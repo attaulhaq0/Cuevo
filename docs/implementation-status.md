@@ -16,8 +16,8 @@ The goal is active. MVP exit is not verified. This document records evidence rat
 
 | Gate | Status | Evidence |
 |---|---|---|
-| 0 Architecture | IN_PROGRESS | Foundation design and implementation plan recorded; runtime not verified yet |
-| 1 School + Learning | NOT_IMPLEMENTED | No completed learning journey |
+| 0 Architecture | IN_PROGRESS | Design, monorepo, private database, API/worker health, tokens and local bootstrap verified; broader deployment/threat documentation pending |
+| 1 School + Learning | IN_PROGRESS | Five-role real sign-in verified; school/learning command implementation underway |
 | 2 Academic Truth | NOT_IMPLEMENTED | No atomic academic release proof |
 | 3 Intelligence Loop | NOT_IMPLEMENTED | No complete approved intervention/reassessment loop |
 | 4 Experience | NOT_IMPLEMENTED | Five role journeys not verified |
@@ -31,4 +31,8 @@ The goal is active. MVP exit is not verified. This document records evidence rat
 
 ## Infrastructure concerns discovered
 
-Remote Supabase default public-schema grants expose new objects to anon/authenticated/service_role. An existing public.rls_auto_enable SECURITY DEFINER event helper is executable by anon/authenticated according to advisors. Correct with explicit reviewed migrations and verify grants before adding business objects. Remote Data API on/off status is UNKNOWN; exposed-schema configuration alone does not prove the setting.
+Remote Supabase default public-schema grants expose new objects to anon/authenticated/service_role. An existing public.rls_auto_enable SECURITY DEFINER event helper is executable by anon/authenticated according to advisors. Local committed migration hardens postgres-owned defaults, private schema/table/function grants and runtime roles; 108 local database assertions passed. Remote configuration is not changed yet. Remote Data API on/off status is UNKNOWN; exposed-schema configuration alone does not prove the setting.
+
+## Foundation evidence
+
+See docs/reports/foundation-verification.md and the independent code/database reviews. Clean local bootstrap, real five-role sign-in, 151 domain/config/API/worker tests, 11 web tests, 108 database assertions, builds and responsive/RTL login browser checks passed. Subsequent feature work does not inherit a Gate 5 claim from foundation tests.

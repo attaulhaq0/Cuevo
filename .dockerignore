@@ -1,0 +1,10 @@
+node_modules
+**/.next
+**/dist
+.git
+.env*
+.local
+supabase/.temp
+supabase/.config-reference
+test-results
+playwright-report

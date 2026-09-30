@@ -1,8 +1,38 @@
-# Edeviser K–12 LXP — Final Codex Specification Pack
+# Cuevo by E Deviser
+
+Cuevo is the K–12 Learning Experience Platform product. E Deviser is the company. The original numbered specification pack uses an earlier product naming convention; the founder's current naming instruction takes precedence.
+
+## Run locally
+
+Prerequisites: Docker Desktop running, Node 24 LTS or the supported local Node toolchain, and npm 11.17.0. Synthetic development data only.
+
+```powershell
+npm ci
+npm run local:bootstrap
+npm run dev
+```
+
+`local:bootstrap` resets **only the local Cuevo database**, applies committed migrations, configures ignored local credentials and provisions deterministic synthetic identities. It uses a dedicated Docker network and ports 56321/56322 to preserve other local Supabase stacks. Local account access details are saved in the ignored `.local/synthetic-accounts.json`; they are never committed.
+
+Open [Cuevo](http://localhost:3000). API health is [localhost:4000/health/ready](http://localhost:4000/health/ready). The worker health service is [localhost:4001/health/ready](http://localhost:4001/health/ready). Provider secrets and school data stay out of the browser; initial auth sessions are memory-only.
+
+```powershell
+npm run lint
+npm run typecheck
+npm test
+npm run db:test
+npm run build
+npm run e2e
+npm run storybook
+```
+
+Read [implementation status](docs/implementation-status.md) for verified scope and blockers. The foundation is working; the full learning-improvement MVP and official curriculum readiness are still in progress.
+
+## Original specification pack
 
 **Date:** 1 October 2026  
-**Product:** Edeviser  
-**Infrastructure codename:** `cuevo`  
+**Company:** E Deviser  
+**Product:** Cuevo  
 **Purpose:** Source-of-truth product, architecture, security, curriculum, UX and agentic-development specifications for a new standalone K–12 Learning Experience Platform.
 
 ## Start here

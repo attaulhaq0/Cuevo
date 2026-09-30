@@ -12,3 +12,5 @@ supabase/.branches/
 .local/
 *.log
 *.tsbuildinfo
+**/storybook-static/
+supabase/.config-reference/

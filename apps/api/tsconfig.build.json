@@ -1,0 +1,1 @@
+{ "extends": "../../tsconfig.json", "compilerOptions": { "noEmit": false, "outDir": "dist", "rootDir": "../..", "sourceMap": true }, "include": ["src/**/*.ts", "../../packages/domain/src/**/*.ts", "../../packages/contracts/src/**/*.ts", "../../packages/config/src/**/*.ts"], "exclude": ["test", "node_modules"] }
