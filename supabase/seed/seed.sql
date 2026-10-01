@@ -13,6 +13,8 @@ insert into app.people(school_id,actor_id,display_name,synthetic)
 select school_id,actor_id,'Synthetic '||role||' '||lpad((right(actor_id::text,12)::integer)::text,3,'0'),true from app.memberships;
 insert into app.entitlements(school_id,code,enabled,effective_from)
 select id,'school.context',true,'2026-09-01T00:00:00Z' from app.schools;
+insert into app.entitlements(school_id,code,enabled,effective_from)
+select s.id,c.code,true,'2026-09-01T00:00:00Z' from app.schools s cross join (values('learning'),('assessment')) c(code);
 insert into app.academic_years(school_id,id,name,starts_on,ends_on) values
  ('10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','Synthetic 2026–2027','2026-09-01','2027-07-01'),
  ('10000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000002','Synthetic 2026–2027','2026-09-01','2027-07-01');

@@ -24,6 +24,7 @@ jobs:
       - run: npm run build
       - run: npm run local:bootstrap
       - run: npm run db:test
+      - run: npm run test:integration
       - run: npx --no-install playwright install --with-deps chromium
       - run: npm run e2e
       - name: Build local Docker images

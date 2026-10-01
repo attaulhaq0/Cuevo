@@ -1,0 +1,12 @@
+import { z } from 'zod';
+const title = z.string().trim().min(1).max(200);
+export const courseInputSchema = z.object({ classId: z.uuid(), subjectId: z.uuid(), title, description: z.string().max(4000) }).strict();
+export const unitInputSchema = z.object({ title, sequence: z.number().int().min(1).max(10000) }).strict();
+export const lessonInputSchema = z.object({ title, sequence: z.number().int().min(1).max(10000), body: z.string().trim().min(1).max(50000) }).strict();
+export const activityInputSchema = z.object({ title, kind: z.enum(['reading','practice','assignment','quiz','reflection']), instructions: z.string().trim().min(1).max(10000), sequence: z.number().int().min(1).max(10000) }).strict();
+export const assessmentInputSchema = z.object({ courseId: z.uuid(), title, instructions: z.string().trim().min(1).max(10000), maxScore: z.number().positive().max(100000), dueAt: z.iso.datetime({ offset: true }).optional() }).strict();
+export const submissionInputSchema = z.object({ content: z.string().trim().min(1).max(50000) }).strict();
+export const completionInputSchema = z.object({ reflection: z.string().max(10000).optional() }).strict();
+export const publishInputSchema = z.object({}).strict();
+export const paginationSchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.uuid().optional() }).strict();
+export const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[A-Za-z0-9_.:-]+$/);

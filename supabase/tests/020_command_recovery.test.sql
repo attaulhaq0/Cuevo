@@ -4,6 +4,8 @@ create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to cuevo_api,cuevo_worker;
 set local search_path = extensions, pg_catalog;
 select no_plan();
+-- Isolate queue fixtures from prior synthetic API runs; rollback restores existing events.
+delete from internal.outbox_events;
 set local role cuevo_api;
 select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
 select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);

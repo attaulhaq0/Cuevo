@@ -17,7 +17,7 @@ The goal is active. MVP exit is not verified. This document records evidence rat
 | Gate | Status | Evidence |
 |---|---|---|
 | 0 Architecture | IN_PROGRESS | Design, monorepo, private database, API/worker health, tokens and local bootstrap verified; broader deployment/threat documentation pending |
-| 1 School + Learning | IN_PROGRESS | Five-role real sign-in verified; school/learning command implementation underway |
+| 1 School + Learning | IN_PROGRESS | Five-role sign-in and teacher → course/lesson/activity/assessment → student completion/submission verified; SIS setup/daily operations remain |
 | 2 Academic Truth | NOT_IMPLEMENTED | No atomic academic release proof |
 | 3 Intelligence Loop | NOT_IMPLEMENTED | No complete approved intervention/reassessment loop |
 | 4 Experience | NOT_IMPLEMENTED | Five role journeys not verified |
@@ -36,3 +36,7 @@ Remote Supabase default public-schema grants expose new objects to anon/authenti
 ## Foundation evidence
 
 See docs/reports/foundation-verification.md and the independent code/database reviews. Clean local bootstrap, real five-role sign-in, 151 domain/config/API/worker tests, 11 web tests, 108 database assertions, builds and responsive/RTL login browser checks passed. Subsequent feature work does not inherit a Gate 5 claim from foundation tests.
+
+## School and learning evidence
+
+See docs/reports/school-learning-verification.md. Clean four-migration replay, 134 database assertions, actual Auth/API/Postgres learning and revoked-replay tests, 169 Vitest + 17 web + 4 runtime tests and three browser tests passed. Academic marking and source evidence release are the next implementation task. Official content remains unverified.

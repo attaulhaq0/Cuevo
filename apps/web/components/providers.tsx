@@ -6,6 +6,7 @@ import { createAuthClient, type PublicConfig } from '../lib/supabase';
 import { fetchMembership, MembershipError, type Membership } from '../lib/membership';
 import { getDictionary, type Locale } from '../lib/locale';
 import { classifyAuthError } from '../lib/auth-error';
+import { CommandJournal } from '../lib/learning-api';
 
 type AuthState = 'initializing' | 'signed-out' | 'verifying' | 'ready' | 'error' | 'not-configured';
 type AppContext = {
@@ -19,6 +20,9 @@ type AppContext = {
   signOut: () => Promise<boolean>;
   refreshAccess: () => void;
   online: boolean;
+  accessToken: string | null;
+  apiUrl: string;
+  commandJournal: CommandJournal;
 };
 const Context = createContext<AppContext | null>(null);
 
@@ -33,6 +37,8 @@ export function Providers({ children, initialLocale, config }: { children: React
   const [online, setOnline] = useState(true);
   const selectedSchool = useRef<string | undefined>(undefined);
   const activeUser = useRef<string | undefined>(undefined);
+  const accessVerified = useRef(false);
+  const commandJournal = useRef(new CommandJournal());
 
   const setLocale = useCallback((nextLocale: Locale) => {
     updateLocale(nextLocale);
@@ -44,7 +50,7 @@ export function Providers({ children, initialLocale, config }: { children: React
 
   useEffect(() => {
     const onOnline = () => { setOnline(true); refreshAccess(); };
-    const onOffline = () => { setOnline(false); setMembership(null); };
+    const onOffline = () => { setOnline(false); setMembership(null); accessVerified.current = false; };
     setOnline(navigator.onLine);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -64,16 +70,18 @@ export function Providers({ children, initialLocale, config }: { children: React
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
       setSession(nextSession);
-      setMembership(null);
       setFailure(null);
       if (!nextSession) {
+        setMembership(null);
+        accessVerified.current = false;
+        commandJournal.current.clear();
         selectedSchool.current = undefined;
         activeUser.current = undefined;
         setStatus('signed-out');
       } else {
-        if (activeUser.current !== nextSession.user.id) selectedSchool.current = undefined;
+        if (activeUser.current !== nextSession.user.id) { selectedSchool.current = undefined; accessVerified.current = false; setMembership(null); commandJournal.current.clear(); }
         activeUser.current = nextSession.user.id;
-        setStatus('verifying');
+        if (!accessVerified.current) setStatus('verifying');
         refreshAccess();
       }
     });
@@ -90,19 +98,20 @@ export function Providers({ children, initialLocale, config }: { children: React
   useEffect(() => {
     if (!accessToken || !online) return;
     const controller = new AbortController();
-    setStatus('verifying');
-    setMembership(null);
+    if (!accessVerified.current) { setStatus('verifying'); setMembership(null); }
     setFailure(null);
     void fetchMembership({ apiUrl: config.apiUrl, accessToken, schoolId: selectedSchool.current, signal: controller.signal })
       .then((current) => {
         if (controller.signal.aborted) return;
         selectedSchool.current = current.schoolId;
+        accessVerified.current = true;
         setMembership(current);
         setStatus('ready');
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setMembership(null);
+        accessVerified.current = false;
         setStatus('error');
         setFailure(error instanceof MembershipError ? error : new MembershipError('unavailable'));
       });
@@ -126,12 +135,14 @@ export function Providers({ children, initialLocale, config }: { children: React
       setMembership(null);
       setSession(null);
       selectedSchool.current = undefined;
+      accessVerified.current = false;
+      commandJournal.current.clear();
       setStatus('signed-out');
       return true;
     } catch { return false; }
   }, [client]);
 
-  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, commandJournal: commandJournal.current }}>{children}</Context.Provider>;
 }
 
 export function useApp() {

@@ -10,6 +10,7 @@ import { parseServerConfig, type ServerConfig } from '@cuevo/config';
 import { Database } from './database/database';
 import { IdentityService, type MembershipRow } from './identity/identity.service';
 import { createUserVerifier, isAuthReady } from './identity/supabase-auth';
+import { createSchoolLearningController } from './school-learning/controller';
 
 export async function createApp(config: ServerConfig = parseServerConfig(process.env)) {
   const database = new Database(config.databaseUrl);
@@ -41,7 +42,7 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
       }
     }
   }
-  @Module({ controllers: [FoundationController] }) class FoundationModule {}
+  @Module({ controllers: [FoundationController, createSchoolLearningController(identity, database)] }) class FoundationModule {}
   const adapter = new FastifyAdapter({ bodyLimit: 1024 * 1024, requestIdHeader: false, logger: false });
   const app = await NestFactory.create<NestFastifyApplication>(FoundationModule, adapter, { logger: ['error', 'warn'] });
   await app.register(helmet);

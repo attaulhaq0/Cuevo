@@ -4,6 +4,7 @@ import { Providers } from '../components/providers';
 import { getLocale } from '../lib/locale';
 import '@cuevo/ui/tokens.css';
 import './globals.css';
+import './learning.css';
 
 export const metadata: Metadata = {
   title: 'Cuevo — Your school workspace',
