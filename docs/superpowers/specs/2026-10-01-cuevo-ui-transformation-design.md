@@ -10,7 +10,28 @@ The repository uses Next.js 16.3.8 App Router, React 19.3.0, TypeScript 5.9.3, o
 
 Apply the founder's complete UI/UX brief to every existing Cuevo role and supported workspace through one shared design system. Preserve protected API contracts, current source/evidence semantics, role distinctions, native academic scales, human approval and uncertain command recovery. The initial deliverable for review is the real React/TypeScript shell, theme and representative home/workspace surfaces in the isolated checkout; continue across all existing screens after that visual checkpoint.
 
-The recommended visual-concept method is the existing React/TypeScript application and Storybook. This avoids a separate preview framework or additional service dependency. Image generation is optional for this code-native application UI. The founder must approve this method because Image Gen was previously selected but the tested Foundry `gpt-image-2` deployment is absent.
+The founder selected the Microsoft Foundry deployment `gpt-image-2.5-sunburst` for visual concept generation. Use that exact deployment for concepts and edits, then implement the selected direction in the existing React/TypeScript application and Storybook. Image generation is a local design tool; it does not become a browser dependency or receive access to pupil records. The earlier request to use React/TypeScript was a stack constraint, not an instruction to abandon visual concepting.
+
+The founder subsequently required approval before further generation and requested several distinct contemporary approaches, including gamification and liquid effects. **Do not issue another generation or edit request until the founder approves its concrete scope.** An API key, successful setup or general request to use the model does not approve an image batch. Selection of a direction does not automatically approve unbounded refinements. The earlier experimental images remain unselected and are not implementation targets.
+
+## Foundry image setup and visual review
+
+The labelled ignored settings file is `.local/design-concepts/foundry-image.env`. It contains `CUEVO_IMAGE_ENDPOINT`, `CUEVO_IMAGE_DEPLOYMENT`, `CUEVO_IMAGE_API_KEY` and `CUEVO_IMAGE_QUALITY`. Leave the key empty to use the already configured `AZURE_OPENAI_API_KEY`; a different resource can use a locally entered key. Do not copy the key into committed documentation, frontend environment variables, browser forms or generated prompts. See [Foundry setup](../../design/foundry-image-setup.md) for the field labels and recovery paths.
+
+Catalog discovery confirmed the exact model family. Initial generation and editing succeeded through the configured resource using `gpt-image-2.5-sunburst`; saved local receipts record the experiments without credentials. This confirms those calls only, not unrestricted API capability or approved visual fidelity. A future failure must not silently select another model. The endpoint must be the HTTPS Microsoft Foundry/Azure OpenAI resource selected by the founder.
+
+Use the deployment in this sequence:
+
+1. Capture the existing product and write a concise screenshot-based audit, preserving source-locked school/role scope. Capture does not authorize academic mutation.
+2. Present the [five-direction concept brief](../../design/2026-concept-generation-brief.md) and obtain approval for the image count, themes, surfaces and approach before generation. The proposed first set is five directions, each in light and dark, ten images total. Each is a complete primary screen with the same Cuevo identity and truthful role context; none is a permanent sidebar or fake metrics dashboard.
+3. Generate only the approved set, inspect it and present the images for the founder to select a direction. Selection approves the visual target, not unsupported product claims. The five proposed approaches are Precision Command Canvas, Open Editorial Index, Evidence Studio, Gamified Learning Journey and Liquid Material Workspace.
+4. After the founder selects a direction, propose and obtain approval for coordinated command palette, representative dense workspace, mobile command dock and Arabic/RTL concepts or edits. Use the selected reference to maintain one system. Request only the agreed detail images; do not generate an open-ended batch.
+5. Extract one semantic token/component specification. Keep code-native text, controls, tables, icons and accessibility in React/TypeScript; use generated production images only when they serve a real supported workflow.
+6. Implement shared foundations and migrate every supported role/workspace in the original required order. Verify real renders against the selected images at matching dimensions, then correct differences and accessibility/interaction failures.
+
+Prompts may contain the product brief, design requirements and explicitly synthetic fixture context. Never transmit secrets, customer/pupil records, private evidence/files or internal credentials. Generated AI text, measurements and interface examples remain concept content until checked against the authoritative repository. Image Gen must not invent curriculum claims, grades, people context or new data contracts.
+
+Save selected concepts and their prompt/provenance in the local ignored design folder during review. When an approved raster asset becomes an actual project dependency, move it into its correct authored asset owner and document it; keep generated test output ignored. Record deployment, endpoint host, generation date, exact prompt, reference inputs and acceptance state without credentials. Start with high quality; use documented higher quality settings only if the deployed API and installed tool support them and inspection demonstrates a need. No speculative model capability replaces an actual response.
 
 ## Visual direction
 
@@ -48,7 +69,7 @@ Derive visible destinations from actual API-required capabilities: progress requ
 
 Worktree: `C:/Users/hp/.codex/worktrees/cuevo-design-system/Cuevo`, branch `codex/cuevo-design-system`, starting commit `946cca0`. The other active customer-readiness chat owns the dirty `G:/Cuevo` checkout. Do not message/interrupt it, change its files, reset its synthetic database, rotate its credentials or occupy its runtime ports.
 
-Begin with isolated web/Storybook component previews. Running current role flows for screenshot audit requires an independently provisioned synthetic runtime when necessary; normal bootstrap scripts target fixed root ports and must not be run blindly. Keep generated runtime configuration, credentials and screenshots ignored. Reconcile the other chat's completed changes explicitly before integrating; this branch must not overwrite newer customer-readiness behavior or primary labels.
+Begin with screenshot audit and Foundry-generated visual concepts, then isolated web/Storybook implementation of the selected design. Running current role flows for screenshot audit requires an independently provisioned synthetic runtime when necessary; normal bootstrap scripts target fixed root ports and must not be run blindly. Keep generated runtime configuration, credentials and screenshots ignored. Reconcile the other chat's completed changes explicitly before integrating; this branch must not overwrite newer customer-readiness behavior or primary labels.
 
 ## Verification and completion
 
