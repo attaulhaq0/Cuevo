@@ -1,17 +1,65 @@
+# Local synthetic environment. Supabase runs separately through npm run db:start.
 name: cuevo
+x-local-runtime: &local-runtime
+  init: true
+  extra_hosts: ['host.docker.internal:host-gateway']
+  networks: [cuevo-local]
+  security_opt: ['no-new-privileges:true']
+  cap_drop: [ALL]
 services:
   web:
-    build: { context: ., dockerfile: docker/Dockerfile, args: { SERVICE: web } }
-    env_file: .env.local
-    ports: ['3000:3000']
-    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1))"], interval: 20s, timeout: 5s, retries: 3 }
+    <<: *local-runtime
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        SERVICE: web
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Run npm run local:configure first}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?Run npm run local:configure first}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?Run npm run local:configure first}
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+    ports: ['127.0.0.1:3000:3000']
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
   api:
+    <<: *local-runtime
     build: { context: ., dockerfile: docker/Dockerfile, args: { SERVICE: api } }
-    env_file: .env.local
-    ports: ['4000:4000']
-    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:4000/health/live').then(r=>process.exit(r.ok?0:1))"], interval: 20s, timeout: 5s, retries: 3 }
+    environment:
+      NODE_ENV: development
+      API_PORT: '4000'
+      API_ALLOWED_ORIGIN: http://localhost:3000
+      DATABASE_URL: ${DOCKER_DATABASE_URL:?Run npm run local:configure first}
+      SUPABASE_URL: ${DOCKER_SUPABASE_URL:?Run npm run local:configure first}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?Run npm run local:configure first}
+    ports: ['127.0.0.1:4000:4000']
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
   worker:
+    <<: *local-runtime
     build: { context: ., dockerfile: docker/Dockerfile, args: { SERVICE: worker } }
-    env_file: .env.local
-    ports: ['4001:4001']
-    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:4001/health/live').then(r=>process.exit(r.ok?0:1))"], interval: 20s, timeout: 5s, retries: 3 }
+    environment:
+      NODE_ENV: development
+      WORKER_PORT: '4001'
+      WORKER_DATABASE_URL: ${DOCKER_WORKER_DATABASE_URL:?Run npm run local:configure first}
+    ports: ['127.0.0.1:4001:4001']
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:4001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+networks:
+  cuevo-local:
+    external: true
+    name: cuevo-local

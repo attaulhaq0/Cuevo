@@ -31,8 +31,8 @@ Read [implementation status](docs/implementation-status.md) for verified scope a
 ## Original specification pack
 
 **Date:** 1 October 2026  
-**Company:** E Deviser  
-**Product:** Cuevo  
+**Company:** E Deviser
+**Product:** Cuevo
 **Purpose:** Source-of-truth product, architecture, security, curriculum, UX and agentic-development specifications for a new standalone K–12 Learning Experience Platform.
 
 ## Start here

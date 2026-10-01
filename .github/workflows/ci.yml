@@ -1,21 +1,33 @@
 name: Cuevo verification
 on: [push, pull_request]
+permissions:
+  contents: read
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  SCARF_ANALYTICS: 'false'
 jobs:
   foundation:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '24', cache: npm }
-      - run: npm ci
+        with: { node-version: '24.16.0', cache: npm }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - run: node --import tsx --test scripts/local-runtime.test.ts
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm run db:start
-      - run: npm run db:reset
+      - run: npm run local:bootstrap
       - run: npm run db:test
-      - run: npm run local:configure
-      - run: npm run db:seed
-      - run: npx playwright install --with-deps chromium
+      - run: npx --no-install playwright install --with-deps chromium
       - run: npm run e2e
+      - name: Build local Docker images
+        run: docker compose --env-file .env.local build
+      - name: Stop local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
