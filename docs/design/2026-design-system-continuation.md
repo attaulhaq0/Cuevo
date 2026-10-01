@@ -1,6 +1,6 @@
 # One Cuevo experience after authentication
 
-Date: 1 October 2026. The approved authentication increment establishes Cuevo's pale pearlescent blue, navy hierarchy, filled learning/role symbols, precise form spacing, welcoming character and separate compact mobile composition. Workspace images are still being reviewed. This document preserves the complete transformation brief; it does not reduce the goal to authentication or treat concepts as delivered product behavior.
+Date: 1 October 2026. The approved authentication increment establishes Cuevo's pale pearlescent blue, navy hierarchy, filled learning/role symbols, precise form spacing, welcoming character and separate compact mobile composition. The37 workspace/foundation concepts are generated and inspected:31 primary and3 foundation views are suitable for discussion, while3 primary candidates have explicit issues. The founder's approach selection and implementation approval are pending. This document preserves the complete transformation brief; it does not reduce the goal to authentication or treat concepts as delivered product behavior.
 
 ## Existing foundation and remaining work
 
@@ -18,6 +18,8 @@ The authenticated shell still uses the original permanent desktop sidebar and tw
 6. Verify all roles, states and supported mutations in Light/Dark, English/Arabic, the five specified widths plus320px/reflow, keyboard/reduced effects/contrast, history, identity/access clearing, API/DB/RLS and source/approval recovery. Storybook and architecture/docs/repository checks supplement those journeys rather than replace them.
 
 ## Supplemental visual review beyond the34-screen set
+
+Dark teacher home, command palette and mobile study/dock concepts have been generated as three foundation supplements. Their controls, themes and responsive behavior remain proposed until selected and implemented. The [generation report](../reports/2026-10-01-coordinated-workspace-concepts.md) records the current37-view gallery. The further families below preserve the remaining complete-LXP review scope.
 
 The active [atlas](2026-full-screen-atlas.md) provides33 current-capability compositions and one proposed companion preference. It maps all59 Source37 screen names and148 current/proposed subsection entries, but34 frames do not render every named screen or every state. The following supplemental families preserve the full LXP vision. Every proposed capability must be visibly identified in its review image and requires a separate domain/contract decision before implementation.
 
