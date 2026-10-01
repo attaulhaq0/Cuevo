@@ -10,6 +10,7 @@ For product requirements start with [product context](product/README.md) and its
 | Current design decisions | [decisions/](decisions/) |
 | Verification evidence and review history | [reports/](reports/) |
 | Implementation task designs/plans | [superpowers/specs/](superpowers/specs/) and [superpowers/plans/](superpowers/plans/) |
+| Proposed Cuevo UI transformation | [Frontend and design proposal](superpowers/specs/2026-10-01-cuevo-ui-transformation-design.md) and [source inventory](reports/2026-10-01-ui-transformation-inventory.md); awaiting founder approval |
 | Original source briefs and manifest | [product history](product/history/README.md); use current product entrypoints for navigation |
 | Repository folder/copy hygiene evidence | [repository hygiene verification](reports/repository-hygiene-verification.md) |
 
