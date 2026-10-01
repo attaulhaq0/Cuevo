@@ -21,6 +21,7 @@ For product requirements start with [product context](product/README.md) and its
 | Authentication desktop/mobile verification | [Approved authentication QA](reports/2026-10-01-auth-design-qa.md); presentation and layout evidence remain separate from real protected sign-in |
 | Current parallel-work boundary | [UI reconciliation follow-up](reports/2026-10-01-ui-reconciliation-follow-up.md); isolated auth increment and source contracts to preserve before all-role integration |
 | Complete UI continuation | [Design-system continuation](design/2026-design-system-continuation.md); remaining shared foundations, full role migration and supplemental future-LXP review families |
+| Coordinated workspace visuals | [Generated workspace concept set](reports/2026-10-01-coordinated-workspace-concepts.md);34 primary and three foundation concepts, review boundaries and unresolved candidate issues |
 | Original source briefs and manifest | [product history](product/history/README.md); use current product entrypoints for navigation |
 | Repository folder/copy hygiene evidence | [repository hygiene verification](reports/repository-hygiene-verification.md) |
 
