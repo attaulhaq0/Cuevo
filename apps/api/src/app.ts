@@ -12,6 +12,7 @@ import { IdentityService, type MembershipRow } from './identity/identity.service
 import { createUserVerifier, isAuthReady } from './identity/supabase-auth';
 import { createSchoolLearningController } from './school-learning/controller';
 import { createAcademicController } from './academic/controller';
+import { createLearnerStateController } from './learner-state/controller';
 
 export async function createApp(config: ServerConfig = parseServerConfig(process.env)) {
   const database = new Database(config.databaseUrl);
@@ -43,7 +44,7 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
       }
     }
   }
-  @Module({ controllers: [FoundationController, createSchoolLearningController(identity, database), createAcademicController(identity, database)] }) class FoundationModule {}
+  @Module({ controllers: [FoundationController, createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database)] }) class FoundationModule {}
   const adapter = new FastifyAdapter({ bodyLimit: 1024 * 1024, requestIdHeader: false, logger: false });
   const app = await NestFactory.create<NestFastifyApplication>(FoundationModule, adapter, { logger: ['error', 'warn'] });
   await app.register(helmet);

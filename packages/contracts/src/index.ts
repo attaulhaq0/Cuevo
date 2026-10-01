@@ -9,3 +9,4 @@ export const apiErrorSchema = z.object({ code: z.string(), message: z.string(), 
 export type ApiErrorResponse = z.infer<typeof apiErrorSchema>;
 export * from './school-learning';
 export * from './academic';
+export * from './learner-state';

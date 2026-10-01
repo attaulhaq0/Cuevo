@@ -30,7 +30,7 @@ export function Providers({ children, initialLocale, config }: { children: React
   const [locale, updateLocale] = useState(initialLocale);
   const [client] = useState(() => createAuthClient(config));
   const [session, setSession] = useState<Session | null>(null);
-  const [status, setStatus] = useState<AuthState>(client ? 'initializing' : 'not-configured');
+  const [status, setStatus] = useState<AuthState>(config.supabaseUrl && config.supabasePublishableKey.startsWith('sb_publishable_') && config.apiUrl ? 'initializing' : 'not-configured');
   const [membership, setMembership] = useState<Membership | null>(null);
   const [failure, setFailure] = useState<MembershipError | null>(null);
   const [refresh, setRefresh] = useState(0);

@@ -19,7 +19,7 @@ The goal is active. MVP exit is not verified. This document records evidence rat
 | 0 Architecture | IN_PROGRESS | Design, monorepo, private database, API/worker health, tokens and local bootstrap verified; broader deployment/threat documentation pending |
 | 1 School + Learning | IN_PROGRESS | Five-role sign-in and teacher → course/lesson/activity/assessment → student completion/submission verified; SIS setup/daily operations remain |
 | 2 Academic Truth | IN_PROGRESS | Numeric marking/release/evidence/correction/approved parent flow verified; rubric and full academic cases remain |
-| 3 Intelligence Loop | NOT_IMPLEMENTED | No complete approved intervention/reassessment loop |
+| 3 Intelligence Loop | IN_PROGRESS | Restricted worker, five-dimensional state and neutral practice/reflection signals verified; proposal/approval/intervention/outcome remain |
 | 4 Experience | NOT_IMPLEMENTED | Five role journeys not verified |
 | 5 Verification | NOT_VERIFIED | Exit suite absent at start |
 
@@ -46,3 +46,9 @@ See docs/reports/school-learning-verification.md. Clean four-migration replay, 1
 See docs/reports/academic-verification.md. Numeric School Custom marking/release/source evidence/correction and explicit parent-approved projection verified. Final 164 SQL checks, sequential real integration, 176 Vitest + 26 web + 4 runtime tests and four browser tests passed. Independent review passed after recoverable-reference marking guard. Live worker/state and rubric support are the next work units.
 
 GitHub CI run 36794876955 passed on commit 3ea5822 (foundation and school learning). Later commits/features require their own CI evidence; this result is not attributed to uncommitted academic work.
+
+## Learner state evidence
+
+See docs/reports/learner-state-verification.md. Clean 14-migration replay, 189 database assertions, nine sequential real integration tests, 183 Vitest + 34 web + 4 runtime tests and five browser tests passed. Worker processes immutable source events and preserves independent state dimensions; revision and outcome remain unmeasured.
+
+GitHub CI run 36796037536 passed on numeric academic commit f9db639; run 36796276441 passed on a1130fc. Uncommitted worker changes require their own hosted checks.

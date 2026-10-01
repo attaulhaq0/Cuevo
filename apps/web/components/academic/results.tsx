@@ -14,7 +14,7 @@ export function ReleasedResults({ results }: { results: ReleasedResult[] }) {
   return results.length ? <section>{results.map((result) => <article key={result.id} className="academic-row"><div className="learning-section-heading"><div><h3>{result.assessmentTitle ?? t.native}</h3><p>{t.reference}: {result.referenceTitle ?? result.referenceId} · <bdi>{result.referenceVersion}</bdi></p></div><Status tone="positive">{t.published}</Status></div><div className="native-score"><strong>{new Intl.NumberFormat(locale).format(result.nativeResult.score)}</strong><span> / {new Intl.NumberFormat(locale).format(result.nativeResult.maxScore)}</span></div><p className="lesson-content">{result.feedback}</p><p className="learning-form__note">{t.revision}: {result.revision} · {t.policy}: {result.policyVersion}</p><p className="learning-form__note">{t.nativeNote}</p><Button type="button" variant="quiet" onClick={() => setEvidenceId(evidenceId === result.evidenceId ? null : result.evidenceId)} aria-expanded={evidenceId === result.evidenceId}>{evidenceId === result.evidenceId ? t.closeEvidence : t.evidence}</Button>{evidenceId === result.evidenceId ? <EvidenceDetail evidenceId={result.evidenceId} /> : null}</article>)}</section> : <p className="learning-empty">{t.emptyResults}</p>;
 }
 
-function EvidenceDetail({ evidenceId }: { evidenceId: string }) {
+export function EvidenceDetail({ evidenceId }: { evidenceId: string }) {
   const { locale } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
   const query = useLearningQuery(`/v1/evidence/${evidenceId}`, parseEvidence, 0);
   if (query.loading) return <p role="status">{t.evidence}…</p>;

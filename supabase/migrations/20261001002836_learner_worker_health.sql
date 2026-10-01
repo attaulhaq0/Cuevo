@@ -1,0 +1,5 @@
+begin;
+create or replace function internal.worker_health()returns jsonb language sql security definer set search_path=''as $$
+select jsonb_build_object('ready',exists(select 1 from pg_roles r where r.rolname=session_user and not r.rolsuper and not r.rolbypassrls and not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in('app','internal','authorization')and c.relowner=r.oid)and not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in('app','internal','authorization')and p.proowner=r.oid))and has_function_privilege(session_user,'internal.process_learner_event(uuid,uuid)','EXECUTE')and has_function_privilege(session_user,'internal.claim_outbox(integer,integer)','EXECUTE')and has_function_privilege(session_user,'internal.fail_outbox(uuid,uuid,text,integer)','EXECUTE'),'pendingCount',(select count(*)from internal.outbox_events where state='PENDING'),'failedCount',(select count(*)from internal.outbox_events where state='FAILED'),'oldestPendingAt',(select min(occurred_at)from internal.outbox_events where state='PENDING'))
+$$;
+commit;

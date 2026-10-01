@@ -6,6 +6,7 @@ import '@cuevo/ui/tokens.css';
 import './globals.css';
 import './learning.css';
 import './academic.css';
+import './progress.css';
 
 export const metadata: Metadata = {
   title: 'Cuevo — Your school workspace',

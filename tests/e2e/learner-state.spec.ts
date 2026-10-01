@@ -1,0 +1,21 @@
+import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
+type Account = { role: string; email: string; password: string };
+test('processed evidence and recorded habits stay separate in bilingual learner progress', async ({ page }) => {
+  const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
+  const student = accounts.find(a => a.role === 'student')!;
+  const errors: string[] = []; const warnings: string[] = [];
+  page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'warning') warnings.push(m.text()); });
+  await page.goto('/'); await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Progress', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Academic evidence', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Learning observations', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Revision', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Not yet measured', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.progress-workspace .native-score').first()).toBeVisible();
+  await expect(page.getByText('Practice activity observed', { exact: true }).first()).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); expect(axe.violations).toEqual([]);
+  expect(errors).toEqual([]); expect(warnings.filter(m => m.includes('Multiple GoTrueClient'))).toEqual([]);
+});

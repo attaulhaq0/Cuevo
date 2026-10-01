@@ -1,0 +1,28 @@
+export const progressEn = {
+  progress: 'Progress', body: 'Native academic evidence and observed learning activity, kept separate.', learner: 'Learner', chooseLearner: 'Choose a learner', noLearners: 'No learners are available under your current access.',
+  selectorLimit: 'This selector shows the first 100 authorized people. Your school controls which learners you can access.', refresh: 'Refresh learner state', loading: 'Loading learner state…',
+  snapshot: 'Latest evidence snapshot', unknown: 'Not yet measured', unknownBody: 'A source-linked snapshot is not available yet. Missing evidence does not mean zero progress.', generatedAt: 'Updated', version: 'Snapshot version',
+  academic: 'Academic evidence', noAcademic: 'No released academic evidence is available in this snapshot.', native: 'Native numeric result', reference: 'Objective', referenceVersion: 'Objective version', policy: 'Assessment policy version', evidence: 'View evidence', closeEvidence: 'Close evidence',
+  development: 'Learning observations', developmentBody: 'Counts describe observed practice and reflection in the stated window. They are separate from academic grades and do not describe character or intelligence.',
+  practice: 'Practice', revision: 'Revision', reflection: 'Reflection', count: 'Observed activities', window: 'Observation window', sourceIds: 'Source observations', sources: 'Source events',
+  engagement: 'Activity completion', completionCount: 'Completed activities', lastCompleted: 'Last completion', engagementBody: 'Completion is participation evidence, not academic attainment.',
+  support: 'Support', impact: 'Outcome measurement', noSupport: 'No intervention state has been established in this increment.', unmeasured: 'No follow-up outcome has been measured.',
+  observations: 'Observation history', noObservations: 'No permitted observations are available.', signals: 'Factual signals', noSignals: 'No factual signals are available.',
+  practiceObserved: 'Practice activity observed', signalBody: 'This signal reports an observed count. It does not infer a learner trait or academic difficulty.', ruleVersion: 'Rule version', observationOnly: 'Observation only',
+  sourceType: 'Source type', activityCompletion: 'Activity completion', sourceObject: 'Source activity completion', occurredAt: 'Observed at', parentSafe: 'This view shows only school-approved academic evidence. Learning-habit details are not shared here.',
+  stale: 'Snapshot awaiting refresh', staleBody: 'Academic evidence remains traceable. Recent activity counts are not available until a current snapshot is produced.', snapshotAsOf: 'Snapshot as of', recordedOnly: 'Recorded observations only', recordedOnlyBody: 'Counts include persisted observations in this window. They do not prove that all learning activity was recorded.', current: 'Current snapshot',
+};
+export const progressAr: typeof progressEn = {
+  progress: 'التقدّم', body: 'الشواهد الأكاديمية الأصلية ونشاط التعلّم الملحوظ، كلٌّ على حدة.', learner: 'الطالب', chooseLearner: 'اختر طالبًا', noLearners: 'لا يتاح طلاب ضمن صلاحياتك الحالية.',
+  selectorLimit: 'يعرض هذا الاختيار أول 100 شخص ضمن صلاحياتك. تحدد مدرستك الطلاب الذين يمكنك الوصول إليهم.', refresh: 'تحديث حالة الطالب', loading: 'جارٍ تحميل حالة الطالب…',
+  snapshot: 'أحدث ملخص للشواهد', unknown: 'لم يُقَس بعد', unknownBody: 'لم يتوفر ملخص مرتبط بالمصادر بعد. نقص الشواهد لا يعني أن التقدّم صفر.', generatedAt: 'آخر تحديث', version: 'إصدار الملخص',
+  academic: 'الشواهد الأكاديمية', noAcademic: 'لا تتاح شواهد أكاديمية صادرة في هذا الملخص.', native: 'النتيجة الرقمية الأصلية', reference: 'الهدف', referenceVersion: 'إصدار الهدف', policy: 'إصدار سياسة التقييم', evidence: 'عرض الشواهد', closeEvidence: 'إغلاق الشواهد',
+  development: 'ملاحظات التعلّم', developmentBody: 'تصف الأعداد التدريب والتأمّل الملحوظَين خلال الفترة المحددة. وهي منفصلة عن الدرجات الأكاديمية ولا تصف الشخصية أو الذكاء.',
+  practice: 'التدريب', revision: 'المراجعة', reflection: 'التأمّل', count: 'الأنشطة الملحوظة', window: 'فترة الملاحظة', sourceIds: 'الملاحظات المصدرية', sources: 'الأحداث المصدرية',
+  engagement: 'إكمال الأنشطة', completionCount: 'الأنشطة المكتملة', lastCompleted: 'آخر إكمال', engagementBody: 'الإكمال شاهد على المشاركة، وليس تحصيلًا أكاديميًا.',
+  support: 'الدعم', impact: 'قياس النتائج', noSupport: 'لم تُنشأ حالة للتدخّلات التعليمية في هذه الخطوة.', unmeasured: 'لم تُقَس نتيجة متابعة بعد.',
+  observations: 'سجل الملاحظات', noObservations: 'لا تتاح ملاحظات ضمن الصلاحيات.', signals: 'الإشارات الواقعية', noSignals: 'لا تتاح إشارات واقعية.',
+  practiceObserved: 'لوحظ نشاط تدريبي', signalBody: 'تعرض هذه الإشارة عددًا ملحوظًا. لا تستنتج صفة للطالب أو صعوبة أكاديمية.', ruleVersion: 'إصدار القاعدة', observationOnly: 'ملاحظة فقط',
+  sourceType: 'نوع المصدر', activityCompletion: 'إكمال نشاط', sourceObject: 'إكمال النشاط المصدر', occurredAt: 'وقت الملاحظة', parentSafe: 'يعرض هذا القسم الشواهد الأكاديمية المعتمدة من المدرسة فقط. لا تُشارك تفاصيل عادات التعلّم هنا.',
+  stale: 'الملخص بانتظار التحديث', staleBody: 'تبقى الشواهد الأكاديمية قابلة للتتبّع. لا تتاح أعداد الأنشطة الحديثة حتى يُنتَج ملخص حالي.', snapshotAsOf: 'تاريخ الملخص', recordedOnly: 'الملاحظات المسجّلة فقط', recordedOnlyBody: 'تشمل الأعداد الملاحظات المحفوظة خلال هذه الفترة. ولا تثبت تسجيل جميع أنشطة التعلّم.', current: 'ملخص حالي',
+};
