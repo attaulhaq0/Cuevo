@@ -1,0 +1,39 @@
+# Proposal approval, intervention and measurement plan
+
+**Goal:** Complete a governed action loop from authorized released evidence through a proposal, human decision, student support activity, follow-up assessment and measured comparison. Keep live AI readiness honest.
+
+**Sources:** 04/08/10/11/12/17/21/38/39/43/44/60/61/65/78/81/83. Existing identity, evidence and immutable numeric release remain authoritative. No model or worker can write grades, access, official mappings or accreditation claims.
+
+## Proposal authority and provider boundary
+
+Teacher-authored proposals are allowed explicitly and labeled TEACHER_AUTHORED. They cite an authorized current baseline result/evidence and approved school objective. Provider-generated proposals use a separate AIProvider interface, minimal authorized evidence context, structured output/schema/provenance validation, timeout/cost/token limits and explicit provider/data-policy approval. Live generation returns unavailable until credentials/model/policy configured. Test-only deterministic providers are dependency-injected and never a public synthetic-AI toggle or mislabeled production capability.
+
+Model context may contain numeric results/reference titles/evidence IDs and recorded observations only as purpose requires; no names, email, raw messages, family/pastoral data, secrets or arbitrary tool access. Tools are read-only scoped retrieval. Structured proposal distinguishes observations, cited evidence, possible interpretation, recommendation, rationale, uncertainty and proposed intervention. Unsupported IDs, authoritative-grade instructions, official curriculum claims, invalid context or unapproved provider are rejected. Proposal creation is not execution.
+
+## Frozen REST workflow
+
+All queries bounded and authorized by current teacher assignment, learner enrollment, school entitlement and approved source context; parent only separately approved academic projection. Every important mutation/replay verifies scope and Idempotency-Key inside its transaction, with audit/outbox. Approval does not take learner/school or baseline from model/client as authority without validation.
+
+- `GET /v1/recommendations` → scoped staff list `{id,learnerId,referenceId,baselineResultId,origin:'TEACHER_AUTHORED'|'AI_GENERATED',observation,evidenceIds,interpretation,recommendation,rationale,uncertainty,activityTitle,instructions,status:'AWAITING_HUMAN'|'APPROVED'|'REJECTED',createdAt}`.
+- `POST /v1/recommendations` `{baselineResultId,observation,interpretation,recommendation,rationale,uncertainty,activityTitle,instructions}` current teacher/admin. Origin fixed server TEACHER_AUTHORED; reference/learner/evidence derived baseline. No official facts or grade fields accepted.
+- `POST /v1/intelligence/analyze` `{baselineResultId}` current teacher/admin. Authorize baseline and retrieve minimum context. Missing provider credentials/data policy → `INTELLIGENCE_UNAVAILABLE`503; no fake AI success. With approved configuration an injected provider returns structured validated proposal and stored run provenance, never a domain execution.
+- `POST /v1/recommendations/:id/decision` `{decision:'APPROVE'|'REJECT',reason,editedActivityTitle?:string,editedInstructions?:string}` current teacher/admin. Lock proposal. Approval atomically stores human decision and one intervention; rejection creates no intervention. Replay/newkey cannot duplicate intervention or decision; status transitions immutable.
+- `GET /v1/interventions` → teacher assigned and student own, coordinator/admin school; parent excluded unless later policy. `{id,recommendationId,learnerId,referenceId,baselineResultId,title,instructions,status:'ASSIGNED'|'COMPLETED'|'MEASURED',createdAt,completedAt:null|string,followUpAssessmentId:null|string}`.
+- `POST /v1/interventions/:id/complete` `{reflection?:string}` enrolled student self only; immutable source completion, audit/outbox. Student language “Try this practice”; no habit inference.
+- `POST /v1/interventions/:id/reassessment` `{assessmentId}` current authorized teacher/admin after completion. Follow-up assessment must be same school/course/reference/version/native numeric scale as baseline, and published/approved compatible context. Link once; a teacher may create and link via existing assessment APIs. Do not mark or release follow-up automatically.
+- `POST /v1/interventions/:id/measure` `{followUpResultId,minimumChange:number}` current teacher/admin; follow-up must be released result for same learner and linked assessment, after intervention completion; baseline/followup immutable evidence/reference/native scale compatible. minimumChange positive teacher-configured raw-score threshold, not official attainment or causal rule. Store baseline/followup native values, difference, threshold, comparable status and limitations; result `improved` if positive difference >= threshold; `no_meaningful_change` if absolute difference < threshold; lower follow-up by threshold → `inconclusive` with explicit `FOLLOW_UP_LOWER` reason and factual difference retained. Missing/incompatible evidence → inconclusive/unmeasured; never convert absence to zero. Approval does not claim causality.
+- `GET /v1/outcomes` → assigned teacher/own student/coordinator/admin scope. `{id,interventionId,baselineResultId,followUpResultId,status,difference:null|number,minimumChange,baseline:{score,maxScore},followUp:{score,maxScore},reason,limitation:'OBSERVED_CHANGE_NOT_CAUSAL_PROOF',measuredAt}`. Parent excluded in this increment.
+
+## Backend task
+
+Create recommendation/human decision/intervention/completion/reassessment/outcome records in private app schema with composite tenant and learner/source foreign keys, current RLS, immutable historical decisions/completions/measurements and constrained source helpers. API module exports createImprovementController(identity,database) for root registration. Live provider/model code isolated behind approved server configuration. Pure orchestrator evaluators and fake provider fixtures are test-only. Explicit AI run statuses/provenance/failure if a model call is attempted; no fabricated success.
+
+Tests first: foreign/unrelated learner retrieval, no evidence/reference, forged authority fields, unsupported source citations, injected instructions, malformed provider output, timeout/token/data policy rejection, approval-only action, rejection no action, duplicate approval/intervention, revoked replay, student completion ownership, follow-up comparability/time, real source measurement, missing/zero, decreased follow-up and rollback/outbox. Run SQL and real API tests sequentially. Missing live provider remains a blocker, not a test failure disguised as pass.
+
+## Browser task
+
+Teacher Improvement view: choose authorized released baseline, create labeled human proposal or request AI analysis (unavailable message when unconfigured), evidence/interpretation/uncertainty visible, Approve/Edit/Reject explicit. Student receives own approved task and completion/reflection form. Teacher links follow-up assessment and measures only after manually released follow-up; show baseline→action→follow-up and observed difference/limitations. Coordinator can inspect permitted outcomes. English/Arabic/mobile/accessibility, typed empty/error/denied/unknown states, original-key uncertain retry. No charts or filler cards; no AI authority implied.
+
+## Exit and remaining blockers
+
+Clean source seed → approved evidence → human proposal → explicit approval → student support completion → reassessment submission/teacher release → measured outcome verified through API/DB/browser. Test orchestrator with source-locked synthetic cases; live AI quality and provider readiness remain unverified until configured. Official curriculum packs, rubric and wider SIS/community/parent scope remain required before MVP exit.
