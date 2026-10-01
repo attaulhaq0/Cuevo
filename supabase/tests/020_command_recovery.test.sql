@@ -5,7 +5,7 @@ grant usage on schema extensions to cuevo_api,cuevo_worker;
 set local search_path = extensions, pg_catalog;
 select no_plan();
 -- Isolate queue fixtures from prior synthetic API runs; rollback restores existing events.
-delete from app.habit_observations;delete from app.learner_signals;delete from app.learner_state_snapshots;delete from internal.processed_events;delete from internal.outbox_events;
+update internal.outbox_events set state='COMPLETED',completed_at=clock_timestamp(),lease_token=null,lease_until=null where state<>'COMPLETED';
 set local role cuevo_api;
 select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
 select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);

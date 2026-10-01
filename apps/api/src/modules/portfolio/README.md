@@ -1,0 +1,7 @@
+# Portfolio domain
+
+Public surface: createPortfolioController(identity,database). PortfolioService owns selected released numeric/rubric evidence, immutable learner reflection revisions, exact teacher reviews and separate current/approved parent revision pointers. Sources04/09/16/18/39/43/81/83 govern source provenance, current relationships and human approval.
+
+GET /v1/portfolio/items offers bounded current item pages, and /items/:id/history offers authorized revision history (parent excluded). Student select/reflection mutations create immutable versions; teacher/admin review can feature and explicitly approve the exact revision for parents only when underlying released evidence is parent-visible. A new learner edit remains unreviewed while the approved parent pointer retains the former revision. Parent revocation removes future item access. Every read/replay repeats current source/tenant/role/relationship/course access. Raw answers, grades, permissions and source parent visibility are never changed.
+
+SQL authority lives in additive portfolio_recognition_sources migration; tables are private/FORCE RLS with no raw runtime or Data API grants. Commands are idempotent/audited/outbox transactional. Unit tests portfolio-development-*; integration portfolio-recognition-api; SQL090. Root coordinates application/native UI and mutation verification. Product sources resolve through [context map](../../../../../docs/product/context-map.md).

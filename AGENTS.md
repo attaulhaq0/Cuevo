@@ -4,6 +4,8 @@ You are implementing a production-grade standalone K–12 Learning Experience Pl
 
 The repository specifications are the source of truth for product intent, domain rules, UX, security and curriculum implementation.
 
+E Deviser is the company. Cuevo is the product.
+
 ## Read before coding
 
 Always read:
@@ -13,6 +15,28 @@ Always read:
 3. relevant domain specification
 4. relevant tests/golden cases
 5. relevant curriculum pack artifacts
+
+Product sources live in `docs/product`. Read `docs/product/context-map.md` to load the common foundation and affected task bundle, and use `docs/product/index.md` or `registry.json` for exact source IDs/current paths. Stored documents are not automatically loaded AI context; explicitly read relevant requirements, tests and approved artifacts. Do not reread all sources for every small task or infer missing authoritative facts from a summary.
+
+For code navigation also read `docs/codebase-map.md`, `docs/architecture/repository-layout.md`, the nearest scoped `AGENTS.md`, and the affected feature/domain README. Scoped instructions add detail; they never weaken this constitution.
+
+## Mandatory repository hierarchy rule
+
+Keep the codebase organized by deployable application, domain/feature ownership and dependency direction. This is a binding convention for every human contributor and coding agent. The canonical tree and allowed dependencies are in `docs/architecture/repository-layout.md`; `docs/codebase-map.md` is the navigation entrypoint.
+
+- Keep Next.js route files in `apps/web/app`; put feature UI, models, copy, styles and unit tests together in `apps/web/features/<feature>`.
+- Put app-wide browser/session/API/form mechanisms in `apps/web/shared`; shared code must not depend on feature code. Reusable design primitives/tokens belong in `packages/ui`.
+- Put API domain controllers/services in `apps/api/src/modules/<domain>` and infrastructure in `apps/api/src/platform/<capability>`. Keep bootstrap composition in `app.ts` and `main.ts`. A folder does not itself establish runtime module isolation.
+- Put worker jobs in `apps/worker/src/jobs` and worker infrastructure in `apps/worker/src/platform`.
+- Shared packages must not import application implementation. Runtime applications must not import another application. Browser code must not import server configuration or database/runtime infrastructure.
+- Cross-feature imports must use documented public surfaces (`model.ts`, `api.ts`, `copy.ts`, `ui.tsx`). Cross-package imports must use `@cuevo/*` exports. Do not create catch-all utility folders, empty future modules, duplicate implementations or barrel files that mix server and browser code.
+- Keep unit tests with their owner, API/database journeys in `apps/api/test/integration`, browser journeys in `tests/e2e`, and SQL/RLS tests in `supabase/tests`. Update test discovery when moving tests.
+- Every new domain/feature or move must update its README, the codebase map, scoped instructions, imports and affected configuration in the same change. Record new architectural boundaries in a decision record.
+- Run `npm run check:architecture` and `npm run test:architecture`, plus checks appropriate to the changed code. These structural checks are required in CI and do not replace security or product verification.
+- Keep root Markdown limited to README, AGENTS and START-HERE. Product specifications belong in `docs/product` with a maintained task context map, index and registry; implementation docs belong in the appropriate `docs` area or owner README. Preserve numbered source identities, facts, versions and historical evidence during moves. Applied SQL migration history remains append-only.
+- Run `npm run check:docs` and `npm run test:docs` after documentation changes. Every product source move/change must update its registry path/hash, context links and affected entrypoints in the same change. Historical reports resolve former source filenames through the registry and never become competing product rules.
+- Maintain one active implementation and source location. Never leave copied source trees, backup/copy folders, empty legacy directories or placeholder modules in authored paths. After a move inspect the physical folders as well as Git, because Git does not track empty directories. Preserve original briefs only in `docs/product/history`; local recovery archives belong in ignored `.local` and are not active context.
+- Run `npm run check:repository` and `npm run test:repository` with structural changes. They check repository hygiene alongside architecture/docs guards. Dependencies and generated build/test output stay ignored; never commit generated files or secrets. Intentional forwarding surfaces and historical evidence are permitted when documented. Static duplicate checks do not prove the absence of semantically equivalent implementations; reviewers still inspect ownership and domain boundaries.
 
 ## Non-negotiable rules
 

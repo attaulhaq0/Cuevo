@@ -1,5 +1,24 @@
 import { z } from 'zod';
 export const referenceInputSchema=z.object({title:z.string().trim().min(1).max(200),description:z.string().trim().min(1).max(4000),version:z.string().trim().min(1).max(100)}).strict();
 export const referenceLinkSchema=z.object({referenceId:z.uuid(),expectedPolicyVersion:z.number().int().min(1)}).strict();
-export const markingInputSchema=z.object({score:z.number().min(0).max(100000),feedback:z.string().max(10000),expectedPolicyVersion:z.number().int().min(1),expectedRevision:z.number().int().min(0),sourceEvidence:z.literal(true)}).strict();
+const rubricKey=z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_.:-]+$/);
+const rubricLevelSchema=z.object({key:rubricKey,label:z.string().trim().min(1).max(200),description:z.string().trim().min(1).max(2000)}).strict();
+const rubricCriterionSchema=z.object({key:rubricKey,title:z.string().trim().min(1).max(200),levels:z.array(rubricLevelSchema).min(1).max(20).refine(levels=>new Set(levels.map(level=>level.key)).size===levels.length,'Allowed level keys must be unique.')}).strict();
+export const rubricInputSchema=z.object({courseId:z.uuid(),title:z.string().trim().min(1).max(200),version:z.string().trim().min(1).max(100),criteria:z.array(rubricCriterionSchema).min(1).max(30).refine(criteria=>new Set(criteria.map(criterion=>criterion.key)).size===criteria.length,'Criterion keys must be unique.')}).strict();
+export const assessmentRubricSchema=z.object({rubricId:z.uuid(),expectedPolicyVersion:z.number().int().min(1)}).strict();
+const markingContext={feedback:z.string().max(10000),expectedPolicyVersion:z.number().int().min(1),expectedRevision:z.number().int().min(0),sourceEvidence:z.literal(true)};
+const numericMarkingSchema=z.object({score:z.number().min(0).max(100000),...markingContext}).strict();
+const rubricChoiceSchema=z.object({criterionKey:rubricKey,levelKey:rubricKey}).strict();
+export const rubricMarkingInputSchema=z.object({nativeResult:z.object({type:z.literal('rubric'),rubricId:z.uuid(),criteria:z.array(rubricChoiceSchema).min(1).max(30).refine(criteria=>new Set(criteria.map(criterion=>criterion.criterionKey)).size===criteria.length,'Criterion choices must be unique.')}).strict(),...markingContext}).strict();
+export const markingInputSchema=z.union([numericMarkingSchema,rubricMarkingInputSchema]);
 export const resultReleaseSchema=z.object({expectedRevision:z.number().int().min(1),parentVisible:z.boolean().default(false)}).strict();
+
+const nativeNumericReportSchema=z.object({type:z.literal('numeric'),score:z.number().min(0).max(100000),maxScore:z.number().positive().max(100000),policyVersion:z.number().int().positive(),normalized:z.null().optional()}).strict().refine(value=>value.score<=value.maxScore,'Native score must remain within its source scale.');
+const nativeRubricReportSchema=z.object({type:z.literal('rubric'),rubricId:z.uuid(),rubricTitle:z.string().min(1).max(200),rubricVersion:z.string().min(1).max(100),policyVersion:z.number().int().positive(),normalized:z.null(),criteria:z.array(z.object({criterionKey:rubricKey,criterionTitle:z.string().min(1).max(200),levelKey:rubricKey,levelLabel:z.string().min(1).max(200),levelDescription:z.string().min(1).max(2000)}).strict()).min(1).max(30)}).strict();
+const reportResultContext={id:z.uuid(),submissionId:z.uuid(),assessmentId:z.uuid(),learnerId:z.uuid(),revision:z.number().int().positive(),feedback:z.string().max(10000),status:z.literal('RELEASED'),policyVersion:z.number().int().positive(),referenceId:z.uuid(),referenceVersion:z.string().min(1).max(100),evidenceId:z.uuid(),createdAt:z.iso.datetime({offset:true}),actorId:z.uuid(),parentVisible:z.boolean(),assessmentTitle:z.string().min(1).max(200),referenceTitle:z.string().min(1).max(200)};
+export const academicReportResultSchema=z.discriminatedUnion('model',[
+ z.object({...reportResultContext,model:z.literal('numeric'),score:z.number().min(0),maxScore:z.number().positive(),nativeResult:nativeNumericReportSchema}).strict(),
+ z.object({...reportResultContext,model:z.literal('rubric'),nativeResult:nativeRubricReportSchema}).strict(),
+]).superRefine((value,ctx)=>{if(value.policyVersion!==value.nativeResult.policyVersion||value.model==='numeric'&&(value.score!==value.nativeResult.score||value.maxScore!==value.nativeResult.maxScore))ctx.addIssue({code:'custom',message:'Report must retain the exact native source policy and value.'});});
+export const academicReportSchema=z.object({schemaVersion:z.literal('1'),schoolId:z.uuid(),learnerId:z.uuid(),generatedAt:z.iso.datetime({offset:true}),scope:z.literal('CURRENT_RELEASED_PAGE'),coverage:z.literal('NOT_ESTABLISHED'),items:z.array(academicReportResultSchema).max(100),nextCursor:z.uuid().nullable()}).strict().superRefine((report,ctx)=>{if(report.items.some(item=>item.learnerId!==report.learnerId)||new Set(report.items.map(item=>item.id)).size!==report.items.length)ctx.addIssue({code:'custom',message:'Every report source must belong to the selected learner exactly once.'});});
+export type AcademicReport=z.infer<typeof academicReportSchema>;

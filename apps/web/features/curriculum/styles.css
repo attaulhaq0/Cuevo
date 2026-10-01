@@ -1,0 +1,4 @@
+.curriculum-workspace { margin-block-start: var(--space-6); }
+.curriculum-record { padding-block: var(--space-5); border-block-end: 1px solid var(--color-border); }
+.curriculum-record h2 { font-size: var(--type-lg); }
+.curriculum-record details { overflow-wrap: anywhere; font-size: var(--type-sm); }

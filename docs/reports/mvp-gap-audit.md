@@ -1,5 +1,7 @@
 # Cuevo MVP gap audit
 
+Historical audit retained as evidence of the pre-completion implementation. For current implemented scope and verification use [implementation status](../implementation-status.md) and the technical reports. The statements below describe their original snapshot.
+
 Date: 1 October 2026, Asia/Riyadh. Scope: read-only comparison of the repository implementation and verification reports with specifications 01, 83 and 87, relevant domain requirements, curriculum artifact inventory and current seed. No academic browsing, source invention, installs or test reruns were performed.
 
 **MVP exit is not yet satisfied.** Foundation, school-authored learning, numeric academic truth and bounded deterministic learner state have reviewed implementation and clean local evidence. Completing the current human approval/intervention loop is the next dependency; it does not remove the remaining curriculum, live intelligence, experience or release-verification requirements.

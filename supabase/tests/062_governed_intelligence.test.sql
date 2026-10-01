@@ -1,0 +1,55 @@
+-- Real private-SQL intelligence boundary; no external provider or application worker is involved.
+begin;
+create extension if not exists pgtap with schema extensions;
+grant usage on schema extensions to cuevo_api;
+set local search_path=extensions,pg_catalog;
+select no_plan();
+select ok(to_regclass('app.intelligence_runs')is not null,'intelligence attempts persist separately from grades');
+select ok(to_regclass('app.intelligence_policies')is not null,'school approval controls intelligence purpose');
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace join pg_roles r on r.rolname in('anon','authenticated','service_role','cuevo_worker')where n.nspname='app'and c.relname in('intelligence_runs','intelligence_policies')and has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE')),'model worker and Data API have no raw intelligence data access');
+select ok(not has_function_privilege('anon','internal.begin_intelligence_run(text,text,uuid,jsonb,text)','EXECUTE'),'anonymous cannot run intelligence tool');
+select ok(not has_function_privilege('cuevo_api','internal.intelligence_context(uuid)','EXECUTE'),'context retrieval is reachable only inside authorized run workflow');
+
+insert into app.intelligence_policies(school_id,version,fixture_enabled,approved_by)values('10000000-0000-4000-8000-000000000001',1,true,'20000000-0000-4000-8000-000000000002')on conflict(school_id)do update set fixture_enabled=true,version=1;
+create temporary table intelligence_fixture(baseline_id uuid,reservation jsonb,response jsonb);
+grant select,insert,update on intelligence_fixture to cuevo_api;
+set local role cuevo_api;
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);
+select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);
+do $$declare c uuid;a uuid;s uuid;m uuid;r uuid;begin
+ insert into app.courses(school_id,class_id,subject_id,created_by,title,description,status)values('10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000001',"authorization".actor_id(),'Intelligence fixture','School authored','PUBLISHED')returning id into c;
+ insert into app.assessments(school_id,course_id,created_by,title,instructions,max_score)values('10000000-0000-4000-8000-000000000001',c,"authorization".actor_id(),'Baseline','Teacher authored task',10)returning id into a;
+ perform internal.link_assessment_reference(a,'61000000-0000-4000-8000-000000000001',1);
+ perform set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true);
+ insert into app.submissions(school_id,assessment_id,learner_id,content)values('10000000-0000-4000-8000-000000000001',a,"authorization".actor_id(),'Source evidence')returning id into s;
+ perform set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);
+ m:=internal.mark_submission(s,0,'Reviewed feedback',2,0,true);
+ r:=internal.release_marking(m,1,false);
+ insert into intelligence_fixture(baseline_id)values(r);
+end$$;
+
+select throws_ok($$select internal.begin_intelligence_run('unknown-source','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','99999999-0000-4000-8000-000000000001','{}','request')$$,'42501',null,'unknown source cannot create run');
+update intelligence_fixture set reservation=internal.begin_intelligence_run('fixture-analysis','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',baseline_id,'{"mode":"FIXTURE","provider":"deterministic-fixture","model":"source-locked-v1","promptId":"next-learning-action","promptVersion":"1","policyVersion":1,"timeoutMs":10000,"maxTokens":1000,"maxCost":1}','request-fixture');
+select is((select reservation->>'state'from intelligence_fixture),'NEW','one durable attempt created');
+select is((select internal.begin_intelligence_run('fixture-analysis','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',baseline_id,'{"mode":"FIXTURE","provider":"deterministic-fixture","model":"source-locked-v1","promptId":"next-learning-action","promptVersion":"1","policyVersion":1,"timeoutMs":10000,"maxTokens":1000,"maxCost":1}','request-repeat')->>'state'from intelligence_fixture),'IN_PROGRESS','duplicate request cannot generate another attempt');
+select throws_ok($$select internal.complete_intelligence_run((select(reservation->>'runId')::uuid from intelligence_fixture),'99999999-0000-4000-8000-000000000001','{}','{}','request')$$,'22023',null,'wrong lease cannot complete generation');
+select throws_ok($$select internal.complete_intelligence_run((select(reservation->>'runId')::uuid from intelligence_fixture),(select(reservation->>'leaseToken')::uuid from intelligence_fixture),'{"evidenceIds":[],"facts":[],"action":"CHANGE_GRADES","reason":"REVIEW_RECORDED_RESULT","limitation":"SINGLE_RESULT_NOT_CAUSAL"}','{"outputTokens":0,"cost":0,"latencyMs":0}','request')$$,'22023',null,'invalid tool or grade authority cannot create proposal');
+update intelligence_fixture set response=internal.complete_intelligence_run((reservation->>'runId')::uuid,(reservation->>'leaseToken')::uuid,jsonb_build_object('evidenceIds',jsonb_build_array(reservation->'context'->'evidenceId'),'facts',jsonb_build_array((reservation->'context')||jsonb_build_object('kind','NUMERIC_RESULT')),'action','GUIDED_PRACTICE','reason','REVIEW_RECORDED_RESULT','limitation','SINGLE_RESULT_NOT_CAUSAL'),'{"outputTokens":0,"cost":0,"latencyMs":1}','request-complete');
+select is((select response->>'origin'from intelligence_fixture),'AI_GENERATED','origin is fixed by governed server completion');
+select is((select response->>'generationMode'from intelligence_fixture),'FIXTURE','synthetic generation is disclosed');
+select is((select response->>'observation'from intelligence_fixture),'The released numeric result is 0 / 10.','native zero factual observation remains zero');
+select is((select response->>'status'from intelligence_fixture),'AWAITING_HUMAN','proposal cannot execute itself');
+select is((select count(*)from app.interventions where recommendation_id=(select(response->>'id')::uuid from intelligence_fixture)),0::bigint,'provider completion creates no intervention');
+select is((select internal.begin_intelligence_run('fixture-analysis','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',baseline_id,'{"mode":"FIXTURE","provider":"deterministic-fixture","model":"source-locked-v1","promptId":"next-learning-action","promptVersion":"1","policyVersion":1,"timeoutMs":10000,"maxTokens":1000,"maxCost":1}','request-replay')->>'state'from intelligence_fixture),'COMPLETED','authorized replay returns terminal durable result');
+select throws_ok($$select internal.begin_intelligence_run('fixture-analysis','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',(select baseline_id from intelligence_fixture),'{"mode":"FIXTURE","provider":"deterministic-fixture","model":"source-locked-v1","promptId":"next-learning-action","promptVersion":"1","policyVersion":1,"timeoutMs":10000,"maxTokens":1000,"maxCost":1}','request')$$,'22023',null,'changed request fingerprint conflicts');
+reset role;
+select is((select count(*)from app.intelligence_runs where command_key='fixture-analysis'),1::bigint,'duplicate command leaves one run');
+select is((select count(*)from app.recommendations where intelligence_run_id=(select(reservation->>'runId')::uuid from intelligence_fixture)),1::bigint,'duplicate command leaves one proposal');
+select is((select count(*)from internal.outbox_events where type='recommendation.created'and entity_id=(select(response->>'id')::uuid from intelligence_fixture)),1::bigint,'proposal event is transactional and singular');
+select ok((select not(context_references::text||tool_trace::text~'Source evidence|Reviewed feedback|email|password')from app.intelligence_runs where command_key='fixture-analysis'),'minimum context excludes answers feedback PII and secrets');
+update app.teacher_assignments set status='revoked'where teacher_actor_id='20000000-0000-4000-8000-000000000004';
+set local role cuevo_api;
+select throws_ok($$select internal.begin_intelligence_run('fixture-analysis','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',(select baseline_id from intelligence_fixture),'{"mode":"FIXTURE","provider":"deterministic-fixture","model":"source-locked-v1","promptId":"next-learning-action","promptVersion":"1","policyVersion":1,"timeoutMs":10000,"maxTokens":1000,"maxCost":1}','request-revoked')$$,'42501',null,'revoked teacher cannot replay persisted context');
+reset role;
+select *from finish();
+rollback;

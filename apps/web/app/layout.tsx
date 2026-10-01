@@ -1,12 +1,19 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { Providers } from '../components/providers';
-import { getLocale } from '../lib/locale';
+import { Providers } from '../shared/session/providers';
+import { getLocale } from '../shared/i18n/locale';
 import '@cuevo/ui/tokens.css';
 import './globals.css';
-import './learning.css';
-import './academic.css';
-import './progress.css';
+import '../features/learning/styles.css';
+import '../features/academic/styles.css';
+import '../features/progress/styles.css';
+import '../features/improvement/styles.css';
+import '../features/school/styles.css';
+import '../features/community/styles.css';
+import '../features/portfolio/styles.css';
+import '../features/development/styles.css';
+import '../features/curriculum/styles.css';
+import '../features/home/styles.css';
 
 export const metadata: Metadata = {
   title: 'Cuevo — Your school workspace',

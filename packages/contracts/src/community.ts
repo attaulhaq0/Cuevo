@@ -1,0 +1,12 @@
+import{z}from'zod';
+const text=z.string().trim().min(1).max(4000);const reason=z.string().trim().min(1).max(1000);
+export const communityRoomSchema=z.object({classId:z.uuid(),name:z.string().trim().min(1).max(200),type:z.enum(['CLASS','GROUP']),memberIds:z.array(z.uuid()).max(100).default([])}).strict();
+export const communityMembershipSchema=z.object({actorId:z.uuid(),status:z.enum(['active','revoked']),confirmAccessChange:z.literal(true)}).strict();
+export const communityPostSchema=z.object({body:text,replyToId:z.uuid().nullable().default(null)}).strict();
+export const communityReactionSchema=z.object({reaction:z.enum(['THANKS','HELPFUL','ENCOURAGE']),active:z.boolean()}).strict();
+export const communityReportSchema=z.object({reason}).strict();
+export const communityModerationSchema=z.object({action:z.enum(['HIDE','RESTORE']),reason,confirmModeration:z.literal(true)}).strict();
+export const communityRestrictionSchema=z.object({actorId:z.uuid(),restriction:z.enum(['MUTED','RESTRICTED','NONE']),reason,confirmModeration:z.literal(true)}).strict();
+export const communityAnnouncementSchema=z.object({classId:z.uuid().nullable(),title:z.string().trim().min(1).max(200),body:text,parentVisible:z.boolean().default(false)}).strict();
+export const communityReadSchema=z.object({}).strict();
+export const communityQuerySchema=z.object({limit:z.coerce.number().int().min(1).max(100).default(25),cursor:z.uuid().optional()}).strict();

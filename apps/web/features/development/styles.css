@@ -1,0 +1,5 @@
+.development-workspace { margin-block-start: var(--space-6); }
+.development-section { border-block-start: 1px solid var(--color-border); margin-block-start: var(--space-6); padding-block-start: var(--space-5); }
+.development-section article { padding-block: var(--space-3); border-block-end: 1px solid var(--color-border); }
+.development-section h2 { font-size: var(--type-lg); }
+.development-total strong { font-size: var(--type-xl); }

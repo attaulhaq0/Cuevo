@@ -1,0 +1,9 @@
+.school-workspace { margin-block-start: var(--space-6); }
+.school-section { border-block-start: 1px solid var(--color-border); margin-block-start: var(--space-6); padding-block-start: var(--space-5); }
+.school-section h2 { font-size: var(--type-lg); }
+.school-table-scroll { overflow-x: auto; max-inline-size: 100%; margin-block: var(--space-4); }
+.school-table-scroll table { border-collapse: collapse; inline-size: 100%; font-size: var(--type-sm); }
+.school-table-scroll th, .school-table-scroll td { padding: var(--space-3); border-block-end: 1px solid var(--color-border); text-align: start; }
+.school-table-scroll th { color: var(--color-text-secondary); font-weight: 600; }
+.school-table-scroll bdi { overflow-wrap: anywhere; }
+.school-workspace .learning-actions { flex-wrap: wrap; }

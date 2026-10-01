@@ -1,0 +1,9 @@
+# Recorded learning recognition
+
+Public surface: createDevelopmentController(identity,database). DevelopmentService exposes personal recorded XP, milestone achievements, school-approved policy/period configuration and an explicitly opt-in class/period alias leaderboard. Sources09/15/39/43/58/80/83 distinguish observed action from academic attainment, traits or qualification.
+
+Latest school policy recognitionEnabled is required for awarding and recognition commands; leaderboardEnabled remains a separate default-off gate. Admin approves immutable points/milestones and nonoverlapping class periods. Verified practice/revision/reflection observations are the only award source. Immutable XP ledger deduplicates observation+period and versions policy; achievements derive from recorded ledger totals. Hidden/opted-out students disappear from the alias board, which rechecks current class enrollment and uses dense ranks for ties. No grades or full child profiles appear. Parent internal recognition access is denied until a separate approved projection exists.
+
+internal.process_recognition_event(event_id,lease) validates a claimed habit.observed event and persisted source ownership/action, awards in the same transaction and requires final outbox ACK. Disabled policy acknowledges without award. Admin bounded backfill awards approved period observations after enabling; source dedup prevents repeated XP. Worker has only this constrained function, no raw ledger or grade writes. Root composes habit dispatch; no other implementation import crosses domains.
+
+Private/FORCE RLS tables and commands/read functions live in additive portfolio_recognition_sources SQL. Unit portfolio-development-*; actual integration portfolio-recognition-api; SQL090. Root owns database replay/browser/RTL/mobile/authorization/recovery evidence. Product sources resolve through [context map](../../../../../docs/product/context-map.md).

@@ -1,0 +1,48 @@
+{
+  "models": [
+    "numeric",
+    "rubric"
+  ],
+  "numeric": {
+    "maxScore": 10,
+    "normalization": null
+  },
+  "rubric": {
+    "title": "School explanation descriptors",
+    "version": "synthetic-1",
+    "criteria": [
+      {
+        "key": "explanation",
+        "title": "Explanation",
+        "levels": [
+          {
+            "key": "developing",
+            "label": "Developing",
+            "description": "Explain a relevant step."
+          },
+          {
+            "key": "secure",
+            "label": "Secure",
+            "description": "Explain connected steps."
+          }
+        ]
+      },
+      {
+        "key": "checking",
+        "title": "Checking",
+        "levels": [
+          {
+            "key": "not-demonstrated",
+            "label": "Not demonstrated",
+            "description": "Checking was not demonstrated in this work."
+          },
+          {
+            "key": "demonstrated",
+            "label": "Demonstrated",
+            "description": "Show a relevant check."
+          }
+        ]
+      }
+    ]
+  }
+}

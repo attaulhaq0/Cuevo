@@ -7,12 +7,23 @@ import { SwaggerModule, DocumentBuilder, ApiBearerAuth, ApiOperation } from '@ne
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { DomainError } from '@cuevo/domain';
 import { parseServerConfig, type ServerConfig } from '@cuevo/config';
-import { Database } from './database/database';
-import { IdentityService, type MembershipRow } from './identity/identity.service';
-import { createUserVerifier, isAuthReady } from './identity/supabase-auth';
-import { createSchoolLearningController } from './school-learning/controller';
-import { createAcademicController } from './academic/controller';
-import { createLearnerStateController } from './learner-state/controller';
+import { Database } from './platform/database/database';
+import { IdentityService, type MembershipRow } from './platform/identity/identity.service';
+import { createUserVerifier, isAuthReady } from './platform/identity/supabase-auth';
+import { createSchoolLearningController } from './modules/school-learning/learning.controller';
+import { createAcademicController } from './modules/academic/academic.controller';
+import { createLearnerStateController } from './modules/learner-state/learner-state.controller';
+import { createImprovementController } from './modules/improvement/improvement.controller';
+import { createIntelligenceService } from './modules/improvement/intelligence.service';
+import { createSchoolController } from './modules/school/school.controller';
+import { createCurriculumController } from './modules/curriculum/curriculum.controller';
+import { createAssetController } from './modules/assets/assets.controller';
+import { createCommunityController } from './modules/community/community.controller';
+import { createPortfolioController } from './modules/portfolio/portfolio.controller';
+import { createDevelopmentController } from './modules/development/development.controller';
+import { registerApiTelemetry } from './platform/telemetry/telemetry';
+import { registerRequestLimits } from './platform/request-limits/request-limits';
+import { createAttentionController } from './modules/learner-state/attention.controller';
 
 export async function createApp(config: ServerConfig = parseServerConfig(process.env)) {
   const database = new Database(config.databaseUrl);
@@ -44,9 +55,11 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
       }
     }
   }
-  @Module({ controllers: [FoundationController, createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database)] }) class FoundationModule {}
+  @Module({ controllers: [FoundationController,createAttentionController(identity,database),createPortfolioController(identity,database),createDevelopmentController(identity,database),createCommunityController(identity,database),createAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createCurriculumController(identity,database), createSchoolController(identity,database), createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database), createImprovementController(identity, database, createIntelligenceService(identity,database,config))] }) class FoundationModule {}
   const adapter = new FastifyAdapter({ bodyLimit: 1024 * 1024, requestIdHeader: false, logger: false });
   const app = await NestFactory.create<NestFastifyApplication>(FoundationModule, adapter, { logger: ['error', 'warn'] });
+  registerApiTelemetry(adapter.getInstance());
+  registerRequestLimits(adapter.getInstance());
   await app.register(helmet);
   app.enableCors({ origin: config.allowedOrigin, credentials: false, allowedHeaders: ['Authorization', 'Content-Type', 'X-School-Id', 'Idempotency-Key'], exposedHeaders: ['X-Request-Id'] });
   const instance = adapter.getInstance();

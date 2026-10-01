@@ -14,7 +14,7 @@ select school_id,actor_id,'Synthetic '||role||' '||lpad((right(actor_id::text,12
 insert into app.entitlements(school_id,code,enabled,effective_from)
 select id,'school.context',true,'2026-09-01T00:00:00Z' from app.schools;
 insert into app.entitlements(school_id,code,enabled,effective_from)
-select s.id,c.code,true,'2026-09-01T00:00:00Z' from app.schools s cross join (values('learning'),('assessment'),('curriculum'),('learner.state')) c(code);
+select s.id,c.code,true,'2026-09-01T00:00:00Z' from app.schools s cross join (values('learning'),('assessment'),('curriculum'),('learner.state'),('improvement')) c(code);
 insert into app.academic_years(school_id,id,name,starts_on,ends_on) values
  ('10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','Synthetic 2026–2027','2026-09-01','2027-07-01'),
  ('10000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000002','Synthetic 2026–2027','2026-09-01','2027-07-01');
@@ -47,4 +47,8 @@ select '10000000-0000-4000-8000-000000000001',('20000000-0000-4000-8000-'||lpad(
 insert into app.school_custom_versions(school_id,id,version,created_by)values('10000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','synthetic-school-1','20000000-0000-4000-8000-000000000002');
 insert into app.school_custom_references(school_id,id,version_id,title,description,status,created_by,approved_by,approved_at)values('10000000-0000-4000-8000-000000000001','61000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','Synthetic school-authored explanation objective','Demonstration objective created by the synthetic school; not an official curriculum standard.','APPROVED','20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002','2026-10-01T00:00:00Z');
 insert into app.learner_state_policies(school_id,development_window_days,version,approved_by)values('10000000-0000-4000-8000-000000000001',14,1,'20000000-0000-4000-8000-000000000002'),('10000000-0000-4000-8000-000000000002',14,1,'20000000-0000-4000-8000-000000000132');
+-- Explicit technical-fixture policy for synthetic tenants only; no live model/data approval is asserted.
+insert into app.intelligence_policies(school_id,version,fixture_enabled,live_enabled,approved_by)values('10000000-0000-4000-8000-000000000001',1,true,false,'20000000-0000-4000-8000-000000000002'),('10000000-0000-4000-8000-000000000002',1,true,false,'20000000-0000-4000-8000-000000000132');
+insert into app.entitlements(school_id,code,enabled,effective_from)select id,'school.operations',true,'2026-09-01'from app.schools on conflict(school_id,code)do update set enabled=true;
+insert into app.entitlements(school_id,code,enabled,effective_from)select s.id,c.code,true,'2026-09-01'from app.schools s cross join(values('community'),('portfolio'))c(code)on conflict(school_id,code)do update set enabled=true;
 commit;

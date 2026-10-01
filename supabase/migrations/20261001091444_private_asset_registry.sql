@@ -1,0 +1,3 @@
+-- Historical no-op version applied while the asset design was still being inspected.
+-- The complete private asset schema is implemented in a later additive migration.
+-- Preserve this applied version; it defines no product behavior or access grants.

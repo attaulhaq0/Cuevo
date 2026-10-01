@@ -14,3 +14,4 @@ supabase/.branches/
 *.tsbuildinfo
 **/storybook-static/
 supabase/.config-reference/
+**/next-env.d.ts

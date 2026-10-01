@@ -1,0 +1,11 @@
+# Technical verification scripts
+
+technical-exit.ts runs the clean synthetic sequence and writes ignored.local/verification evidence. Missing/failed steps remain NOT_VERIFIED/FAILED. It intentionally resets only guarded local Cuevo synthetic state through the existing bootstrap; run after app processes stop and scheduled shared tests complete. Separate runtime/browser fixtures never run concurrently with rollback SQL source replacements.
+
+recovery-drill.ts validates localproject5632x, stopped apps and restricted worker credentials, drains bounded outbox work, backs up/restores a scratch database and dedicated private Storage object, and verifies two-worker leases/expiry/retry. Privileged commands target only generated cuevo_recovery scratch databases/objects; no unrelated stack is stopped/reset. The preserved backup is ignored and may contain synthetic local credentials/data; do not commit or print it.
+
+browser-secrets.ts scans configured browser static artifacts for actual server secret values without printing those values. build-workspaces.ts is the cross-platform build runner. rules.test.ts verifies target refusal and evidence completeness. Run only under synthetic local authorization; external provider/customer/official curriculum acceptance stays separate. Implementation report: docs/reports/technical-observability-recovery.md.
+
+The configured Next build runs production mode after parent environment loading. playwright.production.config.ts starts the standalone production web build plus local fixture API/worker through production-runtime.ts and requires dependency readiness. It never reuses a dev server. This verifies production web assets in the synthetic environment and does not enable fixtures in a production school deployment.
+
+The exit runner requires a frozen authored-file snapshot, real API/SQL denial and private Realtime checks, runtime telemetry privacy, dependency audit and local database advisors. Recovery exercises restricted roles, forced RLS/grants and session denial against the restored database before cleanup. Browser tests include all-role keyboard, AX semantics, source37 viewports, English/Arabic RTL, reduced motion and 200% zoom-equivalent reflow. A passing automated reflow/AX check does not imply a manual assistive-technology certification.

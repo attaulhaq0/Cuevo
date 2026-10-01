@@ -6,6 +6,17 @@ export const lessonInputSchema = z.object({ title, sequence: z.number().int().mi
 export const activityInputSchema = z.object({ title, kind: z.enum(['reading','practice','assignment','quiz','reflection']), instructions: z.string().trim().min(1).max(10000), sequence: z.number().int().min(1).max(10000) }).strict();
 export const assessmentInputSchema = z.object({ courseId: z.uuid(), title, instructions: z.string().trim().min(1).max(10000), maxScore: z.number().positive().max(100000), dueAt: z.iso.datetime({ offset: true }).optional() }).strict();
 export const submissionInputSchema = z.object({ content: z.string().trim().min(1).max(50000) }).strict();
+export const submissionDraftSchema = z.object({content:z.string().max(50000),expectedRevision:z.number().int().min(0)}).strict();
+export const submissionReturnSchema = z.object({feedback:z.string().trim().min(1).max(10000),expectedRevision:z.number().int().positive()}).strict();
+export const resubmissionInputSchema = z.object({content:z.string().trim().min(1).max(50000),returnId:z.uuid(),expectedRevision:z.number().int().positive()}).strict();
+export const submissionCloseSchema = z.object({expectedRevision:z.number().int().positive()}).strict();
+export const assessmentAvailabilitySchema = z.object({availableFrom:z.iso.datetime({offset:true}).nullable(),availableUntil:z.iso.datetime({offset:true}).nullable(),allowLate:z.boolean(),state:z.enum(['OPEN','CLOSED']),expectedAvailabilityVersion:z.number().int().positive()}).strict().refine(input=>input.availableFrom===null||input.availableUntil===null||Date.parse(input.availableFrom)<Date.parse(input.availableUntil),'Availability end must follow its start.');
+const quizKey=z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_.:-]+$/);
+const quizOptionSchema=z.object({key:quizKey,label:z.string().trim().min(1).max(2000)}).strict();
+const quizQuestionSchema=z.object({key:quizKey,prompt:z.string().trim().min(1).max(4000),options:z.array(quizOptionSchema).min(2).max(10),correctOptionKey:quizKey}).strict().superRefine((input,ctx)=>{if(new Set(input.options.map(option=>option.key)).size!==input.options.length||!input.options.some(option=>option.key===input.correctOptionKey))ctx.addIssue({code:'custom',message:'Question options and correct choice must be valid.'});});
+export const quizDefinitionSchema=z.object({version:z.string().trim().min(1).max(100),questions:z.array(quizQuestionSchema).min(1).max(30)}).strict().refine(input=>new Set(input.questions.map(question=>question.key)).size===input.questions.length,'Question keys must be unique.');
+export const quizPublishSchema=z.object({quizId:z.uuid(),expectedPolicyVersion:z.number().int().positive()}).strict();
+export const quizAttemptSchema=z.object({quizId:z.uuid(),answers:z.array(z.object({questionKey:quizKey,optionKey:quizKey}).strict()).min(1).max(30)}).strict().refine(input=>new Set(input.answers.map(answer=>answer.questionKey)).size===input.answers.length,'Answers must have unique question keys.');
 export const completionInputSchema = z.object({ reflection: z.string().max(10000).optional() }).strict();
 export const publishInputSchema = z.object({}).strict();
 export const paginationSchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.uuid().optional() }).strict();

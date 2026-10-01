@@ -1,0 +1,41 @@
+export const commonEn = {
+  loadMore: 'Load more',
+  loadingMore: 'Loading more…',
+  allLoaded: 'All available records loaded.',
+  choose: 'Choose…',
+  save: 'Save',
+  saving: 'Saving…',
+  cancel: 'Cancel',
+  errorDenied: 'You do not have permission for this learning action. Your school administrator can review access.',
+  errorUnauthorized: 'Your session must be verified again.',
+  errorConflict: 'This action conflicts with the current record. Refresh to see the latest state.',
+  errorInvalid: 'The request could not be confirmed. Review your entries and try again.',
+  errorTooLarge: 'This course is too large to open in one view. Ask the course teacher to divide the material into smaller courses.',
+  errorUnavailable: 'The school service is unavailable. Please try again.',
+  uncertain: 'The outcome is not confirmed. Retry the same action without editing it so it cannot create a duplicate.',
+  retrySame: 'Retry the same action',
+  requestReference: 'Support reference',
+  aiUnavailable: 'AI analysis is not configured. No model analysis was produced. You can author a teacher proposal from the available evidence.',
+  aiFailed: 'This analysis attempt did not produce a proposal. Review the evidence and start a new analysis when ready.'
+};
+
+export const commonAr = {
+  loadMore: 'تحميل المزيد',
+  loadingMore: 'جارٍ تحميل المزيد…',
+  allLoaded: 'تم تحميل جميع السجلات المتاحة.',
+  choose: 'اختر…',
+  save: 'حفظ',
+  saving: 'جارٍ الحفظ…',
+  cancel: 'إلغاء',
+  errorDenied: 'لا تملك صلاحية هذا الإجراء التعليمي. يمكن لمسؤول مدرستك مراجعة الوصول.',
+  errorUnauthorized: 'يجب التحقّق من جلستك مجددًا.',
+  errorConflict: 'يتعارض هذا الإجراء مع السجل الحالي. حدّث الصفحة لعرض آخر حالة.',
+  errorInvalid: 'تعذّر تأكيد الطلب. راجع البيانات وحاول مجددًا.',
+  errorTooLarge: 'هذا المقرر كبير جدًا لعرضه في صفحة واحدة. اطلب من معلّم المقرر تقسيم المحتوى إلى مقررات أصغر.',
+  errorUnavailable: 'خدمة المدرسة غير متاحة. يُرجى المحاولة مجددًا.',
+  uncertain: 'لم تتأكّد نتيجة الإجراء. أعد الإجراء نفسه دون تعديله لمنع إنشاء نسخة مكررة.',
+  retrySame: 'إعادة الإجراء نفسه',
+  requestReference: 'مرجع الدعم',
+  aiUnavailable: 'تحليل الذكاء الاصطناعي غير مهيّأ. لم يُنتَج تحليل من نموذج. يمكنك إعداد مقترح معلّم من الشواهد المتاحة.',
+  aiFailed: 'لم ينتج عن محاولة التحليل هذه مقترح. راجع الشواهد وابدأ تحليلاً جديداً عندما تكون مستعداً.'
+};

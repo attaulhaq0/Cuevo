@@ -1,4 +1,4 @@
-import{describe,it,expect,vi}from'vitest';import type{Pool}from'pg';import{OutboxProcessor}from'../src/processor';
+import{describe,it,expect,vi}from'vitest';import type{Pool}from'pg';import{OutboxProcessor}from'../src/jobs/outbox/processor';
 describe('outbox delivery worker',()=>{
  it('processes only validated claimed event IDs and lease tokens through private functions',async()=>{
   const query=vi.fn(async(sql:string)=>sql.includes('claim_outbox')?{rows:[{id:'event',lease_token:'lease'}]}:{rows:[]});

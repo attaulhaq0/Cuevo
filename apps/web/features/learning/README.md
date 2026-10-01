@@ -1,0 +1,9 @@
+# Learning feature
+
+Owns courses, units, lesson/activity authoring, publication, private server drafts, immutable text submission/return/resubmission/close history, versioned assignment availability and teacher-authored MCQ quizzes. Public interfaces: model.ts (response types including native assessment/lifecycle/safe quiz context), api.ts (useLearningApi with feature copy), ui.tsx (LearningWorkspace, TeacherSubmissionActions and SubmissionHistory), copy.ts (shell labels). Academic consumes teacher source actions through ui.tsx. Reused requests/query/form/pagination mechanisms live in shared; do not duplicate them here. API owner: modules/school-learning. Product source IDs 09, 13, 14, 17 and 63.
+
+Tests live in test and are discovered by the web runner. Browser journeys: tests/e2e/school-learning.spec.ts and learning-lifecycle.spec.ts. Preserve publication/current source scope, availability versus academic policy versions, original-key uncertain retry and semantic Arabic/mobile content. Quiz author answer keys remain staff-only; learner checking is CHECKED_NOT_GRADED and never authoritative academic release. Source-linked revision after explicit feedback remains separate from attainment. Official curriculum acceptance is separate from synthetic learning.
+
+Opening a server draft waits for its validated current read before mounting an editable form. A confirmed draft-save receipt supplies the following submission form's content and revision; a delayed earlier read cannot replace that receipt. The lifecycle browser regression holds the initial real read and observes every editor mount, then verifies the actual saved payload, receipt and following form.
+
+Product source lookup: [task context map](../../../../docs/product/context-map.md); numbered IDs resolve through the product registry.

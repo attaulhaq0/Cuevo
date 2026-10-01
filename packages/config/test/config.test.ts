@@ -69,3 +69,18 @@ describe('configuration fails closed', () => {
     }
   });
 });
+
+describe('explicit fixture configuration boundary', () => {
+  const fixture = { NODE_ENV: 'test', SUPABASE_URL: 'http://127.0.0.1:56321', AI_GENERATION_MODE: 'FIXTURE', AI_FIXTURE_ENABLED: 'true' };
+  it('permits an explicitly enabled local fixture without a live credential', () => {
+    expect(parseServerConfig(fixture).intelligence).toMatchObject({ mode: 'FIXTURE', provider: 'deterministic-fixture', model: 'source-locked-v1' });
+  });
+  it('permits the documented Docker host gateway only on the Cuevo local Auth port', () => {
+    expect(parseServerConfig({ ...fixture, SUPABASE_URL: 'http://host.docker.internal:56321' }).intelligence.mode).toBe('FIXTURE');
+    expect(() => parseServerConfig({ ...fixture, SUPABASE_URL: 'http://host.docker.internal:54321' })).toThrow();
+    expect(() => parseServerConfig({ ...fixture, SUPABASE_URL: 'https://host.docker.internal:56321' })).toThrow();
+  });
+  it.each([{ ...fixture, AI_FIXTURE_ENABLED: 'false' }, { ...fixture, SUPABASE_URL: 'https://auth.example' }, { ...fixture, NODE_ENV: 'production' }])('rejects unapproved fixture configuration', input => {
+    expect(() => parseServerConfig(input)).toThrow();
+  });
+});

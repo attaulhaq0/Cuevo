@@ -2,7 +2,9 @@
 
 Date: 2026-10-01 (Asia/Riyadh). Company: E Deviser. Product: Cuevo.
 
-The goal is active. MVP exit is not verified. This document records evidence rather than planned capabilities.
+**Technical MVP Complete — verified in the local synthetic environment on1October2026.** The corrected source-frozen run passed all22 required steps:302 unit cases,83 web cases,482 SQL assertions/27files,32 actual integration cases/18suites,7 recovery checks and28 production-web browser journeys. Configured builds, private source/grant/role/session checks, dependency/advisor scans and browser secret exclusion passed. See the [exit matrix](reports/technical-mvp-exit-matrix.md) and [final implementation report](reports/technical-mvp-final-report.md).
+
+The founder's [execution decision](decisions/2026-10-01-technical-mvp.md) permits explicit local fixture intelligence. Technical verification does not establish official curriculum, live AI/PostHog, academic/rights/customer or production/regional/legal acceptance. The earlier offline [checkpoint](reports/2026-10-01-offline-resume-checkpoint.md) is retained as history; work resumed and its final verification requirement is now satisfied.
 
 ## Initial inventory
 
@@ -16,18 +18,18 @@ The goal is active. MVP exit is not verified. This document records evidence rat
 
 | Gate | Status | Evidence |
 |---|---|---|
-| 0 Architecture | IN_PROGRESS | Design, monorepo, private database, API/worker health, tokens and local bootstrap verified; broader deployment/threat documentation pending |
-| 1 School + Learning | IN_PROGRESS | Five-role sign-in and teacher → course/lesson/activity/assessment → student completion/submission verified; SIS setup/daily operations remain |
-| 2 Academic Truth | IN_PROGRESS | Numeric marking/release/evidence/correction/approved parent flow verified; rubric and full academic cases remain |
-| 3 Intelligence Loop | IN_PROGRESS | Restricted worker, five-dimensional state and neutral practice/reflection signals verified; proposal/approval/intervention/outcome remain |
-| 4 Experience | NOT_IMPLEMENTED | Five role journeys not verified |
-| 5 Verification | NOT_VERIFIED | Exit suite absent at start |
+| 0 Architecture | VERIFIED_TECHNICAL | Modular monolith/worker, ERD/threat model, layout/context guards, configured builds, Docker and Storybook pass |
+| 1 School + Learning | VERIFIED_TECHNICAL | Current school operations, five-role Auth, course/unit/lesson/activity, assignment/draft/feedback/revision and checked quiz journeys pass |
+| 2 Academic Truth | VERIFIED_TECHNICAL | Numeric/rubric native release/correction/evidence/parent projection/report, atomic audit/idempotency/outbox and source-deny cases pass |
+| 3 Intelligence Loop | VERIFIED_TECHNICAL | Authorized persisted contextual fixture runs, factual signals, human approval, differentiated practice, reassessment/outcome/state source closure pass |
+| 4 Experience | VERIFIED_TECHNICAL | Five role homes/class view, controlled community/private Realtime, portfolio/files/recognition, English/Arabic/RTL/mobile/keyboard/AX/axe/reduced motion pass |
+| 5 Verification | VERIFIED_TECHNICAL | Final clean source-frozen22-step aggregate,302unit/83web/482SQL/32integration/7recovery/28browser; security/advisor/bundle checks pass |
 
 ## Critical external blockers
 
 1. England selected subject, Cambridge IGCSE Mathematics 0580 and Qatar official requirement bundles lack local dated sources, known rights, normalized artifacts and academic approval. Implement generic School Custom synthetic cases; official readiness remains REQUIRES_REVIEW.
-2. No configured AI provider secret or approved provider data-policy configuration. Live-model evaluation cannot pass until those exist. Do not fabricate a secret or claim fixture outputs prove production AI.
-3. Production environment, data residency/legal acceptance, academic sign-off and restore drill are unverified. Singapore development does not establish Qatar compliance.
+2. No configured live AI provider secret or approved provider data-policy configuration. Live-model evaluation remains unverified; the current founder instruction explicitly permits labeled deterministic/fixture execution for Technical MVP. Do not fabricate a secret or claim fixture outputs prove production AI.
+3. Production environment, data residency/legal acceptance, academic sign-off and production restore are unverified. The local synthetic database/private-byte/restricted-authority restore drill passed. Singapore development does not establish Qatar compliance.
 
 ## Infrastructure concerns discovered
 
@@ -52,3 +54,15 @@ GitHub CI run 36794876955 passed on commit 3ea5822 (foundation and school learni
 See docs/reports/learner-state-verification.md. Clean 14-migration replay, 189 database assertions, nine sequential real integration tests, 183 Vitest + 34 web + 4 runtime tests and five browser tests passed. Worker processes immutable source events and preserves independent state dimensions; revision and outcome remain unmeasured.
 
 GitHub CI run 36796037536 passed on numeric academic commit f9db639; run 36796276441 passed on a1130fc. Uncommitted worker changes require their own hosted checks.
+
+## Resumed technical completion evidence
+
+The full documentation pack was reviewed by the implementation team before changes. Baseline sequential verification passed ten integration cases, five browser journeys and builds. A dedicated development branch preserves the inherited uncommitted hierarchy and improvement work.
+
+Implemented locally: persisted fixture intelligence runs and source/policy/tool provenance; generated proposals awaiting human approval; original-key recovery for unknown intelligence commit outcome; native teacher-defined rubric definitions/criterion marking/release/correction/evidence; source-linked learner support and native outcome projections; numeric/rubric Progress and bilingual UI. Private source helpers recheck current access, and no fixture/model receives grade/access authority. All new schema is in additive migrations.
+
+Current increment evidence is in [technical loop verification](reports/technical-loop-verification.md): 221 pure unit tests, 52 web cases, four runtime cases, isolated fixture-improvement and native rubric/parent/correction browser journeys passed. Database suites have expanded to 319 assertions across 14 files with new lifecycle/quiz, school and structural programme contexts. Broader actual API/browser verification remains in progress. Typecheck/build have passed during integration. Independent reviews identified and corrected receipt-loss and out-of-order completion/reassessment/outcome projection defects. No full gate is marked complete from intermediate checks.
+
+Current learning revision/quiz, school operations and community browser journeys have passed; see [learning/school/community verification](reports/technical-learning-school-community-verification.md). Portfolio/recognition persistence, private asset integrity and protected programme read scopes are implemented and current SQL suites pass 410 assertions. A–G source-locked synthetic scenarios seed idempotently and the restricted worker drains them with zero failed/pending events.
+
+The final corrected aggregate closes the technical work listed in earlier increments. Official curriculum/live-provider/customer/production acceptance remains separately REQUIRES_REVIEW. Preserve the historical reports as evidence for their original snapshots; use the final matrix for current gate status.

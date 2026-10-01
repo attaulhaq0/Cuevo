@@ -1,0 +1,2 @@
+import{describe,it,expect}from'vitest';import{workerQueueRecord}from'../src/platform/telemetry';
+describe('worker queue telemetry privacy',()=>{it('reports bounded queue status/lag without returning raw DB data',()=>{expect(workerQueueRecord({pendingCount:3,failedCount:1,oldestPendingAt:'2026-10-01T00:00:00Z',student:'private'},Date.parse('2026-10-01T00:00:10Z'))).toEqual({service:'cuevo-worker',event:'queue.health',pendingCount:3,failedCount:1,oldestLagMs:10000});});});

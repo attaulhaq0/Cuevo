@@ -3,7 +3,12 @@ create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to cuevo_api,cuevo_worker;
 set local search_path=extensions,pg_catalog;
 select no_plan();
-delete from app.habit_observations;delete from app.learner_signals;delete from app.learner_state_snapshots;delete from internal.processed_events;delete from internal.outbox_events;
+-- Rollback-only isolation retains immutable observation/XP source links from prior demos.
+update app.habit_observations set occurred_at=clock_timestamp()-interval'400 days';
+delete from internal.processed_events;
+delete from app.learner_signals;delete from app.learner_state_snapshots;
+update internal.outbox_events set state='COMPLETED',completed_at=clock_timestamp(),lease_token=null,lease_until=null where state<>'COMPLETED';
+delete from app.current_results;delete from app.current_rubric_results;
 insert into app.entitlements(school_id,code,enabled,effective_from)select id,'learner.state',true,'2026-09-01'from app.schools on conflict(school_id,code)do update set enabled=true;
 insert into app.learner_state_policies(school_id,development_window_days,version,approved_by)values('10000000-0000-4000-8000-000000000001',14,1,'20000000-0000-4000-8000-000000000002')on conflict(school_id)do nothing;
 select ok(to_regclass('app.learner_state_snapshots')is not null,'five dimensional learner state persists');

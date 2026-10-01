@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createWorkerPool } from '../src/database';
+import { createWorkerPool } from '../src/platform/database';
 
 afterEach(() => vi.restoreAllMocks());
 describe('worker idle connection recovery', () => {

@@ -1,0 +1,8 @@
+import{describe,it,expect}from'vitest';import type{Database}from'../../src/platform/database/database';import type{PoolClient}from'pg';import{CommunityService}from'../../src/modules/community/community.service';
+const actor={userId:'20000000-0000-4000-8000-000000000012',schoolId:'10000000-0000-4000-8000-000000000001',membershipId:'70000000-0000-4000-8000-000000000012',role:'student' as const,entitlements:['community']};
+function db(){let write=false;return{database:{actorTransaction:async(_u:string,_s:string,fn:(c:PoolClient)=>Promise<unknown>)=>fn({query:async()=>{write=true;return{rows:[{response:{id:'one',status:'VISIBLE'}}]};}}as unknown as PoolClient)}as unknown as Database,write:()=>write};}
+describe('community command authority',()=>{
+it('student cannot create a room or choose actor authority',async()=>{const store=db();await expect(new CommunityService(store.database).command(actor,'room.create',undefined,{classId:actor.schoolId,name:'Group',type:'GROUP',memberIds:[]},'community-key-001','request')).rejects.toMatchObject({status:403});expect(store.write()).toBe(false);});
+it('rejects private authority and unsafe reaction fields before SQL',async()=>{const store=db();await expect(new CommunityService(store.database).command(actor,'post.create',actor.schoolId,{body:'Hello',actorId:actor.userId},'community-key-001','request')).rejects.toMatchObject({code:'INVALID_INPUT'});expect(store.write()).toBe(false);});
+it('returns only a persisted scoped command receipt',async()=>{const store=db();expect(await new CommunityService(store.database).command(actor,'post.create',actor.schoolId,{body:'School discussion',replyToId:null},'community-key-001','request')).toEqual({id:'one',status:'VISIBLE'});});
+});
