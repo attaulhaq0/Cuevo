@@ -14,6 +14,8 @@ The founder selected the Microsoft Foundry deployment `gpt-image-2.5-sunburst` f
 
 The founder subsequently required approval before further generation and requested several distinct contemporary approaches, including gamification and liquid effects. **Do not issue another generation or edit request until the founder approves its concrete scope.** An API key, successful setup or general request to use the model does not approve an image batch. Selection of a direction does not automatically approve unbounded refinements. The earlier experimental images remain unselected and are not implementation targets.
 
+The founder approved the proposed ten-image set on 1 October 2026 and clarified that Student should be gamified while all other roles should be mature. Generate exactly the five proposed student-home directions in light/dark for comparison. Use them to recommend one common system with role-specific information architecture. Additional role mockups, variants or edits require approval; implementation remains contingent on visual selection.
+
 ## Foundry image setup and visual review
 
 The labelled ignored settings file is `.local/design-concepts/foundry-image.env`. It contains `CUEVO_IMAGE_ENDPOINT`, `CUEVO_IMAGE_DEPLOYMENT`, `CUEVO_IMAGE_API_KEY` and `CUEVO_IMAGE_QUALITY`. Leave the key empty to use the already configured `AZURE_OPENAI_API_KEY`; a different resource can use a locally entered key. Do not copy the key into committed documentation, frontend environment variables, browser forms or generated prompts. See [Foundry setup](../../design/foundry-image-setup.md) for the field labels and recovery paths.
