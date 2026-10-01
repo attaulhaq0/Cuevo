@@ -15,6 +15,10 @@ For product requirements start with [product context](product/README.md) and its
 | Image concept generation approval | [Five directions, including gamified and liquid material](design/2026-concept-generation-brief.md); ten light/dark images approved, visual selection and further sets remain separate |
 | UI transformation acceptance and concurrent work | [Complete brief acceptance ledger](reports/2026-10-01-ui-transformation-acceptance-ledger.md) and [customer-readiness reconciliation](reports/2026-10-01-ui-concurrent-work-reconciliation.md); preserve the other chat's work and verify the whole brief |
 | Approved ten-image exploration and role recommendation | [Generation evidence, visual issues and role composition](reports/2026-10-01-approved-ui-concepts.md); generated concepts await founder selection |
+| Revised agentic product experience | [New companion and helpful-workspace direction](design/2026-agentic-experience-direction.md); prior concepts rejected, broader approaches and complete role/section exploration authorized |
+| Full role/section UI review | [Full-screen atlas](design/2026-full-screen-atlas.md) and [scalable complete LXP](design/2026-scalable-lxp-experience.md) |
+| Supplied authentication and character direction | [MVP character use and K–12 growth](design/2026-character-mvp-and-growth.md) and [implementation plan](superpowers/plans/2026-10-01-auth-and-character-integration.md); current authentication refinement uses founder assets |
+| Authentication desktop/mobile verification | [Approved authentication QA](reports/2026-10-01-auth-design-qa.md); presentation and layout evidence remain separate from real protected sign-in |
 | Original source briefs and manifest | [product history](product/history/README.md); use current product entrypoints for navigation |
 | Repository folder/copy hygiene evidence | [repository hygiene verification](reports/repository-hygiene-verification.md) |
 

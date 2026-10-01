@@ -31,7 +31,7 @@ Start at root README → AGENTS → [product context map](product/context-map.md
 | [packages/domain](../packages/domain/README.md) | Pure authorization and curriculum readiness invariants |
 | [packages/contracts](../packages/contracts/README.md) | Browser-safe boundary schemas; import @cuevo/contracts |
 | [packages/config](../packages/config/README.md) | Server environment/configuration and minimized analytics mapping |
-| [packages/ui](../packages/ui/README.md) | Shared tokens, Button and Status primitives; no school-specific policy |
+| [packages/ui](../packages/ui/README.md) | Shared semantic tokens, Button/Status and controlled CuevoIcon primitives; no school-specific policy |
 | [supabase/migrations](../supabase/migrations) | Append-only schema, policy, constraints and transactional source functions |
 | [supabase/seed](../supabase/seed) | Deterministic synthetic school context; no credentials |
 | [supabase/tests](../supabase/tests) | Real SQL/grant/RLS/rollback golden cases |

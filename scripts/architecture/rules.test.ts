@@ -3,6 +3,11 @@ import { test } from 'node:test';
 import { checkArchitecture, type ArchitectureFile } from './rules';
 const file = (path: string, content = ''): ArchitectureFile => ({ path, content });
 const rules = (files: ArchitectureFile[]) => checkArchitecture(files, { navigation: false }).map(issue => issue.rule);
+
+test('colocated raster imports resolve while cross-feature asset internals stay private', () => {
+  assert.deepEqual(rules([file('apps/web/features/auth/components/story.tsx', "import art from '../assets/welcome.webp';"), file('apps/web/features/auth/assets/welcome.webp')]), []);
+  assert.ok(rules([file('apps/web/features/learning/components/course.tsx', "import art from '../../auth/assets/welcome.webp';"), file('apps/web/features/auth/assets/welcome.webp')]).includes('feature-api'));
+});
 test('feature public interfaces, platform services and pure package exports are allowed', () => {
   assert.deepEqual(rules([file('apps/web/features/progress/model.ts', "import type { Result } from '../academic/model';"), file('apps/web/features/academic/model.ts', 'export type Result = string;'), file('apps/api/src/modules/academic/academic.service.ts', "import { Database } from '../../platform/database/database'; import { schema } from '@cuevo/contracts';"), file('apps/api/src/platform/database/database.ts'), file('packages/contracts/src/index.ts')]), []);
 });

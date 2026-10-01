@@ -1,15 +1,38 @@
 :root {
   color-scheme: light;
-  --color-canvas: #f7f7f2;
+  --color-canvas: #f5f9ff;
   --color-surface: #ffffff;
-  --color-surface-muted: #efefe8;
-  --color-surface-accent: #eaf0e7;
-  --color-text: #23352a;
-  --color-text-secondary: #566158;
-  --color-text-muted: #687168;
-  --color-border: #dce0d7;
-  --color-accent: #315c42;
-  --color-accent-hover: #244a32;
+  --color-surface-muted: #edf3fa;
+  --color-surface-accent: #e9f3ff;
+  --color-text: #061957;
+  --color-text-secondary: #48638a;
+  --color-text-muted: #526b8d;
+  --color-border: #d4e2f4;
+  --color-border-strong: #a4cdff;
+  --color-brand: #4fc0db;
+  --color-accent: #066abc;
+  --color-accent-hover: #07589b;
+  --color-link: #0963d8;
+  --color-teal: #007e70;
+  --color-violet: #6537d4;
+  --color-action-start: #007cab;
+  --color-action-end: #007e70;
+  --color-auth-action-start: #0668f2;
+  --color-auth-action-end: #07bdcc;
+  --color-auth-text: #001559;
+  --color-auth-border: #b9c7df;
+  --color-recognition: #c96500;
+  --color-learning-symbol: #008bff;
+  --color-practice-symbol: #00a588;
+  --color-feedback-symbol: #6945e8;
+  --color-progress-symbol: #ff8a00;
+  --color-parent-symbol: #ed426b;
+  --color-parent-surface: #ffdbe5;
+  --space-7: 1.75rem;
+  --color-learning-surface: #b8ddff;
+  --color-practice-surface: #b6f0e4;
+  --color-feedback-surface: #d1cdfa;
+  --color-progress-surface: #f8dba5;
   --color-on-accent: #ffffff;
   --color-positive: #2d613b;
   --color-positive-surface: #e9f2e6;
@@ -24,6 +47,8 @@
   --type-sm: .875rem;
   --type-body: 1rem;
   --type-lg: 1.125rem;
+  --type-lead: 1.25rem;
+  --type-subheading: 1.375rem;
   --type-xl: 1.5rem;
   --type-title: clamp(2rem, 3vw, 2.875rem);
   --type-display: clamp(2.75rem, 4.1vw, 4.5rem);
@@ -40,8 +65,12 @@
   --radius-sm: .375rem;
   --radius-md: .625rem;
   --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
   --radius-pill: 999px;
-  --elevation-subtle: 0 2px 8px rgb(35 53 42 / 4%);
+  --elevation-subtle: 0 2px 8px rgb(23 49 91 / 6%);
+  --elevation-floating: 0 18px 42px rgb(23 49 91 / 13%);
+  --elevation-accent: 0 2px 7px rgb(9 99 216 / 22%);
+  --elevation-action: 0 10px 22px rgb(0 124 171 / 16%);
   --focus-ring: 0 0 0 3px rgb(107 72 168 / 28%);
   --motion-fast: 160ms;
   --motion-normal: 240ms;
@@ -76,5 +105,5 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 .status--positive { background: var(--color-positive-surface); color: var(--color-positive); }
 .status--warning { background: var(--color-warning-surface); color: var(--color-warning); }
 .status__dot { inline-size: .375rem; block-size: .375rem; background: currentColor; border-radius: 50%; flex: none; }
-:where(a, button, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; box-shadow: var(--focus-ring); }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; box-shadow: var(--focus-ring); }
 @media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; --motion-normal: 0ms; } }

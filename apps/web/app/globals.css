@@ -13,10 +13,12 @@ svg { flex: none; }
 :where(h1, main):focus { outline: none; }
 .skip-link { position: fixed; inset-block-start: var(--space-3); inset-inline-start: var(--space-3); transform: translateY(-150%); padding: var(--space-3) var(--space-5); background: var(--color-accent); color: var(--color-on-accent); border-radius: var(--radius-md); z-index: 100; }
 .skip-link:focus { transform: translateY(0); }
-.brand { display: inline-flex; align-items: center; text-decoration: none; }
-.brand__name { font-size: 2.35rem; font-weight: 700; letter-spacing: -.085em; line-height: 1; }
-.brand__name span { color: var(--color-accent); }
-.brand--compact .brand__name { font-size: 2.05rem; }
+.brand { display: inline-flex; align-items: center; gap: var(--space-3); text-decoration: none; }
+.brand__mark { display: block; inline-size: 2.7rem; block-size: auto; flex: none; }
+.brand__name { font-size: 1.65rem; font-weight: 700; letter-spacing: -.045em; line-height: 1; }
+.brand__attribution { margin-inline-start: var(--space-3); font-size: var(--type-xs); font-weight: 500; letter-spacing: 0; color: var(--color-text-secondary); }
+.brand--compact .brand__mark { inline-size: 2.1rem; }
+.brand--compact .brand__name { font-size: 1.45rem; }
 .public-header { inline-size: 100%; max-inline-size: 91rem; margin-inline: auto; display: flex; align-items: center; justify-content: space-between; padding: var(--space-10) var(--space-16); }
 .language-switch { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--type-sm); }
 .language-switch > svg { margin-inline-end: var(--space-2); }
@@ -27,20 +29,6 @@ svg { flex: none; }
 .eyebrow { display: flex; align-items: center; gap: var(--space-2); font-size: var(--type-xs); color: var(--color-accent); font-weight: 700; letter-spacing: .085em; text-transform: uppercase; }
 html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 .sign-in-page, .access-page { min-block-size: 100dvh; display: flex; flex-direction: column; }
-.sign-in-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 25.5rem); align-items: center; gap: clamp(4rem, 10vw, 11rem); inline-size: 100%; max-inline-size: var(--content-width); margin: auto; padding: var(--space-10) var(--space-8) var(--space-16); }
-.sign-in-story { max-inline-size: 35rem; }
-.sign-in-story > .eyebrow { margin-block-end: var(--space-6); }
-.sign-in-story h1 { font-size: var(--type-display); line-height: 1.08; }
-.sign-in-story__body { margin-block-start: var(--space-6); font-size: var(--type-lg); color: var(--color-text-secondary); line-height: 1.75; max-inline-size: 32rem; }
-.promise-list { margin: var(--space-10) 0 0; padding: 0; list-style: none; display: grid; gap: var(--space-6); }
-.promise-list li { display: flex; gap: var(--space-4); align-items: flex-start; }
-.promise-list__icon { display: grid; place-items: center; inline-size: 2.375rem; block-size: 2.375rem; background: var(--color-surface-accent); color: var(--color-accent); border-radius: var(--radius-md); flex: none; }
-.promise-list h2 { font-size: var(--type-sm); margin-block-end: var(--space-1); }
-.promise-list p { font-size: var(--type-sm); line-height: 1.5; color: var(--color-text-secondary); }
-.sign-in-panel { background: var(--color-surface); padding: var(--space-10); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--elevation-subtle); }
-.sign-in-panel__heading h2 { font-size: 1.75rem; margin-block-start: var(--space-4); }
-.sign-in-panel__heading > p { font-size: var(--type-sm); color: var(--color-text-secondary); margin-block-start: var(--space-3); }
-.sign-in-form { display: grid; gap: var(--space-5); margin-block-start: var(--space-8); }
 .field label { display: block; font-size: var(--type-sm); font-weight: 600; margin-block-end: var(--space-2); }
 .field input { inline-size: 100%; min-block-size: 3rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); color: var(--color-text); font-size: var(--type-body); }
 .field input::placeholder { color: var(--color-text-muted); }
@@ -50,12 +38,6 @@ html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 .password-field input { padding-inline: 3.25rem; }
 .password-toggle { position: absolute; inset-inline-end: .25rem; inset-block-start: .25rem; inline-size: 2.5rem; block-size: 2.5rem; display: grid; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
 .password-toggle:hover { background: var(--color-canvas); }
-.sign-in-submit { inline-size: 100%; justify-content: space-between; margin-block-start: var(--space-1); min-block-size: 3rem; }
-.sign-in-help { padding-block-start: var(--space-6); margin-block-start: var(--space-8); border-block-start: 1px solid var(--color-border); }
-.sign-in-help h3 { font-size: var(--type-sm); margin-block-end: var(--space-2); }
-.sign-in-help p { font-size: var(--type-sm); color: var(--color-text-secondary); }
-.session-safety { display: flex; gap: var(--space-2); font-size: var(--type-xs); color: var(--color-text-muted); margin-block-start: var(--space-6); line-height: 1.5; }
-.session-safety svg { margin-block-start: .1rem; }
 .public-footer { display: flex; justify-content: space-between; gap: var(--space-6); margin-block-start: auto; padding: var(--space-8) var(--space-16); font-size: var(--type-xs); color: var(--color-text-muted); }
 .form-error { padding: var(--space-3) var(--space-4); background: var(--color-danger-surface); color: var(--color-danger); border-radius: var(--radius-md); font-size: var(--type-sm); }
 .notice { padding: var(--space-5); border-radius: var(--radius-md); background: var(--color-surface-muted); margin-block-start: var(--space-6); }
@@ -140,8 +122,6 @@ html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 html[dir="rtl"] .directional-icon { transform: rotate(180deg); }
 @media (max-width: 1200px) {
   .public-header { padding: var(--space-8) var(--space-10); }
-  .sign-in-main { gap: var(--space-12); padding-inline: var(--space-10); }
-  .sign-in-panel { padding: var(--space-8); }
   .public-footer { padding-inline: var(--space-10); }
   .workspace { grid-template-columns: 13.75rem minmax(0, 1fr); }
   .workspace-intro { flex-direction: column; }
@@ -150,10 +130,6 @@ html[dir="rtl"] .directional-icon { transform: rotate(180deg); }
   .workspace-header { padding-inline: var(--space-8); }
 }
 @media (max-width: 900px) {
-  .sign-in-main { grid-template-columns: minmax(0, 1fr) minmax(18rem, 22.5rem); gap: var(--space-8); }
-  .sign-in-story h1 { font-size: 2.875rem; }
-  .sign-in-story__body { font-size: var(--type-body); }
-  .promise-list { gap: var(--space-5); }
   .workspace-header__leading { display: none; }
   .workspace-header__actions { inline-size: 100%; justify-content: space-between; }
   .header-divider { display: none; }
@@ -161,15 +137,6 @@ html[dir="rtl"] .directional-icon { transform: rotate(180deg); }
 @media (max-width: 767px) {
   .public-header { padding: var(--space-6); }
   .brand__name { font-size: 2.1rem; }
-  .sign-in-main { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-10); padding: var(--space-5) var(--space-6) var(--space-8); }
-  .sign-in-story { max-inline-size: 34rem; margin-inline: auto; }
-  .sign-in-story > .eyebrow { margin-block-end: var(--space-4); }
-  .sign-in-story h1 { font-size: clamp(2.25rem, 7vw, 3.5rem); line-height: 1.15; }
-  .sign-in-story__body { margin-block-start: var(--space-4); line-height: 1.6; }
-  .promise-list { display: none; }
-  .sign-in-panel { max-inline-size: 34rem; inline-size: 100%; margin-inline: auto; padding: var(--space-6); }
-  .sign-in-panel__heading h2 { font-size: var(--type-xl); }
-  .sign-in-form { margin-block-start: var(--space-6); }
   .public-footer { padding: var(--space-6); flex-direction: column; gap: var(--space-2); }
   .workspace { display: block; }
   .sidebar { display: contents; }
@@ -206,7 +173,6 @@ html[dir="rtl"] .directional-icon { transform: rotate(180deg); }
 }
 @media (max-width: 360px) {
   .public-header, .sign-in-main, .public-footer, .workspace-main { padding-inline: var(--space-4); }
-  .sign-in-panel { padding: var(--space-5); }
   .language-switch { gap: var(--space-1); }
   .language-switch > svg { display: none; }
   .account-button bdi { max-inline-size: 7rem; }
