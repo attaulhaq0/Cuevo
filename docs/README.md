@@ -19,6 +19,7 @@ For product requirements start with [product context](product/README.md) and its
 | Full role/section UI review | [Full-screen atlas](design/2026-full-screen-atlas.md) and [scalable complete LXP](design/2026-scalable-lxp-experience.md) |
 | Supplied authentication and character direction | [MVP character use and K–12 growth](design/2026-character-mvp-and-growth.md) and [implementation plan](superpowers/plans/2026-10-01-auth-and-character-integration.md); current authentication refinement uses founder assets |
 | Authentication desktop/mobile verification | [Approved authentication QA](reports/2026-10-01-auth-design-qa.md); presentation and layout evidence remain separate from real protected sign-in |
+| Current parallel-work boundary | [UI reconciliation follow-up](reports/2026-10-01-ui-reconciliation-follow-up.md); isolated auth increment and source contracts to preserve before all-role integration |
 | Original source briefs and manifest | [product history](product/history/README.md); use current product entrypoints for navigation |
 | Repository folder/copy hygiene evidence | [repository hygiene verification](reports/repository-hygiene-verification.md) |
 

@@ -1,0 +1,11 @@
+# UI work alongside customer-readiness work
+
+Read-only follow-up, 1 October 2026. The design work remains isolated in `C:/Users/hp/.codex/worktrees/cuevo-design-system/Cuevo`, branch `codex/cuevo-design-system`, with the approved authentication increment committed as `a084c79`. The customer-readiness chat still owns `G:/Cuevo`, HEAD `946cca0`, with substantial uncommitted application, test and append-only migration changes.
+
+The compact chat-status snapshot reported that the customer-readiness work was active, checking source-bounded scale reads, late-save browser recovery and worker leases before its final screen suite. This is progress context rather than acceptance evidence. No message was sent to that chat, no service was stopped, and its checkout, credentials and database were not modified.
+
+The earlier [reconciliation manifest](2026-10-01-ui-concurrent-work-reconciliation.md) remains historical evidence of an earlier mutable snapshot. It must not be used as an immutable patch or assume that all newer source is included. The latest status inventory has further customer projection, intelligence accounting/provider, form draft/context, recovery, learner-source and browser journey changes. Merely seeing filenames does not establish their correctness or acceptance.
+
+Before bringing the all-role redesign into the main application, read and reconcile the other chat's completed contracts and golden journeys, preserving verified current membership, exact child/record context, memory-only drafts, stable command identity and uncertain retries, authorized source/relationship changes, native grading/evidence, provider governance and current denied/offline recovery. Retain append-only applied migration history. Do not copy mutable trees or replace files wholesale to make a UI merge easier.
+
+Authentication presentation has an independent port53112 preview with non-live loopback auth/API configuration and explicit mocked-error tests. The design gallery at53113 contains generated visual review artifacts and an ordered34-screen inventory; it does not authenticate a real school, call protected APIs, establish official curriculum, or verify those customer-readiness changes. All-role implementation, integration, theme/command/workspace migration and full customer acceptance remain open.
