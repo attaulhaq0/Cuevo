@@ -1,6 +1,6 @@
 # Cuevo UI transformation proposal
 
-Date: 1 October 2026 (Asia/Riyadh). Status: proposed; awaiting founder approval. This implementation design does not replace numbered product sources or establish feature/customer acceptance.
+Date: 1 October 2026 (Asia/Riyadh). Status: ten-image exploration generated under founder approval; visual direction and implementation approval pending. This implementation design does not replace numbered product sources or establish feature/customer acceptance.
 
 ## Confirmed frontend
 
@@ -14,7 +14,7 @@ The founder selected the Microsoft Foundry deployment `gpt-image-2.5-sunburst` f
 
 The founder subsequently required approval before further generation and requested several distinct contemporary approaches, including gamification and liquid effects. **Do not issue another generation or edit request until the founder approves its concrete scope.** An API key, successful setup or general request to use the model does not approve an image batch. Selection of a direction does not automatically approve unbounded refinements. The earlier experimental images remain unselected and are not implementation targets.
 
-The founder approved the proposed ten-image set on 1 October 2026 and clarified that Student should be gamified while all other roles should be mature. Generate exactly the five proposed student-home directions in light/dark for comparison. Use them to recommend one common system with role-specific information architecture. Additional role mockups, variants or edits require approval; implementation remains contingent on visual selection.
+The founder approved the proposed ten-image set on 1 October 2026 and clarified that Student should be gamified while all other roles should be mature. Exactly ten student-home concepts were generated in light/dark; the [concept report](../../reports/2026-10-01-approved-ui-concepts.md) records evidence, limitations and the shared-system role recommendation. Additional role mockups, variants or edits require approval; implementation remains contingent on visual selection.
 
 ## Foundry image setup and visual review
 

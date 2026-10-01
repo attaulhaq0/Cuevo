@@ -10,7 +10,7 @@ For product requirements start with [product context](product/README.md) and its
 | Current design decisions | [decisions/](decisions/) |
 | Verification evidence and review history | [reports/](reports/) |
 | Implementation task designs/plans | [superpowers/specs/](superpowers/specs/) and [superpowers/plans/](superpowers/plans/) |
-| Proposed Cuevo UI transformation | [Frontend and design proposal](superpowers/specs/2026-10-01-cuevo-ui-transformation-design.md) and [source inventory](reports/2026-10-01-ui-transformation-inventory.md); awaiting founder approval |
+| Proposed Cuevo UI transformation | [Frontend and design proposal](superpowers/specs/2026-10-01-cuevo-ui-transformation-design.md) and [source inventory](reports/2026-10-01-ui-transformation-inventory.md); approved concept exploration completed, visual selection and implementation approval pending |
 | Microsoft Foundry image design setup | [Labelled endpoint, deployment and local API key settings](design/foundry-image-setup.md); exact `gpt-image-2.5-sunburst` visual concepts followed by the existing React/TypeScript implementation |
 | Image concept generation approval | [Five directions, including gamified and liquid material](design/2026-concept-generation-brief.md); ten light/dark images approved, visual selection and further sets remain separate |
 | UI transformation acceptance and concurrent work | [Complete brief acceptance ledger](reports/2026-10-01-ui-transformation-acceptance-ledger.md) and [customer-readiness reconciliation](reports/2026-10-01-ui-concurrent-work-reconciliation.md); preserve the other chat's work and verify the whole brief |
