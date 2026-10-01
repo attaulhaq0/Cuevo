@@ -4,7 +4,7 @@ Status: REVIEW COMPLETE — specification and quality pass for the numeric acade
 
 Artifact: `.local/review-academic.patch`, SHA-256 `05F0BB91DAA7E3E095DA4ED5A6463672AAA9E5B6C202887C96FA92E4CB5E8173`. Reviewed the saved academic-truth plan, academic service/controller, strict contracts, migrations `20261001001036_academic_truth.sql` and `20261001001421_academic_context_immutability.sql`, SQL golden cases, real API test and backend report. Source requirements include 03/04/05/17/38/39/43/61/81.
 
-Correction artifact: `.local/review-academic-fix.patch`, SHA-256 `72ECF485D14D6766D03D9C7DAF80A23CDDB8B367DA81D64221CE73BFB2D4790E`. It includes the corrected API command path, additive CLI migration `20261001002127_academic_mark_reference_required.sql` and the recovery regression cases.
+Correction artifact: `.local/review-academic-fix.patch`, initially reviewed at SHA-256 `72ECF485D14D6766D03D9C7DAF80A23CDDB8B367DA81D64221CE73BFB2D4790E`, then refreshed to include the API regression at SHA-256 `693A69B0C1F4533641A03E4C53FC9BC526C16FBD80D3742265408B266DB3CE09`. The reviewer reread the refreshed artifact and confirmed the same corrected command path and SQL prerequisite, plus the additional missing-reference API assertion. The artifact includes additive CLI migration `20261001002127_academic_mark_reference_required.sql` and recovery cases.
 
 ## Final verdict and correction
 

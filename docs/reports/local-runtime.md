@@ -1,6 +1,6 @@
 # Local runtime verification
 
-Status: local Docker deployment skeleton reviewed and partly executed. API image build and nonroot/secret exclusion checks pass. Full three-service Docker startup and hosted CI execution remain unverified. This is a synthetic local environment, not a hardened production release.
+Status: all three local Docker images built, started healthy, and passed configured database/Auth connectivity checks. Nonroot and secret exclusion checks pass. This is a synthetic local environment, not a hardened production release; worker processing was not configured in this image snapshot.
 
 ## Changes
 
@@ -44,5 +44,29 @@ docker compose --env-file .env.local down
 Terminal `npm run dev` and Compose use the same app ports; stop terminal app processes before bringing up Compose. Supabase is separate and should remain running. Stop/down commands must not use volume removal or unrelated stack targets.
 
 The API image snapshot built during this task precedes ongoing school/learning implementation; rebuild the final source state before treating Docker deployment as verified. Web and worker builds/startup remain required. CI now pins Node/npm, follows the same lifecycle-script policy, invokes local guard tests, checks code/build, bootstraps and tests synthetic Supabase, runs browser tests, and builds all Docker images. That Ubuntu workflow has been written but has not run on GitHub, and therefore is not a passing CI claim.
+
+## Subsequent three-image build
+
+Executed `docker compose --env-file .env.local build` after the numeric academic review correction; exit 0. API/worker TypeScript builds and Next.js 16.3.8 production build all passed. Images were built from HEAD `3ea5822` plus then-current uncommitted school/academic source, including the approved-reference marking correction. Later frontend pagination changes were still in progress, so this is not an exact-commit release claim.
+
+Image IDs:
+
+- API: `sha256:5f29ee721f7a5df7660596ed31b73dbb8b5435cba184aded202f0b3db91b2f81`
+- Worker: `sha256:b18602800a58c5efc6edfdb1275dc16bb2d96700b5b2d2ca4aec14b062868646`
+- Web: `sha256:b2887eee4a940af6fa816105ae4501edfb8e8fca2827699203abdc29032d7052`
+
+Each image was executed separately with a Node assertion verifying nonzero UID, Config.User `node`, absence of `.env.local`, local runtime secrets and synthetic account credentials, and absence of service-role/OpenAI environment values. All three passed. Actual Compose rendering confirmed API/worker role names, host.docker.internal database/Auth addresses, and no service-role key delivery to runtime services; values were not printed.
+
+The parent reports GitHub CI run `36794876955` succeeded at commit `3ea5822`, including Docker builds. This report's independent local evidence is the three-image command and assertions above; hosted CI result is parent-provided evidence. Starting the built application services is pending because terminal development currently owns their ports. No Supabase reset, migration, stop/start or credential modification was performed during these image checks.
+
+## Running-container connectivity
+
+After the parent stopped terminal development, it executed Compose `up --no-build -d --wait`. Independent inspection confirmed `cuevo-web-1`, `cuevo-api-1` and `cuevo-worker-1` all healthy, using Config.User `node` on `cuevo-local`, with no service-role/OpenAI key environment entries. Published app ports remain host loopback.
+
+Actual host HTTP checks returned web 200, API `/health/ready` 200 with `{status:ready,database:true,authentication:true}`, and worker `/health/ready` 200 with database true and `processor:not_configured`. The API's readiness runs from inside its container, proving its constrained role connection and Auth URL reach the separate local Supabase services.
+
+Real synthetic teacher, student and parent accounts signed in through local Supabase Auth; their Bearer tokens were sent to the running Docker API `/v1/me`. All three returned 200 and the expected actor UUID, current school and role. Only role/status metadata was emitted; tokens/passwords were not printed. No academic/domain command, schema mutation, reset or Supabase service restart occurred in these checks. The sign-ins create ordinary local Auth sessions.
+
+The parent will inspect the Docker browser flow and then return to terminal development for subsequent worker implementation. Rebuild after newer source changes; this snapshot's processor remains intentionally unconfigured and does not claim the learner-state or signal loop.
 
 Browser/environment URLs and publishable keys are public build inputs; secret database/Auth/Admin credentials remain ignored local setup data. Production secrets, deployment region approval, backup/recovery operations and live AI integration are outside this local runtime increment.
