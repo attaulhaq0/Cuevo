@@ -1,6 +1,6 @@
 # Cuevo UI transformation proposal
 
-Date: 1 October 2026 (Asia/Riyadh). Status: ten-image exploration generated under founder approval; visual direction and implementation approval pending. This implementation design does not replace numbered product sources or establish feature/customer acceptance.
+Date: 1 October 2026 (Asia/Riyadh). Current status: the initial ten-image exploration was rejected; broader concept generation was authorized, and the founder approved a concrete desktop authentication image and compact mobile concept A. Authentication presentation is implemented and verified in the isolated branch. The coordinated34-screen workspace atlas is being generated for review; workspace selection and whole-app implementation acceptance remain open. This implementation design does not replace numbered product sources or establish feature/customer acceptance.
 
 ## Confirmed frontend
 
@@ -12,9 +12,9 @@ Apply the founder's complete UI/UX brief to every existing Cuevo role and suppor
 
 The founder selected the Microsoft Foundry deployment `gpt-image-2.5-sunburst` for visual concept generation. Use that exact deployment for concepts and edits, then implement the selected direction in the existing React/TypeScript application and Storybook. Image generation is a local design tool; it does not become a browser dependency or receive access to pupil records. The earlier request to use React/TypeScript was a stack constraint, not an instruction to abandon visual concepting.
 
-The founder subsequently required approval before further generation and requested several distinct contemporary approaches, including gamification and liquid effects. **Do not issue another generation or edit request until the founder approves its concrete scope.** An API key, successful setup or general request to use the model does not approve an image batch. Selection of a direction does not automatically approve unbounded refinements. The earlier experimental images remain unselected and are not implementation targets.
+The founder initially required approval before generation and requested distinct approaches including gamification and liquid effects. They later rejected the set and explicitly authorized broader approaches, color/theme flexibility and further generation across dashboards and subpages. That later instruction authorizes the current coordinated exploration and necessary corrections. It does not approve live product behavior, unsupported capabilities or external deployment. Earlier rejected images are historical review artifacts.
 
-The founder approved the proposed ten-image set on 1 October 2026 and clarified that Student should be gamified while all other roles should be mature. Exactly ten student-home concepts were generated in light/dark; the [concept report](../../reports/2026-10-01-approved-ui-concepts.md) records evidence, limitations and the shared-system role recommendation. Additional role mockups, variants or edits require approval; implementation remains contingent on visual selection.
+The founder approved generation of the earlier ten-image set and clarified that Student should be gamified while other roles should be mature. The ten concepts were subsequently rejected. The [historical concept report](../../reports/2026-10-01-approved-ui-concepts.md) preserves their evidence. Current review uses the supplied Cuevo mark, supplied student fox/owl family and approved authentication grammar; see the [active atlas](../../design/2026-full-screen-atlas.md) and [authentication QA](../../reports/2026-10-01-auth-design-qa.md). Implement approved screens faithfully, including their filled icons and spacing; approval of auth does not approve every workspace concept.
 
 ## Foundry image setup and visual review
 
