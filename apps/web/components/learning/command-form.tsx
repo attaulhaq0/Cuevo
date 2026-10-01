@@ -6,7 +6,7 @@ import { LearningApiError } from '../../lib/learning-api';
 import { useLearningApi } from './use-learning';
 import { LearningError } from './feedback';
 
-export type FormField = { name: string; label: string; type?: 'text' | 'textarea' | 'number' | 'datetime-local' | 'select'; required?: boolean; options?: { value: string; label: string }[]; defaultValue?: string | number; maxLength?: number; min?: number; max?: number; step?: number | 'any' };
+export type FormField = { name: string; label: string; type?: 'text' | 'textarea' | 'number' | 'datetime-local' | 'select' | 'checkbox'; required?: boolean; options?: { value: string; label: string }[]; defaultValue?: string | number; maxLength?: number; min?: number; max?: number; step?: number | 'any' };
 
 export function CommandForm({ title, path, fields, body, onSaved, onCancel, note, actionLabel }: { title: string; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; onSaved: () => void; onCancel?: () => void; note?: string; actionLabel?: string }) {
   const { request, journal, t } = useLearningApi();
@@ -36,6 +36,7 @@ export function CommandForm({ title, path, fields, body, onSaved, onCancel, note
     const id = `${idPrefix}-${field.name}`;
     const retainedValue = retained?.body[field.name];
     const defaultValue = typeof retainedValue === 'string' || typeof retainedValue === 'number' ? retainedValue : field.defaultValue;
+    if (field.type === 'checkbox') return <div className="field field--wide checkbox-field" key={field.name}><input id={id} name={field.name} type="checkbox" defaultChecked={retainedValue === true} /><label htmlFor={id}>{field.label}</label></div>;
     return <div className={`field ${field.type === 'textarea' ? 'field--wide' : ''}`} key={field.name}><label htmlFor={id}>{field.label}</label>{field.type === 'select' ? <select id={id} name={field.name} required={field.required} defaultValue={defaultValue ?? ''}><option value="">{t.choose}</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : field.type === 'textarea' ? <textarea id={id} name={field.name} required={field.required} defaultValue={defaultValue} maxLength={field.maxLength ?? 10_000} rows={5} /> : <input id={id} name={field.name} type={field.type ?? 'text'} required={field.required} defaultValue={defaultValue} min={field.min} max={field.max} maxLength={field.maxLength ?? 200} step={field.type === 'number' ? field.step ?? 1 : undefined} />}</div>;
   })}</div></fieldset>{error ? <LearningError error={error} /> : null}<div className="learning-form__actions">{error?.uncertain ? <Button type="button" disabled={pending} onClick={() => void send()}>{pending ? t.saving : t.retrySame}</Button> : <Button type="submit" disabled={pending}>{pending ? t.saving : actionLabel ?? t.save}</Button>}{onCancel && !error?.uncertain ? <Button type="button" variant="quiet" onClick={onCancel} disabled={pending}>{t.cancel}</Button> : null}</div></form></section>;
 }

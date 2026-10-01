@@ -1,0 +1,54 @@
+import 'reflect-metadata';
+import{beforeAll,afterAll,describe,it,expect,vi}from'vitest';
+import{Module}from'@nestjs/common';import{NestFactory}from'@nestjs/core';import{FastifyAdapter,type NestFastifyApplication}from'@nestjs/platform-fastify';
+import{createClient}from'@supabase/supabase-js';import{randomUUID}from'node:crypto';import{readFileSync}from'node:fs';import{config as dotenv}from'dotenv';
+import{Database}from'../src/database/database';import{IdentityService,type MembershipRow}from'../src/identity/identity.service';import{createUserVerifier}from'../src/identity/supabase-auth';import{createAcademicController}from'../src/academic/controller';import{createSchoolLearningController}from'../src/school-learning/controller';import{parseServerConfig}from'@cuevo/config';
+import{Pool}from'pg';
+import{AcademicService}from'../src/academic/service';
+import type{ActorContext}from'@cuevo/domain';
+dotenv({path:'.env.local',quiet:true});const local=parseServerConfig(process.env);const enabled=Boolean(local.databaseUrl&&local.supabaseUrl&&new URL(local.supabaseUrl).hostname==='127.0.0.1');if(process.env.CUEVO_REQUIRE_INTEGRATION==='1'&&!enabled)throw Error('Cuevo local integration configuration required');
+describe.skipIf(!enabled)('numeric academic truth actual Auth API database journey',()=>{
+ let app:NestFastifyApplication;let db:Database;let admin:Pool;const tokens:Record<string,string>={};const school='10000000-0000-4000-8000-000000000001';
+ beforeAll(async()=>{const password=(JSON.parse(readFileSync('.local/runtime-secrets.json','utf8'))as{syntheticPassword:string}).syntheticPassword;const actors=(JSON.parse(readFileSync('supabase/seed/identities.json','utf8'))as{actors:{actorId:string;email:string}[]}).actors;
+ for(const[name,suffix]of Object.entries({teacher:'004',student:'012',parent:'072',coordinator:'002',outsider:'013'})){const person=actors.find(item=>item.actorId.endsWith(suffix))!;const auth=createClient(local.supabaseUrl!,local.supabasePublishableKey!,{auth:{persistSession:false,autoRefreshToken:false}});const result=await auth.auth.signInWithPassword({email:person.email,password});if(!result.data.session)throw Error('Synthetic sign in unavailable');tokens[name]=result.data.session.access_token;}
+ db=new Database(local.databaseUrl);const identity=new IdentityService({verifyUser:createUserVerifier(local),currentMemberships:actor=>db.actorTransaction(actor,undefined,async client=>(await client.query<MembershipRow>('select * from "authorization".current_memberships()')).rows),isCurrentSession:(actor,session)=>db.actorTransaction(actor,undefined,async client=>Boolean((await client.query('select "authorization".is_current_session($1)as active',[session])).rows[0]?.active))});const academic=createAcademicController(identity,db);const learning=createSchoolLearningController(identity,db);@Module({controllers:[academic,learning]})class TestModule{}app=await NestFactory.create<NestFastifyApplication>(TestModule,new FastifyAdapter({logger:false}),{logger:false});await app.init();await app.getHttpAdapter().getInstance().ready();},30000);
+ afterAll(async()=>{await app?.close();await db?.close();await admin?.end();});
+ const request=(role:string,url:string,body?:Record<string,unknown>,key=randomUUID())=>app.inject({method:body===undefined?'GET':'POST',url,headers:{authorization:`Bearer ${tokens[role]}`,'x-school-id':school,'idempotency-key':key},payload:body});
+ it('teacher reviews/releases zero then correction preserves native evidence and hides drafts',async()=>{
+  const course=await request('teacher','/v1/courses',{classId:'30000000-0000-4000-8000-000000000001',subjectId:'43000000-0000-4000-8000-000000000001',title:`Academic ${randomUUID()}`,description:'School authored'});expect(course.statusCode,course.body).toBe(200);const courseId=course.json().id;expect((await request('teacher',`/v1/courses/${courseId}/publish`,{})).statusCode).toBe(200);
+  const assessment=await request('teacher','/v1/assessments',{courseId,title:'School numeric',instructions:'Explain',maxScore:10});expect(assessment.statusCode,assessment.body).toBe(200);const assessmentId=assessment.json().id;
+  const ref=await request('teacher','/v1/academic-references',{title:'School objective',description:'School-authored synthetic context only',version:'test-1'});expect(ref.statusCode,ref.body).toBe(200);const referenceId=ref.json().id;
+  expect((await request('teacher',`/v1/academic-references/${referenceId}/approve`,{})).statusCode).toBe(403);expect((await request('coordinator',`/v1/academic-references/${referenceId}/approve`,{})).statusCode).toBe(200);
+  const linked=await request('teacher',`/v1/assessments/${assessmentId}/reference`,{referenceId,expectedPolicyVersion:1});expect(linked.statusCode,linked.body).toBe(200);expect(linked.json().policyVersion).toBe(2);
+  const submission=await request('student',`/v1/assessments/${assessmentId}/submissions`,{content:'Immutable source work'});expect(submission.statusCode,submission.body).toBe(200);const submissionId=submission.json().id;
+  const initial={score:0,feedback:'Reviewed zero result',expectedPolicyVersion:2,expectedRevision:0,sourceEvidence:true};const mark=await request('teacher',`/v1/submissions/${submissionId}/results`,initial);expect(mark.statusCode,mark.body).toBe(200);expect(mark.json().status).toBe('REVIEW');
+  expect((await request('student','/v1/marking')).statusCode).toBe(403);expect((await request('student','/v1/results')).json().items.some((item:{submissionId:string})=>item.submissionId===submissionId)).toBe(false);
+  const releaseKey=randomUUID();const release=await request('teacher',`/v1/results/${mark.json().id}/release`,{expectedRevision:1},releaseKey);expect(release.statusCode,release.body).toBe(200);expect(release.json()).toMatchObject({score:0,status:'RELEASED',revision:1,nativeResult:{type:'numeric',score:0,maxScore:10,policyVersion:2},parentVisible:false});
+  expect((await request('teacher',`/v1/results/${mark.json().id}/release`,{expectedRevision:1},releaseKey)).json()).toEqual(release.json());
+  expect((await request('teacher',`/v1/results/${mark.json().id}/release`,{expectedRevision:1})).json()).toEqual(release.json());
+  expect((await request('parent','/v1/results')).json().items.some((item:{submissionId:string})=>item.submissionId===submissionId)).toBe(false);
+  expect((await request('parent',`/v1/evidence/${release.json().evidenceId}`)).statusCode).toBe(404);expect((await request('outsider',`/v1/evidence/${release.json().evidenceId}`)).statusCode).toBe(404);
+  const evidence=await request('student',`/v1/evidence/${release.json().evidenceId}`);expect(evidence.statusCode,evidence.body).toBe(200);expect(evidence.json()).toMatchObject({sourceType:'SUBMISSION',sourceObjectId:submissionId,resultId:release.json().id});expect(evidence.body).not.toContain('Immutable source work');
+  expect((await request('teacher',`/v1/submissions/${submissionId}/results`,{...initial,score:11,expectedRevision:1})).statusCode).toBe(409);
+  const correction=await request('teacher',`/v1/submissions/${submissionId}/results`,{...initial,score:6,feedback:'Correction reason',expectedRevision:1});expect(correction.statusCode,correction.body).toBe(200);
+  const correctionRelease=await request('teacher',`/v1/results/${correction.json().id}/release`,{expectedRevision:2,parentVisible:true});expect(correctionRelease.statusCode,correctionRelease.body).toBe(200);
+  const own=(await request('student','/v1/results')).json().items.filter((item:{submissionId:string})=>item.submissionId===submissionId);expect(own).toHaveLength(1);expect(own[0].score).toBe(6);
+  const parent=(await request('parent','/v1/results')).json().items.filter((item:{submissionId:string})=>item.submissionId===submissionId);expect(parent).toHaveLength(1);expect(parent[0].score).toBe(6);
+  expect((await request('student',`/v1/evidence/${release.json().evidenceId}`)).json().revision).toBe(1);
+  expect((await request('teacher',`/v1/assessments/${assessmentId}/reference`,{referenceId,expectedPolicyVersion:2})).statusCode).toBe(409);
+  const adminUrl=new URL(local.databaseUrl!);if(adminUrl.port!=='56322')throw Error('Not Cuevo local');adminUrl.username='postgres';adminUrl.password='postgres';admin=new Pool({connectionString:adminUrl.toString()});
+  const counts=(await admin.query("select (select count(*)from app.result_revisions where submission_id=$1)as results,(select count(*)from app.academic_evidence where source_object_id=$1)as evidence,(select count(*)from internal.outbox_events where type='result.released'and entity_id=$2)as events",[submissionId,release.json().id])).rows[0];expect(counts).toEqual({results:'2',evidence:'2',events:'1'});
+  try{await admin.query("update app.teacher_assignments set status='revoked'where teacher_actor_id=$1",['20000000-0000-4000-8000-000000000004']);expect((await request('teacher',`/v1/results/${mark.json().id}/release`,{expectedRevision:1},releaseKey)).statusCode).toBe(403);}finally{await admin.query("update app.teacher_assignments set status='active'where teacher_actor_id=$1",['20000000-0000-4000-8000-000000000004']);}
+  try{await admin.query("update app.parent_relationships set status='revoked'where parent_actor_id=$1",['20000000-0000-4000-8000-000000000072']);expect((await request('parent',`/v1/evidence/${correctionRelease.json().evidenceId}`)).statusCode).toBe(404);}finally{await admin.query("update app.parent_relationships set status='active'where parent_actor_id=$1",['20000000-0000-4000-8000-000000000072']);}
+ },30000);
+});
+
+describe('academic missing objective is recoverable',()=>{
+ it('rejects an unmapped mark before an immutable revision or reservation is written',async()=>{
+  const actor:ActorContext={userId:'20000000-0000-4000-8000-000000000004',schoolId:'10000000-0000-4000-8000-000000000001',role:'teacher',membershipId:'21000000-0000-4000-8000-000000000004',entitlements:['assessment','curriculum']};
+  const query=vi.fn(async(sql:string)=>({rows:sql.includes('as allowed')?[{allowed:true}]:[{approved:false}]}));
+  const database={actorTransaction:async(_actor:string,_school:string,run:(client:unknown)=>Promise<unknown>)=>run({query})}as unknown as Database;
+  await expect(new AcademicService(database).command(actor,'marking.create','72000000-0000-4000-8000-000000000001',{score:0,feedback:'Review',expectedPolicyVersion:1,expectedRevision:0,sourceEvidence:true},'reference-needed','request')).rejects.toMatchObject({code:'ACADEMIC_REFERENCE_REQUIRED',status:409});
+  expect(query.mock.calls.some(([sql])=>sql.includes('begin_command'))).toBe(false);
+ });
+});

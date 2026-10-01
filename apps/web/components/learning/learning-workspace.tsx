@@ -10,11 +10,10 @@ import { LearningError } from './feedback';
 import { CommandForm } from './command-form';
 import { CourseView } from './course-editor';
 import { AssessmentList, SubmissionList } from './assessment-view';
+import { usePaginatedLearningQuery } from './use-paginated-query';
+import { LoadMore } from './load-more';
 
-const courseList = (value: unknown) => parseList(value, parseCourse);
 const choiceList = (value: unknown) => parseList(value, parseChoice);
-const assessmentList = (value: unknown) => parseList(value, parseAssessment);
-const submissionList = (value: unknown) => parseList(value, parseSubmission);
 type Tab = 'courses' | 'assessments' | 'submissions';
 
 export function LearningWorkspace() {
@@ -28,11 +27,11 @@ export function LearningWorkspace() {
   const hasLearning = membership?.entitlements.includes('learning');
   const hasAssessment = membership?.entitlements.includes('assessment');
   const canSeeSubmissions = membership?.role === 'admin' || membership?.role === 'teacher' || membership?.role === 'student';
-  const courses = useLearningQuery(hasLearning ? '/v1/courses?limit=100' : null, courseList, refresh);
+  const courses = usePaginatedLearningQuery(hasLearning ? '/v1/courses?limit=100' : null, parseCourse, refresh);
   const classes = useLearningQuery(canAuthor && hasLearning ? '/v1/classes?limit=100' : null, choiceList, refresh);
   const subjects = useLearningQuery(canAuthor && hasLearning ? '/v1/subjects?limit=100' : null, choiceList, refresh);
-  const assessments = useLearningQuery(hasAssessment ? '/v1/assessments?limit=100' : null, assessmentList, refresh);
-  const submissions = useLearningQuery(hasAssessment && canSeeSubmissions ? '/v1/submissions?limit=100' : null, submissionList, refresh);
+  const assessments = usePaginatedLearningQuery(hasAssessment ? '/v1/assessments?limit=100' : null, parseAssessment, refresh);
+  const submissions = usePaginatedLearningQuery(hasAssessment && canSeeSubmissions ? '/v1/submissions?limit=100' : null, parseSubmission, refresh);
   function reload() { setRefresh((value) => value + 1); }
   function saved() { setCreating(null); reload(); }
   if (!hasLearning) return <div className="notice" role="status">{t.notAvailable}</div>;
@@ -44,6 +43,7 @@ export function LearningWorkspace() {
     {creating === 'course' ? classes.data?.length && subjects.data?.length ? <CreateCourse classes={classes.data} subjects={subjects.data} onSaved={saved} onCancel={() => setCreating(null)} /> : classes.error ? <LearningError error={classes.error} /> : subjects.error ? <LearningError error={subjects.error} /> : <p className="notice">{classes.loading || subjects.loading ? t.loading : t.choicesUnavailable}</p> : null}
     {creating === 'assessment' && courses.data ? <CreateAssessment courses={courses.data} onSaved={saved} onCancel={() => setCreating(null)} /> : null}
     {active.loading ? <p className="learning-empty" role="status">{t.loading}</p> : active.error ? <LearningError error={active.error} /> : tab === 'courses' ? <CourseList courses={courses.data ?? []} onOpen={setCourseId} /> : tab === 'assessments' ? <AssessmentList assessments={(assessments.data ?? []) as Assessment[]} submissions={(submissions.data ?? []) as Submission[]} onSubmitted={reload} /> : <SubmissionList submissions={submissions.data ?? []} />}
+    <LoadMore query={active} />
   </div>;
 }
 

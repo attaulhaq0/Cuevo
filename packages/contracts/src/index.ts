@@ -8,3 +8,4 @@ export type MembershipResponse = z.infer<typeof membershipSchema>;
 export const apiErrorSchema = z.object({ code: z.string(), message: z.string(), requestId: z.string() });
 export type ApiErrorResponse = z.infer<typeof apiErrorSchema>;
 export * from './school-learning';
+export * from './academic';

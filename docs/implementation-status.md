@@ -18,7 +18,7 @@ The goal is active. MVP exit is not verified. This document records evidence rat
 |---|---|---|
 | 0 Architecture | IN_PROGRESS | Design, monorepo, private database, API/worker health, tokens and local bootstrap verified; broader deployment/threat documentation pending |
 | 1 School + Learning | IN_PROGRESS | Five-role sign-in and teacher → course/lesson/activity/assessment → student completion/submission verified; SIS setup/daily operations remain |
-| 2 Academic Truth | NOT_IMPLEMENTED | No atomic academic release proof |
+| 2 Academic Truth | IN_PROGRESS | Numeric marking/release/evidence/correction/approved parent flow verified; rubric and full academic cases remain |
 | 3 Intelligence Loop | NOT_IMPLEMENTED | No complete approved intervention/reassessment loop |
 | 4 Experience | NOT_IMPLEMENTED | Five role journeys not verified |
 | 5 Verification | NOT_VERIFIED | Exit suite absent at start |
@@ -40,3 +40,9 @@ See docs/reports/foundation-verification.md and the independent code/database re
 ## School and learning evidence
 
 See docs/reports/school-learning-verification.md. Clean four-migration replay, 134 database assertions, actual Auth/API/Postgres learning and revoked-replay tests, 169 Vitest + 17 web + 4 runtime tests and three browser tests passed. Academic marking and source evidence release are the next implementation task. Official content remains unverified.
+
+## Numeric academic evidence
+
+See docs/reports/academic-verification.md. Numeric School Custom marking/release/source evidence/correction and explicit parent-approved projection verified. Final 164 SQL checks, sequential real integration, 176 Vitest + 26 web + 4 runtime tests and four browser tests passed. Independent review passed after recoverable-reference marking guard. Live worker/state and rubric support are the next work units.
+
+GitHub CI run 36794876955 passed on commit 3ea5822 (foundation and school learning). Later commits/features require their own CI evidence; this result is not attributed to uncommitted academic work.

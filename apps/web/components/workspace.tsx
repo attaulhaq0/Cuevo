@@ -9,12 +9,15 @@ import { LanguageSwitch } from './language-switch';
 import type { Membership } from '../lib/membership';
 import { LearningWorkspace } from './learning/learning-workspace';
 import { learningAr, learningEn } from '../messages/learning';
+import { AcademicWorkspace } from './academic/academic-workspace';
+import { academicAr, academicEn } from '../messages/academic';
 
-type View = 'overview' | 'access' | 'account' | 'learning';
+type View = 'overview' | 'access' | 'account' | 'learning' | 'academic';
 
 export function Workspace({ membership }: { membership: Membership }) {
   const { dictionary: t, signOut, refreshAccess, locale } = useApp();
   const learning = locale === 'ar' ? learningAr : learningEn;
+  const academic = locale === 'ar' ? academicAr : academicEn;
   const [view, setView] = useState<View>('overview');
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -22,6 +25,7 @@ export function Workspace({ membership }: { membership: Membership }) {
   const navigation: { id: View; label: string; Icon: LucideIcon }[] = [
     { id: 'overview', label: t.overview, Icon: Home },
     ...(membership.entitlements.includes('learning') ? [{ id: 'learning' as const, label: learning.learning, Icon: BookOpen }] : []),
+    ...(membership.entitlements.includes('assessment') ? [{ id: 'academic' as const, label: academic.academic, Icon: CheckCheck }] : []),
     { id: 'access', label: t.accessDetails, Icon: ShieldCheck },
     { id: 'account', label: t.profile, Icon: CircleUserRound },
   ];
@@ -36,8 +40,8 @@ export function Workspace({ membership }: { membership: Membership }) {
     setSigningOut(false);
     setSignOutFailed(!success);
   }
-  const title = view === 'learning' ? learning.learning : view === 'overview' ? t.roleTitles[membership.role] : view === 'access' ? t.accessTitle : t.accountTitle;
-  const body = view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
+  const title = view === 'academic' ? academic.academic : view === 'learning' ? learning.learning : view === 'overview' ? t.roleTitles[membership.role] : view === 'access' ? t.accessTitle : t.accountTitle;
+  const body = view === 'academic' ? academic.body : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
   const upcoming = [
     { Icon: BookOpen, title: t.learningTitle, body: t.learningBody },
     { Icon: CheckCheck, title: t.evidenceTitle, body: t.evidenceBody },
@@ -58,7 +62,7 @@ export function Workspace({ membership }: { membership: Membership }) {
       </header>
       <main id="main-content" className="workspace-main" tabIndex={-1}>
         <div className="workspace-intro"><div><p className="eyebrow">{t.greeting} <bdi>{membership.displayName}</bdi></p><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{body}</p></div><Status tone="positive">{t.sessionVerified}</Status></div>
-        {view === 'learning' ? <LearningWorkspace /> : view === 'overview' ? <>
+        {view === 'academic' ? <AcademicWorkspace /> : view === 'learning' ? <LearningWorkspace /> : view === 'overview' ? <>
           <section className="connection-section" aria-labelledby="connection-title">
             <div className="connection-section__main"><div className="connection-icon"><ShieldCheck size={26} strokeWidth={1.6} aria-hidden="true" /></div><div><p className="eyebrow">{t.activeMembership}</p><h2 id="connection-title"><bdi>{membership.school.name}</bdi></h2><p>{t.activeMembershipBody}</p></div></div>
             <button type="button" className="text-action" onClick={() => selectView('access')}>{t.accessDetails}<ArrowRight size={17} className="directional-icon" aria-hidden="true" /></button>

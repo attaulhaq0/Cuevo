@@ -1,0 +1,25 @@
+'use client';
+
+import { useState } from 'react';
+import { Button, Status } from '@cuevo/ui';
+import { useApp } from '../providers';
+import { parseEvidence, type ReleasedResult } from '../../lib/academic-types';
+import { academicAr, academicEn } from '../../messages/academic';
+import { useLearningQuery } from '../learning/use-learning';
+import { LearningError } from '../learning/feedback';
+
+export function ReleasedResults({ results }: { results: ReleasedResult[] }) {
+  const { locale } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
+  const [evidenceId, setEvidenceId] = useState<string | null>(null);
+  return results.length ? <section>{results.map((result) => <article key={result.id} className="academic-row"><div className="learning-section-heading"><div><h3>{result.assessmentTitle ?? t.native}</h3><p>{t.reference}: {result.referenceTitle ?? result.referenceId} · <bdi>{result.referenceVersion}</bdi></p></div><Status tone="positive">{t.published}</Status></div><div className="native-score"><strong>{new Intl.NumberFormat(locale).format(result.nativeResult.score)}</strong><span> / {new Intl.NumberFormat(locale).format(result.nativeResult.maxScore)}</span></div><p className="lesson-content">{result.feedback}</p><p className="learning-form__note">{t.revision}: {result.revision} · {t.policy}: {result.policyVersion}</p><p className="learning-form__note">{t.nativeNote}</p><Button type="button" variant="quiet" onClick={() => setEvidenceId(evidenceId === result.evidenceId ? null : result.evidenceId)} aria-expanded={evidenceId === result.evidenceId}>{evidenceId === result.evidenceId ? t.closeEvidence : t.evidence}</Button>{evidenceId === result.evidenceId ? <EvidenceDetail evidenceId={result.evidenceId} /> : null}</article>)}</section> : <p className="learning-empty">{t.emptyResults}</p>;
+}
+
+function EvidenceDetail({ evidenceId }: { evidenceId: string }) {
+  const { locale } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
+  const query = useLearningQuery(`/v1/evidence/${evidenceId}`, parseEvidence, 0);
+  if (query.loading) return <p role="status">{t.evidence}…</p>;
+  if (query.error) return <LearningError error={query.error} />;
+  if (!query.data) return <p>{t.evidenceMissing}</p>;
+  const evidence = query.data;
+  return <dl className="academic-facts evidence-provenance"><div><dt>{t.sourceType}</dt><dd>{t.submissionSource}</dd></div><div><dt>{t.sourceObject}</dt><dd><bdi>{evidence.sourceObjectId}</bdi></dd></div><div><dt>{t.recordedBy}</dt><dd><bdi>{evidence.actorId}</bdi></dd></div><div><dt>{t.recordedAt}</dt><dd><bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(evidence.createdAt))}</bdi></dd></div><div><dt>{t.evidenceQuality}</dt><dd>{t.teacherEntered}</dd></div><div><dt>{t.referenceVersion}</dt><dd><bdi>{evidence.referenceVersion}</bdi></dd></div><div><dt>{t.policy}</dt><dd>{evidence.policyVersion}</dd></div><div><dt>{t.revision}</dt><dd>{evidence.revision}</dd></div><div><dt>{t.visibility}</dt><dd>{evidence.visibility === 'PARENT_APPROVED' ? t.parentApproved : t.learnerPrivate}</dd></div><div><dt>{t.reviewStatus}</dt><dd>{t.approved}</dd></div></dl>;
+}

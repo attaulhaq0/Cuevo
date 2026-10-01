@@ -19,7 +19,7 @@
     "lint": "eslint .",
     "test": "vitest run && npm run test --workspace=@cuevo/web && node --import tsx --test scripts/local-runtime.test.ts",
     "test:watch": "vitest",
-    "e2e": "playwright test",
+    "e2e": "node --env-file-if-exists=.env.local node_modules/@playwright/test/cli.js test",
     "db:start": "node --import tsx scripts/start-supabase.ts",
     "db:reset": "supabase db reset --local --network-id cuevo-local",
     "db:test": "node --import tsx scripts/test-database.ts",
