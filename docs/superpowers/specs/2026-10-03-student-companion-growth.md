@@ -1,6 +1,8 @@
 # Cuevo student companion, recognition and growth strategy
 
-Date: 3 October 2026, Asia/Riyadh. Status: proposed strategy for founder review. Scope: a modular companion in the selected single Trail experience; MVP presentation first, durable cosmetic/commerce capabilities later.
+Date: 3 October 2026, Asia/Riyadh. Status: founder-approved strategy, implementation authorized. Scope: a modular companion in the selected single Trail experience, including the separately authorized progression foundation; paid commerce remains later.
+
+Execution authorization: the founder approves this document and the Trail migration plan, requests Sora 2 animations/customer-journey assets and permits additional reviewed characters with authored meanings. Deliver 1080p media masters; where the verified provider contract is 720p, upscale explicitly and preserve the original source, not a native-1080p claim. Keep exact Trail styling and seated Foxi composition, one active UI, approved authentication and current backend behavior. Independent design QA and continuous role previews are required.
 
 Latest founder authorization: numbered XP levels/next-level progress, durable character progression/earned cosmetic foundation, school-configurable points and saved permitted presentation are now requested backend work. The [Character Progression System contract](../../architecture/character-progression-system.md) and [decision](../../decisions/2026-10-03-character-progression-foundation.md) supersede the earlier phase-B/C deferral below for this bounded foundation. Paid store/checkout remains future. No new runtime implementation or verification is claimed by these documents. Sora setup is verified in the Website design-tool project; its authorized reuse is for reviewed assets, with private credentials and no learner-runtime dependency.
 
