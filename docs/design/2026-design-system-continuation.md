@@ -1,5 +1,7 @@
 # One Cuevo experience after authentication
 
+3 October checkpoint: the founder and team selected Trail, requested the Foxi sitting-at-current-task composition, and asked for a safe MVP-only replacement plan with preserved authentication/backend integration. The [current migration proposal](../superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md) and [student companion growth strategy](../superpowers/specs/2026-10-03-student-companion-growth.md) supersede the earlier unselected visual checkpoint below. The dated 37-image status is historical; the later two image-only workflow packages are complete. Runtime redesign has not started and plan approval remains pending.
+
 Date: 1 October 2026. The approved authentication increment establishes Cuevo's pale pearlescent blue, navy hierarchy, filled learning/role symbols, precise form spacing, welcoming character and separate compact mobile composition. The37 workspace/foundation concepts are generated and inspected:31 primary and3 foundation views are suitable for discussion, while3 primary candidates have explicit issues. The founder's approach selection and implementation approval are pending. This document preserves the complete transformation brief; it does not reduce the goal to authentication or treat concepts as delivered product behavior.
 
 ## Existing foundation and remaining work

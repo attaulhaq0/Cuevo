@@ -1,5 +1,7 @@
 # Cuevo UI transformation acceptance ledger
 
+3 October update: Trail selection has now been received. The [current MVP migration proposal](../superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md) and [companion strategy](../superpowers/specs/2026-10-03-student-companion-growth.md) record the selected background/icons/sections and new Foxi placement, backend preservation, single-system migration and later growth boundaries. Earlier selection-pending statements in this dated ledger describe the previous checkpoint. None of the section-level runtime implementation/verification requirements is closed merely by visual selection or the completed image packages; implementation awaits review of the requested whole plan.
+
 Date: 1 October 2026 (Asia/Riyadh). Company: E Deviser. Product: Cuevo.
 
 Status: **whole-application acceptance remains open; dashboard/workspace implementation awaits the founder's visual selection and approval**. Authentication and its shared brand/icon/token increment are implemented and independently verified. This ledger maps every numbered section of the complete transformation brief; that bounded increment does not establish whole-app acceptance. Historical baseline observations below remain dated evidence, not a current claim that no design work has occurred.
