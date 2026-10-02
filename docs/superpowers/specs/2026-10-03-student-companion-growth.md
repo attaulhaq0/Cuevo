@@ -2,6 +2,8 @@
 
 Date: 3 October 2026, Asia/Riyadh. Status: proposed strategy for founder review. Scope: a modular companion in the selected single Trail experience; MVP presentation first, durable cosmetic/commerce capabilities later.
 
+Latest founder authorization: numbered XP levels/next-level progress, durable character progression/earned cosmetic foundation, school-configurable points and saved permitted presentation are now requested backend work. The [Character Progression System contract](../../architecture/character-progression-system.md) and [decision](../../decisions/2026-10-03-character-progression-foundation.md) supersede the earlier phase-B/C deferral below for this bounded foundation. Paid store/checkout remains future. No new runtime implementation or verification is claimed by these documents. Sora setup is verified in the Website design-tool project; its authorized reuse is for reviewed assets, with private credentials and no learner-runtime dependency.
+
 This strategy forms part of the [Trail MVP migration proposal](2026-10-03-cuevo-trail-mvp-redesign.md). It refines the [original character plan](../../design/2026-character-mvp-and-growth.md) using the founder's selected Foxi sitting-at-task reference and explicit permission to propose additional characters, expressions and motion. Earlier restrictions against any new student pose no longer apply to the newly requested asset work. Existing product rules, known source/rights limits and approval before implementation remain intact.
 
 ## Product thesis

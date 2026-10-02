@@ -15,6 +15,8 @@ Read root AGENTS/README/START-HERE, [constitution](overview/00-PRODUCT-CONSTITUT
 
 ## Task bundles
 
+Student XP/level/character/cosmetic work also loads the [Character Progression System foundation](../architecture/character-progression-system.md), its [decision](../decisions/2026-10-03-character-progression-foundation.md), sources 09/12/15/39/58/63/79/80 and current Development contract/worker/SQL/browser tests. It is a bounded founder-authorized extension, with implementation/verification status kept separate; payment/store and unrestricted student AI remain future scope.
+
 | Work | Required sources | Checks and context |
 |---|---|---|
 | School, people, guardian scope, configuration | [07 modularity](domains/07-SCHOOL-CONFIGURATION-AND-MODULARITY.md), [14 SIS](domains/14-SIS-MIS-FUNCTIONAL-SPEC.md), [39 governance](platform/39-SECURITY-PRIVACY-AND-AI-GOVERNANCE.md), [61 deny matrix](verification/61-SECURITY-THREAT-TEST-MATRIX.md) | Platform/module READMEs, current relationship/revocation cases |

@@ -8,6 +8,7 @@ For product requirements start with [product context](product/README.md) and its
 | Source-of-truth product/domain/security requirements | [Product index](product/index.md), [context map](product/context-map.md) and [registry](product/registry.json) |
 | Architecture and trust boundaries | [Repository layout](architecture/repository-layout.md), [domain ERD](architecture/domain-erd.md), [foundation threat model](architecture/foundation-threat-model.md), [stack ADR](product/platform/68-FINAL-TECH-STACK-AND-ADR.md) |
 | Current design decisions | [decisions/](decisions/) |
+| Character Progression System | [Authorized modular foundation](architecture/character-progression-system.md) and [decision](decisions/2026-10-03-character-progression-foundation.md); school-configurable points/levels, earned cosmetic grants and saved presentation work, with current XP reuse and payment/store excluded |
 | Verification evidence and review history | [reports/](reports/) |
 | Implementation task designs/plans | [superpowers/specs/](superpowers/specs/) and [superpowers/plans/](superpowers/plans/) |
 | Selected Trail MVP redesign | [Safe all-role migration proposal](superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md) and [student companion/growth strategy](superpowers/specs/2026-10-03-student-companion-growth.md); Trail selected, complete plan under founder review, application implementation not started |

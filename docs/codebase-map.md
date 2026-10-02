@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Student progression extension: read the [Character Progression System foundation](architecture/character-progression-system.md) and [decision](decisions/2026-10-03-character-progression-foundation.md). Formal levels, track progress, earned character/cosmetic grants and saved presentation choices are founder-authorized requested work, not implemented by this design branch. Backend ownership stays in current Development/contracts/private SQL/worker; frontend remains Development/shared character presentation and the one `packages/ui` Trail system. No empty future modules or separate XP authority are introduced.
+
 Start at root README → AGENTS → [product context map](product/context-map.md) → this implementation map → affected app/domain README → relevant source bundle/tests. The binding layout is [architecture/repository-layout.md](architecture/repository-layout.md); all product documents are indexed under [docs/product](product/index.md).
 
 ## Applications

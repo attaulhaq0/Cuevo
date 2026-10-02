@@ -2,6 +2,8 @@
 
 Date: 3 October 2026, Asia/Riyadh. Status: founder selected Trail; this complete migration proposal is for review before implementation. E Deviser is the company; Cuevo is the product.
 
+Latest scope update: the founder explicitly requested backend implementation of the [Character Progression System foundation](../../architecture/character-progression-system.md), including school-configurable numbered levels, next-level progress, earned character/cosmetic grants and saved permitted presentation. These bounded contracts are no longer excluded merely as future phases; the backend chat owns their coordinated implementation. Paid shop/payment and unrestricted student AI remain excluded. The Website project's Sora design-time setup has been inspected safely and can support reviewed animation assets; no new live call or Cuevo runtime video API is implied.
+
 ## Decision and scope
 
 The founder and team selected the Trail approach. Preserve its dimensional filled icons, cyan/navy palette, pearl-blue ribbon background, section hierarchy, buttons, spacing and welcoming learner presentation. The additional student reference places Foxi beside the current task. This supersedes the earlier small character-preview-only placement for the student home. Authentication is already approved and must retain its composition and behavior.

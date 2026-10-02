@@ -2,6 +2,8 @@
 
 The image model creates design references. Cuevo's frontend remains Next.js, React and TypeScript. These settings belong to local design tools and never enter the browser or the application API environment.
 
+3 October Sora clarification: `G:/E Deviser Website/scripts/foundry-sora.mjs` implements the dedicated Foundry Sora 2 asset workflow. Its `.env.local` has configured `AZURE_SORA_ENDPOINT`, `AZURE_SORA_DEPLOYMENT` and `AZURE_SORA_API_KEY`; only presence was inspected, with no key output/copy or live request. Saved completed job/media records confirm earlier Website generation. The founder authorizes using that setup for reviewed character assets through private design-tool memory; do not import Website app code into Cuevo, commit its key or add a browser/runtime generation dependency. Exact current service/version availability remains separately unverified. See the [progression/asset boundary](../architecture/character-progression-system.md).
+
 ## Where to enter the settings
 
 Open `.local/design-concepts/foundry-image.env` in the isolated design worktree. This file is ignored by Git and has clearly labelled fields. Its absolute path in this chat is `C:/Users/hp/.codex/worktrees/cuevo-design-system/Cuevo/.local/design-concepts/foundry-image.env`.
