@@ -3,7 +3,7 @@ import type { CuevoIconName } from '@cuevo/ui';
 
 /** Already authorized current source context. All callbacks retain exact source
  * and receipt identity in the owner; this view owns no queries or commands. */
-export type TeacherTrailAction = { label: string; onClick: () => void; disabled?: boolean; pending?: boolean };
+export type TeacherTrailAction = { label: string; accessibleLabel?: string; onClick: () => void; disabled?: boolean; pending?: boolean };
 export type TeacherTrailQueueState = 'needs-review' | 'in-progress' | 'waiting' | 'completed';
 export type TeacherTrailItem = {
   key: string;

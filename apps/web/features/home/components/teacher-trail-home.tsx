@@ -1,12 +1,12 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type Ref } from 'react';
 import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
 import type { TeacherTrailAction, TeacherTrailContext, TeacherTrailItem, TeacherTrailQueueState } from '../teacher-trail-model';
 import { teacherTrailAr, teacherTrailEn } from '../teacher-trail-messages';
 
 function Action({ action, variant = 'secondary', arrow = true, className = '' }: { action: TeacherTrailAction; variant?: 'primary' | 'secondary' | 'quiet'; arrow?: boolean; className?: string }) {
-  return <Button type="button" variant={variant} onClick={action.onClick} disabled={action.disabled || action.pending} aria-busy={action.pending || undefined} className={className}><span>{action.label}</span>{arrow ? <CuevoIcon name="arrow" className="teacher-trail__direction" /> : null}</Button>;
+  return <Button type="button" variant={variant} onClick={action.onClick} aria-label={action.accessibleLabel} disabled={action.disabled || action.pending} aria-busy={action.pending || undefined} className={className}><span>{action.label}</span>{arrow ? <CuevoIcon name="arrow" className="teacher-trail__direction" /> : null}</Button>;
 }
 
 function QueueItem({ item, expanded, onToggle, locale, sourceId }: { item: TeacherTrailItem; expanded: boolean; onToggle: () => void; locale: 'en' | 'ar'; sourceId: string }) {
@@ -21,12 +21,12 @@ function QueueItem({ item, expanded, onToggle, locale, sourceId }: { item: Teach
 
 /** Pure current-source Teacher Home. Domain owners provide every fact and exact
  * action; this view neither fetches, approves nor computes learner outcomes. */
-export function TeacherTrailHomeView({ context, locale = 'en', background }: { context: TeacherTrailContext; locale?: 'en' | 'ar'; background?: string }) {
+export function TeacherTrailHomeView({ context, locale = 'en', background, headingRef }: { context: TeacherTrailContext; locale?: 'en' | 'ar'; background?: string; headingRef?: Ref<HTMLHeadingElement> }) {
   const t = locale === 'ar' ? teacherTrailAr : teacherTrailEn;
   const sourcePrefix = useId();
   const [filter, setFilter] = useState<'all' | TeacherTrailQueueState>('all');
   const [expanded, setExpanded] = useState<string | null>(context.attention.items[0]?.key ?? null);
-  if (context.availability === 'denied' || context.availability === 'offline') return <section className="teacher-trail teacher-trail__blocked" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1>{t.title}</h1><p role="status">{context.notice || t[context.availability]}</p>{context.recovery ? <Action action={context.recovery} /> : null}</section>;
+  if (context.availability === 'denied' || context.availability === 'offline') return <section className="teacher-trail teacher-trail__blocked" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={-1}>{t.title}</h1><p role="status">{context.notice || t[context.availability]}</p>{context.recovery ? <Action action={context.recovery} /> : null}</section>;
   const items = context.attention.items.filter(item => filter === 'all' || item.state === filter);
   const filters = [{ key: 'all', label: t.all }, { key: 'needs-review', label: t.needsReview }, { key: 'in-progress', label: t.inProgress }, { key: 'waiting', label: t.waiting }, { key: 'completed', label: t.completed }] as const;
   const insight = context.insight;
@@ -34,7 +34,7 @@ export function TeacherTrailHomeView({ context, locale = 'en', background }: { c
   const approvalLabel = insight?.approval === 'approved' ? t.approved : insight?.approval === 'rejected' ? t.rejected : insight?.approval === 'requires-review' ? t.requiresReview : t.awaiting;
   return <div className="teacher-trail" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} data-availability={context.availability}>
     {background ? <img className="teacher-trail__background" src={background} alt="" /> : null}
-    <div className="teacher-trail__layout"><div className="teacher-trail__main"><header className="teacher-trail__intro"><div><h1>{t.title}</h1><p>{t.introduction}</p></div><p className="teacher-trail__date"><bdi>{context.dateLabel || t.dateUnknown}</bdi></p></header>
+    <div className="teacher-trail__layout"><div className="teacher-trail__main"><header className="teacher-trail__intro"><div><h1 ref={headingRef} tabIndex={-1}>{t.title}</h1><p>{t.introduction}</p></div><p className="teacher-trail__date"><bdi>{context.dateLabel || t.dateUnknown}</bdi></p></header>
       {context.availability !== 'ready' ? <div className="teacher-trail__notice" role={context.availability === 'error' ? 'alert' : 'status'}><p>{context.notice || t[context.availability]}</p>{context.recovery ? <Action action={context.recovery} variant="quiet" /> : null}</div> : null}
       <section className="teacher-trail__attention" aria-labelledby={`${sourcePrefix}-attention`}><h2 id={`${sourcePrefix}-attention`} className="teacher-trail__sr-only">{t.attention}</h2><div className="teacher-trail__filters" role="group" aria-label={t.filters}>{filters.map(value => <button type="button" key={value.key} aria-pressed={filter === value.key} onClick={() => setFilter(value.key)}>{value.label}</button>)}</div><ul className="teacher-trail__queue">{items.map((item, index) => <QueueItem key={item.key} item={item} expanded={expanded === item.key} onToggle={() => setExpanded(expanded === item.key ? null : item.key)} locale={locale} sourceId={`${sourcePrefix}-source-${index}`} />)}</ul>{!items.length ? <p className="teacher-trail__empty" role="status">{context.attention.status === 'loading' ? t.loading : context.attention.status === 'partial' ? t.partial : context.attention.status === 'unavailable' ? t.attentionUnknown : filter === 'all' ? t.empty : t.filteredEmpty}</p> : null}{context.attention.status === 'partial' && items.length ? <p className="teacher-trail__coverage">{t.partial}</p> : null}{context.attention.viewAll ? <Action action={context.attention.viewAll} variant="quiet" /> : null}</section>
       <section className="teacher-trail__workspaces"><div className="teacher-trail__section-heading"><h2>{t.workspaces}</h2>{context.allWorkspaces ? <Action action={context.allWorkspaces} variant="quiet" /> : null}</div>{context.workspaces.length ? <ul className="teacher-trail__workspace-list">{context.workspaces.map(workspace => <li key={workspace.key}><button type="button" onClick={workspace.action.onClick} disabled={workspace.action.disabled || workspace.action.pending} aria-busy={workspace.action.pending || undefined} aria-label={`${workspace.title}. ${workspace.action.label}`} aria-current={workspace.selected ? 'page' : undefined}><span className="teacher-trail__workspace-icon"><CuevoIcon name={workspace.icon} variant="filled" size={31} /></span><strong>{workspace.title}</strong><span>{workspace.description}</span></button></li>)}</ul> : <p className="teacher-trail__empty">{t.workspaceUnknown}</p>}</section>

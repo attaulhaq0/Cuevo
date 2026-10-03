@@ -2,6 +2,10 @@
 @import './parent-trail.css';
 @import './coordinator-trail.css';
 @import './admin-trail.css';
+.teacher-home-records { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.teacher-home-records summary { min-block-size: 2.75rem; cursor: pointer; align-content: center; }
+.teacher-home-records article { padding-block: var(--space-4); }
+.teacher-home-records article h2 { font-size: var(--type-lg); }
 
 .role-home { margin-block-start: var(--space-6); }
 .home-action-section, .home-context-section { margin-block: var(--space-6) var(--space-8); }

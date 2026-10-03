@@ -1,4 +1,30 @@
 import { LearningApiError } from '../../shared/api/client.ts';
+import { learnerProfileSchema } from '@cuevo/contracts';
+export type SchoolRead<T> = { scope: string; value: T };
+export function currentSchoolRead<T>(read: SchoolRead<T> | null, scope: string): T | null { return read?.scope === scope ? read.value : null; }
+export type LearnerProfileRecord = ReturnType<typeof learnerProfileSchema.parse>;
+export function parseCurrentLearnerProfile(value: unknown, learnerId: string): LearnerProfileRecord {
+  const parsed = learnerProfileSchema.safeParse(value);
+  if (!parsed.success || parsed.data.id !== learnerId || parsed.data.enrollments.some(enrollment => enrollment.effectiveTo !== null && Date.parse(enrollment.effectiveTo) <= Date.parse(enrollment.effectiveFrom))) throw new LearningApiError('invalid');
+  return parsed.data;
+}
+export function parseCurrentSchoolContext(value: unknown, schoolId: string): SchoolContext {
+  const context = parseSchoolContext(value);
+  if (context.school.id !== schoolId) throw new LearningApiError('invalid');
+  return context;
+}
+export function parseCurrentAttendance(value: unknown, learnerId?: string): AttendanceRow {
+  const record = parseAttendance(value);
+  if (learnerId && record.learnerId !== learnerId) throw new LearningApiError('invalid');
+  return record;
+}
+/** A chosen calendar date selects an existing timetable window only. This
+ * does not claim a class happened or infer attendance from its schedule. */
+export function schoolTimetableForDate(rows: readonly SchoolRow[], day: string): SchoolRow[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day) return [];
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return rows.filter(row => row.dayOfWeek === weekday && typeof row.effectiveFrom === 'string' && typeof row.effectiveTo === 'string' && row.effectiveFrom <= day && row.effectiveTo >= day).sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt)) || a.id.localeCompare(b.id));
+}
 export type SchoolPolicy = { version: number; parentAttendanceVisible: boolean; parentUpcomingVisible: boolean; studentMessagingEnabled: false; recognitionEnabled: boolean; leaderboardEnabled: boolean; analyticsEnabled: boolean };
 export type SchoolContext = { school: { id: string; name: string; countryCode: string; languages: ('en' | 'ar')[] }; policy: SchoolPolicy; intelligence: { fixtureSchoolApproved: boolean; liveSchoolApproved: boolean; availability: 'SERVER_CONFIG_AND_APPROVED_POLICY_REQUIRED' } };
 export type SchoolRow = { id: string; [field: string]: string | number | boolean | null };
