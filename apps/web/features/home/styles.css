@@ -226,6 +226,8 @@
   .student-trail__task-art { block-size: 9.5rem; max-inline-size: 26rem; margin-inline: auto; }
   .student-trail__current-label { inset-inline-start: 25%; }
   .student-trail .student-trail__work { inline-size: 64%; block-size: 8rem; inset-inline-start: 4%; }
+  .student-trail .student-trail__pedestal { inline-size: 85%; block-size: 6rem; inset-inline-start: 4%; inset-block-end: -.5rem; }
+  .student-trail .student-trail__work-subject { inline-size: 57%; block-size: 8rem; inset-inline-start: 9%; inset-block-end: 1.125rem; }
   .student-trail__foxi-crop { inset-inline-start: 55%; inset-block-start: -.375rem; inline-size: 9.75rem; block-size: auto; }
   .student-trail__task { padding-block-start: var(--space-7); min-block-size: 0; }
   .student-trail__task-context { margin-inline: auto; max-inline-size: 28rem; }
