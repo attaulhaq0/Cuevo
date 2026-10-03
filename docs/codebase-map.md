@@ -23,7 +23,7 @@ Start at root README → AGENTS → [product context map](product/context-map.md
 | Learner progress | [web progress feature](../apps/web/features/progress/README.md), [API learner-state module](../apps/api/src/modules/learner-state/README.md) | Separate source-linked state, observations, factual signals and current staff class evidence summary |
 | Improvement | [web improvement feature](../apps/web/features/improvement/README.md), [API improvement module](../apps/api/src/modules/improvement/README.md) | Authorized fixture runs, proposals, decisions, interventions, follow-up and native measurement; gate verification remains in progress |
 | Authentication UI | [web auth feature](../apps/web/features/auth/README.md) | Sign-in and denied/unavailable states |
-| Application composition | [web shell](../apps/web/features/shell/README.md), [API app.ts](../apps/api/src/app.ts) | Feature navigation and module registration |
+| Application composition | [web shell](../apps/web/features/shell/README.md), [API app.ts](../apps/api/src/app.ts) | Feature navigation and module registration; pure WorkspaceChrome prepares one horizontal/mobile navigation from owner-supplied permitted items, with runtime replacement pending |
 | Shared web infrastructure | [shared README](../apps/web/shared/README.md) | Session context, API/retry/pagination, common forms and locale |
 | API infrastructure | [platform README](../apps/api/src/platform/README.md) | Identity/current session resolution and actor/database transactions |
 | Worker | [worker README](../apps/worker/README.md), [outbox processor](../apps/worker/src/jobs/outbox/processor.ts) | Claimed event processing and bounded recovery; SQL source functions live in migrations |
