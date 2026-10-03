@@ -1,0 +1,7 @@
+# Browser journeys
+
+These tests exercise rendered application workflows through real named controls. Authoritative mutations, grants, source scope and durable receipts remain API/database concerns; an exact test record ID verifies the selected human context and never replaces it.
+
+`human-choice.ts` selects one enabled visible label, requires a nonempty bounded caption/value and checks an independently known receipt identity when available. `humanContextLabel` accepts one literal source title with a visibly separated bounded context suffix. Tests keep their own literal expected product words rather than importing product formatters to manufacture the oracle. Load additional choices only through the current authorized source's paging control before calling this helper; never resolve ambiguity by taking the first matching option or appending a database key.
+
+Cross-application browser journeys stay here. Feature/parser/unit tests remain beside their owners; API/database journeys live in `apps/api/test/integration`, and SQL/RLS cases live in `supabase/tests`. Current English/Arabic, keyboard, mobile, hydration, source denial and axe assertions must survive presentation repairs. Generated screenshots/results and disposable records remain local evidence; restore the guarded synthetic environment after mutation journeys. Test capture does not establish official curriculum or production acceptance.

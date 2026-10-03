@@ -1,5 +1,7 @@
 # Academic feature
 
+The class gradebook's opened evidence section supplies a localized level-three heading beneath the course heading. The shared exact evidence detail retains its level-four task heading, preserving semantic heading order in English and Arabic. The production browser caught the earlier skipped level; renewed rendered axe verification remains required after the repair.
+
 Academic shell introductions reflect the current role: students and parents read released results/evidence, coordinators review school objectives/results, and teachers/admins receive marking/release guidance. Standalone evidence context includes the exact authorized learner name. This copy supplies no authorization; server source checks remain unchanged.
 
 Result cards lead with task/objective/native values and actual revision/date; exact version/policy tokens are in explicit technical source details. Evidence leads with authorized source task/class/recorder context, preserving nullable names and school review guidance. Objective and rubric choices use real source dates; they never infer version numbers from opaque tokens. Browser evidence verifies primary text and opened technical provenance separately. Cross-feature consumers continue through academic/model and academic/ui.

@@ -82,7 +82,7 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
     await expect(main.getByRole('heading', { name: 'قراءة الإعلانات المعتمدة', exact: true })).toBeVisible();
     if (role === 'student' || role === 'parent') await expect(main.getByRole('heading', { name: 'قراءة ملاحظات المعلّم', exact: true })).toBeVisible();
   } else if (name === 'School') {
-    const expected = role === 'admin' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'سجل تدقيق المدرسة', 'مراجعة الأتمتة', 'العمليات اليومية']
+    const expected = role === 'admin' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'سجل تدقيق المدرسة', 'مراجعة الأتمتة', 'الحسابات والدعوات', 'العمليات اليومية']
       : role === 'coordinator' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'العمليات اليومية']
         : role === 'teacher' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'العمليات اليومية']
           : role === 'parent' ? ['الدعم التعليمي المعتمد', 'العمليات اليومية'] : ['العمليات اليومية'];

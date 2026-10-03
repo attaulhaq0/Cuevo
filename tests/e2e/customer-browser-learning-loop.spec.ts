@@ -2,6 +2,7 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { humanContextLabel, selectHumanChoice } from './human-choice';
 
 type Account = { role: string; email: string; password: string };
 type Receipt = { id: string; [field: string]: unknown };
@@ -56,16 +57,16 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     }
     await expect(target).toBeVisible();
   }
-  async function selectHumanLabel(select: Locator, label: string | RegExp, container?: Locator) {
+  async function selectHumanLabel(select: Locator, label: string | RegExp, container?: Locator, expectedValue?: string) {
     await expect(select).toBeVisible();
     for (let pass = 0; pass < 30; pass++) {
       const texts = await select.locator('option').allTextContents();
       const selected = texts.find(text => typeof label === 'string' ? text === label : label.test(text));
-      if (selected) { await select.selectOption({ label: selected }); return selected; }
+      if (selected) return (await selectHumanChoice(select, label, expectedValue)).label;
       const more = container?.getByRole('button', { name: 'Load more', exact: true });
       if (!more || !await more.count()) {
         await expect.poll(async()=>{const labels=await select.locator('option').allTextContents();return labels.some(text=>typeof label==='string'?text===label:label.test(text));},{timeout:15000}).toBe(true);
-        const ready=(await select.locator('option').allTextContents()).find(text=>typeof label==='string'?text===label:label.test(text));if(ready){await select.selectOption({label:ready});return ready;}break;
+        const ready=(await select.locator('option').allTextContents()).find(text=>typeof label==='string'?text===label:label.test(text));if(ready)return (await selectHumanChoice(select,label,expectedValue)).label;break;
       }
       await more.last().click(); await settled(page);
     }
@@ -81,7 +82,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await form.getByLabel('Instructions', { exact: true }).fill('Explain the school-authored example and describe a checking step.');
     const result = await visibleMutation('/v1/assessments', () => form.getByRole('button', { name: 'Save', exact: true }).click());
     const row=page.locator('.assessment-section').filter({has:page.getByRole('heading',{name:label,exact:true})});await expect(row).toBeVisible();
-    const preparation=row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Edit task preparation',exact:true})}).last();await selectHumanLabel(preparation.getByLabel('Approved learning objective',{exact:true}),/^Synthetic school-authored explanation objective(?: · .*)?$/);await visibleMutation(`/v1/assessments/${result.id}/preparation`,()=>preparation.getByRole('button',{name:'Save preparation',exact:true}).click());
+    const preparation=row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Edit task preparation',exact:true})}).last();await selectHumanLabel(preparation.getByLabel('Approved learning objective',{exact:true}),humanContextLabel('Synthetic school-authored explanation objective'),undefined,'61000000-0000-4000-8000-000000000001');const prepared=await visibleMutation(`/v1/assessments/${result.id}/preparation`,()=>preparation.getByRole('button',{name:'Save preparation',exact:true}).click());expect(prepared.referenceId).toBe('61000000-0000-4000-8000-000000000001');
     await visibleMutation(`/v1/assessments/${result.id}/publish`,()=>row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Publish prepared assessment',exact:true})}).last().getByRole('button',{name:'Publish prepared assessment',exact:true}).click());return result;
   }
   async function submitAssessment(label: string, assessmentId: string, useDraft: boolean) {
@@ -107,7 +108,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await loadTarget(queue, page.locator('.academic-workspace')); await queue.click();
     const linked = page.getByRole('region', { name: 'Link approved objective', exact: true });
     if(await linked.count()){
-      await selectHumanLabel(linked.getByLabel('Academic objective', { exact: true }), /^Synthetic school-authored explanation objective \(/);
+      await selectHumanLabel(linked.getByLabel('Academic objective', { exact: true }), humanContextLabel('Synthetic school-authored explanation objective'), undefined, '61000000-0000-4000-8000-000000000001');
       const configuration = await visibleMutation(`/v1/assessments/${submission.assessmentId}/reference`, () => linked.getByRole('button', { name: 'Link approved objective', exact: true }).click());expect(configuration).toMatchObject({ id: submission.assessmentId, policyVersion: 2 });
     }
     const form = page.getByRole('region', { name: 'Save marking draft', exact: true });
@@ -251,7 +252,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await loadTarget(parentResult, page.locator('.academic-workspace')); await expect(parentResult.locator('.native-score strong')).toHaveText('7'); await expect(page.getByRole('navigation').getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
     await capture('09-parent-approved-native-result.png');
     await signOut();await signIn('student');await navigate('Portfolio');await page.getByRole('button',{name:'Select released work',exact:true}).click();
-    const selectWork=page.getByRole('region',{name:'Select released work',exact:true});await selectHumanLabel(selectWork.getByLabel('Released source evidence',{exact:true}),followUpTitle,page.locator('.portfolio-workspace'));
+    const selectWork=page.getByRole('region',{name:'Select released work',exact:true});const releasedChoices=page.locator('.portfolio-workspace > .notice').filter({has:page.getByText('Released source evidence',{exact:true})});const selectedWork=await selectHumanLabel(selectWork.getByLabel('Released source evidence',{exact:true}),humanContextLabel(followUpTitle),releasedChoices,String(followUp.evidenceId));expect(selectedWork).toContain('Objective: Synthetic school-authored explanation objective');expect(selectedWork).toContain('Result revision: 1');expect(selectedWork).toContain('Released:');
     await selectWork.getByLabel('Portfolio title',{exact:true}).fill(`${title} selected explanation`);await selectWork.getByLabel('What I learned',{exact:true}).fill('I used teacher feedback, practised a checking step and explained it in the follow-up work.');
     const portfolio=await visibleMutation('/v1/portfolio/items',()=>selectWork.getByRole('button',{name:'Save',exact:true}).click());expect(portfolio).toMatchObject({revision:1,status:'AWAITING_REVIEW'});await signOut();
     await signIn('teacher');await navigate('Portfolio');const portfolioRow=page.locator(`[data-portfolio-id="${portfolio.id}"]`);await loadTarget(portfolioRow,page.locator('.portfolio-workspace'));await portfolioRow.getByRole('button',{name:'Review selected work',exact:true}).click();
