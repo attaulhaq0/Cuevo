@@ -1,4 +1,5 @@
 * text=auto eol=lf
+supabase/migrations/20261003032848_current_academic_source_candidates.sql -text -eol
 *.png binary
 *.pdf binary
 # Preserve exact applied bytes for these newly authored migration sources.

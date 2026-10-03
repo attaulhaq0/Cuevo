@@ -24,6 +24,9 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
     let stage = 'COURSE_SETUP'; let failureCode: string | null = null; let failureHttpStatus: number | null = null;
     const querySamples: { operation: string; elapsedMs: number; status: string }[] = [];
     const componentSamples: { component: string; elapsedMs: number; status: string; count: number | null }[] = [];
+    const diagnosticPlans: { component: string; plan: unknown }[] = [];
+    let exactSavedContextsChecked = 0;
+    const databaseConditions = (await active.client.query("select current_setting('jit') as jit,current_setting('plan_cache_mode')as plan_cache_mode,(select coalesce(jsonb_agg(row_to_json(s)),'[]'::jsonb)from(select relname,n_live_tup,n_dead_tup,last_analyze,last_autoanalyze,last_autovacuum from pg_stat_user_tables where schemaname in('app','internal')and relname in('result_revisions','current_results','academic_result_sources','assessments','submissions','memberships','people','enrollments','teacher_assignments'))s)as tables")).rows[0];
     const operationCounts = new Map<string, number>();
     const measuredClient = active.client as unknown as { query: (...args: unknown[]) => Promise<unknown> };
     const originalQuery = measuredClient.query.bind(active.client);
@@ -83,7 +86,12 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
           if (starts[index] < 0 || starts[index + 1] <= starts[index]) throw Error('Exact context diagnostic source selection changed.');
           sql = sql.replace('into recent from', 'as payload from').replace('into observations from', 'as payload from').replace('into prior from', 'as payload from')
             .replaceAll('baseline.learner_id', '$2::uuid').replaceAll('baseline.reference_id', '$4::uuid').replaceAll('baseline.reference_version', '$5::text').replaceAll('baseline.max_score', '$6::numeric').replaceAll('baseline_id', '$7::uuid').replaceAll('course.id', '$3::uuid').replaceAll('window_days', '$8::integer').replaceAll('=school', '=$1::uuid').replaceAll('(school,', '($1::uuid,');
-          queries.push({ component: ['RECENT_RESULTS', 'OBSERVATIONS', 'PRIOR_INTERVENTIONS'][index], sql, args: [active.school, source.learner_id, source.course_id, source.reference_id, source.reference_version, source.max_score, baselineId, 14] });
+          // PostgreSQL requires a type for every supplied parameter. These fragments use
+          // different subsets; compact the actual slots rather than pass eight unused values.
+          const values = [active.school, source.learner_id, source.course_id, source.reference_id, source.reference_version, source.max_score, baselineId, 14];
+          const slots = [...new Set([...sql.matchAll(/\$(\d+)/g)].map(match => Number(match[1])))].sort((a,b)=>a-b);
+          sql = sql.replace(/\$(\d+)/g, (_match, slot: string) => '$' + (slots.indexOf(Number(slot)) + 1));
+          queries.push({ component: ['RECENT_RESULTS', 'OBSERVATIONS', 'PRIOR_INTERVENTIONS'][index], sql, args: slots.map(slot=>values[slot-1]) });
         }
         queries.push({ component: 'PUBLISHED_OPTIONS', sql: 'select internal.insight_published_options($1,$2)payload', args: [active.school, source.course_id] }, { component: 'COMPOSITE_CONTEXT', sql: 'select internal.teacher_insight_context($1)payload', args: [baselineId] });
         for (const query of queries) {
@@ -94,6 +102,9 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
             await active.client.query("select set_config('app.actor_id',$1,true),set_config('app.school_id',$2,true)", [customerActor(4), active.school]);
             const value = (await active.client.query(query.sql, query.args)).rows[0];
             componentSamples.push({ component: query.component, elapsedMs: Math.round(performance.now() - start), status: 'OK', count: Array.isArray(value?.payload) ? value.payload.length : value?.payload?.recentResults?.length ?? null });
+            if (query.component === 'RECENT_RESULTS') {
+              diagnosticPlans.push({ component: query.component, plan: (await active.client.query('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' + query.sql, query.args)).rows[0]['QUERY PLAN'] });
+            }
           } catch (error) {
             const code = error instanceof Object && 'code' in error ? String(error.code) : 'UNKNOWN';
             componentSamples.push({ component: query.component, elapsedMs: Math.round(performance.now() - start), status: ['57014', '42501', 'P0002', '22023'].includes(code) ? code : 'UNCONFIRMED', count: null });
@@ -115,6 +126,10 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
       }
       stage = 'DRAIN_SOURCE_EVENTS';
       await active.drain();
+      // Expected facts are selected from this fixture's genuine released source rows;
+      // no authorization helper, current context or model output generates the oracle.
+      const sourceRows = (await active.client.query('select id,evidence_id,reference_id,reference_version,score,max_score from app.result_revisions where school_id=$1 and id=any($2::uuid[]) order by created_at desc,id', [active.school, baselines])).rows;
+      expect(sourceRows).toHaveLength(50);
       phaseStarted = performance.now();
       phaseBudgetMs = 250000;
       for (const baselineResultId of baselines) {
@@ -127,8 +142,21 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
           await profileContext(baselineResultId);
           throw Error('Distinct-source analysis setup returned HTTP ' + response.statusCode + ' ' + failureCode + '.');
         }
+        const proposal = response.json();
+        const saved = (await active.client.query('select context from app.intelligence_context_details where school_id=$1 and run_id=$2', [active.school, proposal.intelligenceRunId])).rows[0]?.context;
+        const chosen = new Set([baselineResultId, ...sourceRows.filter(row => row.id !== baselineResultId).slice(0, 9).map(row => row.id)]);
+        const expectedRecent = sourceRows.filter(row => chosen.has(row.id)).map(row => ({ resultId: row.id, evidenceId: row.evidence_id, referenceId: row.reference_id, referenceVersion: row.reference_version, score: Number(row.score), maxScore: Number(row.max_score) }));
+        expect(saved?.recentResults).toEqual(expectedRecent);
+        expect(saved?.learnerId).toBe(customerActor(12));
+        expect(saved?.courseId).toBe(course.courseId);
+        expect(saved?.priorInterventions).toEqual([]);
+        expect(saved?.observations).toEqual([]);
+        expect(saved?.learningOptions).toEqual([expect.objectContaining({ activityId: course.practiceId, title: 'Teacher practice', instructions: 'Explain one step, then check it.', kind: 'practice', contentRevisionId: expect.any(String), contentRevision: expect.any(Number) })]);
+        exactSavedContextsChecked++;
         completedAnalysisCount++;
       }
+      stage = 'PROFILE_CURRENT_CONTEXT';
+      await profileContext(baselines[0]);
       stage = 'COUNT_CONFIRMED_PROPOSALS';
       const population = (await active.client.query('select count(*)::integer proposals,count(distinct baseline_result_id)::integer baselines from app.recommendations where school_id=$1', [active.school])).rows[0];
       baselineCount = population.baselines; proposalCount = population.proposals;
@@ -162,9 +190,10 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
       // Cooperative setup bounds allow every pending request to finish before the rollback/connection cleanup.
       const closing = context; context = undefined; await closing?.close(); cleanupCompleted = true;
       await mkdir('.local/performance-investigation', { recursive: true });
-      await writeFile('.local/performance-investigation/recommendation-distinct-source-profile.json', JSON.stringify({ classification: 'LOCAL_SYNTHETIC_ROLLBACK_ONLY', sourceSetup: 'PRODUCTION_SERVICES_SQL_ACTOR_TRANSACTIONS', generationAndPages: 'ACTUAL_AUTH_API', statementBudgetMs: 5000, sourcePhaseBoundMs: 150000, analysisPhaseBoundMs: 250000, caseBoundMs: 480000, releasedBaselineCount, completedAnalysisCount, baselineCount, proposalCount, stage, failureCode, failureHttpStatus, elapsedMs: Math.round(performance.now() - started), samples, querySamples, componentSamples, operationCounts: Object.fromEntries(operationCounts), cleanupCompleted }, null, 2) + '\n');
+      await writeFile('.local/performance-investigation/recommendation-distinct-source-profile.json', JSON.stringify({ classification: 'LOCAL_SYNTHETIC_ROLLBACK_ONLY', sourceSetup: 'PRODUCTION_SERVICES_SQL_ACTOR_TRANSACTIONS', generationAndPages: 'ACTUAL_AUTH_API', statementBudgetMs: 5000, sourcePhaseBoundMs: 150000, analysisPhaseBoundMs: 250000, caseBoundMs: 480000, databaseConditions, exactSavedContextsChecked, diagnosticPlans, releasedBaselineCount, completedAnalysisCount, baselineCount, proposalCount, stage, failureCode, failureHttpStatus, elapsedMs: Math.round(performance.now() - started), samples, querySamples, componentSamples, operationCounts: Object.fromEntries(operationCounts), cleanupCompleted }, null, 2) + '\n');
     }
     expect(baselineCount).toBe(50); expect(proposalCount).toBe(50);
+    expect(exactSavedContextsChecked).toBe(50);
     const currentPages = samples.filter(item => item.path === 'CURRENT_API');
     expect(currentPages.map(sample => sample.limit)).toEqual([1, 10, 50]);
     for (const sample of currentPages) {
