@@ -1,0 +1,20 @@
+/* Illustrative Storybook chrome; runtime shell remains its sole owner. */
+.teacher-trail-preview.workspace { display: block; min-block-size: 100dvh; }
+.teacher-trail-preview__header { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-6); border-block-end: 1px solid var(--color-border); background: var(--color-material-chrome); }
+.teacher-trail-preview__header .brand { flex: none; margin-inline-end: var(--space-4); }
+.teacher-trail-preview__header .brand__mark { inline-size: 3rem; }
+.teacher-trail-preview__header .brand__name { font: 900 2rem 'Cuevo Nunito Sans', var(--font-sans); }
+.teacher-trail-preview__context { display: flex; gap: var(--space-3); align-items: center; min-block-size: 2.75rem; min-inline-size: 13rem; padding: var(--space-2) var(--space-4); font: inherit; color: var(--color-text); background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer; }
+.teacher-trail-preview__context > span { flex: 1; text-align: start; }
+.teacher-trail-preview__context > svg { color: var(--color-accent); }
+.teacher-trail-preview__header > p { color: var(--color-text-secondary); font-size: var(--type-xs); margin: 0; white-space: nowrap; }
+.teacher-trail-preview__search { margin-inline-start: auto; color: var(--color-text-secondary) !important; font-weight: var(--font-weight-regular) !important; }
+.teacher-trail-preview__account { display: flex; gap: var(--space-3); align-items: center; flex: none; }
+.teacher-trail-preview__account > span { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; border-radius: var(--radius-pill); background: var(--color-surface-muted); }
+.teacher-trail-preview__account strong { font-size: var(--type-sm); }
+.teacher-trail-preview__account p { margin: 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
+.teacher-trail-preview__receipt { position: fixed; inset-block-end: var(--space-5); inset-inline-end: var(--space-5); z-index: 20; display: flex; gap: var(--space-3); align-items: center; max-inline-size: min(34rem, calc(100% - 2rem)); padding: var(--space-4); border: 1px solid var(--color-border); background: var(--color-material-reading); border-radius: var(--radius-md); box-shadow: var(--elevation-floating); }
+.teacher-trail-preview__receipt p { margin: 0; }
+@media (max-width: 1350px) { .teacher-trail-preview__header { gap: var(--space-3); } .teacher-trail-preview__context { min-inline-size: 10rem; } .teacher-trail-preview__header > p { display: none; } }
+@media (max-width: 1000px) { .teacher-trail-preview__header { flex-wrap: wrap; } .teacher-trail-preview__search { margin-inline-start: 0; } .teacher-trail-preview__account { margin-inline-start: auto; } }
+@media (max-width: 700px) { .teacher-trail-preview__header { padding: var(--space-3) var(--space-4); gap: var(--space-2); } .teacher-trail-preview__header .brand { margin-inline-end: auto; } .teacher-trail-preview__header .brand__name { font-size: 1.5rem; } .teacher-trail-preview__header .brand__mark { inline-size: 2.25rem; } .teacher-trail-preview__context { flex: 1 1 calc(50% - .5rem); order: 2; min-inline-size: 0; } .teacher-trail-preview__search { order: 3; inline-size: 100%; justify-content: start; } .teacher-trail-preview__account strong { max-inline-size: 8rem; display: block; overflow-wrap: anywhere; } }
