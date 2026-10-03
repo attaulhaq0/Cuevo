@@ -1,5 +1,7 @@
 # Academic feature
 
+Academic shell introductions reflect the current role: students and parents read released results/evidence, coordinators review school objectives/results, and teachers/admins receive marking/release guidance. Standalone evidence context includes the exact authorized learner name. This copy supplies no authorization; server source checks remain unchanged.
+
 Result cards lead with task/objective/native values and actual revision/date; exact version/policy tokens are in explicit technical source details. Evidence leads with authorized source task/class/recorder context, preserving nullable names and school review guidance. Objective and rubric choices use real source dates; they never infer version numbers from opaque tokens. Browser evidence verifies primary text and opened technical provenance separately. Cross-feature consumers continue through academic/model and academic/ui.
 
 Native numeric display isolates score/maximum in an LTR bidi span in both locales, with a localized accessible score-out-of-maximum label. This preserves actual native values and prevents RTL reordering; the visible full-loop Arabic mobile regression checks the rendered ratio direction and accessible label. Rubric descriptor/version handling remains separate.

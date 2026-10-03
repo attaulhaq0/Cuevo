@@ -164,6 +164,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('teacher'); const baseline = await markAndRelease(baselineTitle, baselineSubmission, 2); await capture('03-reviewed-native-result.png'); await signOut();
 
     await signIn('student'); await navigate('Academic');
+    await expect(page.getByText('Read your released results, teacher feedback and the work behind them.', { exact: true })).toBeVisible();
     const feedback = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: baselineTitle, exact: true }) });
     await loadTarget(feedback, page.locator('.academic-workspace')); await expect(feedback.locator('.native-score strong')).toHaveText('2');
     expect(await feedback.innerText()).not.toContain('synthetic-school-1');
@@ -241,6 +242,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     const learnerSummary = summary.items.find((item: { learnerId: string }) => item.learnerId === baselineSubmission.learnerId); expect(learnerSummary.academic.numericCount).toBeGreaterThanOrEqual(2); expect(learnerSummary.outcomes.measurementIds).toContain(outcome.id);
     await capture('08-coordinator-class-evidence.png'); await signOut();
     await signIn('parent'); await navigate('Academic'); const childSelect = page.getByLabel('Child', { exact: true });
+    await expect(page.getByText('Read your child’s released results, teacher feedback and approved evidence.', { exact: true })).toBeVisible();
     await selectHumanLabel(childSelect,new RegExp(`${escapeRegExp(studentName)}.*Year 1.*Cedar`));const parentResult = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: followUpTitle, exact: true }) });
     await loadTarget(parentResult, page.locator('.academic-workspace')); await expect(parentResult.locator('.native-score strong')).toHaveText('7'); await expect(page.getByRole('navigation').getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
     await capture('09-parent-approved-native-result.png');

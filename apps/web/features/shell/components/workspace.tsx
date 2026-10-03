@@ -14,7 +14,7 @@ import{parseNavigationIntent,navigationParameters,type NavigationIntent}from'../
 import { LearningWorkspace } from '../../learning/ui';
 import { learningAr, learningEn } from '../../learning/copy';
 import { AcademicWorkspace } from '../../academic/ui';
-import { academicAr, academicEn } from '../../academic/copy';
+import { academicAr, academicEn, academicWorkspaceBody } from '../../academic/copy';
 import { ProgressWorkspace } from '../../progress/ui';
 import { progressAr, progressEn } from '../../progress/copy';
 import { ImprovementWorkspace } from '../../improvement/ui';
@@ -86,7 +86,7 @@ export function Workspace({ membership }: { membership: Membership }) {
     setSignOutFailed(!success);
   }
   const title = view==='restricted'?restricted.title:view === 'portfolio' ? portfolio.portfolio : view === 'development' ? development.development : view === 'curriculum' ? curriculum.curriculum : view === 'community' ? community.community : view === 'school' ? school.school : view === 'improvement' ? improvement.improvement : view === 'progress' ? progress.progress : view === 'academic' ? academic.academic : view === 'learning' ? learning.learning : view === 'overview' ? t.roleTitles[membership.role] : view === 'access' ? t.accessTitle : t.accountTitle;
-  const body = view==='restricted'?restricted.notice:view === 'portfolio' ? portfolio.body : view === 'development' ? development.body : view === 'curriculum' ? curriculum.body : view === 'community' ? community.body : view === 'school' ? school.body : view === 'improvement' ? improvement.body : view === 'progress' ? progress.body : view === 'academic' ? academic.body : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
+  const body = view==='restricted'?restricted.notice:view === 'portfolio' ? portfolio.body : view === 'development' ? development.body : view === 'curriculum' ? curriculum.body : view === 'community' ? community.body : view === 'school' ? school.body : view === 'improvement' ? improvement.body : view === 'progress' ? progress.body : view === 'academic' ? academicWorkspaceBody(membership.role,locale) : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
   return <div className="workspace">
     <aside className="sidebar">
       <div className="sidebar__brand"><Brand compact /></div>
