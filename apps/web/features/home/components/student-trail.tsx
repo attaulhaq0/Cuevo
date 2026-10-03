@@ -39,8 +39,9 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
   const availabilityNotice = context.availability === 'ready' ? null : context.notice || t[context.availability];
   return <div className="student-trail" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} data-availability={context.availability} data-character={context.companion.visible ? 'visible' : 'hidden'}>
     <Illustration src={assets.background} className="student-trail__background" />
-    <div className="student-trail__content">
       {availabilityNotice ? <div className="student-trail__notice" role={context.availability === 'error' ? 'alert' : 'status'}><p>{availabilityNotice}</p>{context.recovery ? <TrailAction action={context.recovery} /> : null}</div> : null}
+    <div className="student-trail__content">
+
       <div className="student-trail__intro-row">
         <header className="student-trail__intro"><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{context.displayName ? <>{t.hello}, <bdi>{context.displayName}</bdi>!</> : t.helloUnknown}</h1><h2>{t.nextStep}</h2><p>{t.introduction}</p></header>
       </div>

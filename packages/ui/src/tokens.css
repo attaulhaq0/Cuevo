@@ -200,7 +200,7 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
   --field-min-size: 3rem;
   --density-gap: 1.5rem;
   --density-padding: 1.5rem;
-  --content-width: 82rem;
+  --content-width: 96rem;
   --reading-width: 65ch;
   font-family: var(--font-sans);
   font-size: var(--type-body);
@@ -266,6 +266,16 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
   border: 1px solid transparent;
 }
 .workspace .status__dot { inline-size: .4375rem; block-size: .4375rem; }
+
+/* Dense reading tables keep data on an opaque surface. Only their column
+   region scrolls; labels, summaries and recovery actions remain in page flow. */
+.workspace .cuevo-table-scroll { min-inline-size:0; max-inline-size:100%; overflow-x:auto; overscroll-behavior-inline:contain; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-material-reading); }
+.workspace .cuevo-table-scroll table { inline-size:100%; border-collapse:separate; border-spacing:0; font-size:var(--type-sm); }
+.workspace .cuevo-table-scroll :is(th,td) { text-align:start; vertical-align:top; padding:var(--space-3); border-block-end:1px solid var(--color-border); overflow-wrap:anywhere; }
+.workspace .cuevo-table-scroll thead th { background:var(--color-surface-muted); color:var(--color-text-secondary); }
+.workspace .cuevo-table-scroll tbody tr:last-child :is(th,td) { border-block-end:0; }
+.workspace .cuevo-table-scroll caption { text-align:start; padding:var(--space-3); font-weight:var(--font-weight-semibold); background:var(--color-material-reading); }
+.workspace .cuevo-table-scroll:focus-visible { outline:var(--focus-width) solid var(--color-focus); outline-offset:var(--focus-offset); }
 
 /* Existing shared fields keep their native semantics, IDs and form ownership.
    Checkboxes/radios retain their compact native control and label hit area. */

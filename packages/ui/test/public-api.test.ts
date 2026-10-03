@@ -57,21 +57,23 @@ describe('controlled workspace icon coverage', () => {
     expect(html).toContain('<svg');
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('width="20" height="20"');
-    expect(html).toContain('stroke-width="1.8"');
+    expect(html).toMatch(/<image href="[^"]+"/);
   });
 
-  it.each(['community', 'portfolio', 'assessment', 'development', 'curriculum', 'notification'] as const)('supplies a filled %s silhouette on the shared optical grid', name => {
+  it.each(['community', 'portfolio', 'assessment', 'development', 'curriculum', 'notification'] as const)('resolves both legacy %s variants to the sole illustrated asset', name => {
       const html = renderToStaticMarkup(createElement(CuevoIcon, { name, variant: 'filled', size: 32 }));
-      expect(html).toContain('width="32" height="32" viewBox="0 0 24 24" fill="currentColor"');
+      expect(html).toContain('width="32" height="32"');
+      expect(html).toMatch(/<image href="[^"]+"/);
+      expect(html).toBe(renderToStaticMarkup(createElement(CuevoIcon, { name, variant: 'outline', size: 32 })));
       expect(html).not.toContain('class="lucide');
     });
 
-  it('keeps utility fallback and caller dimensions, classes and stroke overrides', () => {
+  it('keeps caller dimensions and classes without changing illustration pixels', () => {
     const html = renderToStaticMarkup(createElement(CuevoIcon, {
       name: 'search', variant: 'filled', size: 28, className: 'search-control', strokeWidth: 2,
     }));
     expect(html).toContain('width="28" height="28"');
-    expect(html).toContain('stroke-width="2"');
+    expect(html).toMatch(/<image href="[^"]+"/);
     expect(html).toContain('search-control');
   });
 

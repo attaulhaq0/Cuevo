@@ -11,7 +11,7 @@ const sourceContainers = new Map([
   ['apps', new Set(['api', 'web', 'worker'])],
   ['packages', new Set(['config', 'contracts', 'domain', 'ui'])],
   ['apps/api/src', new Set(['modules', 'platform'])],
-  ['apps/web', new Set(['app', 'features', 'shared', '.storybook'])],
+  ['apps/web', new Set(['app', 'features', 'shared', 'public', '.storybook'])],
   ['apps/worker/src', new Set(['jobs', 'platform'])],
 ]);
 

@@ -7,7 +7,7 @@ import { useApp } from '../../../shared/session/providers';
 import { authAr, authEn } from '../messages';
 import { Brand } from '../../../shared/components/brand';
 import { LearningLoop } from './learning-loop';
-import background from '../assets/learning-background.webp';
+import background from '../assets/studio-background.webp';
 
 export function SignIn() {
   const { dictionary: t, signIn, status, locale } = useApp();
@@ -25,15 +25,16 @@ export function SignIn() {
     setPending(false); setError(result);
   }
   const configured = status !== 'not-configured';
-  return <div className="auth-page">
-    <main id="main-content" className="auth-main" tabIndex={-1} style={{ '--auth-background-image': `url("${background.src}")` } as CSSProperties}>
-      <header className="auth-header"><div className="auth-header__brand"><Brand /></div><div className="auth-language"><LanguageSwitch expanded /></div></header>
+  return <div className="auth-page" data-design="learning-studio" style={{ '--auth-background-image': `url("${background.src}")` } as CSSProperties}>
+    <main id="main-content" className="auth-main" tabIndex={-1}>
+      <header className="auth-header"><div className="auth-header__brand"><Brand /></div><div className="auth-language auth-copy--mobile"><LanguageSwitch expanded /></div></header>
       <section className="auth-story" aria-labelledby="learning-heading">
         <div className="auth-story__intro"><h1 id="learning-heading"><span className="auth-copy--desktop">{copy.headlineStart}<br />{copy.headlineAccent}</span><span className="auth-copy--mobile">{t.welcome}</span></h1><p><span className="auth-copy--desktop">{copy.intro}</span><span className="auth-copy--mobile">{t.signInBody}</span></p></div>
         <LearningLoop copy={copy} />
       </section>
       <div className="auth-side">
-        <section className="auth-panel" aria-labelledby="sign-in-heading">
+        <section className="auth-panel" aria-label={tab === 'sign-in' ? copy.signInTab : copy.helpTab}>
+        <div className="auth-language auth-copy--desktop"><LanguageSwitch expanded /></div>
         <div className="auth-panel__intro"><h2 id="sign-in-heading">{tab === 'sign-in' ? t.welcome : copy.helpTitle}</h2><p>{tab === 'sign-in' ? t.signInBody : copy.helpBody}</p></div>
         <div className="auth-panel__tabs" role="tablist" aria-label={t.welcome} onKeyDown={event => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || pending) return;

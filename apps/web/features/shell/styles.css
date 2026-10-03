@@ -71,6 +71,7 @@
 .workspace .workspace-command__search-label { display: block; margin-block-end: var(--space-2); font-size: var(--type-sm); font-weight: var(--font-weight-semibold); }
 .workspace .workspace-command__search { display: flex; align-items: center; gap: var(--space-2); }
 .workspace .workspace-command__search > svg { color: var(--color-accent); flex: none; }
+.workspace .language-switch > svg { inline-size:1.5rem; block-size:1.5rem; }
 .workspace .workspace-command__search input { flex: 1; box-sizing: border-box; }
 .workspace .workspace-command__search .button { flex: none; }
 .workspace .workspace-command__results { list-style: none; display: grid; gap: var(--space-2); margin: var(--space-5) 0 0; padding: var(--space-1); }
@@ -115,3 +116,36 @@
 }
 @media (max-width: 360px) { .workspace .workspace-chrome__header { padding-inline: var(--space-3); } .workspace .workspace-chrome__person strong { max-inline-size: 7rem; } }
 @media (forced-colors: active) { .workspace .workspace-chrome__rail button[aria-current="page"] { border-color: Highlight; background: Highlight; color: HighlightText; } .workspace .workspace-chrome__rail button[aria-current="page"] svg { color: HighlightText; } }
+
+/* The normal workspace dedicates height to the active task and records. */
+.workspace .workspace-main { inline-size:100%; max-inline-size:var(--content-width); padding:var(--space-5) var(--space-5) var(--space-6); }
+.workspace .workspace-main:has(> .role-home) { padding:0; }
+.workspace .workspace-intro { margin-block-end: var(--space-4); gap: var(--space-4); align-items: center; }
+.workspace .workspace-intro .eyebrow { display: none; }
+.workspace .workspace-intro h1 { font-size: var(--type-xl); margin-block-start: 0; }
+.workspace .workspace-intro > div > p:last-child { margin-block-start: var(--space-1); font-size: var(--type-sm); }
+.workspace .workspace-chrome__header { min-block-size: 3.5rem; padding-block: var(--space-2); gap: var(--space-4); }
+.workspace .workspace-chrome__brand .brand__mark { inline-size: 2.25rem; }
+.workspace .workspace-chrome__brand .brand__name { font-size: 1.5rem; }
+.workspace .workspace-chrome__avatar { inline-size: 2.5rem; block-size: 2.5rem; }
+@media (min-width: 801px) {
+  .workspace .workspace-chrome__navigation { padding-block: var(--space-1); }
+  .workspace .workspace-chrome__rail button { flex-direction: row; gap: var(--space-2); min-block-size: 2.75rem; min-inline-size: 0; padding: var(--space-2) var(--space-3); font-size: var(--type-sm); }
+  .workspace .workspace-chrome__rail button > svg, .workspace[data-expression="student"] .workspace-chrome__rail button > svg { inline-size: 2rem; block-size: 2rem; }
+  .workspace .workspace-chrome__rail ul { justify-content: start; }
+}
+@media (max-width: 800px) {
+  .workspace .workspace-main { padding-block-start: var(--space-4); }
+  .workspace .workspace-intro { gap: var(--space-2); }
+  .workspace .workspace-chrome__header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2); }
+  .workspace .workspace-chrome__brand { grid-column: 1; grid-row: 1; }
+  .workspace .workspace-chrome__person { grid-column: 2; grid-row: 1; margin: 0; }
+  .workspace .workspace-chrome__school { grid-column: 1 / -1; grid-row: 2; order: 0; flex-wrap: nowrap; gap: var(--space-2); }
+  .workspace .workspace-chrome__school > bdi { flex: 1; }
+  .workspace .workspace-chrome__utilities { grid-column: 1 / -1; grid-row: 3; order: 0; justify-content: end; }
+  .workspace .workspace-chrome__person > button { gap: var(--space-2); padding-inline: var(--space-1); }
+  .workspace .workspace-chrome__person strong { max-inline-size: 8rem; font-size: var(--type-xs); }
+  .workspace .workspace-chrome__person .workspace-chrome__avatar { inline-size: 2rem; block-size: 2rem; }
+  .workspace .workspace-chrome__rail button { min-block-size: 3.5rem; min-inline-size: 5.25rem; font-size: var(--type-xs); padding-block: var(--space-1); }
+  .workspace .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }
+}

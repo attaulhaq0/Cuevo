@@ -79,5 +79,50 @@ function CurrentAdminHome({ onNavigate, headingRef }: { onNavigate: (destination
     execution: execution ? { state: executionState, title: t.execution, description: t.executionBody, receiptLabel: `${t.received}: ${new Intl.NumberFormat(locale).format(execution.execution.receiptCount)}`, action: schoolAction } : null,
     audit: { status: audit.error || audit.moreError || !sourceScope ? 'unavailable' : audit.loading || !audit.loaded || audit.nextCursor ? 'partial' : 'ready', records: auditRows.slice(0, 3).map(record => ({ key: record.id, actorName: record.actorName, targetName: record.objectName, description: t.audit, dateLabel: date(record.occurredAt), outcome: record.outcome })), action: schoolAction },
   };
-  return <div className="admin-home-connected"><AdminTrailHomeView context={view} locale={locale} headingRef={currentHeadingRef} /><section className="home-native-context" aria-label={t.source}><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button>{[...queries].map((query,index) => query.error ? <LearningError key={index} error={query.error} /> : null)}{!denied && sourceScope ? <><section aria-label={t.people}><h2>{t.people}</h2><ul>{personRows.map(person => <li key={person.id}><bdi>{person.displayName}</bdi> · {t.roles[person.role]} · {t.statuses[person.status]}</li>)}</ul><LoadMore query={people} label={t.people} /></section><section aria-label={t.relationships}><h2>{t.relationships}</h2><ul>{relationshipItems.map(row=><li key={row.key}><h3>{row.title}</h3><p><bdi>{row.names}</bdi> · {t.statuses[row.state as keyof typeof t.statuses] ?? t.relationshipUnknown}</p><p>{date(row.from)}{row.to ? ` – ${date(row.to)}` : ''}</p></li>)}</ul>{!relationshipItems.length ? <p>{t.relationshipUnknown}</p> : null}{[{query:enrollments,label:t.learner},{query:assignments,label:t.teacher},{query:guardians,label:t.guardian}].map(({query,label})=><LoadMore key={label} query={query} label={label} />)}</section><section aria-label={t.audit}><h2>{t.audit}</h2><ul>{auditRows.map(record => <li key={record.id}><bdi>{record.actorName ?? t.personUnknown}</bdi> · <bdi>{record.objectName ?? t.sourceUnknown}</bdi> · {date(record.occurredAt)}</li>)}</ul><LoadMore query={audit} label={t.audit} /></section>{execution ? <section aria-label={t.automation}><h2>{t.automation}</h2><p>{t.executionBody}</p><dl>{(['returned','pending','processing','completed','failed','receiptCount'] as const).map(key => <div key={key}><dt>{key === 'receiptCount' ? t.received : t[key]}</dt><dd>{new Intl.NumberFormat(locale).format(execution.execution[key])}</dd></div>)}</dl></section> : null}</> : null}</section></div>;
+  return <div className="admin-home-connected">
+    <AdminTrailHomeView context={view} locale={locale} headingRef={currentHeadingRef} />
+    <section className="home-native-context admin-home-records" aria-label={t.source}>
+      <Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button>
+      {queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}
+      {!denied && sourceScope ? <>
+        <details>
+          <summary>{t.people}</summary>
+          <section aria-label={t.people}>
+            <h2>{t.people}</h2>
+            <ul>{personRows.map(person => <li key={person.id}><bdi>{person.displayName}</bdi> · {t.roles[person.role]} · {t.statuses[person.status]}</li>)}</ul>
+            <LoadMore query={people} label={t.people} />
+          </section>
+        </details>
+        <details>
+          <summary>{t.relationships}</summary>
+          <section aria-label={t.relationships}>
+            <h2>{t.relationships}</h2>
+            <ul>{relationshipItems.map(row => <li key={row.key}>
+              <h3>{row.title}</h3>
+              <p><bdi>{row.names}</bdi> · {t.statuses[row.state as keyof typeof t.statuses] ?? t.relationshipUnknown}</p>
+              <p>{date(row.from)}{row.to ? ` – ${date(row.to)}` : ''}</p>
+            </li>)}</ul>
+            {!relationshipItems.length ? <p>{t.relationshipUnknown}</p> : null}
+            {[{ query: enrollments, label: t.learner }, { query: assignments, label: t.teacher }, { query: guardians, label: t.guardian }].map(({ query, label }) => <LoadMore key={label} query={query} label={label} />)}
+          </section>
+        </details>
+        <details>
+          <summary>{t.audit}</summary>
+          <section aria-label={t.audit}>
+            <h2>{t.audit}</h2>
+            <ul>{auditRows.map(record => <li key={record.id}><bdi>{record.actorName ?? t.personUnknown}</bdi> · <bdi>{record.objectName ?? t.sourceUnknown}</bdi> · {date(record.occurredAt)}</li>)}</ul>
+            <LoadMore query={audit} label={t.audit} />
+          </section>
+        </details>
+        {execution ? <details>
+          <summary>{t.automation}</summary>
+          <section aria-label={t.automation}>
+            <h2>{t.automation}</h2>
+            <p>{t.executionBody}</p>
+            <dl>{(['returned', 'pending', 'processing', 'completed', 'failed', 'receiptCount'] as const).map(key => <div key={key}><dt>{key === 'receiptCount' ? t.received : t[key]}</dt><dd>{new Intl.NumberFormat(locale).format(execution.execution[key])}</dd></div>)}</dl>
+          </section>
+        </details> : null}
+      </> : null}
+    </section>
+  </div>;
 }

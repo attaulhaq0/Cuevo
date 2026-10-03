@@ -3,6 +3,8 @@
 Inherit root AGENTS.md. Read this app README, docs/codebase-map.md and the affected feature README. Preserve the framework-generated block below; it is an additional version-specific reminder.
 
 - app is for Next route composition; feature UI/model/messages/styles/test files belong under features/<feature>.
+- public/media holds reviewed, versioned decorative bytes served by Next once. The consuming feature owns presentation/provenance. Never place private files, learner data, credentials or generated runtime content here; see docs/decisions/2026-10-03-public-decorative-media.md.
+- Desktop and mobile use deliberately designed compositions in the same feature implementation, shared contracts/actions/tokens and deterministic initial HTML. Avoid duplicated forms, fetches, command owners or device-selected permission behavior.
 - Shared session, requests, query hooks, forms and locale belong under shared and cannot import features. Shared design primitives belong in packages/ui.
 - Cross-feature imports use only documented model.ts/api.ts/copy.ts/ui.tsx surfaces. Keep parsers separate from UI re-exports so Node tests stay browser/server independent.
 - Course objective approval UI belongs to curriculum; learning preparation and academic marking consume current course-scoped approved choices and the public academic model label formatter. Preserve separate curriculum-source and approved academic-reference identities.
@@ -30,3 +32,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+Shared UI semantic icon pixels stay under packages/ui/src/assets/icons; browser features use @cuevo/ui CuevoIcon names. Do not add random direct icon-library imports, duplicate a raster per feature, present PNGs as editable vectors, or turn illustration selection into source/role/academic authority. Keep directional transforms and disabled/focus/text semantics in the existing owner. Optical review at20–32px and theme/RTL/forced-color checks remain required.

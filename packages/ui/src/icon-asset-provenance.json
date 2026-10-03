@@ -1,0 +1,425 @@
+{
+  "version": 1,
+  "purpose": "Single Cuevo icon family: current runtime semantics, no role or record authority",
+  "count": 38,
+  "assets": [
+    {
+      "name": "arrow",
+      "runtimePath": "packages/ui/src/assets/icons/arrow.webp",
+      "runtimeSha256": "4d8ddb5326ff88a066a0f23e15a5ddef73d7d02b527867e0f08ea4309d562aef",
+      "nativeSourceSha256": "af7e9ee8e9c11595938e1682e49143a028e8e9ba49b319a92a30b78e489c87f8",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\arrow\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "chevron",
+      "runtimePath": "packages/ui/src/assets/icons/chevron.webp",
+      "runtimeSha256": "aac39ba98623d9c5e266dce889d35ce08c77ef470c29e51f89cf36a5a8e7ddbd",
+      "nativeSourceSha256": "afa5d82b8ad13cef8d3d5dcbdfbdbfeab64ff8349d9dca8253ebea7562e13418",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\chevron\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "learning",
+      "runtimePath": "packages/ui/src/assets/icons/learning.webp",
+      "runtimeSha256": "e5852ea385ae56970daeb3018004de73d556a2ca45e4e90e2ac3cf5dcdb38e06",
+      "nativeSourceSha256": "4b9b52059fdb9235b6890aabc1fd8e388b0e8c7d7bda4adc6e3c42868188531c",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\primary-lesson\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "help",
+      "runtimePath": "packages/ui/src/assets/icons/help.webp",
+      "runtimeSha256": "2ce3b45679785c179cc995919cb3e5395fa1f29e36c1d131be5e57ac9be5c24e",
+      "nativeSourceSha256": "7cc0b27e80931e26ba900f93bfc9f3568b8a4087db75ba281f3d12b4ea316ac9",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\help\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "eye",
+      "runtimePath": "packages/ui/src/assets/icons/eye.webp",
+      "runtimeSha256": "5ad084723af8459bfb08afcfe0da7adcab64f0a90eafe9e33be3042d302d188a",
+      "nativeSourceSha256": "aa08394b64e954ca04ed647917e819a46bbd671cf1a7723bd77654725db86aa6",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\eye\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "eyeOff",
+      "runtimePath": "packages/ui/src/assets/icons/eyeOff.webp",
+      "runtimeSha256": "3fe85bc640b61a1986cecbfa868713a705a807fab7e569c9667544cd6c66d82d",
+      "nativeSourceSha256": "704adace9e4ac87ae9f6c35a5b8cf411500eacd95f04e8b4c4c83da9f50090b8",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\eye-off\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "language",
+      "runtimePath": "packages/ui/src/assets/icons/language.webp",
+      "runtimeSha256": "80faf32f7381c1d49ea5989e76a868982c542cdc75088ff79d3fd6697a80ab26",
+      "nativeSourceSha256": "18a120803ec65fdc3df05ff317009b7cc8002047075f706ea752b631c613c6ed",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\globe-study\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "student",
+      "runtimePath": "packages/ui/src/assets/icons/student.webp",
+      "runtimeSha256": "137e80739942f4d86009e5e328b7a7d720d4b57616545c6635546c84f894365b",
+      "nativeSourceSha256": "72342d2f7b7cb5877a07402c3ade27d6257453ac0d0e90ad35735eed638177de",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\student\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "parent",
+      "runtimePath": "packages/ui/src/assets/icons/parent.webp",
+      "runtimeSha256": "0de7cef4841feef9e04cec4ce17b8a51933d509ba8f2f37e658035eaf220d507",
+      "nativeSourceSha256": "493bdc126879b2e3263d916e9efd9048f8b9f1a32f648f2ffd74bd85591573ee",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\parent\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "device",
+      "runtimePath": "packages/ui/src/assets/icons/device.webp",
+      "runtimeSha256": "f9bfcb5f09db34b5c8975576f85b4b8db493e472e4a111a0a7cb642679241a8a",
+      "nativeSourceSha256": "6bb740dbbb63f40c1bacb67e70cacd9ce06aea64968851c869a59f7d09eec4b4",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\device\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "lock",
+      "runtimePath": "packages/ui/src/assets/icons/lock.webp",
+      "runtimeSha256": "cea4b571efd5f4754a2832a101f8a1b985a31fca8bf4db768c821cb46db8b16c",
+      "nativeSourceSha256": "c2c583bcfa76b68dbb0dd1ef377a8421b3de5445711962ebb7d6996771b095bf",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\lock\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "email",
+      "runtimePath": "packages/ui/src/assets/icons/email.webp",
+      "runtimeSha256": "9c24e7762feaaffca719b5e36b2ef18b153722c02e7aba6f03dc668f321a619d",
+      "nativeSourceSha256": "b05c7bb294953bf53ac0c6eeece3f8d2e3913292294078288b9532df855cd855",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\email\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "feedback",
+      "runtimePath": "packages/ui/src/assets/icons/feedback.webp",
+      "runtimeSha256": "bdbc5bedc133d607a56dfc399531f9fff99c29994cb45ea2f7557509944fa7a4",
+      "nativeSourceSha256": "f5af95442b69143a6fa7835d5c5e6194d21900257bd5d09fadda1b4e1bc9c34d",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\primary-feedback\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "practice",
+      "runtimePath": "packages/ui/src/assets/icons/practice.webp",
+      "runtimeSha256": "548fb3cf78b079eca0b57c532ef11b0d020f66707a73be64a34360fa408cc658",
+      "nativeSourceSha256": "65b2f021d4d6aec8b606291d29bc3f6759e8ef83d8892d3d9da224c86237a764",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\primary-practice\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "school",
+      "runtimePath": "packages/ui/src/assets/icons/school.webp",
+      "runtimeSha256": "a76addae7bf7085cd2330a5a34808dcdd0b76b6fe1a32f9c53943d8d321c3fb3",
+      "nativeSourceSha256": "1ef7084e40734fcfb4aa0f11fe953982f8b83bbb771fdb2e770d957bb0da8b38",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\school-boundary\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "shield",
+      "runtimePath": "packages/ui/src/assets/icons/shield.webp",
+      "runtimeSha256": "59de9a6dd14a5138bad1824c79b22476d5df09ff610362122de03295ae5f6e81",
+      "nativeSourceSha256": "5c984b15e36fa9c7ded45504026b07ae9418f8f82f72c6176fd07532d1de3d6c",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\shield\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "progress",
+      "runtimePath": "packages/ui/src/assets/icons/progress.webp",
+      "runtimeSha256": "70652b69a21bffe4a5be536a213049efd81f22285f24a1e47d2387a76391eaf7",
+      "nativeSourceSha256": "94d70452a4926374da25b6b9eb7e0f55a9c40c67dad4eb1c2a2306526311305f",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\progress\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "milestones",
+      "runtimePath": "packages/ui/src/assets/icons/milestones.webp",
+      "runtimeSha256": "2c481618d51dbe7532cb4b56c06e3db426249e3e1e0e73ccbb4c6ce3bbda51e5",
+      "nativeSourceSha256": "4d73f783ea6b4a50b9f08c9179a6927abdd80ba628ab48710c0dacc4b969b9d7",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\milestones\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "person",
+      "runtimePath": "packages/ui/src/assets/icons/person.webp",
+      "runtimeSha256": "3f5d24082e0913b8d5478a860999d8140469580aef9654d72459ecc19a4c0416",
+      "nativeSourceSha256": "b51b5608de80c120e52bb79f75102e4c3862037f8a9f6fa84adac4e69d4aea4a",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\person\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "people",
+      "runtimePath": "packages/ui/src/assets/icons/people.webp",
+      "runtimeSha256": "aea0c0ede026c0c3fddd8dd8bcc9f0d7803396a13309fc84fe607763a60fd77d",
+      "nativeSourceSha256": "0c152465aace124d083e25acc13090f17c1b49baf35965e5e67f3a08c0679d16",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\people\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "home",
+      "runtimePath": "packages/ui/src/assets/icons/home.webp",
+      "runtimeSha256": "9227c94194c7d356854c29c83014ab8a18948b4c399a9b3c4ee5c004e9f35742",
+      "nativeSourceSha256": "374fcee77dbecf1fcf555a118dbdaf063dfc413e93a04b5b871a2cade8a6739c",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\home\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "community",
+      "runtimePath": "packages/ui/src/assets/icons/community.webp",
+      "runtimeSha256": "a83a0b94fc45e339fe35cd25edc96baf8bfa2c8e57879b7c18d5b513a2dfa962",
+      "nativeSourceSha256": "af74294aaed25e3118e35c7575b3aea2a84539d9b5b9886b5938ea37ce45480f",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\community\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "portfolio",
+      "runtimePath": "packages/ui/src/assets/icons/portfolio.webp",
+      "runtimeSha256": "4e0220f34494b6819eef75dc3d67372e4bd48dcb7330d3175d59f232da173a6c",
+      "nativeSourceSha256": "4755607e1c46fdd73dd6e4114692adba19997a329b16df6cecfcb7cca7a3de3b",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\primary-portfolio\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "assessment",
+      "runtimePath": "packages/ui/src/assets/icons/assessment.webp",
+      "runtimeSha256": "9afc1aa4ae6df67d0d7b49e9f6daca66843bea8e6b9eda382bfedc2cc3658e69",
+      "nativeSourceSha256": "10e8a5d0cd592f44a4dec1e616288b49280c1290ad037a648a0ee107074ac018",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\personal-checklist\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "development",
+      "runtimePath": "packages/ui/src/assets/icons/development.webp",
+      "runtimeSha256": "30c7b1765bf144c9e4bd9c76de6cd5b726443da3d254937579f893c4c277027b",
+      "nativeSourceSha256": "5c7a7a6b51c6e2c24e59e89848ff58fa8315fb8b0d9715e4638b444716260ada",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\plant-growth\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "curriculum",
+      "runtimePath": "packages/ui/src/assets/icons/curriculum.webp",
+      "runtimeSha256": "0ce815ab45299cb58870ab0fc81a3a0fc16020e9efb98e8b992cda8ee18a951a",
+      "nativeSourceSha256": "9ac57cdde300991769be0f844c3db4a896ded8a0d9eec395a8f20251a6bb63f5",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\personal-library\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "settings",
+      "runtimePath": "packages/ui/src/assets/icons/settings.webp",
+      "runtimeSha256": "5919ede105e2350656d029ff68ac27e195b71a1a4c56d81c0c314960232c7063",
+      "nativeSourceSha256": "aa3ff7878bb4393e07f8318e46a23f1892894a417345ca9d1fc2bbe29722a28d",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\settings\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "notification",
+      "runtimePath": "packages/ui/src/assets/icons/notification.webp",
+      "runtimeSha256": "c782b809c6ec817ededef894043b294c0140036f949050bfe073b62560520dad",
+      "nativeSourceSha256": "c60cb33fd3ab07db120b6a1583dd1565271c42bfdeef8964ff6c624765c08a1d",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\notification\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "search",
+      "runtimePath": "packages/ui/src/assets/icons/search.webp",
+      "runtimeSha256": "c8c578491696262094ca9fc54a81fdca9c5e67b437c53e127390a8a15b5d040b",
+      "nativeSourceSha256": "0e4b56e444d5e98fe11fd5ec0c767ffb68716e1a467b90c018b9e1ae7ab8b19d",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\search\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "calendar",
+      "runtimePath": "packages/ui/src/assets/icons/calendar.webp",
+      "runtimeSha256": "21a60d35afdfc01407b97b4d1cb0070a5824574c77014983f073e43f8434dcad",
+      "nativeSourceSha256": "d4d7b1223ee10609f8e685a5492be3fa1450eb7cf1d3dab7b71f6170d954a6f6",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\timetable\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "goal",
+      "runtimePath": "packages/ui/src/assets/icons/goal.webp",
+      "runtimeSha256": "f70b863fdf732f75285df3edef39394104e3ef96077200f92533efab39e5efb7",
+      "nativeSourceSha256": "da1ff2ac1c19812fd7b4d902527cbefdafaef77fb1ee08c2a76899329c2da997",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\goal\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "reflection",
+      "runtimePath": "packages/ui/src/assets/icons/reflection.webp",
+      "runtimeSha256": "c9bbc9e1fb93f9715efdb7127e0f8df554ddd7d3261497a31afcfd8d3c14721d",
+      "nativeSourceSha256": "b1af6c0e379bd9f1f6f317341f7e44cadc7c818d121f362ffb41d76639fd041a",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\primary-work\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "close",
+      "runtimePath": "packages/ui/src/assets/icons/close.webp",
+      "runtimeSha256": "819ab08ff3f3f0f4e1b6f8a4808521b37e6cd6533713e6a1bb4f88da7b3a9738",
+      "nativeSourceSha256": "9409de1bf84e21fcb12abfd39e5b8112ea1f369f0963c2b04e2cec3e6df5f657",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\close\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "check",
+      "runtimePath": "packages/ui/src/assets/icons/check.webp",
+      "runtimeSha256": "52d82197f007b9d2305b06277914ee3728b06ba9c62f578fb337848c54eeedc7",
+      "nativeSourceSha256": "c193a8d8a9c66be3304add59f958aa1d660599be67567f9ffa82c88c3b08da71",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\check\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "refresh",
+      "runtimePath": "packages/ui/src/assets/icons/refresh.webp",
+      "runtimeSha256": "6d6c4f8254c8de465b7483776e8c8c9b118d3b31ac1d9fa1063174d68ab05443",
+      "nativeSourceSha256": "ca57159de1f3c47a94ffe98e5d7dee5cb0c347c7cb6354eb28060099b788affa",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\synchronising\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "logout",
+      "runtimePath": "packages/ui/src/assets/icons/logout.webp",
+      "runtimeSha256": "b062e884fe5703d76e8e715bb34fcc30f04b67ce91294f72344c9690e0ee9aca",
+      "nativeSourceSha256": "63d8219f511dbcdf21eb92a21c4dc97660d508e58fd62edf1025aab9d45ffd5e",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\sign-out\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "offline",
+      "runtimePath": "packages/ui/src/assets/icons/offline.webp",
+      "runtimeSha256": "9140deaa412c36cd25933a39117142408045ab2e29458a3a081d0fbd6ccbcb09",
+      "nativeSourceSha256": "3ca55fae92bd68d1a5dd4f250e28b38c2d20b575da4e53e521f740244fa2f28c",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\offline\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    },
+    {
+      "name": "shieldAlert",
+      "runtimePath": "packages/ui/src/assets/icons/shieldAlert.webp",
+      "runtimeSha256": "043a1731ab4d5fd4edd75cd5449fc498e9e01b7fe991e08109b74a51d569ddba",
+      "nativeSourceSha256": "f06a42815451802242678afdd61c0f798c3eae036ac0f672153589f2aa54c665",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\qa\\runtime-icon-mapping\\production\\transparent\\shield-alert\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ]
+    }
+  ]
+}

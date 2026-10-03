@@ -1,21 +1,21 @@
-.progress-workspace { margin-block-start: var(--space-6); }
-.progress-intro { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); margin-block-end: var(--space-6); }
-.progress-intro .eyebrow { font-size: var(--type-lead); color: var(--color-link); font-weight: 700; }
-.progress-intro p + p { max-inline-size: 58ch; margin-block-start: var(--space-2); color: var(--color-text-secondary); font-size: var(--type-lg); line-height: var(--line-height-body); }
+.progress-workspace { margin-block-start: var(--space-4); }
+.progress-intro { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-block-end: var(--space-4); }
+.progress-intro .eyebrow { font-size: var(--type-body); color: var(--color-link); font-weight: 700; }
+.progress-intro p + p { max-inline-size: 58ch; margin-block-start: var(--space-1); color: var(--color-text-secondary); font-size: var(--type-sm); line-height: var(--line-height-body); }
 .progress-companion { display: grid; justify-items: center; flex: none; }
 .progress-companion > .companion-view { inline-size: 7rem; }
 .progress-companion > .button { padding-inline: var(--space-2); font-size: var(--type-xs); }
-.progress-intro > svg { color: var(--color-accent); flex: none; margin-inline-end: var(--space-5); }
+.progress-intro > svg { color: var(--color-accent); flex: none; inline-size: 1.75rem; block-size: 1.75rem; margin-inline-end: var(--space-2); }
 .progress-toolbar { display: flex; align-items: flex-start; gap: var(--space-6); justify-content: space-between; flex-wrap: wrap; }
 .progress-toolbar > .field { flex: 1; max-inline-size: 36rem; }
-.progress-section { margin-block-start: var(--space-6); border: 1px solid var(--color-border); padding: var(--space-6); border-radius: var(--radius-xl); background: var(--color-material-reading); box-shadow: var(--elevation-subtle); min-inline-size: 0; scroll-margin-block-start: var(--space-8); }
+.progress-section { margin-block-start: var(--space-4); border: 1px solid var(--color-border); padding: var(--space-4); border-radius: var(--radius-xl); background: var(--color-material-reading); box-shadow: var(--elevation-subtle); min-inline-size: 0; scroll-margin-block-start: var(--space-8); }
 .progress-section > h2 { font-size: var(--type-lg); }
 .learner-detail-heading { margin-block: var(--space-8) var(--space-5); scroll-margin-block-start: var(--space-8); overflow-wrap: anywhere; font-size: var(--type-xl); }
 .progress-chapters { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-block-end: var(--space-5); }
 .progress-chapters a { display: inline-flex; align-items: center; gap: var(--space-2); min-block-size: 2.75rem; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--color-border); color: var(--color-text); background: var(--color-material-reading); text-decoration: none; font-size: var(--type-sm); font-weight: 600; }
 .progress-chapters a:hover { background: var(--color-surface-accent); }
 .progress-updated { color: var(--color-text-secondary); font-size: var(--type-sm); margin-block-end: var(--space-2); }
-.progress-story-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.progress-story-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .progress-story-grid[data-parent="true"] { grid-template-columns: minmax(0, 1fr); }
 .progress-section-heading { display: flex; gap: var(--space-3); align-items: center; margin-block-end: var(--space-4); }
 .progress-section-heading > span { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; border-radius: var(--radius-lg); background: var(--color-learning-surface); color: var(--color-accent); flex: none; }

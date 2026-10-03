@@ -1,23 +1,30 @@
-# Authentication media
+# Authentication artwork provenance
 
-The founder-approved 1536x1024 target is preserved in ignored `.local/design-concepts/auth-refinement/auth-senior-concept.png`. It matches the supplied approval image `C:/Users/hp/AppData/Local/Temp/codex-clipboard-0c314a8a-56a5-46e4-843b-2aed9fef8de8.png`, SHA-256 `f562e3d57bbeca0db6741fc349172cdc15c8e40759da94e9d59a392317e9cdc5`. The target uses a full-bleed 62.5% illustrated / 37.5% white form split, a waving orange fox with glasses, navy suit and tablet, and the official Cuevo logo. It has no visible company attribution. The earlier desk-fox inspiration is superseded.
+The current Learning Studio authentication composition is static and imports two feature-owned assets. The founder requested the approved paired-character still after reviewing motion. The motion component/model, public WebM and three obsolete still assets were removed after preserving their bytes externally. Shared official branding and current task/role illustrations remain in their existing owners.
 
-`learning-background.webp` and `welcome-fox.webp` are independent derivatives produced through the approved `gpt-image-2.5-sunburst` visual workflow with that concept as the reference. The background is a generated pale blue dimensional ribbon scene without text, UI, logo, people, character or records. The fox is a model-assisted extraction/recreation of the approved waving pose, followed by green chroma removal, cropping and WebP optimization with alpha preserved; it is not a literal pixel crop. The source ZIP remains a separate student-character reference family, and no punitive/mood pose is used by authentication.
+| Active file | Dimensions / format | Bytes | SHA-256 |
+|---|---|---:|---|
+| `studio-background.webp` | 1536×1024 RGB WebP | 212,902 | `b39e666874c5c09f02991df8857b3f221e3aa69408ca65157189bde57ff67746` |
+| `studio-companions.webp` | 1291×780 RGBA WebP | 193,626 | `d5296b211994be7c16c02e7ee50dbcdd4c92590f9b821685722402700f99f183` |
 
-| Shipped asset | Dimensions / alpha | SHA-256 |
+The exact approved visual source is concept `08-learning-studio.png` / clipboard 5494, native 1536×1024, SHA-256 `3f27d025ac1a7c6b7683adc9e4456fb310532aa9eeafc9bacb0e100ff41f72c4`. The external production root is `C:/Users/hp/.codex/visualizations/2026/10/03/cuevo-trail-implementation/auth-learning-studio`. Its `production-manifest.json`, `image-production.json`, prompts and references preserve source/derivative provenance. They document authoring and prior motion rather than a runtime requirement.
+
+Two authorized `gpt-image-2.5-sunburst` image-edit calls used the selected reference at high quality, n=1, 1536×1024. One generated the daylit room and curved desk with UI, lettering, logo, characters, books and learning/role objects removed. The other recreated the paired Foxi/Owl, their two books and original blue pencil on chroma for reviewed alpha extraction. This preserves the selected camera/relative arrangement but is model-assisted recreation, not a literal pixel cutout.
+
+| Preserved external native source | Dimensions | SHA-256 |
 |---|---|---|
-| `learning-background.webp` | 1536x1024; no alpha | `dee70d1f94a40b5b404be177b2af6dd93b017ccd81d81451c1aef9c4800667a8` |
-| `welcome-fox.webp` | 634x807; alpha preserved | `8df7b8e23c364f30a60f9d22df1c172a03ed8320818461f0c21613e94b625db6` |
+| `images/studio-background-v1.png` | 1536×1024 RGB | `74b73aedd7d1724035853130d829c06778036379c10fbfaf74e3ff93d413be4a` |
+| `images/studio-characters-chroma-v1.png` | 1536×1024 RGB | `437911a9dd3f5025b291de2e800891a6cff147aead02d6827da517b885243b2f` |
+| `images/studio-characters-cropped-alpha-v1.png` | 1291×780 RGBA | `f6f6f1d1bb6e2a2b0e7a8cc213f51ccff54ace6e9b78fa8b957541f7fd624be3` |
 
-Generation prompts and intermediate PNGs remain in ignored `.local/design-concepts/auth-refinement` as local provenance, not application assets or product rules:
+The application background is a root-owned WebP encoding of the original PNG and differs from the smaller external preview encoding. The application companion file is byte-identical to the recorded cropped WebP. Its reference placement is x207/y343 at 543×328 in the full concept. Current CSS bounds the Auth canvas, sizes illustrations against their container and contains the pair's intrinsic ratio rather than stretching it across the available page.
 
-| Local intermediate | Dimensions / alpha | SHA-256 |
-|---|---|---|
-| `learning-background.png` | 1536x1024; no alpha | `7ecd8347e78d6201d55978013009c129fcda46cb6e30d0ea664b8d88ea3c4270` |
-| `approved-fox.png` | 1024x1536; alpha channel present | `17185c27d53848809e88684020a8cc49a80ec094aade6fc427e90e96ab5ad3bf` |
-| `approved-fox-green.png` | 1024x1536; no alpha | `43167f39bceb0ad123c00408b001adbd6fce75982b1ca088fe48074e7a51ffbe` |
-| `approved-fox-cutout.png` | 1024x1536; alpha channel present | `d1f18b6e222879c9e9c8d5c9bbbaca19399d91977449a9b50ef2db8223a01736` |
+The shared official logo is `apps/web/shared/assets/cuevo-mark.webp`, 251×267 RGBA, SHA-256 `04d2e37a7a8143bc02e22bdf85a3c02815c63e0f507d84b3d23e4838974cc70a`. The supplied original PNG SHA-256 is `52a21c64517ffb17da9b574b717b941040880f0a0defed5f43c1c9e6d731004d`. [The original brand decision](../../../../../docs/decisions/2026-10-01-auth-presentation-assets.md) retains that evidence. `trailAssets`/`trailRoleAssets` provide current individual learning and role art; `apps/web/shared/characters/role-asset-provenance.json` records exact role hashes. These are decorative illustrations with localized HTML labels, not role selection, access grants or academic facts.
 
-These are decorative/welcoming product assets and carry no learner data, authorization or academic meaning. Text, icons, language, email/password controls and error/help/privacy states stay real localized UI. The app-wide official logo is owned once by `apps/web/shared/assets/cuevo-mark.webp`; do not duplicate it here. Its original supplied PNG and crop provenance are recorded in the [asset decision](../../../../../docs/decisions/2026-10-01-auth-presentation-assets.md). Local integration and visual approval do not establish upstream commercial/public redistribution rights.
+Historical motion production used two eight-second `sora-2` calls through the existing authorized Microsoft Foundry helper. Job `video_6ac0dfafb0e4819085dd6dbf8e687346` was rejected because it added a second pencil. Its repair, `video_6ac0e0b6a61c8190a6058476cccfeaf7`, kept the greeting paw empty and original pencil in the other paw. The repaired raw source is 1280×720, 240 frames at 30 fps, SHA-256 `d8b6fd6f3bfc9854fd867979a9fa97d2cd792d21e93143e9e4c73afe1d734477`. Audio removal and alpha matting produced the former 584×348 runtime, fixed crop `[240,164,824,512]`, mapping to x180/y334 before responsive adjustments. Its WebM SHA-256 is `70e449e73c7ea3a0721f5bc63f4e274231da96f94712c506265aee9285ff894a`. The solid-book correction preserved white pages after an earlier derivative keyed a stripe out of the book.
 
-Asset hashes and alpha metadata establish source identity, not edge quality, screenshot fidelity, browser accessibility or real sign-in acceptance. Verify derivatives on their rendered backgrounds and compare the final page with the approved target before recording visual acceptance. Technical provenance remains in documentation/support details, not customer labels.
+Those motion files are external history and are not shipped, imported, decoded or requested by current Auth. `history-static-transition` beneath the production root preserves the removed component/model/test/WebM and obsolete `learning-background.webp`, `welcome-fox.webp` and `owl-reading-poster.webp` bytes. Original Sora sources, failed candidates, reference/prompt receipts and the production manifest remain in the same external library. No duplicate active Auth media implementation is retained.
+
+Historical all 240 frame decode, standalone browser playback, crop bounds, loop shift and navy fringe evidence remain valid for their recorded motion candidate only. The source was native 720p, not 1080p/4K; the first/last poses differed and the alpha had a fine pale fringe at large navy comparison size. These facts do not describe the current static image as a video or establish current layout acceptance. The still also differs from the painted reference; exact visual fidelity, real authentication/backend and commercial/public redistribution rights remain separate checks.
+
+[The Auth README](../README.md) describes current static behavior and test ownership. [The public README](../../../public/README.md) and [delivery decision](../../../../../docs/decisions/2026-10-03-public-decorative-media.md) retain public-byte ownership with no active Auth clip. The [1 October QA report](../../../../../docs/reports/2026-10-01-auth-design-qa.md) and source decision preserve earlier layouts as historical evidence, not competing current rules.

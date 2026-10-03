@@ -22,6 +22,7 @@ apps/
     test/integration/                # Auth + API + database journeys
   web/
     app/                             # Next route files and global shell styles
+    public/                          # Decorative-byte boundary; current static Auth uses feature assets
     features/<feature>/
       components/                    # Feature UI
       model.ts                       # Browser-safe types and response validation

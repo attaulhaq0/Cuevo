@@ -1,14 +1,14 @@
-.portfolio-workspace { margin-block-start: var(--space-6); }
-.portfolio-journey-heading { display: flex; align-items: center; gap: var(--space-5); margin-block-end: var(--space-5); }
-.portfolio-journey-heading > img { inline-size: 5.5rem; block-size: 5.5rem; object-fit: contain; flex: none; }
+.portfolio-workspace { margin-block-start: var(--space-4); }
+.portfolio-journey-heading { display: flex; align-items: center; gap: var(--space-3); margin-block-end: var(--space-3); }
+.portfolio-journey-heading > img { inline-size: 3rem; block-size: 3rem; object-fit: contain; flex: none; }
 .portfolio-journey-heading > div { flex: 1; min-inline-size: 0; }
-.portfolio-journey-heading h2 { font-size: var(--type-title); line-height: var(--line-height-tight); letter-spacing: var(--tracking-heading); }
-.portfolio-journey-heading p { color: var(--color-text-secondary); font-size: var(--type-lg); line-height: var(--line-height-body); margin-block-start: var(--space-3); max-inline-size: 65ch; }
+.portfolio-journey-heading h2 { font-size: var(--type-xl); line-height: var(--line-height-tight); letter-spacing: var(--tracking-heading); }
+.portfolio-journey-heading p { color: var(--color-text-secondary); font-size: var(--type-sm); line-height: var(--line-height-body); margin-block-start: var(--space-1); max-inline-size: 65ch; }
 .portfolio-journey-heading > .button { flex: none; }
-.portfolio-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-4); margin-block: var(--space-4) var(--space-6); }
+.portfolio-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); margin-block: var(--space-3) var(--space-4); }
 .portfolio-privacy-note { display: flex; align-items: start; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--type-sm); line-height: var(--line-height-body); }
 .portfolio-privacy-note > svg { flex: none; margin-block-start: var(--space-1); color: var(--color-learning-symbol); }
-.portfolio-work-list { display: grid; gap: var(--space-6); }
+.portfolio-work-list { display: grid; gap: var(--space-4); }
 .portfolio-item, .portfolio-create, .portfolio-organization, .portfolio-empty { background: var(--color-material-reading); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--elevation-subtle); padding: var(--space-6); min-inline-size: 0; }
 .portfolio-item-heading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); margin-block-end: var(--space-5); }
 .portfolio-item-heading > svg { color: var(--color-learning-symbol); flex: none; }
@@ -81,8 +81,8 @@
 .portfolio-history article { border-inline-start: 2px solid var(--color-border); padding: var(--space-4) var(--space-5); margin-block: var(--space-3); }
 .portfolio-history h4 { font-size: var(--type-body); margin-block-end: var(--space-3); }
 .portfolio-history p { white-space: pre-wrap; line-height: var(--line-height-reading); }
-.portfolio-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding-block: var(--space-8); }
-.portfolio-empty img { inline-size: 5.5rem; block-size: 5.5rem; object-fit: contain; margin-block-end: var(--space-4); }
+.portfolio-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding-block: var(--space-4); }
+.portfolio-empty img { inline-size: 3rem; block-size: 3rem; object-fit: contain; margin-block-end: var(--space-2); }
 .portfolio-empty h3 { font-size: var(--type-subheading); }
 .portfolio-empty p { color: var(--color-text-secondary); max-inline-size: 50ch; margin-block-start: var(--space-3); }
 .portfolio-loading { padding: var(--space-6); border: 1px solid var(--color-border); background: var(--color-material-reading); border-radius: var(--radius-lg); }
@@ -131,9 +131,9 @@
 }
 @media (max-width: 767px) {
   .portfolio-journey-heading { flex-wrap: wrap; gap: var(--space-3); }
-  .portfolio-journey-heading > img { inline-size: 4rem; block-size: 4rem; }
+  .portfolio-journey-heading > img { inline-size: 2.75rem; block-size: 2.75rem; }
   .portfolio-journey-heading h2 { font-size: var(--type-subheading); }
-  .portfolio-journey-heading p { font-size: var(--type-body); }
+  .portfolio-journey-heading p { font-size: var(--type-sm); }
   .portfolio-journey-heading > .button { inline-size: 100%; }
   .portfolio-toolbar { align-items: start; }
   .portfolio-item, .portfolio-create, .portfolio-organization, .portfolio-empty { padding: var(--space-4); }

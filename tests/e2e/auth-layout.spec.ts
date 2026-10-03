@@ -128,6 +128,10 @@ async function assertTextBounds(page: Page, state: string) {
     // Inputs intentionally scroll their value horizontally. Text and buttons must reflow.
     return [...element.querySelectorAll('h1,h2,h3,p,label,strong,button,summary')]
       .filter(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)
+      // The optional motion-preference announcement intentionally uses a
+      // screen-reader-only 1px box on mobile. All visible text still must reflow.
+      .filter(node => !(node.matches('.auth-welcome-motion__status[role="status"]')
+        && node.clientWidth === 1 && node.clientHeight === 1 && getComputedStyle(node).clipPath === 'inset(50%)'))
       .filter(node => node.scrollWidth > node.clientWidth + 2 || node.scrollHeight > node.clientHeight + 2)
       .map(node => ({ text: node.textContent?.trim(), width: node.clientWidth, scrollWidth: node.scrollWidth,
         height: node.clientHeight, scrollHeight: node.scrollHeight }));
@@ -215,6 +219,22 @@ async function nativeZoom(info: TestInfo, locale: Locale, baseURL: string) {
 }
 
 for (const locale of locales) {
+  test(`${locale}: studio artwork and form keep their proportions on wide zoom-out viewports`, async ({ page }) => {
+    await page.setViewportSize({ width: 1536, height: 1024 }); await open(page, locale);
+    const measure = () => page.evaluate(() => {
+      const width = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().width;
+      return { canvas: width('.auth-main'), panel: width('.auth-panel'),
+        ratio: width('.auth-visual img[alt]:not([alt=""])') / width('.auth-stage-art') };
+    });
+    const initial = await measure();
+    for (const viewport of [{ width: 3072, height: 2048 }, { width: 3830, height: 1750 }]) {
+      await page.setViewportSize(viewport); const current = await measure();
+      expect(current.canvas, 'Zoom-out must not expand the composed studio beyond its reference canvas').toBeLessThanOrEqual(1536);
+      expect(current.panel, 'Credential entry must remain a bounded reading column').toBeLessThanOrEqual(544);
+      expect(current.ratio, 'Characters and learning objects must scale as one scene').toBeCloseTo(initial.ratio, 1);
+    }
+  });
+
   test(`${locale}: normal flow stays anchored when height, help and privacy change`, async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 900 }); await open(page, locale);
     const measurements = [];
@@ -227,6 +247,10 @@ for (const locale of locales) {
       assertLayout(short, `${locale}/${width}: short normal flow`);
       assertLayout(tall, `${locale}/${width}: tall normal flow`);
       for (const section of ['header', 'story', 'visual', 'panel'] as const) {
+        // The selected Studio composition has an intentional compact-height
+        // mode. Anchoring remains invariant within a mode; all short/tall
+        // layouts are still checked above for overlap and reachable content.
+        if(width>1100&&short.viewport.height<=850&&tall.viewport.height>850)continue;
         expect.soft(Math.abs(tall.sections[section].y - short.sections[section].y),
           `${locale}/${width}: ${section} must not move when only viewport height changes`).toBeLessThanOrEqual(tolerance);
       }
@@ -336,7 +360,7 @@ for (const locale of locales) {
   test(`${locale}: artwork decodes with transparent edges and stays stable through resize`, async ({ page }, info) => {
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await page.setViewportSize({ width: 1440, height: 900 }); await open(page, locale);
-    const art = page.locator('.auth-welcome-fox');
+    const art = page.locator('.auth-companions__image');
     await expect.poll(() => art.evaluate(element => {
       const image = element as HTMLImageElement; return image.complete && image.naturalWidth > 0;
     })).toBe(true);
@@ -363,9 +387,11 @@ for (const locale of locales) {
       const bounds = await geometry(page);
       const image = await art.evaluate(element => {
         const image = element as HTMLImageElement, r = image.getBoundingClientRect();
-        return { width: r.width, height: r.height, naturalRatio: image.naturalWidth / image.naturalHeight, source: image.currentSrc };
+        const scene = image.closest('.auth-companions__scene')!.getBoundingClientRect();
+        return { width: r.width, height: r.height, naturalRatio: image.naturalWidth / image.naturalHeight, source: image.currentSrc, fit: getComputedStyle(image).objectFit, insideScene: r.left >= scene.left - 1 && r.right <= scene.right + 1 && r.top >= scene.top - 1 && r.bottom <= scene.bottom + 1 };
       });
-      expect.soft(image.width / image.height, `${locale}/${width}: artwork keeps its aspect ratio`).toBeCloseTo(image.naturalRatio, 2);
+      expect.soft(image.fit, `${locale}/${width}: poster contains the intrinsic artwork without stretching`).toBe('contain');
+      expect.soft(image.insideScene, `${locale}/${width}: poster remains inside its bounded scene`).toBe(true);
       measurements.push({ width, bounds, image });
       assertLayout(bounds, `${locale}/${width}: decoded artwork`);
     }

@@ -1,5 +1,7 @@
 # Application shell
 
+The latest founder-approved responsive composition uses this same Chrome, catalogue, callbacks and session owners for desktop and mobile. Desktop arranges compact icons/labels horizontally; mobile uses a three-row context header and a bounded dock, with native overflow navigation retaining every permitted destination. Theme/person/school labels remain human-readable, keyboard/touch targets stay usable, and natural document flow preserves source controls. Density changes do not introduce another frontend, role authorization mechanism, data fetch or duplicate command owner. Authentication now has its separately authorized owner refinement rather than the earlier blanket exclusion.
+
 Owns Application and Workspace composition, with public ui.tsx consumed by app/page.tsx. Shell may compose other features only through their ui/copy public surfaces. Common session/context, branding and locale live under shared. No other feature may import shell internals.
 
 Product source IDs 36, 37, 62 and 63 apply. Browser journeys verify role navigation and app states. Keep route paths, CSS/token hierarchy, accessible landmarks, English/Arabic and current-role navigation stable. Navigation visibility is not backend authorization. Do not move feature policy or persistence into the shell.
@@ -35,3 +37,5 @@ Offered destinations use the shared browser-safe prerequisite policy; learning/a
 Account composition consumes the school-owned `LearnerProfile` public UI. It does not assemble protected pupil context from unrelated queues or import school implementation internals.
 
 `theme-model.ts` validates the presentation-only cookie value. The server page passes the same initial preference to Application, whose state survives access recovery without changing authentication. `ThemeControl` updates only the workspace theme and cookie; System delegates to the scoped CSS color scheme. No browser-dependent initial render, provider/session change, school context or pupil data is persisted in this preference. Native menu keyboard behavior, reload persistence, all-theme contrast and auth regression are separate browser checks.
+
+The shell owns one full-width Trail background and uses the shared 96rem reading width. Route padding is applied once; connected role Homes provide their own internal composition. Current dimensional navigation icons render at32px on desktop and28px in the mobile dock. One registry, one permitted destination catalogue and owner callbacks remain unchanged.

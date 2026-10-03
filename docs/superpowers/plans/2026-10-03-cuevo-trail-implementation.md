@@ -10,10 +10,14 @@
 
 **Spec:** [Approved Trail specification](../specs/2026-10-03-cuevo-trail-mvp-redesign.md), [companion strategy](../specs/2026-10-03-student-companion-growth.md), [authorized progression foundation](../../architecture/character-progression-system.md).
 
+**Latest founder steering, 3 October:** Fix excessive spacing/scattered hierarchy at normal laptop/mobile dimensions screen by screen. Authentication now permits targeted layout density changes, app-consistent illustrated learning icons and the controlled four-character looping welcome story, while preserving its identity, copy and sign-in/session behavior. The founder approved separately designed desktop and mobile compositions within this same React/TypeScript application; shared feature contracts, actions, permissions, tokens and one implementation remain mandatory. This supersedes earlier complete auth-exclusion instructions below; original auth snapshots/tests remain historical baseline evidence. Full records, help/error/denied/unknown states and enlarged-text reflow stay reachable. First meaningful action fitting a normal viewport does not require a full workflow to fit one screen.
+
 ## Global constraints
 
+Latest authentication review: the founder selected exact Learning Studio concept 08 at1536×1024, with the same desk/camera/character/form composition. Use the approved static Foxi/Owl paired image. Authentication has no video, playback controls, motion effects or decoder; responsive layout and image loading remain independent of the sign-in form. All earlier connector/two/four-character alternatives are historical. Current app icons use one38name reviewed dimensional registry, with23missing icons individually generated and15reused. Distinct desktop/mobile compositions and backend-preservation scope remain approved.
+
 - One Trail visual system and sole implementation per page/feature; no old/new or Trail/Momentum switch, copied app or duplicate submission/reward engine.
-- Authentication is excluded entirely: preserve web/mobile auth components, messages, assets, dimensions/layout/styling with no edits. Scope new tokens/themes/materials to authenticated roots. Preserve current memory-only session/current-scope/receipt behavior.
+- Authentication retains its existing identity and sign-in behavior; only the latest authorized density/icons/static welcome refinement applies. Preserve current memory-only session/current-scope/receipt behavior.
 - APIs retain current exact record/revision/policy/parent scope; private SQL/grants/outbox remains domain authority.
 - Current source `G:/Cuevo` is backend-owned and mutable; reconcile a coherent Git commit before role integration. Do not reset or share the active verification database.
 - English/Arabic RTL, mobile390/320/reflow, keyboard, reduced motion and no-character fallback are required.
@@ -54,7 +58,7 @@ Current checkpoint: the separate 409-source generation is complete and structura
 
 ## Task 3: Canonical UI foundation with auth preservation
 
-**Files:** `packages/ui/src/tokens.css`, `button.tsx`, `status.tsx`, `icon.tsx`, public `index.ts`, colocated stories/tests; authenticated shell styles. Auth components/styles/assets/messages are read-only and must not change.
+**Files:** `packages/ui/src/tokens.css`, `button.tsx`, `status.tsx`, `icon.tsx`, public `index.ts`, colocated stories/tests; authenticated shell styles. Auth edits are limited to the latest founder-authorized refinement described above.
 
 **Consumes:** approved cyan#4FC0DB/navy#061957/actionblue#066ABC family, existing UI exports/props and auth semantics.
 **Produces:** one light/dark semantic type/spacing/radius/material/elevation/focus/motion/icon system consumed through existing public API.

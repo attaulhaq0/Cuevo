@@ -19,6 +19,11 @@ import path from './assets/trail-path.svg';
 import goal from './assets/goal.webp';
 import community from './assets/class-discussion.webp';
 import help from './assets/human-help.webp';
+import studentRole from './assets/role-student-profile.webp';
+import teacherRole from './assets/role-teacher-profile.webp';
+import parentRole from './assets/role-guardian-context.webp';
+import coordinatorRole from './assets/role-programme.webp';
+import schoolRole from './assets/role-school-boundary.webp';
 
 /** Public decorative artwork only. Selection never supplies domain authority. */
 export const trailAssets = {
@@ -39,3 +44,9 @@ export const companionAssets = {
 } as const;
 
 export type CompanionAssetName = keyof typeof companionAssets;
+
+/** Public role metaphors, never a role picker or access policy. */
+export const trailRoleAssets = {
+  student: studentRole.src, teacher: teacherRole.src, parent: parentRole.src,
+  coordinator: coordinatorRole.src, school: schoolRole.src,
+} as const;

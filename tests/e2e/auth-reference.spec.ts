@@ -100,10 +100,10 @@ async function loadedSourceImages(page: Page) {
   await expect(logo).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'Cuevo by E Deviser', exact: true })).toBeVisible();
   await expect(logo).toHaveAttribute('src', /cuevo-mark\./);
-  const art = page.locator('.auth-welcome-fox');
+  const art = page.locator('.auth-companions__image');
   await expect(art).toHaveCount(1);
   await art.scrollIntoViewIfNeeded();
-  await expect(art).toHaveAttribute('src', /welcome-fox\./);
+  await expect(art).toHaveAttribute('src', /studio-companions\./);
   await expect(art).toHaveAttribute('alt', /.+/);
   await expect.poll(() => page.locator('.auth-header img, .auth-visual img').evaluateAll(images => images.every(image => {
     const asset = image as HTMLImageElement;
