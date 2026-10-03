@@ -5,6 +5,11 @@ const requestId = '35000000-0000-4000-8000-000000000001';
 const userSecret = 'a'.repeat(64);
 const message = { requestId, email: 'new.learner@example.test', admissionUrl: `http://localhost:3000/account/admission#id=${requestId}&type=invite&token_hash=provider-redemption&admission_secret=${userSecret}`, expiresAt: '2099-10-04T00:00:00Z', signal: new AbortController().signal };
 describe('local account invitation capture', () => {
+  it('captures recovery only on its fixed purpose route with access-preserving explanation', async () => {
+    let body: Record<string, unknown> = {}; const send = createLocalAccountMail({ mode: 'LOCAL_SYNTHETIC', webOrigin: 'http://localhost:3000' }, async (_url, init) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ ID: 'hXayS6wnCgNnt6aFTvmOF6' }), { headers: { 'Content-Type': 'application/json' } }); });
+    expect(await send({ ...message, admissionUrl: message.admissionUrl.replace('/account/admission', '/account/recovery').replace('type=invite', 'type=recovery') })).toEqual({ state: 'ACCEPTED' });
+    expect(body.Subject).toBe('Cuevo account recovery · استعادة الحساب'); expect(body.Text).toContain('does not change your school access');
+  });
   it('posts exactly one minimized bilingual message to the fixed local capture target', async () => {
     const calls: { url: string; input: RequestInit }[] = [];
     const send = createLocalAccountMail({ mode: 'LOCAL_SYNTHETIC', webOrigin: 'http://localhost:3000' }, async (url, input) => { calls.push({ url: String(url), input: input! }); return new Response(JSON.stringify({ ID: 'hXayS6wnCgNnt6aFTvmOF6' }), { status: 200, headers: { 'Content-Type': 'application/json' } }); });

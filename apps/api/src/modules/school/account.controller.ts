@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiHeader, ApiResponse } from '@nestjs/swagger'
 import { z } from 'zod';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { DomainError, requireCapability } from '@cuevo/domain';
-import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountDeliveryRequestSchema, schoolAccountEffectReceiptSchema, schoolAccountEffectStatusSchema } from '@cuevo/contracts';
+import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountDeliveryRequestSchema, schoolAccountEffectReceiptSchema, schoolAccountEffectStatusSchema, schoolAccountRecoveryRequestSchema, schoolAccountRecoveryAuthorizationSchema, schoolAccountRecoveryCompletionSchema, schoolAccountRecoveryReceiptSchema } from '@cuevo/contracts';
 import type { IdentityService, AccountIdentityService } from '../../platform/identity/identity.service';
 import type { Database } from '../../platform/database/database';
 import { SchoolAccountService } from './account.service';
@@ -63,6 +63,12 @@ export function createSchoolAccountController(identity: IdentityService, account
     deliveryStatus(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {
       return this.respond(request, reply, async () => service.effectStatus(await this.administrator(request), (request.params as { id: string }).id));
     }
+    @Post('/school/accounts/:id/recovery') @ApiHeader({ name: 'X-School-Id', required: true }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiBody({ schema: schema(schoolAccountRecoveryRequestSchema) }) @ApiResponse({ status: 200, schema: schema(schoolAccountInvitationReceiptSchema) })
+    requestRecovery(@Req() request: FastifyRequest, @Res() reply: FastifyReply) { return this.respond(request, reply, async () => service.requestRecovery(await this.administrator(request), (request.params as { id: string }).id, request.body, request.headers['idempotency-key'], request.id)); }
+    @Post('/account/recovery/authorize') @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiBody({ schema: schema(schoolAccountRecoveryAuthorizationSchema) }) @ApiResponse({ status: 200, schema: schema(schoolAccountRecoveryReceiptSchema) })
+    authorizeRecovery(@Req() request: FastifyRequest, @Res() reply: FastifyReply) { return this.respond(request, reply, async () => { if (request.headers['x-school-id'] !== undefined) throw new DomainError('INVALID_SCHOOL', 400, 'The approved recovery determines its school.'); return service.recovery(await accountIdentity.resolve(request.headers.authorization), request.body, request.headers['idempotency-key'], request.id); }); }
+    @Post('/account/recovery/complete') @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiBody({ schema: schema(schoolAccountRecoveryCompletionSchema) }) @ApiResponse({ status: 200, schema: schema(schoolAccountRecoveryReceiptSchema) })
+    completeRecovery(@Req() request: FastifyRequest, @Res() reply: FastifyReply) { return this.respond(request, reply, async () => { if (request.headers['x-school-id'] !== undefined) throw new DomainError('INVALID_SCHOOL', 400, 'The approved recovery determines its school.'); return service.recovery(await accountIdentity.resolve(request.headers.authorization), request.body, request.headers['idempotency-key'], request.id, true); }); }
   }
   return SchoolAccountController;
 }

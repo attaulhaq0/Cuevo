@@ -8,7 +8,7 @@ import { LanguageSwitch } from '../../../shared/components/language-switch';
 import { useApp } from '../../../shared/session/providers';
 
 export function SignIn() {
-  const { dictionary: t, signIn, status } = useApp();
+  const { dictionary: t, signIn, status, locale } = useApp();
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<'credentials' | 'unavailable' | null>(null);
@@ -69,7 +69,7 @@ export function SignIn() {
           {error ? <p id="sign-in-error" className="form-error" role="alert">{error === 'credentials' ? t.invalidCredentials : t.authUnavailable}</p> : null}
           <Button type="submit" disabled={pending} className="sign-in-submit">{pending ? t.signingIn : t.signIn}<ArrowRight size={18} className="directional-icon" aria-hidden="true" /></Button>
         </form> : <div className="notice notice--warning" role="status"><h3>{t.configurationTitle}</h3><p>{t.configurationBody}</p></div>}
-        <div className="sign-in-help"><h3>{t.helpTitle}</h3><p>{t.helpBody}</p></div>
+        <div className="sign-in-help"><h3>{t.helpTitle}</h3><p>{t.helpBody}</p><p>{locale === 'en' ? 'Forgot your password? Ask your school administrator to approve an account recovery link for your current account.' : 'نسيت كلمة المرور؟ اطلب من مسؤول المدرسة الموافقة على رابط استعادة لحسابك الحالي.'}</p></div>
         <p className="session-safety"><ShieldCheck size={15} aria-hidden="true" />{t.safeSession}</p>
       </section>
     </main>
