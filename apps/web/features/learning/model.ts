@@ -37,6 +37,19 @@ export function courseReadingContext(course: CourseDetail, lessonId: string | nu
   const activity = lesson?.activities.find(item => item.id === activityId) ?? null;
   return { unit, lesson, activity };
 }
+
+/** A selection is navigation only. Missing or ambiguous current rows never borrow a sibling. */
+export function currentLearningSelection<T extends { id: string }>(rows: readonly T[], id: string | null): T | null {
+  const matching = id ? rows.filter(row => row.id === id) : [];
+  return matching.length === 1 ? matching[0] : null;
+}
+export type CoursePreparationResource = 'course' | 'unit' | 'lesson' | 'activity';
+export function coursePreparationContext(course: CourseDetail, resource: CoursePreparationResource, lessonId: string | null, activityId: string | null) {
+  const context = courseReadingContext(course, lessonId, activityId);
+  const source = resource === 'course' ? course : resource === 'unit' ? context.unit : resource === 'lesson' ? context.lesson : context.activity;
+  if (!source) return null;
+  return { ...context, resource, sourceId: source.id, title: source.title };
+}
 type AssessmentBase = { courseTitle?:string|null;id: string; courseId: string; title: string; instructions: string; status: string; dueAt: string | null; policyVersion: number; availableFrom: string | null; availableUntil: string | null; allowLate: boolean; assignmentState: 'OPEN' | 'CLOSED'; availabilityVersion: number; submissionKind: 'TEXT' | 'QUIZ';preparationVersion?:number;intendedSubmissionKind?:'TEXT'|'QUIZ';intendedModel?:'numeric'|'rubric';referenceId?:string|null; currentSubmission?: Submission | null };
 export type NumericAssessment = AssessmentBase & { model: 'numeric'; maxScore: number; rubricId: null };
 export type Assessment = NumericAssessment | AssessmentBase & { model: 'rubric'; rubricId: string };

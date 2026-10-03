@@ -1,5 +1,10 @@
 import { commonEn, commonAr } from '../../shared/i18n/common';
 export const learningEn = { retiredCourseNote:'This curriculum source is retired. The task is read only; previous results and evidence remain available.',
+  coursePreparation: 'Course preparation', coursePreparationBody: 'Choose one unit, lesson or activity to review its content and prepare the next change.',
+  courseStructure: 'Course structure', reviewCourse: 'Review course', selectedContent: 'Selected content', choosePreparation: 'Choose content to prepare', preparationUnavailable: 'The selected content is not in the current page. Choose a current source or refresh the course.',
+  staffAssessmentDirectory: 'Assessment directory', staffAssessmentDirectoryBody: 'Choose one assessment to review its private preparation, quiz, resources or availability.',
+  chooseAssessment: 'Choose an assessment', staffSubmissions: 'Submitted work directory', chooseSubmission: 'Choose submitted work', openSubmission: 'Review submitted work', closeSubmission: 'Back to submitted work',
+  submissionTypeUnknown: 'Response type is not recorded. Open the exact submitted source to review it.',
   assessmentPath: 'Your assessment work', assessmentPathBody: 'Open a task, review its instructions, and work on your response.',
   assessmentUnavailable: 'Task name unavailable', taskInstructionsUnavailable: 'Task instructions are unavailable. Refresh or ask your teacher to review this task.',
   selectedTask: 'Your task', workStage: 'Work on your response', reviseStage: 'Revise your response', submittedStage: 'Your current submission',
@@ -51,6 +56,11 @@ export const learningEn = { retiredCourseNote:'This curriculum source is retired
   createQuiz: 'Create quiz version', publishQuiz: 'Publish quiz version', quizVersion: 'Quiz version', quizQuestions: 'Quiz questions', questionKey: 'Question key', questionPrompt: 'Question prompt', optionKey: 'Option key', optionLabel: 'Option label', correctOption: 'Correct option key', question: 'Question', option: 'Option', addQuestion: 'Add question', addOption: 'Add option', submitQuiz: 'Check my answers', checkedNotGraded: 'Answers checked — not graded', quizNote: 'Checking compares the selected answers with the teacher-defined key. It does not release an academic grade.', correct: 'Correct', incorrect: 'Incorrect', noQuiz: 'No published quiz is available.', authorQuiz: 'Quiz versions', quizPublishNote: 'Review the immutable questions and answer keys before publishing. Learner views never receive raw answer keys.',
 };
 export const learningAr: typeof learningEn = {
+  coursePreparation: 'إعداد المقرر', coursePreparationBody: 'اختر وحدة أو درسًا أو نشاطًا لمراجعة محتواه وإعداد التغيير التالي.',
+  courseStructure: 'بنية المقرر', reviewCourse: 'مراجعة المقرر', selectedContent: 'المحتوى المحدد', choosePreparation: 'اختر محتوى لإعداده', preparationUnavailable: 'لا يظهر المحتوى المحدد في الصفحة الحالية. اختر مصدرًا حاليًا أو حدّث المقرر.',
+  staffAssessmentDirectory: 'دليل التقييمات', staffAssessmentDirectoryBody: 'اختر تقييمًا لمراجعة إعداده الخاص أو اختباره أو موارده أو إتاحته.',
+  chooseAssessment: 'اختر تقييمًا', staffSubmissions: 'دليل الأعمال المسلّمة', chooseSubmission: 'اختر عملًا مسلّمًا', openSubmission: 'مراجعة العمل المسلّم', closeSubmission: 'العودة إلى الأعمال المسلّمة',
+  submissionTypeUnknown: 'لم يُسجّل نوع الإجابة. افتح مصدر العمل المسلّم المحدد لمراجعته.',
   assessmentPath: 'عملك على التقييمات', assessmentPathBody: 'افتح تقييمًا، وراجع تعليماته، ثم اعمل على إجابتك.',
   assessmentUnavailable: 'اسم التقييم غير متاح', taskInstructionsUnavailable: 'تعليمات التقييم غير متاحة. حدّث الصفحة أو اطلب من معلّمك مراجعته.',
   selectedTask: 'تقييمك', workStage: 'اعمل على إجابتك', reviseStage: 'راجع إجابتك', submittedStage: 'تسليمك الحالي',

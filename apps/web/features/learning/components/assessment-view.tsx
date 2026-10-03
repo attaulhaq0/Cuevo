@@ -1,21 +1,22 @@
 'use client';
 
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
-import { assessmentSubmissionContext, assessmentWorkAvailable, assessmentWorkPresentation, learningTitle, parseLifecycleAvailability, type Assessment, type Submission } from '../model';
+import { assessmentSubmissionContext, assessmentWorkAvailable, assessmentWorkPresentation, currentLearningSelection, learningTitle, parseAssessment, parseLifecycleAvailability, type Assessment, type Submission } from '../model';
 import { useApi, useApiQuery } from '../../../shared/hooks/use-api';
 import { useLearningApi } from '../api';
 import { CommandForm } from '../../../shared/components/command-form';
 import { LearnerSubmission, TeacherSubmissionActions } from './submission-lifecycle';
 import { QuizWorkspace } from './quiz';
 import { LearningResources } from './resources';
-import { SubmissionDocuments } from './submission-documents';
+import { SubmissionDocuments, SubmittedDocumentWork } from './submission-documents';
 import { LearningError } from '../../../shared/components/feedback';
 import { LearningApiError } from '../../../shared/api/client';
 import { AssessmentPreparation } from './assessment-preparation';
 import { TaskLearningSupport } from '../../school/ui';
 import { trailAssets } from '../../../shared/characters/assets';
+import { StaffAssessmentDirectory, StaffSubmissionDirectory } from './staff-navigation';
 
 function localDateTime(value: string | null) {
   if (!value) return '';
@@ -29,7 +30,7 @@ export function AssessmentList({ assessments, submissions, submissionsComplete, 
   const { membership, locale, formDrafts, accessGeneration, online, status } = useApp();
   const { journal } = useApi();
   useSyncExternalStore(journal.subscribe, journal.getSnapshot, journal.getSnapshot);
-  const [configureId, setConfigureId] = useState<string | null>(null);
+  const [configureId, setConfigureId] = useState<string | null>(() => assessments.find(item => journal.get(`/v1/assessments/${item.id}/availability`) || formDrafts.get(`${membership?.schoolId}:${membership?.userId}:/v1/assessments/${item.id}/availability`))?.id ?? null);
   const availabilityPath = assessments.length ? `/v1/curriculum/learning-availability?courseIds=${[...new Set(assessments.map(item => item.courseId))].join(',')}` : null;
   const availabilityScope = `${membership?.schoolId}:${membership?.userId}:${accessGeneration}:${online}:${status}:${availabilityPath}`;
   const parseCurrentAvailability = useCallback((value: unknown) => ({ scope: availabilityScope, availability: parseLifecycleAvailability(value) }), [availabilityScope]);
@@ -37,15 +38,20 @@ export function AssessmentList({ assessments, submissions, submissionsComplete, 
   const availability = { ...availabilityRead, data: availabilityRead.data?.scope === availabilityScope ? availabilityRead.data.availability : null };
   const selectedSlot = `${membership?.schoolId}:${membership?.userId}:selected-assessment-detail`;
   const documentSlot = `${membership?.schoolId}:${membership?.userId}:selected-document-assessment`;
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => initiallySelectedId ?? formDrafts.model<string>(selectedSlot) ?? formDrafts.model<string>(documentSlot) ?? null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => initiallySelectedId ?? journal.pending().map(command => command.path.match(/^\/v1\/assessments\/([^/]+)\//)?.[1]).find(id => assessments.some(item => item.id === id)) ?? assessments.find(item=>formDrafts.first(`${membership?.schoolId}:${membership?.userId}:/v1/assessments/${item.id}/`))?.id ?? formDrafts.model<string>(selectedSlot) ?? formDrafts.model<string>(documentSlot) ?? null);
   const [documentAssessmentId, setDocumentAssessmentId] = useState<string | null>(() => formDrafts.model<string>(documentSlot) ?? null);
   const student = membership?.role === 'student';
   const author = membership?.role === 'teacher' || membership?.role === 'admin';
   if (!assessments.length) return <p className="learning-empty">{t.noAssessments}</p>;
   if (availability.error) return <LearningError error={availability.error} />;
   if (availability.loading || !availability.data) return <p role="status">{t.loading}</p>;
+  if (author && !initiallySelectedId) {
+    const selected = currentLearningSelection(assessments, selectedTaskId);
+    const locked = journal.pending().some(command => /^\/v1\/assessments\//.test(command.path) || command.path.startsWith('/v1/learning-resources/') || assessments.some(item => command.path.startsWith(`/v1/courses/${item.courseId}/resource`)));
+    return <div className="learning-staff-workspace"><StaffAssessmentDirectory assessments={assessments} selectedId={selected?.id ?? null} disabled={locked} onSelect={id => { if (locked) return; setSelectedTaskId(id); formDrafts.saveModel(selectedSlot,id); }}/><div className="learning-staff-selected">{selected ? <><Button type="button" variant="quiet" disabled={locked} onClick={() => { setSelectedTaskId(null); formDrafts.remove(selectedSlot); }}>{t.closeTask}</Button><SelectedStaffAssessment key={`${membership?.schoolId}:${membership?.userId}:${selected.id}`} assessmentId={selected.id} onChanged={onSubmitted}/></> : <section className="learning-selection-empty"><h2>{t.chooseAssessment}</h2><p>{t.staffAssessmentDirectoryBody}</p></section>}</div></div>;
+  }
   return <div className={`assessment-list${student ? ' assessment-list--student' : ''}${initiallySelectedId ? ' assessment-list--exact' : ''}`}>
-    {student && !initiallySelectedId ? <header className="assessment-path-heading"><div><p className="eyebrow">{t.assessments}</p><h2>{t.assessmentPath}</h2><p>{t.assessmentPathBody}</p></div><img src={trailAssets.work} alt="" width={96} height={96} /></header> : !student ? <h2>{t.assessments}</h2> : null}
+    {student && !initiallySelectedId ? <header className="assessment-path-heading"><div><p className="eyebrow">{t.assessments}</p><h2>{t.assessmentPath}</h2><p>{t.assessmentPathBody}</p></div><img src={trailAssets.work} alt="" width={96} height={96} /></header> : !student && !(author && initiallySelectedId) ? <h2>{t.assessments}</h2> : null}
     {assessments.map(assessment => {
       const { submission, known: sourceKnown, mismatch: sourceMismatch } = assessmentSubmissionContext(assessment, submissions, submissionsComplete, membership?.userId);
       const presentation = assessmentWorkPresentation(assessment, submission);
@@ -61,7 +67,7 @@ export function AssessmentList({ assessments, submissions, submissionsComplete, 
       const workKey = `${membership?.schoolId}:${membership?.userId}:${assessment.id}`;
       const closed = assessment.assignmentState === 'CLOSED';
       if (availability.data?.items.some(course => course.id === assessment.courseId)) return <article className="assessment-section" data-assessment-id={assessment.id} key={assessment.id}>{initiallySelectedId ? <h2 tabIndex={-1}>{title}</h2> : <h3 tabIndex={-1}>{title}</h3>}<p className="notice">{t.retiredCourseNote}</p><p className="lesson-content" dir="auto">{instructions}</p></article>;
-      if (assessment.status === 'DRAFT') return author ? <article className="assessment-section" data-assessment-id={assessment.id} key={assessment.id}><div className="learning-section-heading"><h3 tabIndex={-1}>{title}</h3><Status>{t.draft}</Status></div><AssessmentPreparation assessment={assessment} onChanged={onSubmitted} />{assessment.intendedSubmissionKind === 'QUIZ' ? <QuizWorkspace assessment={assessment} author onChanged={onSubmitted} /> : null}</article> : null;
+      if (assessment.status === 'DRAFT') return author ? <article className="assessment-section" data-assessment-id={assessment.id} key={assessment.id}><div className="learning-section-heading"><h2 tabIndex={-1}>{title}</h2><Status>{t.draftStage}</Status></div><p className="learning-form__note"><bdi>{courseTitle}</bdi></p><AssessmentPreparation assessment={assessment} onChanged={onSubmitted} />{assessment.intendedSubmissionKind === 'QUIZ' ? <QuizWorkspace assessment={assessment} author onChanged={onSubmitted} /> : null}<LearningResources courseId={assessment.courseId} targetKind="assessment" targetId={assessment.id} canManage labelContext={title}/></article> : null;
       if (student && sourceMismatch) return <article className="assessment-section" data-assessment-id={assessment.id} key={assessment.id}>{initiallySelectedId ? <h2 tabIndex={-1}>{title}</h2> : <h3 tabIndex={-1}>{title}</h3>}<LearningError error={new LearningApiError('invalid')} /></article>;
       return <article className={`assessment-section${detailOpen ? ' assessment-section--open' : ''}`} data-assessment-id={assessment.id} key={assessment.id}>
         <header className="assessment-task-heading">
@@ -73,7 +79,7 @@ export function AssessmentList({ assessments, submissions, submissionsComplete, 
         {detailOpen ? <section className={student ? 'assessment-task-layout' : 'assessment-staff-detail'} aria-label={student ? t.taskDetails : undefined}>
           <div className="assessment-task-main">
             {student ? <div className="assessment-stage-heading"><p className="eyebrow">{t.selectedTask}</p>{initiallySelectedId ? <h3>{stageHeading}</h3> : <h4>{stageHeading}</h4>}<p>{stageBody}</p></div> : null}
-            <section className="assessment-instructions" aria-label={t.instructions}><h4><CuevoIcon name="assessment" variant="filled" size={22} />{t.instructions}</h4><p className="lesson-content" dir="auto">{instructions}</p></section>
+            <section className="assessment-instructions" aria-label={t.instructions}>{author ? <h3><CuevoIcon name="assessment" variant="filled" size={22} />{t.instructions}</h3> : <h4><CuevoIcon name="assessment" variant="filled" size={22} />{t.instructions}</h4>}<p className="lesson-content" dir="auto">{instructions}</p></section>
             {author ? <><Button type="button" variant="quiet" aria-expanded={configureId === assessment.id} onClick={() => setConfigureId(configureId === assessment.id ? null : assessment.id)}>{t.availability}</Button>{configureId === assessment.id ? <CommandForm title={t.availability} path={`/v1/assessments/${assessment.id}/availability`} fields={[{ name: 'availableFrom', label: t.availableFrom, type: 'datetime-local', defaultValue: localDateTime(assessment.availableFrom) }, { name: 'availableUntil', label: t.availableUntil, type: 'datetime-local', defaultValue: localDateTime(assessment.availableUntil) }, { name: 'allowLate', label: t.allowLate, type: 'checkbox', defaultChecked: assessment.allowLate }, { name: 'state', label: t.assignmentState, type: 'select', required: true, defaultValue: assessment.assignmentState, options: [{ value: 'OPEN', label: t.open }, { value: 'CLOSED', label: t.closed }] }]} body={values => ({ availableFrom: values.get('availableFrom') ? new Date(String(values.get('availableFrom'))).toISOString() : null, availableUntil: values.get('availableUntil') ? new Date(String(values.get('availableUntil'))).toISOString() : null, allowLate: values.get('allowLate') === 'on', state: String(values.get('state')), expectedAvailabilityVersion: assessment.availabilityVersion })} onSaved={() => { setConfigureId(null); onSubmitted(); }} onCancel={() => setConfigureId(null)} note={t.availabilityNote} /> : null}<QuizWorkspace assessment={assessment} author onChanged={onSubmitted} /></> : student ? <div className="assessment-response-panel" key={workKey}>{sourceMismatch ? <LearningError error={new LearningApiError('invalid')} /> : assessment.submissionKind === 'QUIZ' ? <QuizWorkspace assessment={assessment} author={false} onChanged={onSubmitted} /> : sourceKnown ? <>{available && (!submission || submission.status === 'RETURNED') ? <Button type="button" variant="quiet" disabled={textCommandLocked} onClick={() => { setDocumentAssessmentId(assessment.id); formDrafts.saveModel(documentSlot, assessment.id); }}><CuevoIcon name="portfolio" size={18} />{t.attachWork}</Button> : null}{documentAssessmentId === assessment.id || submission?.responseKind === 'FILE' || (submission?.artifactCount ?? 0) > 0 ? <SubmissionDocuments assessmentId={assessment.id} submission={submission} available={available} onChanged={onSubmitted} /> : <LearnerSubmission assessment={assessment} submission={submission} onChanged={onSubmitted} />}</> : <p className="notice">{t.submissionUnknown}</p>}</div> : null}
           </div>
           <aside className="assessment-task-context" aria-label={t.taskContext}>
@@ -87,8 +93,30 @@ export function AssessmentList({ assessments, submissions, submissionsComplete, 
   </div>;
 }
 
+function SelectedStaffAssessment({ assessmentId, onChanged }: { assessmentId: string; onChanged: () => void }) {
+  const { membership, accessGeneration, online, status } = useApp(); const { t } = useLearningApi();
+  const [refresh,setRefresh] = useState(0); const root = useRef<HTMLDivElement>(null); const focused = useRef(false);
+  const path = `/v1/assessments/${assessmentId}`;
+  const scope = `${membership?.schoolId}:${membership?.userId}:${membership?.role}:${accessGeneration}:${online}:${status}:${path}:${refresh}`;
+  const parse = useCallback((value: unknown) => { const source = parseAssessment(value); if (source.id !== assessmentId) throw new LearningApiError('invalid'); return { scope, source }; },[scope,assessmentId]);
+  const read = useApiQuery(path,parse,refresh); const source = read.data?.scope === scope ? read.data.source : null;
+  useEffect(() => { if (focused.current || read.loading || !source && !read.error) return; const focus = () => { const heading=root.current?.querySelector<HTMLElement>('h2[tabindex="-1"]');if(!focused.current&&heading){heading.focus();focused.current=true;} };focus();const observer=new MutationObserver(focus);if(root.current)observer.observe(root.current,{childList:true,subtree:true});return()=>observer.disconnect(); },[source,read.loading,read.error]);
+  function changed() { setRefresh(value=>value+1); onChanged(); }
+  return <div ref={root}>{read.loading ? <p role="status">{t.loading}</p> : read.error ? <><h2 tabIndex={-1}>{t.assessments}</h2><LearningError error={read.error}/><Button type="button" variant="quiet" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button></> : source ? <AssessmentList initiallySelectedId={source.id} assessments={[source]} submissions={[]} submissionsComplete={false} onSubmitted={changed}/> : null}</div>;
+}
+
 export function SubmissionList({ submissions, onChanged }: { submissions: Submission[]; onChanged: () => void }) {
   const { t } = useLearningApi();
-  const { locale, membership } = useApp();
+  const { locale, membership, formDrafts, commandJournal } = useApp();
+  useSyncExternalStore(commandJournal.subscribe,commandJournal.getSnapshot,commandJournal.getSnapshot);
+  const slot = `${membership?.schoolId}:${membership?.userId}:selected-staff-submission`;
+  const [selectedId,setSelectedId] = useState<string|null>(()=>commandJournal.pending().map(command=>command.path.match(/^\/v1\/submissions\/([^/]+)\//)?.[1]).find(id=>submissions.some(item=>item.id===id)) ?? formDrafts.model<string>(slot) ?? null);
+  const heading = useRef<HTMLHeadingElement>(null); const lastFocused = useRef<string|null>(null);
+  useEffect(()=>{if(selectedId&&heading.current&&lastFocused.current!==selectedId){heading.current.focus();lastFocused.current=selectedId;}},[selectedId,submissions]);
+  if (membership?.role === 'teacher' || membership?.role === 'admin') {
+    const selected = currentLearningSelection(submissions,selectedId);
+    const locked = commandJournal.pending().some(command=>command.path.startsWith('/v1/submissions/'));
+    return submissions.length ? <div className="learning-staff-workspace"><StaffSubmissionDirectory submissions={submissions} selectedId={selected?.id??null} disabled={locked} onSelect={id=>{if(locked)return;setSelectedId(id);formDrafts.saveModel(slot,id);}}/><section className="learning-staff-selected" aria-label={t.currentWork}>{selected ? <article className="submission-section" key={`${selected.id}:${selected.revision}`}><Button type="button" variant="quiet" disabled={locked} onClick={()=>{setSelectedId(null);formDrafts.remove(slot);}}>{t.closeSubmission}</Button><h2 ref={heading} tabIndex={-1}>{learningTitle(selected.assessmentTitle,t.assessmentUnavailable)}</h2><p><bdi>{selected.learnerName}</bdi> · <bdi>{new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(selected.submittedAt))}</bdi></p><p>{selected.responseKind==='FILE'?t.fileTask:selected.responseKind==='TEXT'?t.textTask:t.submissionTypeUnknown}</p><SubmittedDocumentWork submissionId={selected.id}/><p className="learning-form__note">{t.evidenceNote}</p><TeacherSubmissionActions submission={selected} onChanged={onChanged}/></article> : <div className="learning-selection-empty"><h2>{t.chooseSubmission}</h2><p>{t.markingLater}</p></div>}</section></div> : <p className="learning-empty">{t.noSubmissions}</p>;
+  }
   return <section><p className="learning-form__note">{t.markingLater}</p>{submissions.length ? <div className="submission-list">{submissions.map(submission => <article className="submission-section" key={submission.id}><div className="learning-section-heading"><div><h3>{learningTitle(submission.assessmentTitle, t.assessmentUnavailable)}</h3><p><bdi>{submission.learnerName}</bdi> · <bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(submission.submittedAt))}</bdi></p></div><Status>{submission.status === 'RETURNED' ? t.returned : submission.status === 'CLOSED' ? t.closed : submission.status === 'RESUBMITTED' ? t.resubmitted : t.pending}</Status></div><h4>{t.response}</h4><p className="lesson-content" dir="auto">{submission.content}</p><p className="learning-form__note">{t.evidenceNote}</p>{membership?.role === 'teacher' || membership?.role === 'admin' ? <TeacherSubmissionActions submission={submission} onChanged={onChanged} /> : null}</article>)}</div> : <p className="learning-empty">{t.noSubmissions}</p>}</section>;
 }
