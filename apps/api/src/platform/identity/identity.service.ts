@@ -4,6 +4,31 @@ import { z } from 'zod';
 
 export interface MembershipRow { membership_id: string; actor_id: string; school_id: string; school_name: string; display_name: string; role: string; entitlement_codes: string[] }
 export interface VerifiedUser { userId: string; sessionId: string }
+export interface VerifiedAccount extends VerifiedUser { email: string; emailConfirmedAt: string }
+export interface AccountIdentityDependencies {
+  verifyAccount(token: string): Promise<VerifiedAccount>;
+  isCurrentSession(userId: string, sessionId: string): Promise<boolean>;
+}
+export function parseVerifiedAccount(input: unknown): VerifiedAccount {
+  const session = z.object({ userId: z.uuid(), sessionId: z.uuid() }).safeParse(input);
+  if (!session.success) throw new DomainError('INVALID_SESSION', 401, 'Sign in again to continue.');
+  const candidate = input as Record<string, unknown>;
+  const email = z.email().max(254).safeParse(candidate.email);
+  if (!email.success) throw new DomainError('ACCOUNT_EMAIL_REQUIRED', 403, 'A verified account email is required to continue.');
+  const confirmed = z.iso.datetime({ offset: true }).safeParse(candidate.emailConfirmedAt);
+  if (!confirmed.success) throw new DomainError('ACCOUNT_EMAIL_UNCONFIRMED', 403, 'Confirm your account email before continuing.');
+  return { ...session.data, email: email.data, emailConfirmedAt: confirmed.data };
+}
+/** Identifies only the current account; it supplies no school or membership authority. */
+export class AccountIdentityService {
+  constructor(private readonly deps: AccountIdentityDependencies) {}
+  async resolve(header: string | undefined): Promise<VerifiedAccount> {
+    if (!header || !/^Bearer [^\s]+$/i.test(header)) throw new DomainError('AUTHENTICATION_REQUIRED', 401, 'Sign in to continue.');
+    const account = parseVerifiedAccount(await this.deps.verifyAccount(header.slice(7)));
+    if (await this.deps.isCurrentSession(account.userId, account.sessionId) !== true) throw new DomainError('SESSION_REVOKED', 401, 'Sign in again to continue.');
+    return account;
+  }
+}
 export interface IdentityDependencies {
   verifyUser(token: string): Promise<VerifiedUser>;
   currentMemberships(userId: string): Promise<MembershipRow[]>;
