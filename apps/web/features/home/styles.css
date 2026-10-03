@@ -56,6 +56,8 @@
 .student-trail__task-art { position: relative; block-size: 10.375rem; }
 .student-trail__current-label { position: absolute; z-index: 3; inset-block-start: .125rem; inset-inline-start: 33%; padding: .125rem var(--space-4); border-radius: var(--radius-pill); background: var(--color-accent); color: var(--color-on-accent); font-size: var(--type-body); line-height: 1.6; white-space: nowrap; box-shadow: var(--elevation-accent); }
 .student-trail .student-trail__work { position: absolute; z-index: 2; inline-size: 85%; block-size: 10rem; inset-inline-start: 6%; inset-block-end: -.75rem; object-fit: fill; }
+.student-trail .student-trail__pedestal { position: absolute; z-index: 1; inline-size: 78%; block-size: 6.875rem; inset-inline-start: 31%; inset-block-end: -.75rem; object-fit: contain; }
+.student-trail .student-trail__work-subject { position: absolute; z-index: 2; inline-size: 56%; block-size: 11.25rem; inset-inline-start: 32%; inset-block-end: 1.5rem; object-fit: contain; }
 .student-trail__foxi-crop { position: absolute; z-index: 3; inset-inline-start: 66%; inset-block-start: -2rem; inline-size: 14.125rem; block-size: auto; overflow: visible; }
 .student-trail__foxi { inline-size: 100%; block-size: auto; object-fit: contain; }
 .student-trail__encouragement { position: absolute; inset-inline-start: 122%; inset-block-start: -.5rem; inline-size: 4.75rem; font-size: var(--type-lead); font-style: italic; line-height: 1.15; color: var(--color-link); transform: rotate(-8deg); }

@@ -80,3 +80,12 @@ test('task-first reading order also places goal and character preference control
   value.companion.hideAction = { label: 'Change my character preference', onClick() {} };
   const html = render(value); assert.ok(html.indexOf('Open current task') < html.indexOf('Edit my goal')); assert.ok(html.indexOf('Edit my goal') < html.indexOf('Change my character preference'));
 });
+
+test('current-step illustration composes one separate platform with an unstretched subject', () => {
+  const value = context();
+  const html = renderToStaticMarkup(createElement(StudentTrailView, { context: value, assets: { ...assets, workSubject: '/work-subject.webp', pedestal: '/pedestal.svg' }, locale: 'en' }));
+  assert.match(html, /student-trail__work-subject/);
+  assert.match(html, /student-trail__pedestal/);
+  assert.doesNotMatch(html, /class="student-trail__illustration student-trail__work"/);
+  assert.equal((html.match(/src="\/pedestal.svg"/g) || []).length, 1);
+});

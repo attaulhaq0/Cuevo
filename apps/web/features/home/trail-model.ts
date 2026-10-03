@@ -22,6 +22,8 @@ export type StudentTrailAssets = {
   foxi: string;
   lesson: string;
   work: string;
+  workSubject?: string;
+  pedestal?: string;
   feedback: string;
   practice: string;
   reflect: string;

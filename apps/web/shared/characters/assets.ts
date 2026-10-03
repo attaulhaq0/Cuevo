@@ -7,6 +7,8 @@ import turtle from './assets/turtle-practice.webp';
 import background from './assets/trail-background.png';
 import lesson from './assets/lesson.webp';
 import work from './assets/work.webp';
+import workSubject from './assets/work-subject.webp';
+import pedestal from './assets/pedestal.svg';
 import feedback from './assets/feedback.webp';
 import practice from './assets/practice.webp';
 import reflect from './assets/reflect.webp';
@@ -25,6 +27,8 @@ export const trailAssets = {
   portfolio: portfolio.src, grow: grow.src, milestone: milestone.src, owl: owl.src,
   path: typeof path === 'string' ? path : path.src,
   goal: goal.src, community: community.src, help: help.src,
+  workSubject: workSubject.src,
+  pedestal: typeof pedestal === 'string' ? pedestal : pedestal.src,
 } as const;
 
 export const companionAssets = {
