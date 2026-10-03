@@ -2,6 +2,8 @@
 
 Date: 3 October 2026 (Asia/Riyadh). E Deviser is the company; Cuevo is the product. This document contains unresolved release blockers only. Implemented features, historical failures and ordinary operating controls are recorded in the [acceptance report](CUSTOMER-READINESS-ACCEPTANCE-REPORT.md), [test matrix](CUSTOMER-READINESS-TEST-MATRIX.md) and [pilot operations](CUSTOMER-PILOT-OPERATIONS.md).
 
+Current continuation repairs are scoped: worker Auth-event ownership, timetable maintenance context and demonstration-analysis/413 wording are committed and verified. Genuine first-school/account admission/recovery remains a hard blocker despite uncomposed contracts/config and the in-progress offline executor. Some person/year/objective/portfolio choices still require human context and collision handling. These fixes do not establish the final frozen/customer/security/hosted acceptance. The founder owns the support ticket; repository work continues without sending it.
+
 Current-source customer acceptance and a functioning hosted deployment are not established. Frozen run2026-10-03T01-24-45-965Z ended NOT_VERIFIED after34/37rows; its106passing browser cases/two fixture failures and subsequent2/2repair plus3/3console retests remain separate evidence. Distinct50-source paging and supported browser volume have scoped passing receipts. Final frozen/security/coherent publication and missing onboarding/progression remain required. The founder authorized deployment and will send the Supabase support request; no additional generic permission is needed to continue repository work.
 
 | Unresolved release item | Classification | Evidence required to close it |
