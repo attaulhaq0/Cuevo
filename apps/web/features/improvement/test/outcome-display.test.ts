@@ -2,12 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseOutcome } from '../model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
+import { parsePage } from '../../../shared/api/pagination.ts';
 
 const id = (n: number) => `23000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const context = { status: 'READY', labelBasis: 'CURRENT_REGISTERED_NAMES_AND_IMMUTABLE_TASK', learnerId: id(12), identityRequiresReview: false, learnerName: 'Lina Hassan', className: 'Cedar', yearGroupName: 'Year 1', academicYearName: '2026–2027', courseTitle: 'School checking', practiceTitle: 'Explain one checking step', baselineAssessmentTitle: 'First checking task', followUpAssessmentTitle: 'Later checking task', baselineSubmittedAt: '2026-10-01T10:00:00Z', followUpSubmittedAt: '2026-10-02T10:00:00Z' };
 const numeric = { id: id(1), interventionId: id(2), baselineResultId: id(3), followUpResultId: id(4), status: 'improved', difference: 2, minimumChange: 1, baseline: { score: 0, maxScore: 10 }, followUp: { score: 2, maxScore: 10 }, reason: 'OBSERVED_RAW_SCORE_CHANGE', limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF', measuredAt: '2026-10-02T11:00:00Z' };
 const native = { type: 'rubric', rubricId: id(5), rubricTitle: 'Checking', rubricVersion: 'school-v1', policyVersion: 3, normalized: null, criteria: [{ criterionKey: 'check', criterionTitle: 'Checking', levelKey: 'shown', levelLabel: 'Shown', levelDescription: 'Show the check.' }] };
 const rubric = { id: id(1), interventionId: id(2), baselineResultId: id(3), followUpResultId: id(4), model: 'rubric', status: 'inconclusive', baseline: native, followUp: native, comparability: 'UNKNOWN', reason: 'NO_APPROVED_RUBRIC_COMPARISON_POLICY', limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF', measuredAt: '2026-10-02T11:00:00Z' };
+
+test('normal paged outcomes accept numeric and rubric context while explicit learner checks still deny mismatches', () => {
+  const items = [{ ...numeric, context }, { ...rubric, id: id(6), context }];
+  assert.deepEqual(parsePage({ items, nextCursor: null }, parseOutcome).items, items);
+  for (const outcome of items) {
+    assert.deepEqual(parseOutcome(outcome, context.learnerId), outcome);
+    assert.throws(() => parseOutcome(outcome, id(13)), LearningApiError);
+  }
+});
 
 test('numeric and rubric outcome parsing preserves exact optional human context', () => {
   assert.deepEqual(parseOutcome({ ...numeric, context }), { ...numeric, context });

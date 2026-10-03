@@ -4,7 +4,7 @@ export type Page<T> = { items: T[]; nextCursor: string | null };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function parsePage<T>(value: unknown, parse: (item: unknown) => T): Page<T> {
   if (!value || typeof value !== 'object' || !('items' in value) || !Array.isArray(value.items) || value.items.length > 100 || !('nextCursor' in value) || (value.nextCursor !== null && (typeof value.nextCursor !== 'string' || !uuid.test(value.nextCursor)))) throw new LearningApiError('invalid');
-  return { items: value.items.map(parse), nextCursor: value.nextCursor as string | null };
+  return { items: value.items.map(item => parse(item)), nextCursor: value.nextCursor as string | null };
 }
 export function pagePath(path: string, cursor: string | null): string {
   if (!cursor) return path;

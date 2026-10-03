@@ -3,12 +3,34 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 import { PageAccumulator, parsePage, pagePath } from '../pagination.ts';
 import { apiRequest, LearningApiError } from '../client.ts';
+import { parseList } from '../responses.ts';
 
 const cursor = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const parseItem = (value: unknown) => {
   assert.ok(value && typeof value === 'object' && 'id' in value && 'title' in value);
   return value as { id: string; title: string };
 };
+
+test('page parsers receive only the source item, never array position or page contents', () => {
+  const received: unknown[][] = [];
+  const items = [{ id: 'first', title: 'First' }, { id: 'second', title: 'Second' }];
+  const parsed = parsePage({ items, nextCursor: null }, (...args: unknown[]) => {
+    received.push(args);
+    return parseItem(args[0]);
+  });
+  assert.deepEqual(parsed.items, items);
+  assert.deepEqual(received, [[items[0]], [items[1]]]);
+});
+
+test('bounded list parsers preserve the same single-item contract', () => {
+  const received: unknown[][] = [];
+  const items = [{ id: 'first', title: 'First' }, { id: 'second', title: 'Second' }];
+  assert.deepEqual(parseList({ items }, (...args: unknown[]) => {
+    received.push(args);
+    return parseItem(args[0]);
+  }), items);
+  assert.deepEqual(received, [[items[0]], [items[1]]]);
+});
 
 test('malformed cursors cannot trigger a follow-up query or hide incomplete pages', () => {
   assert.throws(() => parsePage({ items: [], nextCursor: 'bad cursor' }, parseItem), LearningApiError);

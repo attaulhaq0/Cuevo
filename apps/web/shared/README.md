@@ -1,5 +1,7 @@
 # Shared web infrastructure
 
+`api/pagination.ts` and `api/responses.ts` pass one source item to a feature parser. Array indices and page contents never become optional validation context. Actual Outcomes pagination exposed this boundary when `parseOutcome` added an explicit expected learner; pure page/list and numeric/rubric regressions preserve that independent learner check.
+
 `holdMembershipVerification` is a browser-only continuation hold used while explicit account admission verifies its current account and claim. It suppresses premature ordinary membership requests, clears prior membership, and resumes fresh normal verification on release. It grants no access, supplies no role or session, and does not bypass any API/database authorization. The real new-user browser journey checks the console before claim and fresh workspace/sign-in afterward.
 
 Own only mechanisms reused across features: api/client.ts and pagination/responses, session/providers and membership/Auth, query hooks, common forms/feedback/branding, and global i18n. Shared may depend on packages/ui/contracts and other shared capabilities, never feature code. It has explicit server-free imports; tests live beside the capability in test. Feature-specific response models/copy remain under features.
