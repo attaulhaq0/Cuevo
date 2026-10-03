@@ -10,7 +10,7 @@ export function LearningLoop({ copy }: { copy: typeof authEn }) {
   return <div className="auth-visual">
     <div className="learning-loop" aria-label={copy.loop}>
       <div className="learning-loop__journey">
-        <ol className="learning-loop__stages" aria-label={copy.loop}>{stages.map(stage => <li key={stage.className}><img src={stage.artwork} width={56} height={56} alt="" className="auth-stage-art"/><span>{stage.label}</span></li>)}</ol>
+        <ol className="learning-loop__stages" aria-label={copy.loop}>{stages.map(stage => <li key={stage.className} className={`learning-loop__stage learning-loop__stage--${stage.className}`}><img src={stage.artwork} width={56} height={56} alt="" className="auth-stage-art"/><span>{stage.label}</span></li>)}</ol>
       </div>
     </div>
     <div className="auth-visual__lower"><div className="learning-loop__roles"><strong>{copy.roleHeading}<br />{copy.roleConnection}</strong><div>{roles.map(role => <span key={role.label}><img className="auth-role-art" src={role.artwork} width={48} height={48} alt=""/><span>{role.label}</span></span>)}</div></div><div className="auth-companions"><div className="auth-companions__scene"><img className="auth-companions__image" src={welcomeFox.src} width={welcomeFox.width} height={welcomeFox.height} alt={copy.studioArt}/></div></div></div>

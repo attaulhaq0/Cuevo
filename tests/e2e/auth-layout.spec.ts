@@ -223,15 +223,43 @@ for (const locale of locales) {
     await page.setViewportSize({ width: 1536, height: 1024 }); await open(page, locale);
     const measure = () => page.evaluate(() => {
       const width = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().width;
-      return { canvas: width('.auth-main'), panel: width('.auth-panel'),
+      return { canvas: width('.auth-visual'), panel: width('.auth-panel'),
         ratio: width('.auth-visual img[alt]:not([alt=""])') / width('.auth-stage-art') };
     });
     const initial = await measure();
     for (const viewport of [{ width: 3072, height: 2048 }, { width: 3830, height: 1750 }]) {
       await page.setViewportSize(viewport); const current = await measure();
-      expect(current.canvas, 'Zoom-out must not expand the composed studio beyond its reference canvas').toBeLessThanOrEqual(1536);
-      expect(current.panel, 'Credential entry must remain a bounded reading column').toBeLessThanOrEqual(544);
+      expect(current.canvas, 'Zoom-out must not expand the composed artwork beyond its reference canvas').toBeLessThanOrEqual(1002);
+      expect(current.panel, 'Credential entry must remain a bounded reading column').toBeLessThanOrEqual(640);
       expect(current.ratio, 'Characters and learning objects must scale as one scene').toBeCloseTo(initial.ratio, 1);
+    }
+  });
+
+  test(`${locale}: normal desktop uses the window edges and fits the form and role tray`, async ({ page }) => {
+    for (const viewport of [{ width: 1882, height: 856 }, { width: 1536, height: 1024 }, { width: 1366, height: 768 }]) {
+      await page.setViewportSize(viewport); await open(page, locale);
+      const bounds = await page.evaluate(() => {
+        const box = (selector: string) => { const r = document.querySelector(selector)!.getBoundingClientRect(); return { x: r.x, right:r.right, bottom:r.bottom, width:r.width }; };
+        return { brand:box('.auth-header .brand'), panel:box('.auth-panel'), roles:box('.learning-loop__roles'),
+          height:document.documentElement.scrollHeight, trayBackground:getComputedStyle(document.querySelector('.learning-loop__roles')!).backgroundColor };
+      });
+      expect(locale === 'en' ? bounds.brand.x : viewport.width-bounds.brand.right).toBeLessThanOrEqual(48);
+      expect(locale === 'en' ? viewport.width-bounds.panel.right : bounds.panel.x).toBeLessThanOrEqual(40);
+      expect(bounds.panel.width).toBeGreaterThanOrEqual(420);
+      expect(bounds.height).toBeLessThanOrEqual(viewport.height+1);
+      expect(bounds.roles.bottom).toBeLessThanOrEqual(viewport.height+1);
+      expect(bounds.trayBackground).not.toBe('rgba(0, 0, 0, 0)');
+    }
+  });
+
+  test(`${locale}: tablet learning labels remain separate from the role tray`, async ({ page }) => {
+    for (const width of [768, 941, 1024]) {
+      await page.setViewportSize({ width, height: 512 }); await open(page, locale);
+      const gap = await page.evaluate(() => {
+        const bottom = Math.max(...[...document.querySelectorAll('.learning-loop__stages li')].map(element => element.getBoundingClientRect().bottom));
+        return document.querySelector('.learning-loop__roles')!.getBoundingClientRect().top - bottom;
+      });
+      expect(gap, 'Learning labels and the separate role tray must not overlap').toBeGreaterThanOrEqual(4);
     }
   });
 
