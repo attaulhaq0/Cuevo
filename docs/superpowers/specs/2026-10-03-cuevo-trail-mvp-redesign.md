@@ -10,6 +10,8 @@ Latest scope update: the founder explicitly requested backend implementation of 
 
 Latest color/material approval: the founder selected solid Royal blue primary actions, Pearl + blue edge selected controls, retained existing status badges, and dedicated Midnight Trail dark backgrounds. The [shared approved rule](../../design/2026-10-03-approved-trail-colors-and-background.md) supersedes the earlier gradient/cyan-selection/dimmed-light-image variants while preserving current semantics and backend contracts.
 
+Latest role-reference approval: the founder selected the Student lower-section composition, 29 Teacher references and seven Parent references 042–048. The [approved role compositions](../../design/2026-10-03-approved-role-compositions.md) record exact reference paths, current feature ownership, Parent publication/child-scope limitations and mobile reading order. Retain the current header, icons and illustrations. These references refine the existing approved redesign; they do not authorize duplicate dashboards, unsupported Parent comparisons/attachments or future copilot controls. The reference mapping is documented; complete connected implementation remains pending.
+
 Latest authentication placement refinement: use the full viewport for the logical-start brand/heading and logical-end wider sign-in form. Bound only the decorative artwork; group the five separate role icons/labels in a real pill tray and keep Learn/Practice clear of the paired books with a central gutter. The current normal desktop default fits without scroll, while expanded recovery/privacy and enlarged text retain natural scroll access. Sign-in/session behavior and static companions remain unchanged.
 
 ## Decision and scope
