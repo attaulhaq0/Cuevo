@@ -66,7 +66,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
   });
   const view = workspaceView(navigation, requestedView);
   const studentHome = view === 'overview' && membership.role === 'student';
-  const composedHome = view === 'overview' && ['student', 'teacher', 'parent'].includes(membership.role);
+  const composedHome = view === 'overview';
   const destinationKey = `${view}:${intent?.source ?? ''}:${intent?.id ?? ''}`;
   const focusedDestination = useRef(destinationKey);
   useEffect(() => {
@@ -88,7 +88,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     setSignOutFailed(!success);
   }
   const title = view==='restricted'?restricted.title:view === 'portfolio' ? portfolio.portfolio : view === 'development' ? development.development : view === 'curriculum' ? curriculum.curriculum : view === 'community' ? community.community : view === 'school' ? school.school : view === 'improvement' ? improvement.improvement : view === 'progress' ? progress.progress : view === 'academic' ? academic.academic : view === 'learning' ? learning.learning : view === 'overview' ? t.roleTitles[membership.role] : view === 'access' ? t.accessTitle : t.accountTitle;
-  const body = view==='restricted'?restricted.notice:view === 'portfolio' ? portfolio.body : view === 'development' ? development.body : view === 'curriculum' ? curriculum.body : view === 'community' ? community.body : view === 'school' ? school.body : view === 'improvement' ? improvement.body : view === 'progress' ? progress.body : view === 'academic' ? academic.body : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
+  const body = view==='restricted'?restricted.notice:view === 'portfolio' ? portfolio.body : view === 'development' ? development.body : view === 'curriculum' ? curriculum.body : view === 'community' ? community.body : view === 'school' ? school.body : view === 'improvement' ? improvement.body : view === 'progress' ? progress.body : view === 'academic' ? ['student', 'parent'].includes(membership.role) ? academic.learnerBody : academic.body : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
   return <WorkspaceCommandNavigation navigation={navigationItems} selectedId={view} locale={locale}>{(searchAction, commandDialog) => <WorkspaceChrome context={{
     navigation: navigationItems,
     selectedId: view, navigationLabel: t.mainNavigation,
@@ -102,7 +102,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     searchAction,
   }}>
       <img className="workspace-chrome__background" src={trailAssets.background} alt="" aria-hidden="true" />
-      <main id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}${view === 'learning' && membership.role === 'student' ? ' workspace-main--student-learning' : ''}${view === 'community' ? ' workspace-main--community' : ''}`} tabIndex={-1}>
+      <main id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}${view === 'learning' && membership.role === 'student' ? ' workspace-main--student-learning' : ''}${view === 'community' ? ' workspace-main--community' : ''}${view === 'academic' ? ' workspace-main--academic' : ''}`} tabIndex={-1}>
         {composedHome ? null : <div className="workspace-intro"><div><p className="eyebrow">{t.greeting} <bdi>{membership.displayName}</bdi></p><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{body}</p></div><Status tone="positive">{t.sessionVerified}</Status></div>}
         {notice ? <p className="notice" role="status">{notice}</p> : null}
         {view==='restricted'?<RestrictedRecordsWorkspace/>:view === 'portfolio' ? <PortfolioWorkspace /> : view === 'development' ? <DevelopmentWorkspace /> : view === 'curriculum' ? <CurriculumWorkspace /> : view === 'community' ? <CommunityWorkspace /> : view === 'school' ? <SchoolWorkspace onAutomationControl={selectView}/> : view === 'improvement' ? <ImprovementWorkspace intent={intent?.view==='improvement'?intent:null} /> : view === 'progress' ? <ProgressWorkspace /> : view === 'academic' ? <AcademicWorkspace intent={intent?.view==='academic'?intent:null} /> : view === 'learning' ? <LearningWorkspace intent={intent?.view==='learning'?intent:null} /> : view === 'overview' ? <RoleHome onNavigate={selectView} headingRef={composedHome ? heading : undefined} /> : view === 'access' ? <>

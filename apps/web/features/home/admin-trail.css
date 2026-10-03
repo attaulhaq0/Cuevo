@@ -8,7 +8,7 @@
 .admin-trail__intro .admin-trail__environment { font-size: var(--type-sm); }
 .admin-trail__school { display: flex; align-items: center; gap: var(--space-4); background: var(--color-material-reading); border-radius: var(--radius-md); padding: var(--space-5); flex: 0 1 20rem; }
 .admin-trail__school svg { color: var(--color-accent); flex: none; }
-.admin-trail__areas { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--space-2); margin-block-end: var(--space-5); }
+.admin-trail__areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr)); gap: var(--space-2); margin-block-end: var(--space-5); }
 .admin-trail__areas button { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); font: inherit; min-block-size: 8rem; padding: var(--space-3) var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: var(--color-material-reading); color: var(--color-text); cursor: pointer; text-align: center; }
 .admin-trail__areas button[aria-current="page"] { border-color: var(--color-control-border); background: var(--color-surface-accent); }
 .admin-trail__area-icon { display: grid; place-items: center; inline-size: 3.75rem; block-size: 3.75rem; border-radius: var(--radius-pill); background: var(--color-learning-surface); color: var(--color-accent); flex: none; }

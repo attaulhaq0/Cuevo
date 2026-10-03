@@ -44,6 +44,11 @@
 .workspace .workspace-main--community .workspace-intro h1 { font-size: var(--type-xl); }
 .workspace .workspace-main--community .workspace-intro > div > p:last-child { margin-block-start: var(--space-2); font-size: var(--type-sm); }
 .workspace .workspace-main--community .workspace-intro .eyebrow { display: none; }
+.workspace .workspace-main--academic { padding-block-start: var(--space-5); }
+.workspace .workspace-main--academic .workspace-intro { margin-block-end: var(--space-5); }
+.workspace .workspace-main--academic .workspace-intro h1 { font-size: var(--type-xl); }
+.workspace .workspace-main--academic .workspace-intro > div > p:last-child { margin-block-start: var(--space-2); font-size: var(--type-sm); }
+.workspace .workspace-main--academic .workspace-intro .eyebrow { display: none; }
 @media (max-width: 800px) {
   .workspace .workspace-main--student-learning { padding-block-start: var(--space-3); }
   .workspace .workspace-main--student-learning .workspace-intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; margin-block-end: var(--space-3); }

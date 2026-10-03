@@ -1,4 +1,44 @@
 import { LearningApiError } from '../../shared/api/client.ts';
+import { academicReportSchema, nativeAcademicSourceSchema } from '@cuevo/contracts';
+
+export function parseCurrentAcademicReport(value: unknown, schoolId: string, learnerId: string, parent = false) {
+  const parsed = academicReportSchema.safeParse(value);
+  if (!parsed.success || parsed.data.scope !== 'CURRENT_RELEASED_PAGE' || parsed.data.schoolId !== schoolId || parsed.data.learnerId !== learnerId || parent && parsed.data.items.some(row => !row.parentVisible)) throw new LearningApiError('invalid');
+  return parsed.data;
+}
+
+export function parseCurrentMarking(value: unknown, submissionId: string): MarkingItem {
+  const row = parseMarkingItem(value);
+  if (row.id !== submissionId) throw new LearningApiError('invalid');
+  return row;
+}
+export function parseCurrentNativeSource(value: unknown, resultId: string, learnerId?: string) {
+  const result = nativeAcademicSourceSchema.safeParse(value);
+  if (!result.success || result.data.id !== resultId || learnerId !== undefined && result.data.learnerId !== learnerId) throw new LearningApiError('invalid');
+  return result.data;
+}
+export function parseLearnerReleasedResult(value: unknown, learnerId: string, parent = false): ReleasedResult {
+  const result = parseReleasedResult(value);
+  if (result.learnerId !== learnerId || result.correctionReason != null || parent && (result.previousResultId != null || !(value && typeof value === 'object' && 'parentVisible' in value) || value.parentVisible !== true)) throw new LearningApiError('invalid');
+  return result;
+}
+export type AcademicHistoryAnchor = { submissionId: string; assessmentId?: string; learnerId: string };
+/** Revision history retains changed native values and source versions, but
+ * every row must still belong to the selected work and authorized learner. */
+export function parseAcademicHistoryResult(value: unknown, anchor: AcademicHistoryAnchor, role: string): ReleasedResult {
+  const result = ['student', 'parent'].includes(role) ? parseLearnerReleasedResult(value, anchor.learnerId, role === 'parent') : parseReleasedResult(value);
+  if (!anchor.assessmentId || result.submissionId !== anchor.submissionId || result.learnerId !== anchor.learnerId || result.assessmentId !== anchor.assessmentId) throw new LearningApiError('invalid');
+  return result;
+}
+export function sameNativeResult(left: NativeResult, right: NativeResult): boolean {
+  if (left.type !== right.type || left.policyVersion !== right.policyVersion) return false;
+  if (left.type === 'numeric' && right.type === 'numeric') return left.score === right.score && left.maxScore === right.maxScore;
+  if (left.type !== 'rubric' || right.type !== 'rubric') return false;
+  return left.rubricId === right.rubricId && left.rubricVersion === right.rubricVersion && left.rubricTitle === right.rubricTitle && left.criteria.length === right.criteria.length && left.criteria.every((row, index) => {
+    const other = right.criteria[index];
+    return row.criterionKey === other.criterionKey && row.criterionTitle === other.criterionTitle && row.levelKey === other.levelKey && row.levelLabel === other.levelLabel && row.levelDescription === other.levelDescription;
+  });
+}
 
 export type AcademicReference = { id: string; title: string; description: string; code: string | null; version: string; status: 'DRAFT' | 'APPROVED'; sourceType: 'SCHOOL_AUTHORED'; createdBy: string; approvedBy: string | null;parentTitle?:string|null };
 export function academicReferenceChoice(reference:AcademicReference){return reference.parentTitle?`${reference.title} · ${reference.parentTitle} · ${reference.version}`:reference.title;}

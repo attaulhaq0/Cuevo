@@ -26,6 +26,7 @@ export type CoordinatorTrailContext = {
     /** Owner composes existing Academic NativeResultView/OutcomeList. */
     baselineView?: ReactNode;
     followUpView?: ReactNode;
+    comparisonView?: ReactNode;
     baselineDate: string | null;
     followUpDate: string | null;
     observationLabel: string | null;
