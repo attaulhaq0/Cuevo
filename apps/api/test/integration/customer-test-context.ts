@@ -111,8 +111,9 @@ export async function createCustomerContext(options: { committed?: boolean; live
   const drain = async () => {
     if (options.committed) await client.query('BEGIN');
     try {
+    if ((await client.query("select count(*)::integer count from internal.outbox_events where school_id=$1 and state<>'COMPLETED' and internal.outbox_event_owner(type) is distinct from 'WORKER'", [school])).rows[0]?.count !== 0) throw Error('Customer fixture cannot acknowledge unresolved account effects through the general worker.');
     for (let pass = 0; pass < 30; pass++) {
-      const events = (await client.query("select id from internal.outbox_events where school_id=$1 and state='PENDING'order by occurred_at,id limit 100", [school])).rows;
+      const events = (await client.query("select id from internal.outbox_events where school_id=$1 and state='PENDING' and internal.outbox_event_owner(type)='WORKER' order by occurred_at,id limit 100", [school])).rows;
       if (!events.length) { if (options.committed) await client.query('COMMIT'); return; }
       for (const event of events) {
         const lease = randomUUID(); await client.query("update internal.outbox_events set state='PROCESSING',lease_token=$2,lease_until=clock_timestamp()+interval '30 seconds',attempt_count=attempt_count+1 where school_id=$1 and id=$3", [school, lease, event.id]);

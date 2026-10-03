@@ -3,8 +3,8 @@ import test from 'node:test';
 import { requireReferenceWorkerTarget, referenceManifest, requireReferenceSnapshot, requireReferenceHealth, requireReferenceProgress, drainReference } from './reference-drain-rules';
 
 const worker = 'postgresql://cuevo_worker:fixture@127.0.0.1:56322/postgres';
-const snapshot = (pendingCount = 0) => ({ database: 'postgres', port: 5432, sessionUser: 'postgres', readOnly: true, referenceActive: true, populationMatches: true, dispatchDisabled: true, pendingCount, processingCount: 0, failedCount: 0, unsafeCount: 0, nonCompletedCount: pendingCount });
-const health = (pendingCount = 0) => ({ ready: true, pendingCount, failedCount: 0 });
+const snapshot = (pendingCount = 0) => ({ database: 'postgres', port: 5432, sessionUser: 'postgres', readOnly: true, referenceActive: true, populationMatches: true, dispatchDisabled: true, pendingCount, processingCount: 0, failedCount: 0, unsafeCount: 0, nonWorkerCount: 0, nonCompletedCount: pendingCount });
+const health = (pendingCount = 0) => ({ scope: 'WORKER', ready: true, pendingCount, failedCount: 0 });
 const progress = { processed: 1, attempted: 1, reviewRequired: false, failureReceiptUnknown: false, executionUnavailable: false, deadlineReached: false };
 
 test('reference worker target rejects PostgreSQL query overrides, owner and foreign targets', () => {
@@ -21,6 +21,13 @@ test('reference manifest refuses non-synthetic, foreign or duplicate fixture ide
 test('reference admission refuses active leases, unsafe population, enabled dispatch and owner write sessions', () => {
   assert.equal(requireReferenceSnapshot(snapshot(3)).pendingCount, 3);
   for (const fields of [{ processingCount: 1, nonCompletedCount: 1 }, { failedCount: 1, nonCompletedCount: 1 }, { unsafeCount: 1 }, { populationMatches: false }, { referenceActive: false }, { dispatchDisabled: false }, { readOnly: false }, { sessionUser: 'cuevo_worker' }, { database: 'other' }, { port: 5433 }, { nonCompletedCount: 1 }]) assert.throws(() => requireReferenceSnapshot({ ...snapshot(), ...fields }));
+});
+
+test('reference drain refuses unfinished work owned by another executor before claiming', async () => {
+  let calls = 0;
+  await assert.rejects(() => drainReference({ inspect: async () => ({ ...snapshot(1), nonWorkerCount: 1 }), health: async () => health(1), process: async () => { calls++; return progress; }, now: () => 1000 }));
+  assert.equal(calls, 0);
+  for (const scope of [undefined, null, 'SCHOOL_ACCOUNT_AUTH']) assert.throws(() => requireReferenceHealth({ ...health(), scope }, 0));
 });
 
 test('reference admission and health refuse missing, negative or non-integer counts', () => {

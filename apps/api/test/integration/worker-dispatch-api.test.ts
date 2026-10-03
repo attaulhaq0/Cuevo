@@ -2,8 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { config as dotenv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { createCustomerContext, customerCourse, type CustomerContext } from './customer-test-context';
+import { createCustomerContext, customerActor, customerCourse, type CustomerContext } from './customer-test-context';
 import { prepareSyntheticWorkerWindow, requireSyntheticWorkerTarget } from './customer-worker-window';
+import { withFixtureCleanup } from './fixture-cleanup';
 
 dotenv({ path: '.env.local', quiet: true });
 const enabled = process.env.CUEVO_REQUIRE_INTEGRATION === '1';
@@ -107,4 +108,51 @@ describe.skipIf(!enabled)('restricted worker dispatch admission with isolated co
     expect((await workers!.query("select internal.finish_worker_wake($1,'COMPLETED',0)as finished", [wakeId])).rows[0].finished).toBe(false);
     await pause();
   });
+  it('actual restricted login cannot claim or mutate API-owned Auth events or expose private ownership helpers', async () => {
+    await noApplications(); expect(await ownerQueue()).toBe(0);
+    const controlBefore = (await context.client.query('select *from internal.worker_dispatch_control where singleton')).rows[0] as Control;
+    expect(controlBefore).toMatchObject({ enabled: false, state: 'DISABLED', wake_id: null });
+    const fixtures = [
+      { id: randomUUID(), lease: null, type: 'school.account.provisioning_requested', state: 'PENDING' },
+      { id: randomUUID(), lease: randomUUID(), type: 'school.account.recovery_requested', state: 'PROCESSING' },
+      { id: randomUUID(), lease: randomUUID(), type: 'school.account.provisioning_requested', state: 'PROCESSING' },
+      { id: randomUUID(), lease: randomUUID(), type: 'school.account.recovery_requested', state: 'PROCESSING' },
+    ];
+    const ownedIds = fixtures.map(fixture => fixture.id);
+    const sources = async () => (await context.client.query('select to_jsonb(event)as record from internal.outbox_events event where event.school_id=$1 and event.id=any($2::uuid[])order by event.id', [context.school, ownedIds])).rows.map(row => row.record);
+    await withFixtureCleanup(async () => {
+      // Owner-created committed event/lease fixtures test transport ownership only.
+      // No provider, invitation recipient, delivery secret or membership is created.
+      for (const fixture of fixtures) {
+        await context.client.query(`insert into internal.outbox_events(school_id,id,actor_id,type,entity_type,entity_id,version,metadata,deduplication_key,state,lease_token,lease_until,attempt_count)
+          values($1,$2,$3,$4,'school_account',$2,1,'{"executionOwner":"WORKER"}', $5,$6,$7,case when $7::uuid is null then null else clock_timestamp()+interval'5 minutes'end,case when $7::uuid is null then 0 else 1 end)`,
+        [context.school, fixture.id, customerActor(1), fixture.type, 'worker-ownership:' + fixture.id, fixture.state, fixture.lease]);
+      }
+      const before = await sources(); expect(before).toHaveLength(4); expect(await ownerQueue()).toBe(4);
+      expect((await workers!.query('select current_user,session_user')).rows[0]).toEqual({ current_user: 'cuevo_worker', session_user: 'cuevo_worker' });
+      const health = (await workers!.query('select internal.worker_health()as health')).rows[0]?.health;
+      expect(health).toMatchObject({ ready: true, scope: 'WORKER', pendingCount: 0, failedCount: 0, oldestPendingAt: null });
+      const dispatch = (await workers!.query('select internal.worker_dispatch_health()as health')).rows[0]?.health;
+      expect(dispatch).toMatchObject({ ready: true, scope: 'WORKER', enabled: false, state: 'DISABLED', dueWork: false });
+      expect((await workers!.query('select id,lease_token from internal.claim_outbox(100,30)')).rows).toHaveLength(0);
+      expect((await workers!.query('select internal.complete_outbox($1,$2)as receipt', [fixtures[1].id, fixtures[1].lease])).rows[0]?.receipt).toBe(false);
+      expect((await workers!.query("select internal.fail_outbox($1,$2,'PROCESSING_REQUIRES_REVIEW',30)as receipt", [fixtures[2].id, fixtures[2].lease])).rows[0]?.receipt).toBe(false);
+      await expect(workers!.query('select internal.process_learner_event($1,$2)', [fixtures[3].id, fixtures[3].lease])).rejects.toMatchObject({ code: '42501' });
+      const grants = (await workers!.query(`select has_table_privilege(current_user,'internal.outbox_events','SELECT,INSERT,UPDATE,DELETE')as raw_outbox,
+        has_function_privilege(current_user,'internal.outbox_event_owner(text)','EXECUTE')as classifier,
+        has_function_privilege(current_user,'internal.process_before_account_execution_ownership(uuid,uuid)','EXECUTE')as prior_processor`)).rows[0];
+      expect(grants).toEqual({ raw_outbox: false, classifier: false, prior_processor: false });
+      await expect(workers!.query('select *from internal.outbox_events')).rejects.toMatchObject({ code: '42501' });
+      await expect(workers!.query("select internal.outbox_event_owner('school.account.provisioning_requested')")).rejects.toMatchObject({ code: '42501' });
+      await expect(workers!.query('select internal.process_before_account_execution_ownership($1,$2)', [fixtures[3].id, fixtures[3].lease])).rejects.toMatchObject({ code: '42501' });
+      expect(await sources()).toEqual(before);
+      expect((await context.client.query('select count(*)::integer count from internal.processed_events where school_id=$1 and event_id=any($2::uuid[])', [context.school, ownedIds])).rows[0]?.count).toBe(0);
+      expect((await context.client.query('select *from internal.worker_dispatch_control where singleton')).rows[0]).toEqual(controlBefore);
+    }, [
+      () => context.client.query('delete from internal.processed_events where school_id=$1 and event_id=any($2::uuid[])', [context.school, ownedIds]),
+      () => context.client.query('delete from internal.outbox_events where school_id=$1 and id=any($2::uuid[])', [context.school, ownedIds]),
+      async () => { expect(await ownerQueue()).toBe(0); },
+      async () => { expect((await context.client.query('select *from internal.worker_dispatch_control where singleton')).rows[0]).toEqual(controlBefore); },
+    ]);
+  }, 60_000);
 });

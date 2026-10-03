@@ -62,3 +62,20 @@ test('hosted synthetic authority stays server-only while API and worker retain t
   const web = runtimeEnvironment('web', authority);
   for (const key of Object.keys(authority)) assert.equal(web[key], undefined);
 });
+
+test('dedicated local Auth provisioning inputs reach only the explicit API child', () => {
+  const provision = { CUEVO_AUTH_PROVISIONING_MODE: 'LOCAL_SYNTHETIC', CUEVO_AUTH_PROVISIONING_KEY: 'dedicated-auth-key', CUEVO_AUTH_PROVISIONING_URL: 'http://127.0.0.1:56321', CUEVO_AUTH_PROVISIONING_PROJECT_REF: 'LOCAL_CUEVO', CUEVO_AUTH_PROVISIONING_WEB_ORIGIN: 'http://localhost:3000' };
+  const api = runtimeEnvironment('api', { ...input, ...provision });
+  for (const [key, value] of Object.entries(provision)) assert.equal(api[key], value);
+  for (const service of ['web', 'worker'] as const) {
+    const child = runtimeEnvironment(service, { ...input, ...provision });
+    for (const key of Object.keys(provision)) assert.equal(child[key], undefined);
+  }
+});
+
+test('disabled or absent local provisioning mode never forwards the dedicated key', () => {
+  for (const mode of [undefined, 'DISABLED']) {
+    const child = runtimeEnvironment('api', { ...input, CUEVO_AUTH_PROVISIONING_MODE: mode, CUEVO_AUTH_PROVISIONING_KEY: 'dedicated-auth-key' });
+    assert.equal(child.CUEVO_AUTH_PROVISIONING_KEY, undefined);
+  }
+});

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { hostedSyntheticRuntime, requireHostedSyntheticDatabase, requireSyntheticAnalyticsSources } from './synthetic-runtime';
+import { parseAuthProvisioningConfig } from './auth-provisioning';
 const httpOrigin = z.url().refine(value => {
   const url = new URL(value);
   return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
@@ -44,6 +45,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(), POSTHOG_CAPTURE_MODE: z.enum(['DISABLED', 'LIVE_SYNTHETIC']).default('DISABLED'),
 });
 export function parseServerConfig(input: Record<string, string | undefined>, consumer: 'all' | 'api' | 'worker' = 'all') {
+  const authProvisioning = parseAuthProvisioningConfig(input, consumer);
   const values = Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== undefined && value !== '' && (consumer !== 'api' || !key.startsWith('POSTHOG_'))));
   const parsed = envSchema.safeParse(values);
   if (!parsed.success) throw new Error(`Invalid environment configuration: ${parsed.error.issues.map(i => i.path.join('.')).join(', ')}`);
@@ -86,8 +88,9 @@ export function parseServerConfig(input: Record<string, string | undefined>, con
       approved: e.AI_GENERATION_MODE === 'FIXTURE' || liveApproved, promptId: e.AI_PROMPT_ID, promptVersion: e.AI_PROMPT_VERSION,
       policyVersion: e.AI_POLICY_VERSION, timeoutMs: e.AI_TIMEOUT_MS, maxTokens: e.AI_MAX_OUTPUT_TOKENS, maxCost: e.AI_MAX_COST,globalDailyBudget:e.AI_GLOBAL_DAILY_BUDGET },
     foundry: foundry ? { endpoint: e.AI_BASE_URL, apiKey: e.AZURE_OPENAI_API_KEY, syntheticOnly: Boolean(syntheticLive), inputCostPerMillion: e.AI_INPUT_COST_PER_MILLION, outputCostPerMillion: e.AI_OUTPUT_COST_PER_MILLION } : undefined,
-    analytics, analyticsEnabled: analytics.mode === 'LIVE_SYNTHETIC', storageSecret:e.SUPABASE_SERVICE_ROLE_KEY,
+    analytics, analyticsEnabled: analytics.mode === 'LIVE_SYNTHETIC', storageSecret:e.SUPABASE_SERVICE_ROLE_KEY, authProvisioning,
   };
 }
 export type ServerConfig = ReturnType<typeof parseServerConfig>;
 export * from './analytics';
+export * from './auth-provisioning';

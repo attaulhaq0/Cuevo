@@ -24,14 +24,14 @@ export function referenceManifest(value: unknown) {
 
 export function requireReferenceSnapshot(value: unknown) {
   const source = row(value);
-  const pendingCount = count(source.pendingCount); const processingCount = count(source.processingCount); const failedCount = count(source.failedCount); const unsafeCount = count(source.unsafeCount); const nonCompletedCount = count(source.nonCompletedCount);
-  if (source.database !== 'postgres' || source.port !== 5432 || source.sessionUser !== 'postgres' || source.readOnly !== true || source.referenceActive !== true || source.populationMatches !== true || source.dispatchDisabled !== true || processingCount !== 0 || failedCount !== 0 || unsafeCount !== 0 || nonCompletedCount !== pendingCount + processingCount + failedCount) throw Error('Reference population, dispatch or unfinished source requires review.');
+  const pendingCount = count(source.pendingCount); const processingCount = count(source.processingCount); const failedCount = count(source.failedCount); const unsafeCount = count(source.unsafeCount); const nonWorkerCount = count(source.nonWorkerCount); const nonCompletedCount = count(source.nonCompletedCount);
+  if (source.database !== 'postgres' || source.port !== 5432 || source.sessionUser !== 'postgres' || source.readOnly !== true || source.referenceActive !== true || source.populationMatches !== true || source.dispatchDisabled !== true || processingCount !== 0 || failedCount !== 0 || unsafeCount !== 0 || nonWorkerCount !== 0 || nonCompletedCount !== pendingCount + processingCount + failedCount) throw Error('Reference population, dispatch or unfinished source requires review.');
   return { pendingCount, nonCompletedCount };
 }
 
 export function requireReferenceHealth(value: unknown, pendingCount: number) {
   const source = row(value);
-  if (source.ready !== true || count(source.pendingCount) !== pendingCount || count(source.failedCount) !== 0) throw Error('Reference worker health or source counts require review.');
+  if (source.scope !== 'WORKER' || source.ready !== true || count(source.pendingCount) !== pendingCount || count(source.failedCount) !== 0) throw Error('Reference worker health or source counts require review.');
 }
 
 export function requireReferenceProgress(value: unknown) {

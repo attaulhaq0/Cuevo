@@ -24,7 +24,7 @@ const metadata = `
 with expected as(select *from jsonb_to_recordset($2::jsonb)as actor("schoolId"uuid,"actorId"uuid)),
 bounds as(select clock_timestamp()as now),
 queue as(
- select event.state,event.school_id,school.status as school_status,person.synthetic,membership.status as member_status,membership.effective_from,membership.effective_to
+ select event.state,internal.outbox_event_owner(event.type) as executor,event.school_id,school.status as school_status,person.synthetic,membership.status as member_status,membership.effective_from,membership.effective_to
  from internal.outbox_events event
  left join app.schools school on school.id=event.school_id
  left join app.people person on person.school_id=event.school_id and person.actor_id=event.actor_id
@@ -35,6 +35,7 @@ queue as(
  count(*)filter(where state='PENDING')::integer as "pendingCount",
  count(*)filter(where state='PROCESSING')::integer as "processingCount",
  count(*)filter(where state='FAILED')::integer as "failedCount",
+ count(*)filter(where executor is distinct from 'WORKER')::integer as "nonWorkerCount",
  count(*)filter(where school_id is distinct from $1::uuid or school_status is distinct from'active'or synthetic is distinct from true or member_status is distinct from'active'or effective_from is null or effective_from>bounds.now or(effective_to is not null and effective_to<=bounds.now))::integer as "unsafeCount"
  from queue cross join bounds
 )

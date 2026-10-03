@@ -12,6 +12,8 @@
 
 **Status:** `AccountIdentityService` verifies current provider-confirmed account/email/session without granting membership. The fixed-target provisioning adapter is implemented and a disposable real local Auth UUID create→reconcile→invite sequence passes with owned cleanup. Actual provider omission of confirmation time remains unknown; exact local admission/recovery redirects are now allowlisted. The adapter's receipt is not mail delivery, email control or admission. No application invitation route, durable Auth effect executor, claim, recovery, operator admission or browser journey is implemented. Existing `SchoolService` configures already-provisioned users; local synthetic bootstrap is not onboarding. [Scoped evidence](../../reports/2026-10-03-human-evidence-and-auth-provisioning.md).
 
+**Execution checkpoint:** Strict contracts/uncomposed account controller/service and dedicated API-only local configuration are now implemented. The [execution decision](../../decisions/2026-10-03-school-account-admission-and-effects.md) selects bounded API-owned external effects on the same existing outbox. Additive20261003052325 repairs worker ownership, including generic lease mutation, processing, health and wake recovery; SQL45/full1,356 and actual restricted-login3cases pass. [Current checkpoint](../../reports/2026-10-03-account-execution-ownership-checkpoint.md). Private invitation/effect/claim SQL, sender, operator admission, composition and browser proof remain unfinished.
+
 ## Fixed safety decisions
 
 - PUBLIC signup stays disabled. No caller-provided role, email, school ID, token or user metadata independently creates membership, entitlement or guardian access.
