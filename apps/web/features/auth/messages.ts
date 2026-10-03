@@ -13,7 +13,7 @@ export const authEn = {
   sharedDevice: 'On a shared device, sign out when you finish.',
   privacyTitle: 'Privacy & device information', privacyBody: 'This browser remembers your language choice. Sign-in sessions stay in memory and are not saved in browser storage.',
   privacyEnvironment: 'This preview uses a synthetic school environment. Official curriculum and live intelligence readiness require separate review.',
-  studioArt: 'Foxi greets learners at a writing book while Owl reads beside him',
+  welcomeArt: 'Foxi welcomes you to Cuevo',
 };
 export const authAr: typeof authEn = {
   headlineStart: 'رحلة تعلّمك', headlineAccent: 'تبدأ هنا.',
@@ -27,5 +27,5 @@ export const authAr: typeof authEn = {
   passwordPlaceholder: 'أدخل كلمة المرور',
   helpTitle: 'تحتاج إلى حساب أو مساعدة في كلمة المرور؟', helpBody: 'اطلب من مسؤول مدرستك حسابك أو المساعدة في تسجيل الدخول.', schoolAccount: 'مدرستك توفّر حسابك وتحدّد مساحات العمل التي يمكنك الوصول إليها.', sharedDevice: 'سجّل الخروج بعد الانتهاء من استخدام جهاز مشترك.',
   privacyTitle: 'الخصوصية ومعلومات الجهاز', privacyBody: 'يتذكّر هذا المتصفح اللغة التي تختارها. تبقى جلسات تسجيل الدخول في الذاكرة ولا تُحفظ في تخزين المتصفح.', privacyEnvironment: 'تستخدم هذه المعاينة بيئة مدرسية اصطناعية. اعتماد المناهج الرسمية والذكاء المباشر يحتاج إلى مراجعة مستقلة.',
-  studioArt: 'يرحّب فوكسي بالمتعلّمين أمام كتاب للكتابة بينما تقرأ البومة بجانبه',
+  welcomeArt: 'يرحّب بك فوكسي في Cuevo',
 };

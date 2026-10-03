@@ -8,6 +8,7 @@ import { authAr, authEn } from '../messages';
 import { Brand } from '../../../shared/components/brand';
 import { LearningLoop } from './learning-loop';
 import background from '../assets/studio-background.webp';
+import mobileBackground from '../assets/learning-background.webp';
 
 export function SignIn() {
   const { dictionary: t, signIn, status, locale } = useApp();
@@ -25,7 +26,7 @@ export function SignIn() {
     setPending(false); setError(result);
   }
   const configured = status !== 'not-configured';
-  return <div className="auth-page" data-design="learning-studio" style={{ '--auth-background-image': `url("${background.src}")` } as CSSProperties}>
+  return <div className="auth-page" data-design="learning-studio" style={{ '--auth-background-image': `url("${background.src}")`, '--auth-mobile-background-image': `url("${mobileBackground.src}")` } as CSSProperties}>
     <main id="main-content" className="auth-main" tabIndex={-1}>
       <header className="auth-header"><div className="auth-header__brand"><Brand /></div><div className="auth-language auth-copy--mobile"><LanguageSwitch expanded /></div></header>
       <section className="auth-story" aria-labelledby="learning-heading">

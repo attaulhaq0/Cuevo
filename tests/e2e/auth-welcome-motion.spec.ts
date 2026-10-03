@@ -11,11 +11,16 @@ for (const locale of ['en', 'ar'] as const) {
     await page.getByRole('button', { name: locale === 'ar' ? 'العربية' : 'English', exact: true }).click();
     const art = page.locator('.auth-companions__image');
     await expect(art).toBeVisible();
+    await expect.poll(() => art.evaluate(image => (image as HTMLImageElement).currentSrc)).toMatch(/studio-companions\./);
     await expect(page.locator('.auth-page video')).toHaveCount(0);
     await page.locator('#email').fill('static-presentation@example.invalid');
     for (const viewport of [{ width: 390, height: 844 }, { width: 3072, height: 2048 }]) {
       await page.setViewportSize(viewport);
       await expect(art).toBeVisible();
+      await expect.poll(() => art.evaluate(image => (image as HTMLImageElement).currentSrc)).toMatch(viewport.width < 768 ? /welcome-fox\./ : /studio-companions\./);
+      const backdrop = await page.locator('.auth-page').evaluate(element => getComputedStyle(element, '::before').backgroundImage);
+      expect(backdrop).toMatch(viewport.width < 768 ? /learning-background\./ : /studio-background\./);
+      await expect(page.locator('.auth-form')).toHaveCount(1);
       await expect(page.locator('#email')).toHaveValue('static-presentation@example.invalid');
       await expect(page.locator('.auth-submit')).toBeEnabled();
       await expect(page.locator('.auth-page video')).toHaveCount(0);

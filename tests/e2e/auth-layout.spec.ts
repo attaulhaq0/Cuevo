@@ -418,7 +418,7 @@ for (const locale of locales) {
         const scene = image.closest('.auth-companions__scene')!.getBoundingClientRect();
         return { width: r.width, height: r.height, naturalRatio: image.naturalWidth / image.naturalHeight, source: image.currentSrc, fit: getComputedStyle(image).objectFit, insideScene: r.left >= scene.left - 1 && r.right <= scene.right + 1 && r.top >= scene.top - 1 && r.bottom <= scene.bottom + 1 };
       });
-      expect.soft(image.fit, `${locale}/${width}: poster contains the intrinsic artwork without stretching`).toBe('contain');
+      expect.soft(image.fit, `${locale}/${width}: mobile uses the approved upper-body crop; desktop contains the full scene`).toBe(width < 768 ? 'cover' : 'contain');
       expect.soft(image.insideScene, `${locale}/${width}: poster remains inside its bounded scene`).toBe(true);
       measurements.push({ width, bounds, image });
       assertLayout(bounds, `${locale}/${width}: decoded artwork`);

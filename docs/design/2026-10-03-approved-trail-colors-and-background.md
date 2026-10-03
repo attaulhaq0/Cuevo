@@ -26,7 +26,7 @@ Light source: shared/characters/assets/trail-background.png; original SHA256 959
 
 Dark source: shared/characters/assets/trail-background-midnight.webp, 1536×1024, lossless encoding of the approved Midnight review pixels. Raw image-model output and the reviewed PNG remain in external design evidence; the WebP pixels match the reviewed PNG exactly. The original high highlights were limited in linear-light luminance to protect text when cropped. Do not claim native 4K from this 1536px source. [Background provenance](../../apps/web/shared/characters/background-provenance.json) records hashes, size and processing.
 
-Dark/System use the dark asset through the single CSS source token; Light/System-light use the unchanged light asset. No dark filter is applied. Opaque reading panels, text, control boundaries and current source limitations remain required. Authentication stays static/light with its approved studio artwork and responsive layout; its primary action follows Royal blue.
+Dark/System use the dark asset through the single CSS source token; Light/System-light use the unchanged light asset. No dark filter is applied. Opaque reading panels, text, control boundaries and current source limitations remain required. Authentication stays static/light; desktop/tablet retain the approved Learning Studio artwork, while mobile up to 767px restores the earlier compact one-Foxi welcome and pale-blue ribbon background as requested by the founder on 3 October 2026. Its primary action follows Royal blue; current form, icons, recovery and one-form composition remain unchanged. [Auth ownership and provenance](../../apps/web/features/auth/README.md) records this responsive rule.
 
 ## Verification and authority
 

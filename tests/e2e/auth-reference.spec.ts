@@ -103,7 +103,7 @@ async function loadedSourceImages(page: Page) {
   const art = page.locator('.auth-companions__image');
   await expect(art).toHaveCount(1);
   await art.scrollIntoViewIfNeeded();
-  await expect(art).toHaveAttribute('src', /studio-companions\./);
+  await expect.poll(() => art.evaluate(image => (image as HTMLImageElement).currentSrc)).toMatch((page.viewportSize()?.width ?? 1536) < 768 ? /welcome-fox\./ : /studio-companions\./);
   await expect(art).toHaveAttribute('alt', /.+/);
   await expect.poll(() => page.locator('.auth-header img, .auth-visual img').evaluateAll(images => images.every(image => {
     const asset = image as HTMLImageElement;
