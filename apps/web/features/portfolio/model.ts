@@ -6,14 +6,46 @@ export function parsePortfolioCollection(value:unknown):PortfolioCollection{if(!
 export function parsePortfolioPlacement(value:unknown):PortfolioPlacement{if(!value||typeof value!=='object'||!('id'in value)||typeof value.id!=='string'||!('collectionId'in value)||!(value.collectionId===null||typeof value.collectionId==='string')||!('position'in value)||!Number.isInteger(value.position)||!('revision'in value)||!Number.isInteger(value.revision))throw new LearningApiError('invalid');return value as PortfolioPlacement;}
 export function parsePortfolioFeedbackRequest(value:unknown):PortfolioFeedbackRequest{if(!value||typeof value!=='object'||['id','itemId','revisionId','learnerId','learnerName','title','message','requestedAt'].some(key=>!(key in value)||typeof(value as Record<string,unknown>)[key]!=='string'||!(value as Record<string,unknown>)[key])||!('state'in value)||value.state!=='PENDING'||!Number.isFinite(Date.parse(String((value as Record<string,unknown>).requestedAt))))throw new LearningApiError('invalid');return value as PortfolioFeedbackRequest;}
 export function parsePortfolioCollectionPage(value:unknown):{id:string;title:string;items:{id:string;title:string;reflection:string;position:number}[];nextCursor:string|null}{if(!value||typeof value!=='object'||!('id'in value)||typeof value.id!=='string'||!('title'in value)||typeof value.title!=='string'||!('items'in value)||!Array.isArray(value.items)||value.items.some(item=>!item||typeof item!=='object'||typeof item.id!=='string'||typeof item.title!=='string'||typeof item.reflection!=='string'||!Number.isInteger(item.position))||!('nextCursor'in value)||!(value.nextCursor===null||typeof value.nextCursor==='string'))throw new LearningApiError('invalid');return value as{id:string;title:string;items:{id:string;title:string;reflection:string;position:number}[];nextCursor:string|null};}
-import { parseNativeResult, type NativeResult } from '../academic/model.ts';
+import { parseNativeResult, type NativeResult, type ReleasedResult } from '../academic/model.ts';
+import { portfolioAr, portfolioEn } from './messages.ts';
 import { portfolioSourceWorkSchema, portfolioRequestedReviewSchema,portfolioIdentitySchema,type PortfolioIdentity, type PortfolioSourceWork, type PortfolioRequestedReview } from '@cuevo/contracts';
 export type { PortfolioSourceWork } from '@cuevo/contracts';
 export function parsePortfolioSourceWork(value: unknown): PortfolioSourceWork { const parsed = portfolioSourceWorkSchema.safeParse(value); if (!parsed.success) throw new LearningApiError('invalid'); return parsed.data; }
 export function parsePortfolioRequestedReview(value:unknown):PortfolioRequestedReview{const parsed=portfolioRequestedReviewSchema.safeParse(value);if(!parsed.success)throw new LearningApiError('invalid');return parsed.data;}
 export type PortfolioItem = {identity:PortfolioIdentity; id: string; revisionId: string; revision: number; learnerId: string; sourceModel: 'numeric' | 'rubric'; title: string; reflection: string; createdAt: string; feedback: string | null; featured: boolean; approvalState: 'AWAITING_REVIEW' | 'REVIEWED'; parentVisible: boolean; reviewedAt: string | null; evidenceId: string; resultId: string; submissionId: string; referenceId: string; referenceVersion: string; policyVersion: number; nativeResult: NativeResult; assessmentTitle: string; referenceTitle: string; submissionKind?: 'TEXT' | 'QUIZ'; sourceWorkApproved?: boolean; responseKind?: 'TEXT' | 'FILE'; artifactCount?: number };
 const unknownIdentity:PortfolioIdentity={status:'REQUIRES_REVIEW',learnerName:null,className:null,yearGroupName:null,academicYearName:null,courseTitle:null,assessmentTitle:null,submittedAt:null,submissionRevision:null};
-export function portfolioWorkChoices(items:PortfolioItem[],locale:'en'|'ar'):{value:string;label:string;ambiguous:boolean}[]{const date=new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'medium'});const unavailable=locale==='ar'?'سياق العمل غير متاح':'Work context unavailable';const choices=items.map(item=>({value:item.id,label:[item.title,...(item.identity.status==='READY'?[item.identity.learnerName,item.identity.className,item.identity.yearGroupName,item.identity.academicYearName,item.identity.courseTitle,item.identity.assessmentTitle,date.format(new Date(item.identity.submittedAt!))]:[item.assessmentTitle,date.format(new Date(item.createdAt)),unavailable])].join(' · ')}));return choices.map(choice=>({...choice,ambiguous:choices.filter(candidate=>candidate.label===choice.label).length>1}));}
+export type PortfolioChoice = { value: string; label: string; ambiguous: boolean; unavailable: boolean };
+function choiceText(locale: 'en' | 'ar') { return locale === 'ar' ? portfolioAr : portfolioEn; }
+function savedDate(value: string, locale: 'en' | 'ar') {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return choiceText(locale).contextUnavailable;
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', timeZoneName: 'short' }).format(date);
+}
+function distinctChoices(choices: Omit<PortfolioChoice, 'ambiguous'>[], locale: 'en' | 'ar'): PortfolioChoice[] {
+  const key = (label: string) => label.normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase(locale);
+  const counts = new Map<string, number>();
+  for (const choice of choices) counts.set(key(choice.label), (counts.get(key(choice.label)) ?? 0) + 1);
+  return choices.map(choice => ({ ...choice, ambiguous: (counts.get(key(choice.label)) ?? 0) > 1 }));
+}
+export function portfolioIdentityLabel(identity: PortfolioIdentity, locale: 'en' | 'ar'): string {
+  const t = choiceText(locale);
+  return [identity.learnerName ?? t.unknownLearner, `${t.classLabel}: ${identity.className ?? t.contextUnavailable}`, `${t.yearGroupLabel}: ${identity.yearGroupName ?? t.contextUnavailable}`, `${t.academicYearLabel}: ${identity.academicYearName ?? t.contextUnavailable}`].join(' · ');
+}
+export function portfolioEvidenceChoices(results: ReleasedResult[], locale: 'en' | 'ar'): PortfolioChoice[] {
+  const t = choiceText(locale); const numbers = new Intl.NumberFormat(locale);
+  return distinctChoices(results.map(result => ({ value: result.evidenceId, unavailable: !result.assessmentTitle?.trim() || !result.referenceTitle?.trim() || !Number.isFinite(Date.parse(result.createdAt)), label: [result.assessmentTitle?.trim() || t.contextUnavailable, ...(result.learnerName?.trim() ? [result.learnerName] : []), `${t.objectiveLabel}: ${result.referenceTitle?.trim() || t.contextUnavailable}`, `${t.resultRevision}: ${numbers.format(result.revision)}`, `${t.releasedOn}: ${savedDate(result.createdAt, locale)}`].join(' · ') })), locale);
+}
+export function portfolioCollectionChoices(collections: PortfolioCollection[], locale: 'en' | 'ar'): PortfolioChoice[] {
+  const t = choiceText(locale);
+  const titleKey = (title: string) => title.normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase(locale);
+  const titles = new Map<string, number>();
+  for (const collection of collections) titles.set(titleKey(collection.title), (titles.get(titleKey(collection.title)) ?? 0) + 1);
+  return distinctChoices(collections.map(collection => ({ value: collection.id, unavailable: !collection.title.trim(), label: [collection.title.trim() || t.contextUnavailable, ...((titles.get(titleKey(collection.title)) ?? 0) > 1 && collection.description.trim() ? [collection.description.trim()] : [])].join(' · ') })), locale);
+}
+export function portfolioWorkChoices(items: PortfolioItem[], locale: 'en' | 'ar'): PortfolioChoice[] {
+  const t = choiceText(locale); const numbers = new Intl.NumberFormat(locale);
+  return distinctChoices(items.map(item => ({ value: item.id, unavailable: item.identity.status !== 'READY', label: [item.title, ...(item.identity.status === 'READY' ? [portfolioIdentityLabel(item.identity, locale), `${t.courseLabel}: ${item.identity.courseTitle}`, `${t.assessmentLabel}: ${item.identity.assessmentTitle}`, `${t.objectiveLabel}: ${item.referenceTitle}`, `${t.submittedOn}: ${savedDate(item.identity.submittedAt!, locale)}`, `${t.submissionRevision}: ${numbers.format(item.identity.submissionRevision!)}`] : [item.assessmentTitle, t.contextUnavailable]), `${t.revision}: ${numbers.format(item.revision)}`].join(' · ') })), locale);
+}
 export function parsePortfolioItem(value: unknown): PortfolioItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new LearningApiError('invalid'); const row = value as Record<string, unknown>;
   if (['id', 'revisionId', 'learnerId', 'title', 'reflection', 'evidenceId', 'resultId', 'submissionId', 'referenceId', 'referenceVersion', 'assessmentTitle', 'referenceTitle'].some(key => typeof row[key] !== 'string' || !row[key]) || !Number.isInteger(row.revision) || Number(row.revision) < 1 || !Number.isInteger(row.policyVersion) || Number(row.policyVersion) < 1 || typeof row.createdAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt)) || typeof row.featured !== 'boolean' || typeof row.parentVisible !== 'boolean' || !['AWAITING_REVIEW', 'REVIEWED'].includes(String(row.approvalState)) || !(row.feedback === null || typeof row.feedback === 'string') || !(row.reviewedAt === null || typeof row.reviewedAt === 'string' && Number.isFinite(Date.parse(row.reviewedAt)))) throw new LearningApiError('invalid');

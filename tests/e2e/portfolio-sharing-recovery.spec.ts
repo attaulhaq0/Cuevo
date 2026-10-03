@@ -87,7 +87,7 @@ test('revoked selected work explains learner recovery and requires a fresh exact
   await signIn(page, student);
   await page.getByRole('button', { name: 'Select released work', exact: true }).click();
   let form = page.getByRole('region', { name: 'Select released work', exact: true });
-  await expect.poll(async () => form.getByLabel('Released source evidence').locator('option').allTextContents()).toContain(title);
+  await expect(form.getByLabel('Released source evidence').locator('option').filter({ hasText: title })).toHaveCount(1);
   await form.getByLabel('Released source evidence').selectOption(result.evidenceId);
   await form.getByLabel('Portfolio title').fill(title);
   await form.getByLabel('What I learned').fill('My first reflection for family.');
