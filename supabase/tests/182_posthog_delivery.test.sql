@@ -8,8 +8,9 @@ insert into app.school_policy_versions(school_id,version,reason,approved_by,anal
 select '10000000-0000-4000-8000-000000000001',coalesce(max(version),0)+1,'Synthetic capture verification','20000000-0000-4000-8000-000000000001',true from app.school_policy_versions where school_id='10000000-0000-4000-8000-000000000001';
 select ok(internal.configure_posthog_school('10000000-0000-4000-8000-000000000001',true,'QA',1),'operator activates current populated all-synthetic school');
 select ok(internal.posthog_school_allowed('10000000-0000-4000-8000-000000000001'),'school policy and fresh activation permit synthetic capture');
-insert into app.activity_completions(school_id,id,activity_id,learner_id)
-select a.school_id,'82000000-0000-4000-8000-000000000001',a.id,'20000000-0000-4000-8000-000000000012' from app.activities a where a.school_id='10000000-0000-4000-8000-000000000001' limit 1;
+insert into app.activities(school_id,id,lesson_id,title,kind,instructions,sequence)
+select lesson.school_id,'82000000-0000-4000-8000-000000000003',lesson.id,'Analytics source verification','practice','Explain a checking step.',(select coalesce(max(activity.sequence),0)+1 from app.activities activity where activity.school_id=lesson.school_id and activity.lesson_id=lesson.id) from app.lessons lesson join app.units unit on unit.school_id=lesson.school_id and unit.id=lesson.unit_id join app.courses course on course.school_id=unit.school_id and course.id=unit.course_id where lesson.school_id='10000000-0000-4000-8000-000000000001'and course.status='PUBLISHED'order by lesson.id limit 1;
+insert into app.activity_completions(school_id,id,activity_id,learner_id)values('10000000-0000-4000-8000-000000000001','82000000-0000-4000-8000-000000000001','82000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000012');
 insert into internal.outbox_events(school_id,id,actor_id,type,entity_type,entity_id,version,metadata,deduplication_key,state,completed_at)
 values('10000000-0000-4000-8000-000000000001','82000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000012','activity.complete','activity','82000000-0000-4000-8000-000000000001',1,'{"private":"never export"}','posthog-sql-golden','COMPLETED',clock_timestamp());
 -- The local fixture destination never substitutes for PostHog acceptance.
