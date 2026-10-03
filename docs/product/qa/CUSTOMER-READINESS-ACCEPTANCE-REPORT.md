@@ -1,5 +1,9 @@
 # Cuevo independent customer-readiness acceptance
 
+Current scoped repair: source-candidate migration20261003032848 and five regenerated private delegates pass actual50source/mixed/page tests6cases, independent frozen historical helper/full nonempty prior context4cases, seven SQL suites88assertions and six native/API suites11cases. All50savedcontexts have exact identity/value/order/practice assertions; pages2817/3431/3191ms. Build passes. The purpose-only pre-membership identity unit passes66focused cases; it supplies no membership grant and does not implement invitations/admission/recovery. Production browser/final frozen/customer/security/hosted gates and progression remain unfinished. [Repair evidence](../../reports/2026-10-03-current-source-reservation-repair.md) records the current scope and preserved failed attempts.
+
+Latest replacement frozen run2026-10-03T02-44-48-022Z ended NOT_VERIFIED after28/37rows:800unit/158web/1302SQL passed; integration198pass/1fail/1live skip. The47th intelligence reservation timed out57014 at5022ms beforeprovider (50released/46completedanalyses, no pages). This remaining context/reservation performance issue is being reproduced under5seconds. Later recovery/browser/demo/sourcecomparison were unexecuted. Owned source checkpoint8ddcdd91 is committed; no full current gate, onboarding/progression or hosted acceptance is claimed. [Latest evidence](../../reports/2026-10-03-customer-readiness-current-evidence.md) takes precedence over prior checkpoint paragraphs below.
+
 Company: E Deviser. Product: Cuevo. Initial review:2026-10-01; current reconciliation:2026-10-03. Sources01/04/08/10/11/13–20/36/38–43/58/60/61/63/64/77/78/80–85 remain authoritative. Current customer acceptance is IN PROGRESS. Earlier frozen passes prove only their original snapshots. Official/customer/hosted acceptance remains separate.
 
 ## 1. Executive conclusion
