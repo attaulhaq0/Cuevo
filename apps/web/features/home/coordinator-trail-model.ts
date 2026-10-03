@@ -12,12 +12,17 @@ export type CoordinatorTrailContext = {
   notice?: string;
   recovery?: CoordinatorTrailAction;
   primaryAction?: CoordinatorTrailAction;
+  sourceContext?: {title:string;fields:{label:string;value:string}[];description:string;controls?:ReactNode};
+  programmeControls?:ReactNode;
+  outcomeControls?:ReactNode;
   programmes: { key: string; name: string; contextLabel: string | null; status: 'reviewed-school-context' | 'requires-review' | 'unavailable'; statusLabel: string; action?: CoordinatorTrailAction }[];
   evidence: {
     status: 'ready' | 'loading' | 'partial' | 'unavailable';
     coverage: 'not-established' | 'requires-review';
     gap: { status: 'known'; count: number; basis: string } | { status: 'unknown'; count: null; basis: null };
-    records: { key: string; title: string; learnerName: string | null; contextLabel: string | null; teacherName: string | null; feedback: string | null; action?: CoordinatorTrailAction }[];
+    records: { key: string; title: string; learnerName: string | null; contextLabel: string | null; teacherName: string | null; feedback: string | null; nativeResultView?:ReactNode; action?: CoordinatorTrailAction }[];
+    description?:string;
+    controls?:ReactNode;
     action?: CoordinatorTrailAction;
   };
   outcome: {

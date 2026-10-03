@@ -1,5 +1,13 @@
 # Role action home
 
+## Coordinator Home source review — 4 October 2026
+
+The 034/035/038 reading composition now puts current declared-plan evidence before programme metadata, with the selected course/class/school period/programme/year/source version beside it. Direct course selection requires complete current course and programme choices and one exact class/subject programme context; periods require complete current choices. Missing/duplicate labels and ambiguous programme joins are refused without opaque suffixes. Current scope/error/loading and current period revision still govern each coverage read.
+
+Evidence rows receive Academic's canonical native renderer and retain the exact released-result action. Coverage remains not established; no gap total is inferred from missing rows, and an unknown gap does not fill a separate placeholder panel. Absent future follow-up/CQI review is omitted. The independent school follow-up is explicitly unrelated to the selected course or period and uses the existing canonical OutcomeList and exact intervention destination. Programme availability/read context never establishes official readiness.
+
+The existing six read families, loaded records and continuations remain in this owner. Course/period source errors and paging stay by selection, coverage page/recovery by evidence, and outcome/task recovery by school follow-up. The already-tested Home denial barrier is reused within Home for initial/continuation 401/403; same-scope retry cannot resurrect protected rows, while 503 remains partial. No Parent/Teacher/Student implementation, shared design, API, grade, metric, command or backend authority is changed. Source/render tests cover complete choices, missing/duplicate joins, current plan native reading, independent outcome and source controls. Root-owned frozen browser, actual API/deny/source and complete Coordinator acceptance remain separate.
+
 ## Parent Home current-source reading — 4 October 2026
 
 The 042 reading plane now keeps teacher context, actual released feedback, its plain explanation, the exact Academic report action and canonical native/reference context in that order. Result `createdAt` is labelled Source record date with UTC formatting; it never becomes approval time or a teacher name. Latest feedback requires the complete successful current report comparison set. A continued/failed report shows available feedback, independently of other supporting source completeness.

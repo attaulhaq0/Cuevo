@@ -1,9 +1,19 @@
 import { LearningApiError } from '../../shared/api/client.ts';
 import { parseIntervention, parseOutcome, type Intervention, type Outcome } from '../improvement/model.ts';
 import { parseNativeResult, type NativeResult } from '../academic/model.ts';
-import { learnerProjectionSchema } from '@cuevo/contracts';
+import { classLearningSummarySchema, learnerProjectionSchema, type ClassLearningSummary } from '@cuevo/contracts';
 import type { z } from 'zod';
 import { currentLearnerChoices, type PersonChoice } from '../../shared/api/people.ts';
+import { choiceLabel, type Choice } from '../learning/model.ts';
+
+export function parseCurrentClassSummary(value: unknown, schoolId: string, classId: string): ClassLearningSummary {
+ const parsed=classLearningSummarySchema.safeParse(value);
+ if(!parsed.success||parsed.data.schoolId!==schoolId||parsed.data.classId!==classId)throw new LearningApiError('invalid');
+ return parsed.data;
+}
+export function currentClassSummary(source:{scope:string;value:ClassLearningSummary}|null,scope:string,loading:boolean,failed:boolean){return !loading&&!failed&&source?.scope===scope?source.value:null;}
+export function coordinatorClassChoices(rows:Choice[],complete:boolean,unavailable:string){const choices=rows.map(row=>({value:row.id,label:row.name.trim()?choiceLabel(row):unavailable,requiresReview:!complete||!row.name.trim()}));return choices.map(row=>({...row,requiresReview:row.requiresReview||choices.filter(other=>other.label===row.label).length!==1}));}
+export function currentCoordinatorClasses(rows:(Choice&{scope?:string})[],scope:string):Choice[]{return rows.filter(row=>row.scope===scope);}
 
 export function progressLearnerChoices(people:PersonChoice[],unavailable:string,complete:boolean){return currentLearnerChoices(people,unavailable).map(choice=>({...choice,requiresReview:!complete||choice.requiresReview}));}
 

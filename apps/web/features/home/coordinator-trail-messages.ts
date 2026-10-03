@@ -1,5 +1,5 @@
 export const coordinatorTrailEn = {
-  title: 'Programme and learning review', introduction: 'Where are programme, evidence or follow-up gaps, and who owns the next review?',
+  title: 'Programme and learning review', introduction: 'Choose a course and school period, then review its declared sources and native evidence.',
   classUnknown: 'Class information is not available', periodUnknown: 'Period information is not available', dateUnknown: 'Date is not available',
   programmeUnknown: 'Current programme context is not available. Open your workspace to check.',
   evidence: 'Class evidence', coverage: 'Coverage not established', coverageReview: 'Coverage requires review', gapUnknown: 'Current evidence gaps are not available.', gaps: 'Recorded gaps',
@@ -9,7 +9,7 @@ export const coordinatorTrailEn = {
   loading: 'Loading current programme and evidence context…', partial: 'Some current records are not available. Review the source workspace for more.', error: 'Current programme and evidence records could not be loaded.', denied: 'These records are not available with your current access.', offline: 'You are offline. Reconnect to check current programme and evidence records.',
 };
 export const coordinatorTrailAr: typeof coordinatorTrailEn = {
-  title: 'مراجعة البرنامج والتعلّم', introduction: 'أين فجوات البرنامج أو الشواهد أو المتابعة، ومن يتولى المراجعة التالية؟',
+  title: 'مراجعة البرنامج والتعلّم', introduction: 'اختر مقررًا وفترة مدرسية، ثم راجع المصادر المعلنة وشواهدها الأصلية.',
   classUnknown: 'معلومات الصف غير متاحة', periodUnknown: 'معلومات الفترة غير متاحة', dateUnknown: 'التاريخ غير متاح',
   programmeUnknown: 'سياق البرنامج الحالي غير متاح. افتح مساحة العمل للتحقّق.',
   evidence: 'شواهد الصف', coverage: 'تغطية المنهج غير مثبتة', coverageReview: 'تتطلب التغطية المراجعة', gapUnknown: 'فجوات الشواهد الحالية غير متاحة.', gaps: 'فجوات مسجّلة',

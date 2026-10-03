@@ -42,3 +42,15 @@ test('coordinator outcome selects only its exact source-linked current task with
  assert.equal(binding.coordinatorHomeOutcome([{...outcome,context}],[task])?.outcome.context?.learnerId,id);
  assert.equal(binding.coordinatorHomeOutcome([{...outcome,context:{...context,learnerId:other}}],[task]),null);
 });
+test('Coordinator direct selection waits for complete current source choices without blocking independent reads',()=>{
+ const ready={loaded:true,loading:false,loadingMore:false,error:null,moreError:null,nextCursor:null};
+ assert.equal(binding.coordinatorHomeChoicesReady(ready),true);
+ for(const next of [{...ready,nextCursor:other},{...ready,moreError:new LearningApiError('unavailable')},{...ready,error:new LearningApiError('denied')},{...ready,loading:true},{...ready,loaded:false}])assert.equal(binding.coordinatorHomeChoicesReady(next),false);
+});
+test('Coordinator course choices require one exact programme class subject and real year context',()=>{
+ const programme={id,classId:id,subjectId:other,className:'Cedar',subjectName:'Reading',yearGroupName:'Year 6',academicYearName:'2026–2027'};
+ const course={id,classId:id,subjectId:other,title:'School reading'};
+ assert.deepEqual(binding.coordinatorHomeCourseChoices([course],[programme],'Context unavailable'),[{value:id,label:'School reading · Cedar · Reading · Year 6 · 2026–2027',requiresReview:false}]);
+ for(const rows of [[],[programme,{...programme,id:other}],[{...programme,academicYearName:''}]])assert.equal(binding.coordinatorHomeCourseChoices([course],rows,'Context unavailable')[0].requiresReview,true);
+ assert.equal(binding.coordinatorHomeCourseChoices([course,{...course,id:other}],[programme],'Context unavailable').every(choice=>choice.requiresReview),true);
+});

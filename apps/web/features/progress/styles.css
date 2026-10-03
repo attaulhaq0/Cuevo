@@ -54,3 +54,22 @@
 .class-native-source { margin-block: var(--space-5); padding-block: var(--space-4); border-block-end: 1px solid var(--color-border); }
 .class-summary-row bdi { overflow-wrap: anywhere; }
 @media (max-width: 767px) { .class-summary-row .academic-facts { grid-template-columns: 1fr; } }
+.coordinator-progress-layout { display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-5);align-items:start; }
+.coordinator-progress-layout[data-selected="true"] { grid-template-columns:minmax(18rem,.72fr) minmax(0,1.65fr); }
+.coordinator-progress-reading { min-inline-size:0; }
+.class-learning-summary[data-coordinator="true"] .coordinator-class-context { margin-block:var(--space-3); }
+.coordinator-class-row { padding-block:var(--space-4); }
+.coordinator-class-row .learning-section-heading { align-items:start;gap:var(--space-2); }
+.coordinator-class-row h3 { font-size:var(--type-body); }
+.coordinator-class-row .button { min-block-size:2.75rem; }
+.coordinator-record-counts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);margin-block:var(--space-3); }
+.coordinator-record-counts dt { font-size:var(--type-sm);color:var(--color-text-secondary); }
+.coordinator-record-counts dd { margin:var(--space-1) 0;font-weight:700; }
+.coordinator-class-row[data-selected="true"] { border-inline-start:3px solid var(--color-primary);padding-inline-start:var(--space-3); }
+.coordinator-domain-counts > section { border-block-start:1px solid var(--color-border);padding-block:var(--space-3); }
+.coordinator-domain-counts h4 { font-size:var(--type-sm); }
+.coordinator-domain-counts .academic-facts { grid-template-columns:minmax(0,1fr);gap:var(--space-2);margin-block:var(--space-2); }
+.progress-workspace[data-role="coordinator"] .progress-story-grid,.progress-workspace[data-role="coordinator"] .progress-follow-up-grid { grid-template-columns:minmax(0,1fr); }
+.progress-workspace[data-role="coordinator"] .learner-detail-heading { margin-block:var(--space-4); }
+@media(max-width:1023px){.coordinator-progress-layout[data-selected="true"]{grid-template-columns:minmax(0,1fr)}.progress-workspace[data-role="coordinator"] .progress-chapters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}.progress-workspace[data-role="coordinator"] .progress-chapters a{padding:var(--space-2)}}
+@media(max-width:767px){.coordinator-progress-layout[data-selected="true"] > .coordinator-progress-reading{order:-1}}

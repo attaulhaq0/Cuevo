@@ -16,6 +16,13 @@ export function coordinatorHomePlanIsCurrent(plan:{sourceStatus:string;periodRev
 export function coordinatorHomeChoices<T extends {id:string}>(rows:T[],label:(row:T)=>string) {
  const choices=rows.map(row=>({value:row.id,label:label(row)}));return choices.map(choice=>({...choice,requiresReview:!choice.label.trim()||choices.filter(candidate=>candidate.label===choice.label).length!==1}));
 }
+export function coordinatorHomeChoicesReady(source:{loaded:boolean;loading:boolean;loadingMore:boolean;error:unknown;moreError:unknown;nextCursor:string|null}):boolean {
+ return source.loaded&&!source.loading&&!source.loadingMore&&!source.error&&!source.moreError&&!source.nextCursor;
+}
+export function coordinatorHomeCourseChoices(courses:{id:string;title:string;classId:string;subjectId:string}[],programmes:{id:string;classId:string;subjectId:string;className:string;subjectName:string;yearGroupName:string;academicYearName:string}[],unknown:string) {
+ const choices=courses.map(course=>{const matches=programmes.filter(p=>p.classId===course.classId&&p.subjectId===course.subjectId),programme=matches.length===1?matches[0]:null;const context=programme?[programme.className,programme.subjectName,programme.yearGroupName,programme.academicYearName]:[];const valid=!!programme&&!!course.title.trim()&&context.every(value=>value.trim().length>0);return{value:course.id,label:[course.title,...(valid?context:[unknown])].join(' · '),requiresReview:!valid};});
+ return choices.map(choice=>({...choice,requiresReview:choice.requiresReview||choices.filter(candidate=>candidate.label===choice.label).length!==1}));
+}
 export function coordinatorHomePeriod(value:unknown) {
  const row=parseSchoolRow(value);if(typeof row.name!=='string'||!row.name.trim()||typeof row.startsOn!=='string'||typeof row.endsOn!=='string'||!Number.isInteger(row.revision)||Number(row.revision)<1)throw new LearningApiError('invalid');return {...row,name:row.name,startsOn:row.startsOn,endsOn:row.endsOn,revision:Number(row.revision)};
 }
