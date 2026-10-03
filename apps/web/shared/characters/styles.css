@@ -5,3 +5,6 @@
 @font-face { font-family: 'Cuevo Nunito Sans'; src: url('./assets/nunito-sans-900.ttf') format('truetype'); font-weight: 900; font-display: swap; }
 .workspace .student-trail, .student-trail-preview { font-family: 'Cuevo Nunito Sans', var(--font-sans); }
 .workspace [lang='ar'] .student-trail, .student-trail[lang='ar'], .student-trail-preview[lang='ar'] { font-family: var(--font-arabic); }
+
+.workspace .companion-view { display: inline-grid; max-inline-size: 100%; }
+.workspace .companion-view > img { display: block; max-inline-size: 100%; block-size: auto; object-fit: contain; pointer-events: none; user-select: none; }
