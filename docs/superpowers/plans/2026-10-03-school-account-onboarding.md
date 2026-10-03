@@ -16,6 +16,8 @@
 
 ## Fixed safety decisions
 
+Current source checkpoint: additive20261003054939 is locally applied; SQL197/196/179165assertions and fullSQL1,430/106files pass. Real Auth/controller/privateSQL source4cases pass3.39seconds with explicit rollback SETROLEpositive/independentLOGINdeny distinction. [Evidence](../../reports/2026-10-03-private-invitation-source-checkpoint.md). The invite-only executor remains offline/uncomposed; effect/token/claim SQL, SMTP, operator first-school admission and browser acceptance remain unfinished.
+
 - PUBLIC signup stays disabled. No caller-provided role, email, school ID, token or user metadata independently creates membership, entitlement or guardian access.
 - Initial school/admin/entitlement admission is an explicit authenticated operator action with fixed purpose, reviewed school source and an approved exact initial actor. It cannot use the seed reset or attach a foreign user through ordinary administrator commands.
 - Ordinary current administrators create school-owned pending invitations/admission requests for approved names/email/role and optional exact enrollment/teacher assignment/guardian tuples. Teachers/parents/students/coordinators cannot provision roles or privileges.
