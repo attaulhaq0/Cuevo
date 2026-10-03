@@ -2,12 +2,14 @@
 import type { SchoolRow } from '../model';
 import { useApp } from '../../../shared/session/providers';
 import { schoolAr, schoolEn } from '../messages';
+import { capabilityLabel } from '../../../shared/i18n/capability-label';
 
 export function SchoolRecords({ title, rows, columns, names = {} }: { title: string; rows: SchoolRow[]; columns: { key: string; label: string }[]; names?: Record<string, string> }) {
   const { locale, dictionary } = useApp(); const t = locale === 'ar' ? schoolAr : schoolEn;
   const labels: Record<string, string> = { active: t.active, suspended: t.suspended, revoked: t.revoked, pending: t.pending, completed: t.completed, present: t.present, absent: t.absent, late: t.late, excused: t.excused };
   function display(row: SchoolRow, key: string) {
     const value = row[key]; if (value === null || value === undefined) return '—';
+    if (key === 'code') return capabilityLabel(String(value), locale);
     if (key.endsWith('Id')) {
       const labelKey = key === 'learnerId' || key === 'studentId' ? 'learnerName' : key.replace(/Id$/, 'Name');
       const sourceLabel = row[labelKey];
