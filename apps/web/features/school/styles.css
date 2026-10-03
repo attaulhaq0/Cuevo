@@ -80,3 +80,59 @@
   .school-staff-day .school-attendance-list > li > div { inline-size:100%; }
   .school-staff-day .school-attendance-list > li > .button { inline-size:100%; min-inline-size:0; }
 }
+.parent-school-dates { min-inline-size:0; }
+.school-workspace--parent { margin-block-start:var(--space-3); gap:var(--space-3); }
+.school-workspace--parent > .home-context-section { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-3); margin:0; padding:var(--space-3); border-radius:var(--radius-lg); background:var(--color-material-reading); }
+.school-workspace--parent > .home-context-section > .field { flex:1 1 20rem; }
+.school-workspace--parent > .home-context-section .pagination-actions { margin:0; }
+.school-workspace--parent > .home-context-section .pagination-actions p { margin:0; font-size:var(--type-xs); }
+.school-workspace--parent > .learning-toolbar { margin:0; }
+.school-workspace--parent > .learning-toolbar .learning-tabs { margin:0; }
+.workspace-main:has(.school-workspace--parent) > .workspace-intro { margin-block-end:var(--space-3); padding-block-end:var(--space-3); }
+.workspace-main:has(.school-workspace--parent) > .workspace-intro > div > p:last-child { display:none; }
+.parent-calendar { display:grid; gap:var(--space-4); min-inline-size:0; }
+.parent-calendar > .school-day-heading { align-items:flex-start; }
+.parent-calendar > .school-day-heading p { margin-block:var(--space-1) 0; color:var(--color-text-secondary); font-size:var(--type-body); }
+.parent-calendar-layout { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(19rem,1fr); gap:var(--space-5); align-items:start; }
+.parent-calendar .school-day-panel { padding:var(--space-5); }
+.parent-calendar-month { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; margin-block-end:var(--space-4); }
+.parent-calendar-month h3 { flex:1; min-inline-size:0; font-size:var(--type-subheading); overflow-wrap:anywhere; }
+.parent-calendar-month > .button { min-block-size:var(--control-min-height); min-inline-size:var(--control-min-height); }
+.parent-calendar-previous { rotate:180deg; }
+[dir="rtl"] .parent-calendar-previous { rotate:0deg; }
+[dir="rtl"] .parent-calendar-next { rotate:180deg; }
+.parent-calendar-date { max-inline-size:22rem; margin-block-end:var(--space-2); }
+.parent-calendar-grid { margin-block:var(--space-4); border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
+.parent-calendar-weekdays,.parent-calendar-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
+.parent-calendar-weekdays { background:var(--color-surface-muted); color:var(--color-text-secondary); font-size:var(--type-xs); text-align:center; }
+.parent-calendar-weekdays span { padding:var(--space-2); overflow-wrap:anywhere; }
+.parent-calendar-day { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:var(--space-1); min-block-size:4.75rem; min-inline-size:0; padding:var(--space-2); border:0; border-block-start:1px solid var(--color-border); border-inline-end:1px solid var(--color-border); background:var(--color-material-reading); color:var(--color-text); font:inherit; font-size:var(--type-sm); cursor:pointer; }
+.parent-calendar-day:nth-child(7n) { border-inline-end:0; }
+.parent-calendar-day[aria-pressed="true"] { background:var(--color-selection-surface); color:var(--color-selection-text); box-shadow:inset 0 0 0 2px var(--color-selection-border); }
+.parent-calendar-day--adjacent { color:var(--color-text-muted); background:var(--color-surface-muted); }
+.parent-calendar-day:focus-visible { outline:2px solid var(--color-focus); outline-offset:-4px; z-index:1; }
+.parent-calendar-marker { inline-size:.45rem; block-size:.45rem; border-radius:50%; background:var(--color-brand); }
+.parent-calendar-today { font-size:.65rem; line-height:1.15; overflow-wrap:anywhere; }
+.parent-calendar-events { list-style:none; margin:var(--space-4) 0; padding:0; display:grid; gap:var(--space-3); }
+.parent-calendar-events > li { display:grid; gap:var(--space-2); padding:var(--space-3); border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-muted); }
+.parent-calendar-events .button { justify-self:start; }
+.parent-calendar-events h4,.parent-calendar-detail h4 { font-size:var(--type-lg); }
+.parent-calendar-events p { font-size:var(--type-sm); }
+.parent-calendar-detail { padding-block-start:var(--space-4); margin-block-start:var(--space-4); border-block-start:1px solid var(--color-border); }
+.parent-calendar-detail dl { display:grid; gap:var(--space-3); font-size:var(--type-sm); margin-block:var(--space-3); }
+.parent-calendar-detail dt { color:var(--color-text-secondary); }
+.parent-calendar-detail dd { margin:var(--space-1) 0 0; }
+.parent-calendar-detail h5 { font-size:var(--type-body); }
+.parent-calendar :is(h2,h3,h4,p,time,bdi,dd) { overflow-wrap:anywhere; }
+.parent-school-day-context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-5); align-items:start; }
+.parent-school-day-context summary { min-block-size:var(--control-min-height); align-content:center; cursor:pointer; }
+@media(max-width:1023px) { .parent-calendar-layout { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:767px) {
+ .parent-calendar-grid { display:none; }
+ .parent-calendar .school-day-panel { padding:var(--space-4); }
+ .parent-calendar-month h3 { font-size:var(--type-lg); }
+ .parent-calendar-month > .button:last-child { flex-basis:100%; }
+ .parent-calendar-date { max-inline-size:none; }
+ .parent-school-day-context { grid-template-columns:minmax(0,1fr); }
+ .parent-calendar-events .button { inline-size:100%; justify-self:stretch; }
+}

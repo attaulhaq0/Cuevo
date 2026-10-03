@@ -31,3 +31,33 @@ test('non-period Parent Home report refuses a period-scoped response for its unf
  const period={id,name:'Term one',revision:1,startsOn:'2026-10-01',endsOn:'2026-10-31',basis:'SOURCE_SUBMITTED_DATE_UTC'};
  assert.throws(()=>binding.parseParentHomeReport({...report,scope:'CURRENT_RELEASED_PERIOD_PAGE',period},id,id),LearningApiError);
 });
+test('parent feedback can claim latest only after its complete current report comparison set',()=>{
+ const ready={loaded:true,loading:false,error:null,nextCursor:null,moreError:null};
+ assert.equal(binding.parentHomeReportComplete(ready),true);
+ for(const next of [{...ready,nextCursor:other},{...ready,moreError:new LearningApiError('unavailable')},{...ready,error:new LearningApiError('denied')},{...ready,loading:true},{...ready,loaded:false}])assert.equal(binding.parentHomeReportComplete(next),false);
+});
+test('parent shared dates retain school-wide or actual class context without learner attribution',()=>{
+ const labels={schoolWide:'School-wide date',classUnknown:'Shared class date · class information unavailable'};
+ assert.equal(binding.parentHomeEventContext({classId:null,className:'Noor'},labels),'School-wide date');
+ assert.equal(binding.parentHomeEventContext({classId:id,className:'Cedar'},labels),'Cedar');
+ assert.equal(binding.parentHomeEventContext({classId:id,className:null},labels),'Shared class date · class information unavailable');
+});
+test('a denied continuation withholds prior protected rows until a fresh current source scope',()=>{
+ const scope='current-child-report',denied=new LearningApiError('denied');
+ const source={loaded:true,loading:false,error:null,moreError:denied};
+ const barrier=binding.parentHomeSourceDenial(null,scope,source);
+ assert.equal(binding.parentHomeSourceUsable(source,barrier),false);
+ const retry={...source,moreError:null,loadingMore:true};
+ const retained=binding.parentHomeSourceDenial(barrier,scope,retry);
+ assert.equal(binding.parentHomeSourceUsable(retry,retained),false);
+ const settledRetry={...retry,loadingMore:false};assert.equal(binding.parentHomeSourceUsable(settledRetry,binding.parentHomeSourceDenial(retained,scope,settledRetry)),false);
+ const fresh=binding.parentHomeSourceDenial(retained,'fresh-current-read',{...retry,loading:true});
+ assert.equal(binding.parentHomeSourceUsable({...retry,loading:true},fresh),false);
+ assert.equal(binding.parentHomeSourceUsable(retry,fresh),true);
+});
+test('unauthorized source continuation is withheld while a service outage retains the loaded page',()=>{
+ const source={loaded:true,loading:false,error:null,moreError:new LearningApiError('unauthorized')};
+ assert.equal(binding.parentHomeSourceUsable(source,binding.parentHomeSourceDenial(null,'child-source',source)),false);
+ const outage={...source,moreError:new LearningApiError('unavailable')};
+ assert.equal(binding.parentHomeSourceUsable(outage,binding.parentHomeSourceDenial(null,'child-source',outage)),true);
+});

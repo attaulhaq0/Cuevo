@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { currentSchoolRead, parseCurrentLearnerProfile, schoolTimetableForDate, parseCurrentSchoolContext, parseCurrentAttendance } from '../model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
+import { currentParentCalendarEvent, parentCalendarEventSelection } from '../parent-calendar-model.ts';
 
 const learnerId = '00000000-0000-4000-8000-000000000001';
 const classId = '00000000-0000-4000-8000-000000000002';
@@ -43,4 +44,9 @@ test('student and selected-child attendance cannot accept another learner source
   assert.equal(parseCurrentAttendance(row, learnerId).status, 'late');
   assert.throws(() => parseCurrentAttendance(row, courseId), LearningApiError);
   assert.equal(parseCurrentAttendance(row).learnerId, learnerId);
+});
+test('parent calendar working selection clears across child source changes without caching the source row',()=>{
+ const event={id:'current-event',classId:null,startsAt:'2026-10-03T10:00:00Z',endsAt:'2026-10-03T11:00:00Z',revision:1};const selection=parentCalendarEventSelection(learnerId,event);
+ assert.deepEqual(Object.keys(selection).sort(),['childId','eventId','revision']);assert.equal(currentParentCalendarEvent(selection,classId,[event],'2026-10-03'),null);
+ assert.equal(currentParentCalendarEvent(selection,learnerId,[],'2026-10-03'),null);
 });

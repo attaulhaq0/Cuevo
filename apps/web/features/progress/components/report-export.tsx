@@ -22,23 +22,23 @@ export function ReportExport({ learnerId }: { learnerId: string }) {
   useEffect(() => { setPending(false); setError(null); setReport(null); setCursor(null); setPrevious([]); setCombined(false); return () => { controller.current?.abort(); }; }, [scope]);
   async function operate(mode: 'show' | 'download' | 'next' | 'previous' | 'combined') {
     if (pending || !membership || !accessToken || !online) return;
-    setPending(true); setError(null);
+    setPending(true); setError(null); setReport(null); setCombined(false);
     const expectedScope = scope; const active = new AbortController(); controller.current?.abort(); controller.current = active;
     try {
       const desiredCursor = mode === 'combined' ? null : mode === 'next' ? report?.nextCursor ?? null : mode === 'previous' ? previous.at(-1) ?? null : cursor;
       const periodFilter=periodId?`&periodId=${periodId}`:'';
-      let current = parseAcademicReport(await request(`/v1/learners/${learnerId}/academic-report?limit=25${desiredCursor ? `&cursor=${desiredCursor}` : ''}${periodFilter}`, { signal: active.signal }));
+      const context = { schoolId: membership.schoolId, learnerId, periodId, parent: membership.role === 'parent' };
+      let current = parseAcademicReport(await request(`/v1/learners/${learnerId}/academic-report?limit=25${desiredCursor ? `&cursor=${desiredCursor}` : ''}${periodFilter}`, { signal: active.signal }), context);
       if (active.signal.aborted || currentScope.current !== expectedScope) return;
-      if (current.learnerId !== learnerId || current.schoolId !== membership.schoolId || (current.period?.id??'')!==periodId) throw new LearningApiError('invalid');
       let combinedItems = current.items;
       if (mode === 'combined') {
         const seen = new Set<string>();
         for (let page = 1; current.nextCursor && page < 40; page++) {
           if (seen.has(current.nextCursor)) throw new LearningApiError('invalid');
           seen.add(current.nextCursor);
-          const next = parseAcademicReport(await request(`/v1/learners/${learnerId}/academic-report?limit=25&cursor=${current.nextCursor}${periodFilter}`, { signal: active.signal }));
+          const next = parseAcademicReport(await request(`/v1/learners/${learnerId}/academic-report?limit=25&cursor=${current.nextCursor}${periodFilter}`, { signal: active.signal }), context);
           if (active.signal.aborted || currentScope.current !== expectedScope) return;
-          if (next.learnerId !== learnerId || next.schoolId !== membership.schoolId || (next.period?.id??'')!==periodId || JSON.stringify(next.period)!==JSON.stringify(current.period) || next.items.some(item => combinedItems.some(previous => previous.id === item.id))) throw new LearningApiError('invalid');
+          if (JSON.stringify(next.period)!==JSON.stringify(current.period) || next.items.some(item => combinedItems.some(previous => previous.id === item.id))) throw new LearningApiError('invalid');
           combinedItems = [...combinedItems, ...next.items]; current = next;
         }
       }
@@ -51,7 +51,7 @@ export function ReportExport({ learnerId }: { learnerId: string }) {
         const link = document.createElement('a'); link.href = url; link.download = `cuevo-current-results-${locale}-page-${previous.length + 1}.html`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         if (mode === 'combined') setCombined(true);
       }
-    } catch (failure) { if (!active.signal.aborted && currentScope.current === expectedScope) setError(failure instanceof LearningApiError ? failure : new LearningApiError('invalid')); }
+    } catch (failure) { if (!active.signal.aborted && currentScope.current === expectedScope) { setReport(null); setCursor(null); setPrevious([]); setCombined(false); setError(failure instanceof LearningApiError ? failure : new LearningApiError('invalid')); } }
     finally { if (!active.signal.aborted && currentScope.current === expectedScope) setPending(false); }
   }
   return <section className="progress-section" aria-label={t.currentResultPages}><div className="field"><label htmlFor="report-period">{locale==='ar'?'فترة التقرير':'Report period'}</label><select id="report-period" value={periodId} disabled={pending} onChange={event=>setPeriodId(event.target.value)}><option value="">{locale==='ar'?'كل النتائج الحالية':'All current results'}</option>{periods.data.map(period=><option key={period.id} value={period.id}>{String(period.name)} · {String(period.startsOn)}–{String(period.endsOn)}</option>)}</select><LoadMore query={periods}/>{periods.error?<LearningError error={periods.error}/>:null}</div><div className="learning-actions"><Button type="button" variant="secondary" disabled={pending} onClick={() => void operate('download')}>{pending ? t.loading : t.exportReport}</Button><Button type="button" variant="quiet" disabled={pending} onClick={() => void operate('show')}>{t.currentResultPages}</Button><Button type="button" variant="quiet" disabled={pending} onClick={() => void operate('combined')}>{t.exportCombined}</Button></div><p className="learning-form__note">{t.reportNote}</p>{combined ? <p className="notice">{t.combinedReportNote}</p> : null}{error ? <LearningError error={error} /> : null}{report ? <><h3><bdi>{report.learnerName ?? t.learner}</bdi></h3>{report.period?<p>{report.period.name} · {report.period.startsOn}–{report.period.endsOn}</p>:null}<p><bdi>{report.schoolName}</bdi> · {t.reportPage} {new Intl.NumberFormat(locale).format(previous.length + 1)}</p>{report.items.map(item => <article className="academic-row" key={item.id}><h4>{item.assessmentTitle}</h4><NativeResultView result={item.nativeResult} /><p>{item.feedback}</p><p>{item.referenceTitle} · <bdi>{item.referenceVersion}</bdi></p></article>)}{!report.items.length ? <p>{t.noAcademic}</p> : null}<div className="learning-actions">{previous.length ? <Button type="button" variant="secondary" disabled={pending} onClick={() => void operate('previous')}>{t.previousReportPage}</Button> : null}{report.nextCursor ? <Button type="button" variant="secondary" disabled={pending} onClick={() => void operate('next')}>{t.nextReportPage}</Button> : <p>{t.currentPagesFinished}</p>}</div></> : null}</section>;

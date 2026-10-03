@@ -1,8 +1,11 @@
 import { LearningApiError } from '../../shared/api/client.ts';
 import { academicReportSchema, type AcademicReport } from '@cuevo/contracts';
 export type { AcademicReport } from '@cuevo/contracts';
-export function parseAcademicReport(value: unknown): AcademicReport {
-  const result = academicReportSchema.safeParse(value); if (!result.success) throw new LearningApiError('invalid'); return result.data;
+export type AcademicReportContext = { schoolId: string; learnerId: string; periodId: string; parent: boolean };
+export function parseAcademicReport(value: unknown, context?: AcademicReportContext): AcademicReport {
+  const result = academicReportSchema.safeParse(value);
+  if (!result.success || context && (result.data.schoolId !== context.schoolId || result.data.learnerId !== context.learnerId || (result.data.period?.id ?? '') !== context.periodId || context.parent && result.data.items.some(item => !item.parentVisible))) throw new LearningApiError('invalid');
+  return result.data;
 }
 function escape(value: unknown): string { return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!); }
 export function renderAcademicReport(report: AcademicReport, locale: 'en' | 'ar'): string {

@@ -1,5 +1,7 @@
 # Academic feature
 
+A fresh Parent result deep link keeps the current ChildSelector and its read refresh visible until a guardian-authorized child is resolved. The exact result request remains disabled during that selection; the route does not infer a child from the result identifier. Existing native source/history/publication guards then admit only the selected child's result.
+
 An opened Parent-sharing decision that cannot read its current publication now offers a local refresh of that exact source. Pending original commands and their keys remain retained; failed/denied current publication withholds the decision until reauthorized. This retries a read only and does not change sharing or result authority.
 
 After that read is restored, an uncertain sharing command derives the displayed Share/Revoke intent from its strict original payload rather than the later publication state. Recovery remounts the existing CommandForm with the original reason, confirmation, source revisions and command key. A malformed retained payload cannot open a replacement decision. The current publication still leads the visible source status, and no retry is available during failed or denied readback.

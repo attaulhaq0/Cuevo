@@ -3,11 +3,12 @@ export const parentTrailEn = {
   checkingChildren: 'Checking current child relationships…', chooseChild: 'Choose a child to view their records.', identityReview: 'Your school needs to distinguish matching child records before selection.', childUnavailable: 'No child is available through your current approved relationships.', checkingRecords: 'Current child records are being checked. Wait for the selected child’s approved context.',
   childUnknown: 'Child information is not available', classUnknown: 'Class information is not available', schoolUnknown: 'School information is not available',
   loading: 'Loading the selected child’s approved context…', partial: 'Some approved records are not available. Check the current workspace for more.', error: 'The selected child’s approved records could not be loaded.', denied: 'These child records are not available with your current access.', offline: 'You are offline. Reconnect to check approved child records.',
-  latestFeedback: 'Latest approved feedback', approved: 'Approved by school', dateUnknown: 'Date is not available', teacherUnknown: 'Teacher information is not available', teacher: 'Teacher',
+  latestFeedback: 'Latest approved feedback', availableFeedback:'Available approved feedback', approved: 'Approved by school', sourceDate:'Source record date', reviewedDate:'Reviewed on', dateUnknown: 'Date is not available', teacherUnknown: 'Teacher information is not available', teacher: 'Teacher',
   feedbackUnknown: 'Approved feedback is not available yet. Check your child’s current report.', aboutFeedback: 'About this feedback',
-  portfolio: 'Approved portfolio', portfolioUnknown: 'Approved selected work is not available yet. Check the current portfolio.',
+  portfolio: 'Approved portfolio', portfolioUnknown: 'Approved selected work is not available yet. Check the current portfolio.', portfolioFeedback:'School feedback',portfolioReflection:'Reviewed reflection',
   upcoming: 'Upcoming school work', upcomingIntro: 'See the work and dates your school has shared.', upcomingUnknown: 'Current shared work and dates are not available yet.',
   communication: 'School communication', communicationUnknown: 'Current school communication is not available yet.',
+  updates:'School updates',updatesIntro:'General school information shared with families. An update may apply to another child or class.',updatesUnknown:'Current school updates are not available yet.',
   support: 'How you can help', supportUnknown: 'School-approved support guidance is not available yet.',
 };
 export const parentTrailAr: typeof parentTrailEn = {
@@ -15,10 +16,11 @@ export const parentTrailAr: typeof parentTrailEn = {
   checkingChildren: 'جارٍ التحقّق من علاقات الأطفال الحالية…', chooseChild: 'اختر الطفل لعرض سجلاته.', identityReview: 'تحتاج المدرسة إلى توضيح السجلات المتشابهة قبل الاختيار.', childUnavailable: 'لا يتاح طفل ضمن العلاقات الحالية المعتمدة.', checkingRecords: 'جارٍ التحقّق من سجلات الطفل الحالي. انتظر السياق المعتمد للطفل المختار.',
   childUnknown: 'معلومات الطفل غير متاحة', classUnknown: 'معلومات الصف غير متاحة', schoolUnknown: 'معلومات المدرسة غير متاحة',
   loading: 'جارٍ تحميل السياق المعتمد للطفل المختار…', partial: 'بعض السجلات المعتمدة غير متاحة. راجع مساحة العمل الحالية للمزيد.', error: 'تعذّر تحميل السجلات المعتمدة للطفل المختار.', denied: 'لا تتاح سجلات الطفل هذه ضمن صلاحياتك الحالية.', offline: 'أنت غير متصل. أعد الاتصال للتحقّق من سجلات الطفل المعتمدة.',
-  latestFeedback: 'أحدث ملاحظات معتمدة', approved: 'معتمد من المدرسة', dateUnknown: 'التاريخ غير متاح', teacherUnknown: 'معلومات المعلّم غير متاحة', teacher: 'المعلّم',
+  latestFeedback: 'أحدث ملاحظات معتمدة', availableFeedback:'ملاحظات معتمدة متاحة', approved: 'معتمد من المدرسة', sourceDate:'تاريخ السجل المصدر', reviewedDate:'تاريخ المراجعة', dateUnknown: 'التاريخ غير متاح', teacherUnknown: 'معلومات المعلّم غير متاحة', teacher: 'المعلّم',
   feedbackUnknown: 'الملاحظات المعتمدة غير متاحة بعد. راجع تقرير طفلك الحالي.', aboutFeedback: 'حول هذه الملاحظات',
-  portfolio: 'ملف أعمال معتمد', portfolioUnknown: 'الأعمال المختارة المعتمدة غير متاحة بعد. راجع ملف الأعمال الحالي.',
+  portfolio: 'ملف أعمال معتمد', portfolioUnknown: 'الأعمال المختارة المعتمدة غير متاحة بعد. راجع ملف الأعمال الحالي.',portfolioFeedback:'ملاحظات المدرسة',portfolioReflection:'التأمل الذي تمت مراجعته',
   upcoming: 'العمل المدرسي القادم', upcomingIntro: 'اطّلع على الأعمال والمواعيد التي شاركتها المدرسة.', upcomingUnknown: 'الأعمال والمواعيد المشتركة الحالية غير متاحة بعد.',
   communication: 'التواصل المدرسي', communicationUnknown: 'التواصل المدرسي الحالي غير متاح بعد.',
+  updates:'تحديثات المدرسة',updatesIntro:'معلومات عامة شاركتها المدرسة مع الأسر. قد يخص التحديث طفلًا أو صفًا آخر.',updatesUnknown:'تحديثات المدرسة الحالية غير متاحة بعد.',
   support: 'كيف يمكنك المساعدة', supportUnknown: 'إرشادات الدعم المعتمدة من المدرسة غير متاحة بعد.',
 };

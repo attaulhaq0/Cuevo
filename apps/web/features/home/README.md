@@ -1,5 +1,15 @@
 # Role action home
 
+## Parent Home current-source reading — 4 October 2026
+
+The 042 reading plane now keeps teacher context, actual released feedback, its plain explanation, the exact Academic report action and canonical native/reference context in that order. Result `createdAt` is labelled Source record date with UTC formatting; it never becomes approval time or a teacher name. Latest feedback requires the complete successful current report comparison set. A continued/failed report shows available feedback, independently of other supporting source completeness.
+
+The existing selected-child directory remains the relationship owner: an explicitly selected unambiguous child on a successful loaded page remains usable while more children can be loaded; loading/current directory failure or a new access frame withholds dependent content. No shared selection hook or API is added. Calendar dates use actual class context or localized school-wide/unavailable context. General guardian-authorized school updates have their own visible section and never substitute for a child conversation or imply that each update is about the selected child. The approved portfolio preview distinguishes reviewed school feedback, reflection and review date; its browse action opens the existing owner without promising an exact item route or unapproved selected evidence.
+
+Current source errors/loading and continuation controls stay beside their own panel. Supporting-source loading does not hide another current approved report, and failed sources do not become empty/all-clear claims. Lower native disclosures retain every loaded report, portfolio, date, update and conversation with labelled factual dates/context; their existing owner actions remain reachable. The view owns no release, message, relationship, event or support command. Focused source/render tests cover partial/latest, dates, attribution, order, general updates, independent source failure, exact child/publication and native zero. Root-owned frozen browser, real protected API/source/deny and full Parent journey acceptance remain separate.
+
+An initial or continuation 401/403 withholds that source's loaded records in both the Home summary and lower disclosures. The Home-only source denial barrier stores its current read scope and error, never record content or commands. It survives error clearing by a same-scope continuation retry; recovery requires a fresh current read scope, which withholds records while loading. A continuation 503 retains the authorized loaded page as partial with its error and paging control. Independent source records remain available, and the existing command journal is untouched.
+
 Outcome context reconciliation uses the canonical optional read metadata while retaining exact Coordinator task linkage. The Home parser passes only each outcome item and checks any context learner against its matching measured intervention. Its nested comparison uses the supplied heading level; it adds no period attribution or authority.
 
 ## Daily-use responsive refinement — 3 October 2026

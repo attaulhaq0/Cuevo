@@ -41,3 +41,30 @@ test('an unavailable or failed current read does not reuse a populated old portf
   assert.doesNotMatch(render(value), /Old private|stale work/);
   value.snapshot!.status = 'ready'; value.availability = 'error'; assert.doesNotMatch(render(value), /Old private|stale work|Samira/);
 });
+test('partial report feedback is available rather than globally latest and its date is a source record date',()=>{
+ const value=context();value.snapshot={...value.snapshot!,status:'partial',feedback:{publication:'approved',title:'Current checked explanation',text:'Show the checked detail.',teacherName:null,dateLabel:'1 October · UTC',description:'This exact released source.',nativeResultView:createElement('strong',null,'0 / 10')}};
+ const html=render(value);assert.match(html,/Available approved feedback/);assert.doesNotMatch(html,/Latest approved feedback/);assert.match(html,/Source record date/);assert.match(html,/Teacher information is not available/);
+ value.snapshot.feedback!.latest=true;value.snapshot.status='ready';assert.match(render(value),/Latest approved feedback/);
+});
+test('feedback reading order keeps explanation before the report action and native source context',()=>{
+ const value=context();value.snapshot={...value.snapshot!,status:'ready',feedback:{publication:'approved',title:'Current checked explanation',text:'Show the checked detail.',teacherName:null,dateLabel:'1 October · UTC',description:'This exact source explanation.',nativeResultView:createElement('strong',null,'Native source 0 / 10'),action:{label:'Read approved report',onClick(){}}}};
+ const html=render(value);assert.ok(html.indexOf('Teacher information is not available')<html.indexOf('Show the checked detail.'));assert.ok(html.indexOf('This exact source explanation.')<html.indexOf('Read approved report'));assert.ok(html.indexOf('Read approved report')<html.indexOf('Native source 0 / 10'));
+});
+test('general school updates have their own visible context and never become a child teacher conversation',()=>{
+ const value=context();value.snapshot={...value.snapshot!,status:'ready',updates:{items:[{key:'update-a',title:'General library hours',body:'Current school information for families.',dateLabel:'3 October · UTC'}]}};
+ const html=render(value);assert.match(html,/School updates/);assert.match(html,/General library hours/);assert.match(html,/General school information/);assert.match(html,/Current school communication is not available yet/);
+ const communication=html.slice(html.indexOf('parent-trail__communication'),html.indexOf('parent-trail__support'));assert.doesNotMatch(communication,/General library hours|Teacher information is not available/);
+ value.availability='denied';assert.doesNotMatch(render(value),/General library hours|Current school information/);
+});
+test('supporting source failure stays beside its source while current approved feedback remains readable',()=>{
+ const value=context();value.snapshot={...value.snapshot!,status:'partial',feedback:{publication:'approved',title:'Current feedback',text:'Current approved detail.',teacherName:null,dateLabel:null,description:'Current source'},sourceControls:{portfolio:createElement('p',{role:'alert'},'Portfolio records could not be checked.')}};
+ const html=render(value);assert.match(html,/Current approved detail/);assert.match(html,/Portfolio records could not be checked/);const portfolio=html.slice(html.indexOf('parent-trail__portfolio'),html.indexOf('parent-trail__right'));assert.match(portfolio,/Portfolio records could not be checked/);assert.doesNotMatch(portfolio,/Approved selected work is not available yet/);
+});
+test('the approved portfolio summary distinguishes reviewed reflection and school feedback',()=>{
+ const value=context();value.snapshot={...value.snapshot!,status:'ready',portfolio:{publication:'approved',title:'Checked explanation',description:'Exact reviewed reflection.',feedback:'This detail is clear.',reflection:'I checked the detail in the source.',dateLabel:'3 October · UTC',action:{label:'Browse approved portfolio',onClick(){}}}};
+ const html=render(value);assert.match(html,/School feedback/);assert.match(html,/Reviewed reflection/);assert.match(html,/This detail is clear/);assert.match(html,/I checked the detail in the source/);assert.match(html,/Reviewed on/);
+});
+test('an optional authorized event action remains reachable without invoking it during render',()=>{
+ const value=context();let calls=0;value.snapshot={...value.snapshot!,status:'ready',upcoming:[{key:'event-a',title:'School reading date',description:'School-wide date',dateLabel:null,action:{label:'Read shared event',pending:true,onClick(){calls++;}}}]};
+ const html=render(value);assert.match(html,/Read shared event/);assert.match(html,/disabled="" aria-busy="true"/);assert.equal(calls,0);
+});

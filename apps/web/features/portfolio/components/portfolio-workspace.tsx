@@ -8,13 +8,14 @@ import { LearningError } from '../../../shared/components/feedback';
 import { LoadMore } from '../../../shared/components/load-more';
 import { LearningApiError } from '../../../shared/api/client';
 import { EvidenceDetail, NativeResultView } from '../../academic/ui';
-import { parsePortfolioItem, parsePortfolioItemForLearner, parsePortfolioReleasedResultForLearner, parsePortfolioHistoryForItem, parsePortfolioCommandReceipt, portfolioWorkChoices } from '../model';
+import { parsePortfolioItem, parsePortfolioItemForLearner, parsePortfolioReleasedResultForLearner, parsePortfolioHistoryForItem, parsePortfolioCommandReceipt, portfolioWorkChoices, portfolioReadScope } from '../model';
 import { portfolioReleasedWorkChoices } from '../presentation-model';
 import { portfolioAr, portfolioEn, portfolioTrailAr, portfolioTrailEn } from '../messages';
 import { PrivateFiles } from './private-files';
 import { PortfolioSourceWork } from './source-work';
 import { PortfolioDocumentSelection } from './document-selection';
 import { PortfolioOrganization } from './organization';
+import { ParentPortfolioReading } from './parent-reading';
 import { useChildContext } from '../../../shared/hooks/use-child-context';
 import { ChildSelector } from '../../../shared/components/child-selector';
 import { trailAssets } from '../../../shared/characters/assets';
@@ -28,7 +29,7 @@ export function PortfolioWorkspace() {
 }
 
 function CurrentPortfolioWorkspace() {
-  const { locale, membership, formDrafts, commandJournal, accessGeneration } = useApp();
+  const app=useApp();const { locale, membership, formDrafts, commandJournal, accessGeneration } = app;
   const t = locale === 'ar' ? portfolioAr : portfolioEn;
   const trail = locale === 'ar' ? portfolioTrailAr : portfolioTrailEn;
   const student = membership?.role === 'student';
@@ -57,9 +58,11 @@ function CurrentPortfolioWorkspace() {
   const focusToRestore = useRef<typeof focusedControl.current>(null);
   const childContext = useChildContext(refresh);
   const expectedLearnerId = student ? membership?.userId ?? null : parent ? childContext.child?.id ?? null : null;
-  const parseItems = useCallback((value:unknown) => student || parent ? parsePortfolioItemForLearner(value, expectedLearnerId, parent) : parsePortfolioItem(value), [student, parent, expectedLearnerId]);
+  const itemPath=parent?childContext.child?'/v1/portfolio/items?limit=100&learnerId='+childContext.child.id:null:'/v1/portfolio/items?limit=100';
+  const parentScope=parent?portfolioReadScope(app,itemPath,refresh):null;
+  const parseItems = useCallback((value:unknown) => {const item=student || parent ? parsePortfolioItemForLearner(value, expectedLearnerId, parent) : parsePortfolioItem(value);return parent?{...item,parentSourceScope:parentScope}:item;}, [student, parent, expectedLearnerId,parentScope]);
   const parseResults = useCallback((value:unknown) => parsePortfolioReleasedResultForLearner(value, membership?.userId ?? null), [membership?.userId]);
-  const items = usePaginatedLearningQuery(parent ? childContext.child ? '/v1/portfolio/items?limit=100&learnerId=' + childContext.child.id : null : '/v1/portfolio/items?limit=100', parseItems, refresh);
+  const items = usePaginatedLearningQuery(parent&&!parentScope?null:itemPath, parseItems, refresh);
   const results = usePaginatedLearningQuery(student ? '/v1/results?limit=100' : null, parseResults, refresh);
   const historyAnchor = items.data.find(item => item.id === historyId);
   const parseHistory = useCallback((value:unknown) => { if (!historyAnchor) throw new LearningApiError('invalid'); return parsePortfolioHistoryForItem(value, historyAnchor); }, [historyAnchor]);
@@ -129,7 +132,7 @@ function CurrentPortfolioWorkspace() {
         return { evidenceId: source.evidenceId, sourceModel: source.model, title: String(values.get('title')), reflection: String(values.get('reflection')) };
       }} onLockedChange={setCreateLocked} validateReceipt={receipt => { parsePortfolioCommandReceipt(receipt, 'create'); }} onSaved={saved} onCancel={() => { setCreating(false); formDrafts.remove(sourceSelectionSlot); }} /></div>
     </section> : null}
-    {items.loading ? <p role="status" className="portfolio-loading">{t.loading}</p> : items.error ? <LearningError error={items.error} /> : <div className="portfolio-work-list">{items.data.map(item => {
+    {items.loading ? <p role="status" className="portfolio-loading">{t.loading}</p> : items.error ? <LearningError error={items.error} /> : parent ? <ParentPortfolioReading key={expectedLearnerId??'unselected'} items={items.moreError?[]:items.data.filter(item=>!!parentScope&&'parentSourceScope'in item&&item.parentSourceScope===parentScope)} childId={expectedLearnerId} current={!!parentScope&&items.loaded&&!items.loading&&!items.error&&!items.moreError}/>: <div className="portfolio-work-list">{items.data.map(item => {
       const canReadWork = membership?.role !== 'coordinator' && item.submissionKind === 'TEXT' && (!parent || item.sourceWorkApproved === true);
       const canReview = reviewer && item.identity.status === 'READY' && !workChoices.find(choice => choice.value === item.id)?.ambiguous;
       const activeAction = action?.id === item.id ? action.type : null;
