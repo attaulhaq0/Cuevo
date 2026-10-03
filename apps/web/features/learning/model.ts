@@ -1,4 +1,5 @@
 import { LearningApiError } from '../../shared/api/client.ts';
+import { submissionArtifactSchema, submissionInputSchema, submissionWorkDraftResponseSchema, submissionWorkSourceSchema, type SubmissionArtifact } from '@cuevo/contracts';
 
 export type Choice = { id: string; name: string;yearGroupName?:string;academicYearName?:string };
 export function choiceLabel(choice:Choice){return[choice.name,choice.yearGroupName,choice.academicYearName].filter(Boolean).join(' · ');}
@@ -43,6 +44,102 @@ export type SubmissionDraft = { id: string | null; assessmentId: string; content
 export type Quiz = { id: string; assessmentId: string; version: string; policyVersion: number; questions: { key: string; prompt: string; options: { key: string; label: string }[] }[] };
 export type QuizAttempt = { id: string; quizId: string; assessmentId: string; learnerId: string; submissionId: string; createdAt: string; status: 'CHECKED_NOT_GRADED'; checkedAnswers: { questionKey: string; optionKey: string; status: 'CORRECT' | 'INCORRECT' }[] };
 export type QuizDefinition = Omit<Quiz, 'policyVersion' | 'questions'> & { createdAt: string; published: boolean; questions: (Quiz['questions'][number] & { correctOptionKey: string })[] };
+
+/** Presentation context preserves explicit absence and current source identity. */
+export function assessmentSubmissionContext(assessment: Assessment, submissions: Submission[], submissionsComplete: boolean, learnerId: string | undefined) {
+  const submission = assessment.currentSubmission !== undefined
+    ? assessment.currentSubmission ?? undefined
+    : submissions.find(item => item.assessmentId === assessment.id && item.learnerId === learnerId);
+  return {
+    submission,
+    known: assessment.currentSubmission !== undefined || !!submission || submissionsComplete,
+    mismatch: !!submission && (submission.learnerId !== learnerId || submission.assessmentId !== assessment.id),
+  };
+}
+export function assessmentWorkAvailable(assessment: Assessment, now: number): boolean {
+  return assessment.assignmentState === 'OPEN'
+    && (!assessment.availableFrom || Date.parse(assessment.availableFrom) <= now)
+    && (!assessment.availableUntil || Date.parse(assessment.availableUntil) > now)
+    && (assessment.allowLate || !assessment.dueAt || Date.parse(assessment.dueAt) >= now);
+}
+export function assessmentWorkPresentation(assessment: Assessment, submission?: Submission) {
+  return {
+    stage: assessment.submissionKind === 'QUIZ' ? 'quiz' : submission?.status === 'RETURNED' ? 'revise' : submission ? 'submitted' : 'write',
+    response: assessment.submissionKind === 'QUIZ' ? 'quiz' : submission?.responseKind === 'FILE' ? 'file' : 'text',
+  } as const;
+}
+export function currentSubmissionDraft(value: unknown, assessmentId: string, expectedRevision?: number): SubmissionDraft {
+  try {
+    const draft = parseDraft(value);
+    if (draft.assessmentId !== assessmentId || expectedRevision !== undefined && draft.revision !== expectedRevision + 1) throw new LearningApiError('invalid');
+    return draft;
+  } catch { throw new LearningApiError('invalid', expectedRevision !== undefined); }
+}
+export function preferredSubmissionDraft(assessmentId: string, read: SubmissionDraft | null | undefined, receipt: SubmissionDraft | null): SubmissionDraft | null | undefined {
+  return receipt && receipt.assessmentId === assessmentId && receipt.revision >= (read?.revision ?? 0) ? receipt : read;
+}
+export function currentSubmissionReceipt(value: unknown, assessmentId: string, learnerId: string | undefined, body: Record<string, unknown>, previousId?: string): Submission {
+  try {
+    const receipt = parseSubmission(value);
+    const sent = submissionInputSchema.safeParse({ content: body.content });
+    if (!sent.success || receipt.assessmentId !== assessmentId || receipt.learnerId !== learnerId || receipt.content !== sent.data.content
+      || (previousId ? receipt.status !== 'RESUBMITTED' || receipt.revision !== Number(body.expectedRevision) + 1 || receipt.previousSubmissionId !== previousId || receipt.sourceReturnId !== body.returnId : receipt.status !== 'SUBMITTED' || receipt.revision !== 1)) throw new LearningApiError('invalid');
+    return receipt;
+  } catch { throw new LearningApiError('invalid', true); }
+}
+export function currentSubmissionActionReceipt(value: unknown, action: 'return' | 'close', submissionId: string, actorId: string | undefined, body: Record<string, unknown>) {
+  if (!isObject(value) || !hasStrings(value, ['id', 'submissionId', 'learnerId']) || !value.id || value.submissionId !== submissionId || !date(value.createdAt)
+    || value.status !== (action === 'return' ? 'RETURNED' : 'CLOSED')
+    || action === 'return' && (value.actorId !== actorId || value.sourceRevision !== body.expectedRevision || typeof body.feedback !== 'string' || value.feedback !== body.feedback.trim() || typeof value.assessmentId !== 'string')) throw new LearningApiError('invalid', true);
+  return value;
+}
+export function currentStudentQuiz(quiz: Quiz | null | undefined, attempts: QuizAttempt[], assessmentId: string, learnerId: string | undefined): Quiz | null | undefined {
+  if (quiz && quiz.assessmentId !== assessmentId || !quiz && attempts.length) throw new LearningApiError('invalid');
+  for (const attempt of attempts) {
+    if (!quiz || attempt.assessmentId !== assessmentId || attempt.learnerId !== learnerId || attempt.quizId !== quiz.id
+      || attempt.checkedAnswers.length !== quiz.questions.length || new Set(attempt.checkedAnswers.map(answer => answer.questionKey)).size !== quiz.questions.length
+      || attempt.checkedAnswers.some(answer => !quiz.questions.find(question => question.key === answer.questionKey)?.options.some(option => option.key === answer.optionKey))) throw new LearningApiError('invalid');
+  }
+  return quiz;
+}
+export function currentQuizReceipt(value: unknown, quiz: Quiz, learnerId: string | undefined, body: Record<string, unknown>): QuizAttempt {
+  try {
+    const receipt = parseQuizAttempt(value);
+    currentStudentQuiz(quiz, [receipt], quiz.assessmentId, learnerId);
+    const answers = body.answers;
+    if (body.quizId !== quiz.id || !Array.isArray(answers) || answers.length !== receipt.checkedAnswers.length
+      || receipt.checkedAnswers.some(answer => !answers.some((sent: unknown) => isObject(sent) && sent.questionKey === answer.questionKey && sent.optionKey === answer.optionKey))) throw new LearningApiError('invalid');
+    return receipt;
+  } catch { throw new LearningApiError('invalid', true); }
+}
+function exactWorkManifest(artifacts: SubmissionArtifact[], body: Record<string, unknown>, chosen?: SubmissionArtifact[]): boolean {
+  const ids = body.assetIds;
+  return Array.isArray(ids) && ids.length === artifacts.length && artifacts.every(asset => ids.includes(asset.id)
+    && (!chosen || chosen.some(selected => selected.id === asset.id && selected.name === asset.name && selected.contentType === asset.contentType && selected.byteSize === asset.byteSize && selected.sha256 === asset.sha256 && selected.state === asset.state)));
+}
+export function currentWorkArtifact(value: unknown, assetId: string, metadata: Record<string, unknown>): SubmissionArtifact {
+  const parsed = submissionArtifactSchema.safeParse(value);
+  if (!parsed.success || parsed.data.id !== assetId || parsed.data.state !== 'AVAILABLE'
+    || parsed.data.name !== metadata.name || parsed.data.contentType !== metadata.contentType || parsed.data.byteSize !== metadata.byteSize || parsed.data.sha256 !== metadata.sha256) throw new LearningApiError('invalid', true);
+  return parsed.data;
+}
+export function currentSubmissionWorkDraft(value: unknown, assessmentId: string, body?: Record<string, unknown>) {
+  const parsed = submissionWorkDraftResponseSchema.safeParse(value);
+  if (!parsed.success || parsed.data.assessmentId !== assessmentId
+    || (parsed.data.id === null) !== (parsed.data.revision === 0)
+    || parsed.data.revision === 0 && (parsed.data.content !== '' || parsed.data.artifacts.length !== 0 || parsed.data.responseKind !== 'TEXT')
+    || body && (parsed.data.revision !== Number(body.expectedRevision) + 1 || parsed.data.responseKind !== body.responseKind || parsed.data.content !== body.content || !exactWorkManifest(parsed.data.artifacts, body))) throw new LearningApiError('invalid', !!body);
+  return parsed.data;
+}
+export function currentSubmissionWorkReceipt(value: unknown, assessmentId: string, learnerId: string | undefined, body: Record<string, unknown>, chosen: SubmissionArtifact[]) {
+  if (!isObject(value)) throw new LearningApiError('invalid', true);
+  const { id, ...source } = value;
+  const parsed = submissionWorkSourceSchema.safeParse(source);
+  if (!parsed.success || id !== parsed.data.submissionId || parsed.data.assessmentId !== assessmentId || parsed.data.learnerId !== learnerId
+    || parsed.data.revision !== (body.expectedRevision === undefined ? 1 : Number(body.expectedRevision) + 1)
+    || parsed.data.responseKind !== body.responseKind || parsed.data.content !== body.content || !exactWorkManifest(parsed.data.artifacts, body, chosen)) throw new LearningApiError('invalid', true);
+  return parsed.data;
+}
 export function parseDraft(value: unknown): SubmissionDraft {
   if (!isObject(value) || value.status !== 'DRAFT' || typeof value.assessmentId !== 'string' || typeof value.content !== 'string' || typeof value.revision !== 'number' || !Number.isInteger(value.revision) || value.revision < 0 || !(value.id === null || typeof value.id === 'string' && value.id) || !(value.updatedAt === null || date(value.updatedAt)) || (value.id === null) !== (value.revision === 0) || value.id === null && (value.content !== '' || value.updatedAt !== null)) throw new LearningApiError('invalid');
   return value as SubmissionDraft;

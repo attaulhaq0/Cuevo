@@ -102,7 +102,64 @@
 .course-view--reading .unit-section > .learning-section-heading { margin-block-end: var(--space-2); }
 .course-view--reading .unit-section > .learning-section-heading .eyebrow { display: inline; margin-inline-end: var(--space-2); }
 .course-view--reading .unit-section > .learning-section-heading h3 { display: inline; }
-.assessment-section, .submission-section { border-block-end: 1px solid var(--color-border); padding-block: var(--space-5) var(--space-8); }
+.assessment-path-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin-block: var(--space-5) var(--space-6); }
+.assessment-path-heading h2 { font-size: var(--type-title); line-height: var(--line-height-tight); letter-spacing: var(--tracking-heading); }
+.assessment-path-heading p:not(.eyebrow) { margin-block-start: var(--space-3); color: var(--color-text-secondary); font-size: var(--type-lg); }
+.assessment-path-heading .eyebrow { margin-block-end: var(--space-2); color: var(--color-link); font-weight: 700; }
+.assessment-path-heading img { inline-size: 6rem; block-size: 6rem; object-fit: contain; flex: none; }
+.assessment-section { margin-block: var(--space-5); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-material-reading); box-shadow: var(--elevation-subtle); }
+.submission-section { border-block-end: 1px solid var(--color-border); padding-block: var(--space-5) var(--space-8); }
+.assessment-task-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); }
+.assessment-task-heading > img { inline-size: 4rem; block-size: 4rem; object-fit: contain; }
+.assessment-task-heading > svg { color: var(--color-learning-symbol); }
+.assessment-task-heading .eyebrow { margin-block-end: var(--space-1); color: var(--color-link); font-size: var(--type-sm); overflow-wrap: anywhere; }
+.assessment-task-heading h2, .assessment-task-heading h3 { font-size: var(--type-subheading); line-height: var(--line-height-tight); letter-spacing: var(--tracking-heading); overflow-wrap: anywhere; }
+.assessment-task-heading .status { margin-block-start: var(--space-3); }
+.assessment-task-summary { margin-block-start: var(--space-5); }
+.assessment-section--open > .assessment-task-heading { background: var(--color-learning-surface); padding: var(--space-4); border-radius: var(--radius-lg); margin-block-end: var(--space-6); }
+.assessment-task-layout { display: grid; grid-template-columns: minmax(0, 2.35fr) minmax(15rem, 1fr); gap: var(--space-6); align-items: start; }
+.assessment-task-main, .assessment-task-context { min-inline-size: 0; }
+.assessment-stage-heading { margin-block-end: var(--space-6); }
+.assessment-stage-heading .eyebrow { color: var(--color-link); font-weight: 700; margin-block-end: var(--space-2); }
+.assessment-stage-heading h3, .assessment-stage-heading h4 { font-size: var(--type-title); line-height: var(--line-height-tight); letter-spacing: var(--tracking-heading); }
+.assessment-stage-heading > p:last-child { margin-block-start: var(--space-3); color: var(--color-text-secondary); line-height: var(--line-height-body); }
+.assessment-instructions { border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); margin-block-end: var(--space-5); }
+.assessment-instructions > h4, .assessment-task-facts > h4, .submission-revision-feedback > h4 { display: flex; align-items: center; gap: var(--space-3); font-size: var(--type-lg); margin-block-end: var(--space-3); }
+.assessment-instructions > h4 > svg, .assessment-task-facts > h4 > svg, .assessment-disclosure summary > svg { color: var(--color-learning-symbol); flex: none; }
+.assessment-response-panel .learning-form { margin-block-start: var(--space-4); }
+.assessment-task-context { display: flex; flex-direction: column; gap: var(--space-5); background: var(--color-surface-muted); border-radius: var(--radius-lg); padding: var(--space-5); }
+.assessment-task-context > section, .assessment-task-context > details { min-inline-size: 0; }
+.assessment-disclosure { border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-3); margin-block-start: var(--space-3); }
+.assessment-disclosure summary { cursor: pointer; font-size: var(--type-body); font-weight: 700; min-block-size: 2.75rem; padding-block: var(--space-3); overflow-wrap: anywhere; }
+.assessment-disclosure summary > svg { vertical-align: middle; margin-inline-end: var(--space-2); }
+.assessment-disclosure > .learning-resources, .assessment-support > section { margin-block-start: var(--space-3); }
+.assessment-task-context .learning-resources h3 { font-size: var(--type-body); overflow-wrap: anywhere; }
+.assessment-task-context .learning-resources .button { max-inline-size: 100%; }
+.assessment-task-context .assessment-metadata { display: grid; gap: var(--space-4); }
+.assessment-task-context .assessment-metadata > div { flex-direction: column; gap: var(--space-1); }
+.assessment-task-context .assessment-metadata dd { overflow-wrap: anywhere; line-height: var(--line-height-body); }
+.assessment-staff-detail .assessment-task-context { margin-block-start: var(--space-5); }
+.submission-work-heading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-block: var(--space-3) var(--space-4); }
+.submission-work-heading > svg { color: var(--color-learning-symbol); flex: none; }
+.submission-work-heading > div { flex: 1; min-inline-size: 0; }
+.submission-work-heading h4 { font-size: var(--type-lg); line-height: var(--line-height-tight); }
+.submission-work-heading p { color: var(--color-text-secondary); font-size: var(--type-sm); line-height: var(--line-height-body); margin-block-start: var(--space-2); }
+.submission-work-modes { justify-content: space-between; }
+.submission-response, .submission-revision-feedback { padding: var(--space-5); border-radius: var(--radius-lg); border: 1px solid var(--color-border); margin-block: var(--space-5); }
+.submission-response > h4 { font-size: var(--type-lg); margin-block-end: var(--space-3); }
+.submission-revision-feedback { background: var(--color-warning-surface); }
+.submission-revision-feedback > h4 > svg { color: var(--color-warning); }
+.submission-history { margin-block-start: var(--space-4); }
+.quiz-checked-work ol { list-style: decimal; padding-inline-start: var(--space-6); }
+.quiz-checked-work li { padding-block: var(--space-4); border-block-end: 1px solid var(--color-border); }
+.quiz-checked-work li p { margin-block-end: var(--space-3); line-height: var(--line-height-body); overflow-wrap: anywhere; }
+.submission-documents > .learning-form { margin-block-start: var(--space-5); }
+.submission-documents fieldset { margin-block: var(--space-4); }
+.submission-document-list { list-style: none; padding: 0; margin-block: var(--space-4); }
+.submission-document-list li, .submitted-document { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); border-block-end: 1px solid var(--color-border); padding-block: var(--space-4); }
+.submission-document-list li > bdi, .submitted-document bdi { overflow-wrap: anywhere; min-inline-size: 0; }
+.submitted-document { margin-block-start: var(--space-3); }
+.submission-document-download { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .assessment-metadata { display: flex; flex-wrap: wrap; gap: var(--space-6); margin-block: var(--space-5); }
 .assessment-metadata > div { display: flex; gap: var(--space-3); }
 .assessment-metadata dt { color: var(--color-text-secondary); font-size: var(--type-sm); }
@@ -111,6 +168,25 @@
 .pagination-actions { margin-block: var(--space-6); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); }
 .pagination-actions > p { color: var(--color-text-muted); font-size: var(--type-xs); }
 @media (max-width: 767px) {
+  .assessment-path-heading { gap: var(--space-3); }
+  .assessment-path-heading h2 { font-size: var(--type-subheading); }
+  .assessment-path-heading p:not(.eyebrow) { font-size: var(--type-body); }
+  .assessment-path-heading img { inline-size: 4rem; block-size: 4rem; }
+  .assessment-section { padding: var(--space-4); }
+  .assessment-task-heading { grid-template-columns: auto minmax(0, 1fr); gap: var(--space-3); }
+  .assessment-task-heading > .button { grid-column: 1 / -1; inline-size: 100%; }
+  .assessment-task-heading h2, .assessment-task-heading h3 { font-size: var(--type-lg); }
+  .assessment-task-heading > img { inline-size: 3rem; block-size: 3rem; }
+  .assessment-section--open > .assessment-task-heading { padding: var(--space-3); margin-block-end: var(--space-5); }
+  .assessment-task-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .assessment-stage-heading h3, .assessment-stage-heading h4 { font-size: var(--type-subheading); }
+  .assessment-instructions, .assessment-task-context, .submission-response, .submission-revision-feedback { padding: var(--space-4); }
+  .submission-work-modes > .button { inline-size: 100%; }
+  .submission-work-heading > .status { max-inline-size: 100%; }
+  .submission-work > .submission-work-heading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .submission-work > .submission-work-heading > .status { grid-column: 1 / -1; justify-self: start; }
+  .submission-work > .submission-work-heading > div { min-inline-size: 0; }
+  .submission-work > .submission-work-heading > div > p { white-space: normal; }
   .learning-toolbar { align-items: flex-start; gap: var(--space-2); }
   .learning-toolbar > .button { padding-inline: var(--space-2); }
   .learning-path-heading { gap: var(--space-3); }

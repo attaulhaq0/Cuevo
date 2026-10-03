@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Button, Status } from '@cuevo/ui';
+import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import type { Assessment } from '../model';
-import { parseQuiz, parseQuizAttempt, parseQuizDefinition } from '../model';
+import { currentQuizReceipt, currentStudentQuiz, parseQuiz, parseQuizAttempt, parseQuizDefinition } from '../model';
+import { LearningApiError } from '../../../shared/api/client';
 import { useLearningApi } from '../api';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
@@ -15,6 +16,7 @@ import { versionLabel } from '../../../shared/i18n/version-label';
 
 export function QuizWorkspace({ assessment, author, onChanged }: { assessment: Assessment; author: boolean; onChanged: () => void }) {
   const { locale, membership, formDrafts } = useApp();
+  const { journal } = useApi();
   const retainedDraft = !!formDrafts.get(`${membership?.schoolId}:${membership?.userId}:/v1/assessments/${assessment.id}/quiz`);
   const { t } = useLearningApi(); const [open, setOpen] = useState(retainedDraft); const [create, setCreate] = useState(retainedDraft); const [refresh, setRefresh] = useState(0);
   const versions = usePaginatedLearningQuery(author && open ? `/v1/assessments/${assessment.id}/quiz-authoring?limit=100` : null, parseQuizDefinition, refresh);
@@ -23,9 +25,16 @@ export function QuizWorkspace({ assessment, author, onChanged }: { assessment: A
   function saved() { setCreate(false); setRefresh(value => value + 1); onChanged(); }
   function definitionSaved() { setCreate(false); setRefresh(value => value + 1); }
   if (author) return <section><Button type="button" variant="quiet" onClick={() => setOpen(value => !value)} aria-expanded={open}>{t.authorQuiz}</Button>{open ? <><Button type="button" variant="secondary" onClick={() => setCreate(true)}>{t.createQuiz}</Button>{create ? <QuizEditor assessmentId={assessment.id} onSaved={definitionSaved} onCancel={() => setCreate(false)} /> : null}{versions.error ? <LearningError error={versions.error} /> : versions.loading ? <p role="status">{t.loading}</p> : versions.data.map(version => <article key={version.id} className="submission-history-row"><h4>{t.quizVersion}: {versionLabel(version.version, locale)}</h4>{version.questions.map(question => <div key={question.key}><p>{question.prompt}</p><ul>{question.options.map(option => <li key={option.key}>{option.label}</li>)}</ul><p className="learning-form__note">{t.correctAnswer}: {question.options.find(option => option.key === question.correctOptionKey)?.label ?? t.noQuiz}</p></div>)}{!version.published ? <CommandForm title={t.publishQuiz} path={`/v1/assessments/${assessment.id}/quiz/publish`} fields={[]} body={() => ({ quizId: version.id, expectedPolicyVersion: assessment.policyVersion })} onSaved={saved} actionLabel={t.publishQuiz} note={t.quizPublishNote} /> : <Status>{t.published}</Status>}</article>)}<LoadMore query={versions} /></> : null}</section>;
-  if (quiz.loading || attempts.loading) return <p role="status">{t.loading}</p>;
+  if (quiz.loading || attempts.loading) return <p role="status" data-work-loading="true">{t.loading}</p>;
   if (quiz.error || attempts.error) return <LearningError error={(quiz.error ?? attempts.error)!} />;
-  return <section><p className="notice">{t.quizNote}</p>{quiz.data && !attempts.data.length ? <CommandForm title={t.quizQuestions} path={`/v1/assessments/${assessment.id}/quiz/attempts`} fields={quiz.data.questions.map(question => ({ name: question.key, label: question.prompt, type: 'select' as const, required: true, options: question.options.map(option => ({ value: option.key, label: option.label })) }))} body={values => ({ quizId: quiz.data!.id, answers: quiz.data!.questions.map(question => ({ questionKey: question.key, optionKey: String(values.get(question.key)) })) })} onSaved={saved} actionLabel={t.submitQuiz} /> : null}{attempts.data.map(attempt => <article className="submission-history-row" key={attempt.id}><Status>{t.checkedNotGraded}</Status><ul>{attempt.checkedAnswers.map(answer => <li key={answer.questionKey}>{quiz.data?.questions.find(question => question.key === answer.questionKey)?.prompt ?? t.question}: {answer.status === 'CORRECT' ? t.correct : t.incorrect}</li>)}</ul><p className="learning-form__note">{t.quizNote}</p></article>)}<LoadMore query={attempts} /></section>;
+  let currentQuiz;
+  try { currentQuiz = currentStudentQuiz(quiz.data, attempts.data, assessment.id, membership?.userId); } catch { return <LearningError error={new LearningApiError('invalid')} />; }
+  return <section className="quiz-work" aria-label={attempts.data.length ? t.quizCheckedWork : t.quizWork}>
+    <div className="submission-work-heading"><CuevoIcon name="assessment" variant="filled" size={26} /><h4>{attempts.data.length ? t.quizCheckedWork : t.quizWork}</h4></div><p className="learning-form__note">{t.quizNote}</p>
+    {currentQuiz && !attempts.data.length ? <CommandForm title={t.quizQuestions} path={`/v1/assessments/${assessment.id}/quiz/attempts`} fields={currentQuiz.questions.map(question => ({ name: question.key, label: question.prompt, type: 'select' as const, required: true, options: question.options.map(option => ({ value: option.key, label: option.label })) }))} body={values => ({ quizId: currentQuiz.id, answers: currentQuiz.questions.map(question => ({ questionKey: question.key, optionKey: String(values.get(question.key)) })) })} onSaved={result => { const command = journal.get(`/v1/assessments/${assessment.id}/quiz/attempts`); if (!command) throw new LearningApiError('invalid', true); currentQuizReceipt(result, currentQuiz, membership?.userId, command.body); saved(); }} actionLabel={t.submitQuiz} /> : null}
+    {!currentQuiz ? <p className="notice">{t.noQuiz}</p> : null}
+    {attempts.data.map(attempt => <article className="submission-history-row quiz-checked-work" key={attempt.id}><div className="submission-work-heading"><Status tone="neutral">{t.checkedNotGraded}</Status><p><bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(attempt.createdAt))}</bdi></p></div><ol>{attempt.checkedAnswers.map(answer => <li key={answer.questionKey}><p dir="auto">{currentQuiz?.questions.find(question => question.key === answer.questionKey)?.prompt ?? t.question}</p><Status tone={answer.status === 'CORRECT' ? 'positive' : 'warning'}>{answer.status === 'CORRECT' ? t.correct : t.incorrect}</Status></li>)}</ol><p className="learning-form__note">{t.quizNote}</p></article>)}<LoadMore query={attempts} />
+  </section>;
 }
 
 type QuizWorkingModel = { version: string; questions: { id: string; options: string[] }[] };

@@ -1,7 +1,7 @@
 'use client';
 
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { parseChoice,choiceLabel, learningTitle, parseCourse, parseAssessment, parseSubmission, type Choice, type Course, type Assessment, type Submission } from '../model';
@@ -20,8 +20,36 @@ import { trailAssets } from '../../../shared/characters/assets';
 type Tab = 'courses' | 'assessments' | 'submissions';
 
 export function LearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{view:'learning'}>|null}={}) {
-  const { t } = useLearningApi();
   const { membership } = useApp();
+  const root = useRef<HTMLDivElement>(null);
+  const actor = `${membership?.schoolId}:${membership?.userId}`;
+  const focused = useRef<{ actor: string; taskId: string; element: HTMLElement; field?: string; control?: string } | null>(null);
+  useEffect(() => {
+    const restore = () => {
+      const previous = focused.current;
+      if (!previous || previous.actor !== actor || previous.element.isConnected || document.activeElement !== document.body && document.activeElement !== document.documentElement) return;
+      const task = Array.from(root.current?.querySelectorAll<HTMLElement>('[data-assessment-id]') ?? []).find(element => element.dataset.assessmentId === previous.taskId);
+      if (!task) return;
+      const candidates = Array.from(task.querySelectorAll<HTMLElement>('input, textarea, select, button, summary'));
+      const target = candidates.find(element => previous.field ? element.getAttribute('name') === previous.field : previous.control ? (element.getAttribute('aria-label') || element.textContent?.trim()) === previous.control : false);
+      if (!target && task.querySelector('[data-work-loading="true"]')) return;
+      const destination = target && !target.matches(':disabled') ? target : task.querySelector<HTMLElement>('h2[tabindex="-1"], h3[tabindex="-1"]');
+      if (destination) { focused.current = null; destination.focus(); }
+    };
+    const observer = new MutationObserver(restore);
+    if (root.current) observer.observe(root.current, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [actor]);
+  return <div ref={root} onFocusCapture={event => {
+    const element = event.target as HTMLElement;
+    const taskId = element.closest<HTMLElement>('[data-assessment-id]')?.dataset.assessmentId;
+    focused.current = taskId ? { actor, taskId, element, field: element.getAttribute('name') ?? undefined, control: element.matches('button, summary') ? element.getAttribute('aria-label') || element.textContent?.trim() : undefined } : null;
+  }}><CurrentLearningWorkspace key={actor} intent={intent} /></div>;
+}
+
+function CurrentLearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{view:'learning'}>|null}={}) {
+  const { t } = useLearningApi();
+  const { membership, accessGeneration, online, status } = useApp();
   const [tab, setTab] = useState<Tab>('courses');
   const [refresh, setRefresh] = useState(0);
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -29,7 +57,11 @@ export function LearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{vi
   const canAuthor = membership?.role === 'teacher' || membership?.role === 'admin';
   const hasLearning = membership?.entitlements.includes('learning');
   const hasAssessment = membership?.entitlements.includes('assessment');
-  const exact=useApiQuery(intent?.source==='assessment'&&hasAssessment?`/v1/assessments/${intent.id}`:null,parseAssessment,refresh);
+  const exactPath = intent?.source === 'assessment' && hasAssessment ? `/v1/assessments/${intent.id}` : null;
+  const exactScope = `${membership?.schoolId}:${membership?.userId}:${accessGeneration}:${online}:${status}:${exactPath}:${refresh}`;
+  const parseExactAssessment = useCallback((value: unknown) => { const assessment = parseAssessment(value); if (intent?.source !== 'assessment' || assessment.id !== intent.id) throw new LearningApiError('invalid'); return { scope: exactScope, assessment }; }, [exactScope, intent]);
+  const exactRead = useApiQuery(exactPath, parseExactAssessment, refresh);
+  const exact = { ...exactRead, data: exactRead.data?.scope === exactScope ? exactRead.data.assessment : null };
   const canSeeSubmissions = membership?.role === 'admin' || membership?.role === 'teacher' || membership?.role === 'student';
   const courses = usePaginatedLearningQuery(hasLearning ? '/v1/courses?limit=100' : null, parseCourse, refresh);
   const classes = usePaginatedLearningQuery(canAuthor && hasLearning ? '/v1/classes?limit=100' : null, parseChoice, refresh);

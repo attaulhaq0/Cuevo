@@ -1,4 +1,4 @@
-import type { Assessment, Submission } from '../learning/model.ts';
+import { assessmentWorkAvailable, type Assessment, type Submission } from '../learning/model.ts';
 export type { StudentTrailAction, StudentTrailAssets, StudentTrailContext, StudentTrailStage, StudentTrailStageKey } from './trail-model.ts';
 export type { TeacherTrailAction, TeacherTrailContext, TeacherTrailItem, TeacherTrailQueueState } from './teacher-trail-model.ts';
 export type { ParentTrailAction, ParentTrailChild, ParentTrailContext, ParentTrailSnapshot } from './parent-trail-model.ts';
@@ -9,7 +9,7 @@ export type HomeTarget = 'learning' | 'academic' | 'progress' | 'improvement' | 
 export type HomeDestination=HomeTarget|NavigationIntent;
 export type PendingWork = { assessmentId: string; title: string; dueAt: string | null; needsRevision: boolean };
 export function pendingWork(assessments: Assessment[], submissions: Submission[], learnerId: string, now: number): PendingWork[] {
-  return assessments.filter(assessment => assessment.status === 'PUBLISHED' && assessment.assignmentState === 'OPEN' && (!assessment.availableFrom || Date.parse(assessment.availableFrom) <= now) && (!assessment.availableUntil || Date.parse(assessment.availableUntil) > now) && (assessment.allowLate || !assessment.dueAt || Date.parse(assessment.dueAt) >= now)).flatMap(assessment => {
+  return assessments.filter(assessment => assessment.status === 'PUBLISHED' && assessmentWorkAvailable(assessment, now)).flatMap(assessment => {
     const source = assessment.currentSubmission !== undefined ? assessment.currentSubmission : submissions.find(item => item.assessmentId === assessment.id && item.learnerId === learnerId);
     if (source && source.learnerId !== learnerId) return [];
     return source && source.status !== 'RETURNED' ? [] : [{ assessmentId: assessment.id, title: assessment.title, dueAt: assessment.dueAt, needsRevision: source?.status === 'RETURNED' }];
