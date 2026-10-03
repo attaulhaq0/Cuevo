@@ -13,3 +13,9 @@ export const LearningAndRoles: Story = {
     {names.map(name => <div key={name} style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}><CuevoIcon name={name} variant="filled" size={32} /><span>{name}</span></div>)}
   </div>,
 };
+
+export const WorkspaceDestinations: Story = {
+  render: () => <div className="workspace" style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', minBlockSize: 'auto', padding: 'var(--space-6)', color: 'var(--color-accent)' }}>
+    {(['home', 'learning', 'community', 'portfolio', 'assessment', 'development', 'curriculum', 'school', 'settings', 'notification', 'search', 'calendar', 'goal', 'reflection'] as const).map(name => <div key={name} style={{ display: 'grid', gap: 'var(--space-2)', justifyItems: 'center' }}><CuevoIcon name={name} variant="filled" size={32} /><span>{name}</span></div>)}
+  </div>,
+};

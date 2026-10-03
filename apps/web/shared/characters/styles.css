@@ -1,0 +1,7 @@
+@font-face { font-family: 'Cuevo Nunito Sans'; src: url('./assets/nunito-sans-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Cuevo Nunito Sans'; src: url('./assets/nunito-sans-600.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Cuevo Nunito Sans'; src: url('./assets/nunito-sans-700.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Cuevo Nunito Sans'; src: url('./assets/nunito-sans-800.ttf') format('truetype'); font-weight: 800; font-display: swap; }
+@font-face { font-family: 'Cuevo Nunito Sans'; src: url('./assets/nunito-sans-900.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+.workspace .student-trail, .student-trail-preview { font-family: 'Cuevo Nunito Sans', var(--font-sans); }
+.workspace [lang='ar'] .student-trail, .student-trail[lang='ar'], .student-trail-preview[lang='ar'] { font-family: var(--font-arabic); }

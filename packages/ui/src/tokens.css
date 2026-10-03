@@ -107,3 +107,235 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 .status__dot { inline-size: .375rem; block-size: .375rem; background: currentColor; border-radius: 50%; flex: none; }
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; box-shadow: var(--focus-ring); }
 @media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; --motion-normal: 0ms; } }
+
+/* Trail is the authenticated continuation of this system. The public/auth
+   definitions above are frozen; overrides belong to the workspace boundary. */
+.workspace {
+  color-scheme: light;
+  --color-canvas: light-dark(#edf7ff, #09162c);
+  --color-surface: light-dark(#ffffff, #132540);
+  --color-surface-muted: light-dark(#eaf4fd, #1c3352);
+  --color-surface-accent: light-dark(#def5fd, #143e56);
+  --color-text: light-dark(#061957, #edf6ff);
+  --color-text-secondary: light-dark(#355982, #c0d5ed);
+  --color-text-muted: light-dark(#4e6689, #a7bfdc);
+  --color-border: light-dark(#cedff0, #385578);
+  --color-border-strong: light-dark(#8dabc7, #7096b8);
+  --color-control-border: light-dark(#8293b1, #7096b8);
+  --color-brand: #4fc0db;
+  --color-on-brand: #061957;
+  --color-accent: light-dark(#066abc, #4fc0db);
+  --color-accent-hover: light-dark(#07589b, #83d6e8);
+  --color-link: light-dark(#066abc, #83d6e8);
+  --color-on-accent: light-dark(#ffffff, #061957);
+  --color-action-start: light-dark(#0965e8, #4fc0db);
+  --color-action-end: light-dark(#007ca6, #67d1dc);
+  --color-teal: light-dark(#007b70, #78ddc8);
+  --color-violet: light-dark(#6537d4, #c6afff);
+  --color-recognition: light-dark(#965500, #ffd085);
+  --color-learning-symbol: light-dark(#066abc, #83c8ff);
+  --color-learning-surface: light-dark(#deefff, #163d61);
+  --color-practice-symbol: light-dark(#007b70, #78ddc8);
+  --color-practice-surface: light-dark(#d9f6ee, #173e3b);
+  --color-feedback-symbol: light-dark(#6537d4, #c6afff);
+  --color-feedback-surface: light-dark(#eee5ff, #35284f);
+  --color-progress-symbol: light-dark(#965500, #ffd085);
+  --color-progress-surface: light-dark(#fff0d1, #40351e);
+  --color-parent-symbol: light-dark(#ad3055, #ffa9c5);
+  --color-parent-surface: light-dark(#ffe7ee, #472b3e);
+  --color-positive: light-dark(#12664d, #91e3bd);
+  --color-positive-surface: light-dark(#e0f6eb, #173c33);
+  --color-warning: light-dark(#795012, #ffd58c);
+  --color-warning-surface: light-dark(#fff2d6, #43341e);
+  --color-danger: light-dark(#a52b2b, #ffb5b4);
+  --color-danger-surface: light-dark(#fff0ef, #472a35);
+  --color-disabled-text: light-dark(#536888, #aec3dc);
+  --color-disabled-surface: light-dark(#e8eef5, #21354f);
+  --color-focus: light-dark(#066abc, #4fc0db);
+  --color-focus-halo: light-dark(#b8e6f5, #254961);
+  --color-material-chrome: light-dark(#f5fbff, #101f36);
+  --color-material-reading: var(--color-surface);
+  --color-material-raised: var(--color-surface);
+  --color-material-scrim: light-dark(rgb(6 25 87 / 30%), rgb(2 8 19 / 68%));
+  --trail-background-filter: brightness(1);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --type-xs: .8125rem;
+  --type-sm: .9375rem;
+  --type-body: 1rem;
+  --type-lg: 1.125rem;
+  --type-lead: 1.25rem;
+  --type-subheading: 1.375rem;
+  --type-xl: 1.5rem;
+  --type-title: clamp(1.875rem, 2.8vw, 2.75rem);
+  --type-display: clamp(2.25rem, 3.5vw, 3.5rem);
+  --line-height-tight: 1.25;
+  --line-height-body: 1.6;
+  --line-height-reading: 1.75;
+  --tracking-heading: -.025em;
+  --space-7: 1.75rem;
+  --space-9: 2.25rem;
+  --space-14: 3.5rem;
+  --radius-sm: .5rem;
+  --radius-md: .75rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.5rem;
+  --elevation-subtle: 0 2px 7px light-dark(rgb(6 25 87 / 5%), rgb(0 0 0 / 14%));
+  --elevation-floating: 0 12px 32px light-dark(rgb(6 25 87 / 12%), rgb(0 0 0 / 28%));
+  --elevation-accent: 0 3px 8px light-dark(rgb(6 106 188 / 16%), rgb(0 0 0 / 20%));
+  --elevation-action: 0 5px 12px light-dark(rgb(6 106 188 / 16%), rgb(0 0 0 / 22%));
+  --elevation-control: inset 0 1px 0 light-dark(rgb(255 255 255 / 42%), rgb(255 255 255 / 10%));
+  --focus-ring: 0 0 0 4px var(--color-focus-halo);
+  --focus-width: 2px;
+  --focus-offset: 3px;
+  --motion-fast: 160ms;
+  --motion-normal: 240ms;
+  --motion-feedback: 280ms;
+  --motion-easing: cubic-bezier(.2, .7, .3, 1);
+  --control-min-size: 2.75rem;
+  --control-padding-block: .75rem;
+  --control-padding-inline: 1.25rem;
+  --field-min-size: 3rem;
+  --density-gap: 1.5rem;
+  --density-padding: 1.5rem;
+  --content-width: 82rem;
+  --reading-width: 65ch;
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  background-color: var(--color-canvas);
+}
+
+.workspace[data-theme="dark"] { color-scheme: dark; --trail-background-filter: brightness(.2) saturate(.8); }
+.workspace[data-theme="system"] { color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  .workspace[data-theme="system"] { --trail-background-filter: brightness(.2) saturate(.8); }
+}
+.workspace[data-density="compact"] {
+  --control-padding-block: .625rem;
+  --control-padding-inline: 1rem;
+  --density-gap: 1rem;
+  --density-padding: 1rem;
+}
+.workspace:is([lang="ar"], [dir="rtl"]), html[lang="ar"] .workspace {
+  font-family: var(--font-arabic);
+  --line-height-tight: 1.55;
+  --tracking-heading: 0;
+}
+.workspace :where(h1, h2, h3) { letter-spacing: var(--tracking-heading); line-height: var(--line-height-tight); }
+
+.workspace .button {
+  min-block-size: var(--control-min-size);
+  min-inline-size: var(--control-min-size);
+  padding: var(--control-padding-block) var(--control-padding-inline);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: var(--elevation-control), var(--elevation-subtle);
+  transition: background-color var(--motion-fast) var(--motion-easing), border-color var(--motion-fast) var(--motion-easing), box-shadow var(--motion-fast) var(--motion-easing);
+}
+.workspace .button--primary {
+  background: linear-gradient(105deg, var(--color-action-start), var(--color-action-end));
+  color: var(--color-on-accent);
+  box-shadow: var(--elevation-control), var(--elevation-action);
+}
+.workspace .button--primary:hover:not(:disabled) { background: var(--color-accent-hover); }
+.workspace .button--secondary { background: var(--color-surface); border-color: var(--color-control-border); color: var(--color-accent); }
+.workspace .button--secondary:hover:not(:disabled) { background: var(--color-surface-accent); border-color: var(--color-accent); }
+.workspace .button--quiet { background: transparent; color: var(--color-link); box-shadow: none; }
+.workspace .button--quiet:hover:not(:disabled) { background: var(--color-surface-accent); }
+.workspace .button:disabled {
+  background: var(--color-disabled-surface);
+  color: var(--color-disabled-text);
+  border-color: var(--color-control-border);
+  box-shadow: none;
+  opacity: 1;
+}
+.workspace .button:active:not(:disabled) { box-shadow: var(--elevation-control); }
+
+.workspace .status {
+  padding: .375rem .75rem;
+  font-size: var(--type-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.5;
+  max-inline-size: 100%;
+  border: 1px solid transparent;
+}
+.workspace .status__dot { inline-size: .4375rem; block-size: .4375rem; }
+
+/* Existing shared fields keep their native semantics, IDs and form ownership.
+   Checkboxes/radios retain their compact native control and label hit area. */
+.workspace .field :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  min-inline-size: 0;
+  inline-size: 100%;
+  min-block-size: var(--field-min-size);
+  padding: var(--control-padding-block) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+  background: var(--color-material-reading);
+  color: var(--color-text);
+  font: inherit;
+  box-shadow: var(--elevation-control);
+  transition: border-color var(--motion-fast) var(--motion-easing), box-shadow var(--motion-fast) var(--motion-easing);
+}
+.workspace .field textarea { resize: vertical; line-height: var(--line-height-reading); }
+.workspace .field :is(input, textarea)::placeholder { color: var(--color-text-muted); opacity: 1; }
+.workspace .field :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--color-danger); }
+.workspace .field :is(input, select, textarea):disabled { background: var(--color-disabled-surface); color: var(--color-disabled-text); opacity: 1; }
+.workspace input:is([type="checkbox"], [type="radio"]) { accent-color: var(--color-accent); }
+
+/* Existing pressed-button groups and semantic tabs share this anatomy without
+   changing their current keyboard or selection behavior. */
+.workspace [role="tablist"], .workspace [role="group"]:has(> button[aria-pressed]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.workspace :is([role="tablist"], [role="group"]) > button:is([aria-pressed], [role="tab"]) {
+  min-block-size: var(--control-min-size);
+  min-inline-size: var(--control-min-size);
+  padding: var(--control-padding-block) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--type-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-easing), border-color var(--motion-fast) var(--motion-easing);
+}
+.workspace :is([role="tablist"], [role="group"]) > button:is([aria-pressed="true"], [aria-selected="true"]) {
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  border-color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--elevation-control), var(--elevation-accent);
+}
+.workspace :is([role="tablist"], [role="group"]) > button:hover:not(:disabled):not([aria-pressed="true"]):not([aria-selected="true"]) { background: var(--color-surface-accent); }
+.workspace :is([role="tablist"], [role="group"]) > button:disabled { background: var(--color-disabled-surface); color: var(--color-disabled-text); cursor: wait; box-shadow: none; }
+
+.workspace :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+.workspace :is([role="tablist"], [role="group"]) > button:focus-visible {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+  box-shadow: var(--focus-ring);
+}
+.workspace[data-motion="quiet"] { --motion-fast: 0ms; --motion-normal: 0ms; --motion-feedback: 0ms; }
+@media (prefers-reduced-motion: reduce) {
+  .workspace { --motion-fast: 0ms; --motion-normal: 0ms; --motion-feedback: 0ms; }
+}
+@media (forced-colors: active) {
+  .workspace .button { border-color: ButtonText; background: ButtonFace; color: ButtonText; box-shadow: none; }
+  .workspace .button:disabled { color: GrayText; border-color: GrayText; }
+  .workspace .status { border-color: CanvasText; }
+  .workspace .field :is(input, select, textarea) { border-color: ButtonText; box-shadow: none; }
+  .workspace :is([role="tablist"], [role="group"]) > button:is([aria-pressed="true"], [aria-selected="true"]) { border-color: Highlight; background: Highlight; color: HighlightText; box-shadow: none; }
+  .workspace :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+  .workspace :is([role="tablist"], [role="group"]) > button:focus-visible { outline-color: Highlight; box-shadow: none; }
+}

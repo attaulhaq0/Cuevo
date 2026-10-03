@@ -1,5 +1,7 @@
 # Shared web infrastructure
 
+`characters` owns the single public Trail decorative artwork registry and scoped authenticated font assets. It imports no feature/model/provider or learner data; feature owners supply already authorized state/actions. Read its README for task-pedestal placement, confirmed-action semantics, static/quiet/media/rights boundaries. No separate character behavior/XP engine is introduced.
+
 Own only mechanisms reused across features: api/client.ts and pagination/responses, session/providers and membership/Auth, query hooks, common forms/feedback/branding, and global i18n. Shared may depend on packages/ui/contracts and other shared capabilities, never feature code. It has explicit server-free imports; tests live beside the capability in test. Feature-specific response models/copy remain under features.
 
 `components/brand.tsx` is the one app-wide Cuevo brand surface, including the supplied transparent official mark under `assets/cuevo-mark.webp` and optional company attribution. It is not a source of role or school access. The auth loop/mascot remains feature-owned; student companion assets follow their own documented owner.

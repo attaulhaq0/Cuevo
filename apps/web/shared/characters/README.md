@@ -1,0 +1,25 @@
+# Shared character artwork
+
+One public decorative asset registry, consumed by authenticated Trail presentation. `assets.ts` exports `trailAssets` and `companionAssets`; it contains no learner facts, preferences, API calls, grading, XP or grant rules. Feature owners pass current authorized state and keep their own mutations/receipt validation. Shared code never imports features.
+
+Foxi's seated pose follows the founder's selected current-step reference. Its ledge must align with the task pedestal; do not stack floating platforms. Owl/Rabbit/Turtle are optional authored presentation themes. The turtle's check badge is decorative selection or confirmed-action feedback, not proof of pending task completion. No personality/maturity inference follows a selection.
+
+`trailAssets.foxi` uses the reviewed platform-free head/torso/paws derivative for a single task pedestal. `companionAssets.foxi.image` retains the complete seated choice illustration. These are deliberate pose variants under the same registry, not duplicate implementations. Goal, school discussion and human-help illustrations extend the same dimensional material family. They carry no status/permission authority.
+
+The static art was generated with the authorized Foundry image workflow and inspected at native resolution/cutout edges. Source prompts, original PNGs, metadata and independent QA remain outside the repository under `C:/Users/hp/.codex/visualizations/2026/10/03/cuevo-trail-implementation/assets` and `qa`. Accepted WebP derivatives reserve intrinsic dimensions and one versioned registry. Generated art is user-authorized content; upstream commercial rights/release evidence remains separately reviewed before public activation.
+
+Task illustrations share one eight-item optical/material family: lesson, work, feedback, practice, reflection, portfolio, progress and milestone. These are decorative with ordinary adjacent semantic controls/text. Full UI screenshots are not backgrounds or controls. The background contains only the selected pearl-blue ribbon material.
+
+Feedback now uses a separately regenerated 1536×1024 high-quality source and an 855×758 transparent master, replacing the blurry small-sheet derivative. Native edges, optical 64–128px use and scaled displays are reviewed independently; source and new PNG/size/4K-upscale files are in the linked working library. Smooth material shading is intentional, while contours/dots remain distinct. Never stretch a square/portrait asset into a wide placeholder or treat a 4K padded/upscaled canvas as native detail.
+
+The reusable `trail-path.svg` is an authored, resolution-independent decorative route. It indicates a visual connection, not task order, completion or availability. Feature markup supplies those meanings. It has no autonomous animation; any future state transition uses shared motion tokens with the same static reduced-motion fallback. Directional mirroring belongs to the view, while object illustrations remain unchanged.
+
+Licensed Nunito Sans weights are scoped through `styles.css` to authenticated Trail roots, with OFL text retained beside the font files. Auth typography and styling remain unchanged. Arabic uses the current Arabic font stack until separately reviewed local Arabic font assets are accepted. No remote font request is needed at runtime.
+
+The external Sora source/master/runtime/poster files are reviewed guidance references. Actual Sora sources are1280×720;1920×1080masters are disclosed upscales and preserve original metadata. Do not use their opaque backdrop as a transparent task-edge overlay. Runtime media integration needs pause/quiet/reduced-motion/static behavior and current-state review; no dynamic pupil/model generation.
+
+Future multi-app reuse is an asset-content concern, not a new deployable app or premature domain package. Add accepted asset versions/compatibility/motion fallback/provenance through this single registry; do not copy character/rendering implementations per role, school or future app. Paid cosmetics and backend progression remain in their separately authorized domain contracts.
+
+The founder-authorized expanded content library targets at least 200 distinct icons and 200 poses/states across the consistent four-character cast, with actual transparent RGBA PNGs, optimized web derivatives and optional motion exports. Its external inventory separates planned, generated, extracted and visually reviewed assets. The runtime imports only accepted assets needed by supported MVP consumers; the broad future catalog and review tools do not become extra app routes or domain features. Read [library delivery rules](../../../../docs/design/2026-10-03-reusable-trail-asset-library.md) before consuming future entries.
+
+Sources09/12/15/36/39/63/79/80 and `docs/architecture/character-progression-system.md` govern meaning and safe use.

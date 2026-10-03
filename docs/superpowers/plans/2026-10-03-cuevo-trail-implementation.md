@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Implement task-by-task, review each patch for specification/quality and retain current-source evidence. The founder explicitly authorized implementation and continuous previews; no repeated “continue?” question is required.
 
-**Goal:** Faithfully implement the approved Trail desktop/mobile MVP and modular Character Progression System with one active UI, preserved authentication/backend integration, and independently reviewed high-quality character assets/animations.
+**Goal:** Faithfully implement the approved Trail desktop/mobile MVP across Student, Teacher, Parent, Coordinator and Admin profiles and every supported section/subsection through one active design system; preserve authentication and backend integration; build the authorized modular Character Progression System; prepare and QA a reusable complete UI kit with at least 200 distinct utility icons/animations, 200 poses across the consistent character cast, individually reusable illustrations, editable card/control anatomy, responsive/themed variants and honestly disclosed 4K presentation masters for current and future learning products.
 
 **Architecture:** Existing Next/React feature owners consume one `@cuevo/ui` system. Current API/SQL/worker Development owns progression; shared character rendering consumes confirmed permitted state without issuing domain commands. Design-time Foundry image/Sora calls create reviewed public assets, never runtime pupil authority.
 
@@ -22,6 +22,8 @@
 - Native results, recognition XP, progression track, cosmetic grants and academic access remain separate. Model calls never award/grade/grant.
 - No shop/payment, broad student chatbot, new curriculum claim, unrestricted social feature or background-generation dependency.
 - All work happens in the attached isolated design worktree or ignored/external asset output; do not alter the other chat's source/runtime.
+- Latest founder expansion: all foreground artwork must have individual transparent PNG delivery; SVG vectors contain real geometry, not embedded raster sheets. Image/Sora may assist source artwork/motion, while controls and cards remain editable. Utility vectors and selected dimensional illustrations have distinct optical purposes within one controlled design system. Automatic clay traces that fail fidelity QA remain candidates and do not silently replace approved art.
+- Prepare role/section/state/size coverage for the full future LXP without enabling unsupported MVP features. Master asset dimensions, scene/background framing, source/derivative hashes, exact silhouette extraction, light/dark colors, static/motion/quiet and Arabic/mobile compatibility are recorded separately from runtime acceptance. 4K raster/video upscales retain native sources and cannot claim recovered detail.
 
 ## Task 1: Approved objective and current-source handoff
 

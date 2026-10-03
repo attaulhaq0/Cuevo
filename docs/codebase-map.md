@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Trail public artwork is owned once by [shared characters](../apps/web/shared/characters/README.md): accepted static character/task/material assets and authenticated-only font styles. The registry contains no learner data or reward/AI/permission authority; current feature owners provide typed facts and callbacks. Independent asset QA and Sora1080upscale provenance stay in ignored/external evidence.
+
 Student progression extension: read the [Character Progression System foundation](architecture/character-progression-system.md) and [decision](decisions/2026-10-03-character-progression-foundation.md). Formal levels, track progress, earned character/cosmetic grants and saved presentation choices are founder-authorized requested work, not implemented by this design branch. Backend ownership stays in current Development/contracts/private SQL/worker; frontend remains Development/shared character presentation and the one `packages/ui` Trail system. No empty future modules or separate XP authority are introduced.
 
 Start at root README → AGENTS → [product context map](product/context-map.md) → this implementation map → affected app/domain README → relevant source bundle/tests. The binding layout is [architecture/repository-layout.md](architecture/repository-layout.md); all product documents are indexed under [docs/product](product/index.md).
@@ -15,7 +17,7 @@ Start at root README → AGENTS → [product context map](product/context-map.md
 | Private assets | [asset API](../apps/api/src/modules/assets/README.md) | Staged checksummed private byte storage, current authorized download and retirement |
 | Portfolio | [portfolio API](../apps/api/src/modules/portfolio/README.md), [portfolio web](../apps/web/features/portfolio/README.md) | Immutable selected evidence/reflection, exact teacher feedback and explicitly approved parent revision |
 | Recognition | [development API](../apps/api/src/modules/development/README.md), [development web](../apps/web/features/development/README.md) | Approved observed-action XP/achievements, optional alias-only class period board |
-| Role home | [home feature](../apps/web/features/home/README.md) | Bounded current action queues and permitted evidence context; shell supplies navigation callback |
+| Role home | [home feature](../apps/web/features/home/README.md) | Bounded current action queues and permitted evidence context; shell supplies navigation callback. Public `StudentTrailView` consumes current typed facts/callbacks; its illustrative Storybook records are separate from pending runtime binding. |
 | School learning | [web learning feature](../apps/web/features/learning/README.md), [API school-learning module](../apps/api/src/modules/school-learning/README.md) | Courses, units, lessons, activities, submission boundaries |
 | Academic truth | [web academic feature](../apps/web/features/academic/README.md), [API academic module](../apps/api/src/modules/academic/README.md) | Draft marking, approved objective context, immutable release/evidence/correction and selected learner native report pages |
 | Learner progress | [web progress feature](../apps/web/features/progress/README.md), [API learner-state module](../apps/api/src/modules/learner-state/README.md) | Separate source-linked state, observations, factual signals and current staff class evidence summary |

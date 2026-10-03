@@ -11,7 +11,7 @@ const preview: Preview = {
   },
   initialGlobals: { locale: 'en' },
   decorators: [
-    (Story, context) => <div lang={context.globals.locale === 'ar' ? 'ar' : 'en'} dir={context.globals.locale === 'ar' ? 'rtl' : 'ltr'} style={{ fontFamily: context.globals.locale === 'ar' ? 'var(--font-arabic)' : 'var(--font-sans)', padding: 'var(--space-8)' }}><Story /></div>,
+    (Story, context) => <div lang={context.globals.locale === 'ar' ? 'ar' : 'en'} dir={context.globals.locale === 'ar' ? 'rtl' : 'ltr'} style={{ fontFamily: context.globals.locale === 'ar' ? 'var(--font-arabic)' : 'var(--font-sans)', padding: context.parameters.trailFullscreen ? 0 : 'var(--space-8)' }}><Story /></div>,
   ],
   parameters: { layout: 'centered', controls: { expanded: true } },
 };
