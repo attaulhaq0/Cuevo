@@ -61,3 +61,29 @@ test('feature parser failures remain uncertain even when the parser throws a def
     assert.equal(journal.get('draft')?.key, command.key);
   }
 });
+
+test('pure original-command validation also protects an unmounted form before settlement', () => {
+  const journal = new CommandJournal();
+  const command = journal.prepare('goal', '/v1/development/goals', { title: 'My original goal' });
+  let validated = 0;
+  const validator = (receipt: unknown, original: typeof command) => {
+    validated++;
+    assert.equal(original, command);
+    if ((receipt as { title: string }).title !== original.body.title) throw new LearningApiError('invalid');
+  };
+  assert.throws(() => confirmCommandReceipt(journal, 'goal', command.key, { id: 'goal', title: 'Wrong goal' }, undefined, validator), failure => failure instanceof LearningApiError && failure.uncertain);
+  assert.equal(journal.get('goal')?.key, command.key);
+  assert.equal(confirmCommandReceipt(journal, 'goal', command.key, { id: 'goal', title: 'My original goal' }, undefined, validator), true);
+  assert.equal(validated, 2);
+});
+
+test('cleared or replaced keys never invoke a prior validator or current UI callback', () => {
+  const journal = new CommandJournal();
+  const prior = journal.prepare('goal', '/v1/development/goals', { title: 'Prior' });
+  journal.clear();
+  const current = journal.prepare('goal', prior.path, { title: 'Current' });
+  let calls = 0;
+  assert.equal(confirmCommandReceipt(journal, 'goal', prior.key, { id: 'prior' }, () => calls++, () => calls++), false);
+  assert.equal(calls, 0);
+  assert.equal(journal.get('goal'), current);
+});

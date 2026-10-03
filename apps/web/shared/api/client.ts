@@ -36,10 +36,15 @@ export class CommandJournal {
   }
   clear(): void { if (this.commands.size) { this.commands.clear(); this.changed(); } }
 }
-export function confirmCommandReceipt(journal: CommandJournal, slot: string, expectedKey: string, receipt: unknown, onCurrentReceipt?: (receipt: unknown) => void): boolean {
+export function confirmCommandReceipt(journal: CommandJournal, slot: string, expectedKey: string, receipt: unknown, onCurrentReceipt?: (receipt: unknown) => void, validateReceipt?: (receipt: unknown, originalCommand: Command) => void): boolean {
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || !('id' in receipt) || typeof receipt.id !== 'string' || !receipt.id) throw new LearningApiError('invalid', true);
-  if (journal.get(slot)?.key !== expectedKey) return false;
-  try { onCurrentReceipt?.(receipt); } catch { throw new LearningApiError('invalid', true); }
+  const originalCommand = journal.get(slot);
+  if (!originalCommand || originalCommand.key !== expectedKey) return false;
+  try {
+    validateReceipt?.(receipt, originalCommand);
+    if (journal.get(slot)?.key !== expectedKey) return false;
+    onCurrentReceipt?.(receipt);
+  } catch { throw new LearningApiError('invalid', true); }
   return journal.confirm(slot, expectedKey);
 }
 export async function apiRequest(config: LearningApiConfig, path: string, options: { method?: 'GET' | 'POST'; key?: string; body?: Record<string, unknown>; signal?: AbortSignal; observe?: (value: ApiObservation) => void } = {}): Promise<unknown> {

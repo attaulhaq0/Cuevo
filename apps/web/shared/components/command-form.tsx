@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { Button } from '@cuevo/ui';
-import { confirmCommandReceipt, LearningApiError } from '../api/client';
+import { confirmCommandReceipt, LearningApiError, type Command } from '../api/client';
 import { useApi } from '../hooks/use-api';
 import { LearningError } from './feedback';
 import { useApp } from '../session/providers';
@@ -10,15 +10,15 @@ import type { FormValues } from '../session/form-drafts';
 
 export type FormField = { name: string; label: string; type?: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'datetime-local' | 'select' | 'checkbox'; required?: boolean; options?: { value: string; label: string }[]; defaultValue?: string | number; defaultChecked?: boolean; maxLength?: number; min?: number; max?: number; step?: number | 'any' };
 
-export function CommandForm({ title, regionLabel, asRegion=true, path, fields, body, onSaved, onCancel, note, actionLabel, draftKey, onValuesChange, onLockedChange }: { title: string; regionLabel?:string; asRegion?:boolean; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; onSaved: (result: unknown) => void; onCancel?: () => void; note?: string; actionLabel?: string; draftKey?: string; onValuesChange?: (values: FormData) => void; onLockedChange?: (locked: boolean) => void }) {
+export function CommandForm({ title, regionLabel, asRegion=true, path, fields, body, validateReceipt, onSaved, onCancel, note, actionLabel, draftKey, onValuesChange, onLockedChange }: { title: string; regionLabel?:string; asRegion?:boolean; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; validateReceipt?: (receipt: unknown, originalCommand: Command) => void; onSaved: (result: unknown) => void; onCancel?: () => void; note?: string; actionLabel?: string; draftKey?: string; onValuesChange?: (values: FormData) => void; onLockedChange?: (locked: boolean) => void }) {
   const { request, journal, t } = useApi();
   const journalRevision = useSyncExternalStore(journal.subscribe, journal.getSnapshot, journal.getSnapshot);
-  const { membership, formDrafts, announce, accessToken, online } = useApp();
+  const { membership, formDrafts, announce, accessToken, online, apiUrl, accessGeneration } = useApp();
   const idPrefix = useId();
   const errorId = `${idPrefix}-error`;
   const slot = path;
   const workingSlot = `${membership?.schoolId}:${membership?.userId}:${draftKey ?? path}`;
-  const scope = `${workingSlot}:${accessToken ?? ''}:${online}`;
+  const scope = `${workingSlot}:${membership?.role}:${apiUrl}:${accessToken ?? ''}:${online}:${accessGeneration}`;
   const currentScope = useRef(scope); currentScope.current = scope;
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -29,13 +29,19 @@ export function CommandForm({ title, regionLabel, asRegion=true, path, fields, b
   const [, setInputRevision] = useState(0);
   const [formRevision, setFormRevision] = useState(0);
   const [error, setError] = useState<LearningApiError | null>(() => retained ? new LearningApiError('unavailable', true) : null);
+  useEffect(() => {
+    const currentCommand = journal.get(slot);
+    recoveryKey.current = currentCommand?.key;
+    setPending(false);
+    setError(currentCommand ? new LearningApiError('unavailable', true) : null);
+  }, [scope, journal, slot]);
   useEffect(() => { if (recoveryKey.current && !retained) { recoveryKey.current = undefined; setError(current => current?.uncertain ? null : current); } }, [journalRevision, retained]);
   const locked = pending || !!error?.uncertain;
   useEffect(() => { onLockedChange?.(locked); return () => onLockedChange?.(false); }, [locked, onLockedChange]);
   async function send(values?: FormData) {
     if (pending) return;
     setPending(true); setError(null);
-    const expectedScope = scope; let commandKey: string | undefined;
+    const expectedScope = scope; const originalValidator = validateReceipt; let commandKey: string | undefined;
     const ownsCommand = () => mounted.current && currentScope.current === expectedScope && (!commandKey || journal.get(slot)?.key === commandKey);
     try {
       const payload = values ? body(values) : null;
@@ -46,7 +52,7 @@ export function CommandForm({ title, regionLabel, asRegion=true, path, fields, b
       recoveryKey.current = command.key;
       const submittedDraft = formDrafts.get(workingSlot);
       const result = await request(path, { command });
-      if (!confirmCommandReceipt(journal, slot, command.key, result, ownsCommand() ? onSaved : undefined)) return;
+      if (!confirmCommandReceipt(journal, slot, command.key, result, ownsCommand() ? onSaved : undefined, originalValidator)) return;
       if (!mounted.current || currentScope.current !== expectedScope) return;
       if (formDrafts.consume(workingSlot, submittedDraft)) { setInputRevision(value => value + 1); setFormRevision(value => value + 1); }
       announce(`${title}: ${t.saved}`);

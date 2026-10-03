@@ -16,6 +16,7 @@ import '../features/portfolio/styles.css';
 import '../features/development/styles.css';
 import '../features/curriculum/styles.css';
 import '../features/home/styles.css';
+import '../shared/characters/styles.css';
 
 export const metadata: Metadata = {
   title: 'Cuevo — Your school workspace',

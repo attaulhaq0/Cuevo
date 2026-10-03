@@ -1,4 +1,9 @@
 export const progressEn = {
+  myLearningStory: 'My learning story', sharedLearningStory: 'Shared learning progress', learningEvidence: 'Evidence for the next step', exploreProgress: 'Explore learning progress', resultPages: 'Result pages',
+  assessmentNameUnavailable: 'Assessment name unavailable', objectiveNameUnavailable: 'Objective name unavailable',
+  offline: 'You’re offline. Reconnect, then refresh to check current progress and access.',
+  progressGuide: 'Explore your reviewed work, recorded learning actions and school-approved next steps.', recordHistory: 'Explore learning records and sources',
+  hideCompanion: 'Hide Foxi', showCompanion: 'Show Foxi',
   currentLearnerEvidence: 'Current learner evidence', learnerContextUnavailable: 'Learner name unavailable in current records',
   exportCombined: 'Download current results across pages', combinedReportNote: 'The export follows current authorized pages, up to 1,000 records. Any remaining continuation is disclosed; curriculum coverage is unknown.',
   currentResultPages: 'Browse current result pages', reportPage: 'Page', previousReportPage: 'Previous result page', nextReportPage: 'Next result page', currentPagesFinished: 'No further current result page. Curriculum coverage remains unknown.',
@@ -24,6 +29,11 @@ export const progressEn = {
   stale: 'Snapshot awaiting refresh', staleBody: 'Academic evidence remains traceable. Recent activity counts are not available until a current snapshot is produced.', snapshotAsOf: 'Snapshot as of', recordedOnly: 'Recorded observations only', recordedOnlyBody: 'Counts include persisted observations in this window. They do not prove that all learning activity was recorded.', current: 'Current snapshot',
 };
 export const progressAr: typeof progressEn = {
+  myLearningStory: 'قصة تعلّمي', sharedLearningStory: 'تقدّم التعلّم المشترك', learningEvidence: 'شواهد الخطوة التالية', exploreProgress: 'استكشف تقدّم التعلّم', resultPages: 'صفحات النتائج',
+  assessmentNameUnavailable: 'اسم التقييم غير متاح', objectiveNameUnavailable: 'اسم الهدف غير متاح',
+  offline: 'أنت غير متصل. اتصل بالإنترنت ثم حدّث الصفحة للتحقق من التقدّم والصلاحيات الحالية.',
+  progressGuide: 'استكشف أعمالك التي روجعت وأنشطة تعلّمك المسجّلة والخطوات التالية المعتمدة من المدرسة.', recordHistory: 'استكشف سجلات التعلّم ومصادرها',
+  hideCompanion: 'إخفاء فوكسي', showCompanion: 'إظهار فوكسي',
   currentLearnerEvidence: 'شواهد الطالب الحالي', learnerContextUnavailable: 'اسم الطالب غير متاح في السجلات الحالية',
   exportCombined: 'تنزيل النتائج الحالية عبر الصفحات', combinedReportNote: 'يتبع التصدير الصفحات الحالية المسموح بها حتى ١٠٠٠ سجل. يُذكر أي استمرار متبقٍ؛ تغطية المنهج مجهولة.',
   currentResultPages: 'تصفح صفحات النتائج الحالية', reportPage: 'صفحة', previousReportPage: 'صفحة النتائج السابقة', nextReportPage: 'صفحة النتائج التالية', currentPagesFinished: 'لا توجد صفحة نتائج حالية أخرى. تبقى تغطية المنهج مجهولة.',

@@ -8,6 +8,27 @@ export type AcademicStateRow = { resultId: string; referenceId: string; referenc
 export type LearnerState = { learnerId: string; status: 'READY' | 'UNKNOWN'; freshness?: 'CURRENT' | 'STALE' | 'APPROVED_PROJECTION'; generatedAt: string | null; version: number | null; academic: AcademicStateRow[]; development: { practice: { count: number | null; observationIds: string[] }; revision: { count: number | null; observationIds: string[] }; reflection: { count: number | null; observationIds: string[] }; windowStart: string | null; windowEnd: string | null; completeness?: 'RECORDED_ONLY' }; engagement: { completedActivityCount: number | null; lastCompletedAt: string | null }; support: { activeInterventionIds: string[]; items: Intervention[] }; impact: { status: 'unmeasured' | 'measured'; measurementIds: string[]; outcomes: Outcome[] }; sourceEventIds: string[]; projection?: z.infer<typeof learnerProjectionSchema> };
 export type Observation = { id: string; learnerId: string; kind: 'practice' | 'revision' | 'reflection'; sourceType: string; sourceObjectId: string; occurredAt: string; sourceEventId: string };
 export type Signal = { id: string; learnerId: string; type: 'practice_observed'; count: number; ruleVersion: number; createdAt: string; windowStart: string; windowEnd: string; sourceEventIds: string[]; observationIds: string[]; status: 'ACTIVE'; uncertainty: 'OBSERVATION_ONLY'; sourceCoverage?: { totalCount: number; returnedCount: number; truncated: boolean } };
+export type LearnerStateSource = { scope: string; value: LearnerState };
+/** Current read identity is checked during render, before query effects clear
+ * a preceding snapshot. An unchanged learner alone is not a current read. */
+export function currentLearnerState(source: LearnerStateSource | null, scope: string, learnerId: string): LearnerState | null {
+  return source?.scope === scope && source.value.learnerId === learnerId ? source.value : null;
+}
+export function parseLearnerObservation(value: unknown, learnerId: string): Observation {
+  const row = parseObservation(value);
+  if (row.learnerId !== learnerId) throw new LearningApiError('invalid');
+  return row;
+}
+export function parseLearnerSignal(value: unknown, learnerId: string): Signal {
+  const row = parseSignal(value);
+  if (row.learnerId !== learnerId) throw new LearningApiError('invalid');
+  return row;
+}
+export function parseLearnerAttentionSignal(value: unknown, learnerId: string): AttentionSignal {
+  const row = parseAttentionSignal(value);
+  if (row.learnerId !== learnerId) throw new LearningApiError('invalid');
+  return row;
+}
 type AttentionBase = { id: string; learnerId: string; ruleVersion: number; generatedAt: string; sourceEventIds: string[] };
 export type AttentionSignal = AttentionBase & ({ type: 'native_result_decline'; referenceId: string; referenceVersion: string; baselineResultId: string; followUpResultId: string; evidenceIds: string[]; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; difference: number; minimumDecline: number; uncertainty: 'OBSERVED_CHANGE_NOT_CAUSE' } | { type: 'missing_due_work'; count: number; missingAssessments: { id: string; title: string; dueAt: string }[]; uncertainty: 'MISSING_SUBMISSION_NOT_ZERO' });
 export function parseAttentionSignal(value: unknown): AttentionSignal {

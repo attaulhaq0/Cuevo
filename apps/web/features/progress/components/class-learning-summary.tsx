@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { classLearningSummarySchema, type ClassLearningSummary } from '@cuevo/contracts';
 import { Button, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
@@ -12,23 +12,22 @@ import { parseChoice,choiceLabel } from '../../learning/model';
 import { EvidenceDetail, NativeResultView } from '../../academic/ui';
 import { progressAr, progressEn } from '../messages';
 
-function summaryParser(value: unknown): ClassLearningSummary {
-  const parsed = classLearningSummarySchema.safeParse(value); if (!parsed.success) throw new LearningApiError('invalid'); return parsed.data;
-}
-
 export function ClassLearningSummaryPanel({ refresh, onReviewLearner, selectedLearnerId, labelContext, onLearnerContext }: { refresh: number; onReviewLearner: (id: string, label: string) => void; selectedLearnerId: string | null; labelContext: string; onLearnerContext: (id: string, label: string | null, context: string) => void }) {
-  const { locale, membership } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
+  const { locale, membership, accessToken, accessGeneration, apiUrl, online } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
   const [classId, setClassId] = useState(''); const [cursor, setCursor] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null); const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const classes = usePaginatedLearningQuery('/v1/classes?limit=100', parseChoice, refresh);
+  const scope = `${apiUrl}:${membership?.schoolId}:${membership?.userId}:${membership?.role}:${accessToken ?? ''}:${online}:${classId}:${cursor}:${refresh}:${accessGeneration}`;
+  const summaryParser = useCallback((value: unknown): { scope: string; value: ClassLearningSummary } => {
+    const parsed = classLearningSummarySchema.safeParse(value);
+    if (!parsed.success || parsed.data.schoolId !== membership?.schoolId || parsed.data.classId !== classId) throw new LearningApiError('invalid');
+    return { scope, value: parsed.data };
+  }, [scope, membership?.schoolId, classId]);
   const summary = useApiQuery(classId ? `/v1/classes/${classId}/learning-summary?limit=25${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}` : null, summaryParser, refresh);
   const number = (value: number | null) => value === null ? t.unknown : new Intl.NumberFormat(locale).format(value);
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-  const data = summary.data?.classId === classId && summary.data.schoolId === membership?.schoolId ? summary.data : null;
-  const labelRead = useRef<{ context: string; previous: ClassLearningSummary | null }>({ context: labelContext, previous: null });
-  if (labelRead.current.context !== labelContext) labelRead.current = { context: labelContext, previous: summary.data };
-  const currentRead = summary.data !== labelRead.current.previous;
-  const selected = currentRead && !classes.loading && !classes.error && !summary.loading && !summary.error ? data?.items.find(item => item.learnerId === selectedLearnerId) : null;
+  const data = summary.data?.scope === scope ? summary.data.value : null;
+  const selected = !classes.loading && !classes.error && !summary.loading && !summary.error ? data?.items.find(item => item.learnerId === selectedLearnerId) : null;
   const currentClass = classes.data.find(item => item.id === classId);
   const currentLabel = selected && currentClass ? [selected.learnerName, choiceLabel(currentClass)].join(' · ') : null;
   useEffect(() => {
