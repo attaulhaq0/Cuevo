@@ -114,7 +114,8 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   expect(proposal.intelligenceRunId).toEqual(expect.any(String));
   const proposalRow = page.locator(`[data-recommendation-id="${proposal.id}"]`);
   await loadRow(proposalRow);
-  await expect(proposalRow.getByText('Fixture analysis — synthetic/test', { exact: true })).toBeVisible();
+  await expect(proposalRow.getByText('Demonstration analysis', { exact: true })).toBeVisible();
+  await expect(proposalRow).toContainText('prepared example output');
   await expect(proposalRow.getByText('Live model analysis', { exact: true })).toHaveCount(0);
   await proposalRow.getByText('Cited evidence', { exact: true }).click();
   await expect(proposalRow).toContainText(String(proposal.intelligenceRunId));

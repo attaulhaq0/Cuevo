@@ -111,7 +111,7 @@ test('teacher rejects one proposal and approves exact edited instructions throug
     expect(proposal.intelligenceRunId).toEqual(expect.any(String));
     const row = page.locator(`[data-recommendation-id="${proposal.id}"]`);
     await loadTarget(row);
-    await expect(row.getByText('Fixture analysis — synthetic/test', { exact: true })).toBeVisible();
+    await expect(row.getByText('Demonstration analysis', { exact: true })).toBeVisible();
     await expect(row.getByRole('region', { name: 'Why this appeared', exact: true })).toBeVisible();
     return { proposal, row };
   };

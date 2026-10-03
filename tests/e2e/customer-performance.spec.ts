@@ -169,7 +169,7 @@ test('customer performance: production browser navigation, private bytes, fixtur
         expect(receipt.generationMode).toBe('FIXTURE'); expect(receipt.status).toBe('AWAITING_HUMAN'); proposalId = receipt.id;
         await loadTarget(page.locator(`[data-recommendation-id="${proposalId}"]`), page.locator('.improvement-workspace'));
       });
-      const proposal = page.locator(`[data-recommendation-id="${proposalId}"]`); await expect(proposal.getByText('Fixture analysis — synthetic/test', { exact: true })).toBeVisible();
+      const proposal = page.locator(`[data-recommendation-id="${proposalId}"]`); await expect(proposal.getByText('Demonstration analysis', { exact: true })).toBeVisible();
       if (repeat === 0) await capture('07-fixture-human-review');
       await proposal.getByRole('button', { name: 'Reject proposal', exact: true }).click();
       const rejection = proposal.getByRole('region', { name: 'Reject proposal', exact: true }); await rejection.getByLabel('Decision reason', { exact: true }).fill('Performance verification complete; no practice assigned.');
