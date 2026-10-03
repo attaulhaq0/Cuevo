@@ -1,0 +1,19 @@
+begin;
+create function internal.read_learner_profile(target_learner uuid)returns jsonb language plpgsql security definer set search_path=''as $$
+declare school uuid:="authorization".school_id();learner_name text;school_name text;enrollments jsonb;courses jsonb;
+begin
+ perform internal.lock_school_access_mutation(school);
+ if not"authorization".school_operations_access(school)or not"authorization".can_view_person(school,target_learner)then raise exception 'Current learner profile scope denied'using errcode='42501';end if;
+ select person.display_name,schoolrow.name into learner_name,school_name from app.people person join app.memberships member on member.school_id=person.school_id and member.actor_id=person.actor_id join app.schools schoolrow on schoolrow.id=person.school_id where person.school_id=school and person.actor_id=target_learner and member.role='student'and member.status='active'and member.effective_from<=now()and(member.effective_to is null or member.effective_to>now());
+ if learner_name is null then raise exception 'Current learner identity required'using errcode='42501';end if;
+ with sources as materialized(select enrollment.id,class.id class_id,class.name class_name,year_group.name year_group_name,academic_year.name academic_year_name,enrollment.effective_from,enrollment.effective_to from app.enrollments enrollment join app.classes class on class.school_id=enrollment.school_id and class.id=enrollment.class_id join app.year_groups year_group on year_group.school_id=class.school_id and year_group.id=class.year_group_id join app.academic_years academic_year on academic_year.school_id=class.school_id and academic_year.id=class.academic_year_id where enrollment.school_id=school and enrollment.student_actor_id=target_learner and enrollment.status='active'and enrollment.effective_from<=now()and(enrollment.effective_to is null or enrollment.effective_to>now())and class.status='active'and"authorization".can_view_class(school,class.id)order by class.name,class.id limit 26)
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'classId',class_id,'className',class_name,'yearGroupName',year_group_name,'academicYearName',academic_year_name,'effectiveFrom',effective_from,'effectiveTo',effective_to)order by class_name,class_id),'[]'::jsonb)into enrollments from sources;
+ if jsonb_array_length(enrollments)>25 then raise exception 'Profile enrollment capacity requires review'using errcode='22023';end if;
+ with sources as materialized(select course.id,content->>'title'title,class.id class_id,class.name class_name,subject.name subject_name from app.courses course join app.classes class on class.school_id=course.school_id and class.id=course.class_id join app.subjects subject on subject.school_id=course.school_id and subject.id=course.subject_id cross join lateral(select internal.learning_published_content(school,'course',course.id)content)published where course.school_id=school and course.status='PUBLISHED'and"authorization".current_learner_course(school,course.id,target_learner)and"authorization".can_read_course(school,course.id)and content is not null order by course.title,course.id limit 51)
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'title',title,'classId',class_id,'className',class_name,'subjectName',subject_name)order by title,id),'[]'::jsonb)into courses from sources;
+ if jsonb_array_length(courses)>50 then raise exception 'Profile course capacity requires review'using errcode='22023';end if;
+ return jsonb_build_object('id',target_learner,'displayName',learner_name,'schoolName',school_name,'enrollments',enrollments,'courses',courses);
+end$$;
+revoke execute on function internal.read_learner_profile(uuid)from public,anon,authenticated,service_role,cuevo_api,cuevo_worker;
+grant execute on function internal.read_learner_profile(uuid)to cuevo_api;
+commit;

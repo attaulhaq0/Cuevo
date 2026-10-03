@@ -6,11 +6,15 @@ const actor:ActorContext={userId:'20000000-0000-4000-8000-000000000012',schoolId
 const id='91100000-0000-4000-8000-000000000001';
 describe('learning lifecycle service boundaries',()=>{
  it('rechecks current assignment availability before returning a stored submission receipt',async()=>{
-  const db={actorTransaction:async(_actor:string,_school:string,run:(client:unknown)=>Promise<unknown>)=>run({query:async(sql:string)=>{if(sql.includes('as allowed'))return{rows:[{allowed:true}]};if(sql.includes('require_assessment_available'))throw Object.assign(Error('closed'),{code:'22023'});if(sql.includes('begin_command'))return{rows:[{reservation:{state:'COMPLETED',response:{id,content:'Old source'}}}]};return{rows:[]};}})}as unknown as Database;
+  const db={actorTransaction:async(_actor:string,_school:string,run:(client:unknown)=>Promise<unknown>)=>run({query:async(sql:string)=>{if(sql.includes('as allowed'))return{rows:[{allowed:true}]};if(sql.includes('assessment_course'))return{rows:[{id:'91000000-0000-4000-8000-000000000001'}]};if(sql.includes('require_assessment_available'))throw Object.assign(Error('closed'),{code:'22023'});if(sql.includes('begin_command'))return{rows:[{reservation:{state:'COMPLETED',response:{id,content:'Old source'}}}]};return{rows:[]};}})}as unknown as Database;
   await expect(new SchoolLearningService(db).command(actor,'submission.create',id,{content:'Old source'},'old-source-key','request')).rejects.toMatchObject({code:'LEARNING_CONFLICT',status:409});
  });
  it('never allows a parent to submit deterministic quiz answers',async()=>{
   const db={}as Database;
   await expect(new SchoolLearningService(db).command({...actor,role:'parent'},'quiz.submit' as never,id,{quizId:id,answers:[{questionKey:'q',optionKey:'a'}]},'quiz-key','request')).rejects.toMatchObject({status:403});
+ });
+ it('reports a private draft quiz read as denied rather than service unavailable',async()=>{
+  const db={actorTransaction:async()=>{throw Object.assign(Error('private denied'),{code:'42501'});}}as unknown as Database;
+  await expect(new SchoolLearningService(db).quiz(actor,id,false)).rejects.toMatchObject({code:'FORBIDDEN',status:403});
  });
 });

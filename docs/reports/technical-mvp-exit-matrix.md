@@ -1,5 +1,7 @@
 # Technical MVP exit matrix
 
+Historical matrix for the 1 October 2026 snapshot. Use the [current acceptance report](../product/qa/CUSTOMER-READINESS-ACCEPTANCE-REPORT.md) and [current test matrix](../product/qa/CUSTOMER-READINESS-TEST-MATRIX.md) for the current 3 October checkpoint and remaining acceptance limits. The original evidence below is preserved.
+
 Company: E Deviser. Product: Cuevo. Verification date: 1 October 2026, Asia/Riyadh. Sources 01/43/61/63/64/77/78/83 and the founder's autonomous completion instruction govern this matrix. Official curriculum, academic/rights/customer/live-model and production acceptance are separate.
 
 ## Current result

@@ -1,0 +1,16 @@
+'use client';
+import { useState } from 'react';
+import { interventionChoiceStatusSchema } from '@cuevo/contracts';
+import { useApp } from '../../../shared/session/providers';
+import { useApiQuery } from '../../../shared/hooks/use-api';
+import { CommandForm } from '../../../shared/components/command-form';
+import { LearningError } from '../../../shared/components/feedback';
+const parseChoices = (value: unknown) => interventionChoiceStatusSchema.parse(value);
+export function InterventionTaskChoices({ interventionId, canChoose }: { interventionId: string; canChoose: boolean }) {
+  const { locale } = useApp(); const ar = locale === 'ar'; const [refresh, setRefresh] = useState(0); const current = useApiQuery(`/v1/interventions/${interventionId}/choices`, parseChoices, refresh);
+  if (current.loading) return <p role="status">{ar ? 'جارٍ تحميل التدريب المعتمد…' : 'Loading approved practices…'}</p>;
+  if (current.error) return <LearningError error={current.error} />;
+  if (!current.data) return null;
+  const { options, choice } = current.data;
+  return <section aria-label={ar ? 'خيارات التدريب المعتمدة' : 'Approved practice choices'}><h3>{ar ? 'خيارات التدريب المعتمدة' : 'Approved practice choices'}</h3>{choice ? <><p>{ar ? 'التدريب الذي اخترته' : 'Your selected practice'}: {choice.title}</p><p className="lesson-content">{choice.instructions}</p><p>{ar ? 'اختيارك محفوظ. أكمل هذا التدريب قبل تأكيد الإنجاز.' : 'Your choice is recorded. Complete this practice before confirming completion.'}</p></> : options.length ? <><p>{ar ? 'اعتمد المعلّم هذه التدريبات للهدف نفسه. اختر واحدًا فقط، أو استخدم المهمة الأصلية.' : 'Your teacher approved these practices for the same objective. Choose one, or use the original task.'}</p>{options.map(option => <article key={option.activityId}><h4>{option.title}</h4><p>{option.instructions}</p>{!option.available ? <p className="notice">{ar ? 'يتطلب هذا المصدر مراجعة المعلّم.' : 'This source requires teacher review.'}</p> : null}</article>)}{canChoose && options.some(option => option.available) ? <CommandForm title={ar ? 'اختيار تدريب معتمد' : 'Choose approved practice'} path={`/v1/interventions/${interventionId}/choices`} fields={[{ name: 'activityId', label: ar ? 'التدريب المعتمد' : 'Approved practice', type: 'select', required: true, options: options.filter(option => option.available).map(option => ({ value: option.activityId, label: option.title })) }, { name: 'confirmChoice', label: ar ? 'أؤكد اختيار هذا التدريب للمهمة' : 'I confirm this practice for my task', type: 'checkbox', required: true }]} body={values => ({ activityId: String(values.get('activityId')), confirmChoice: values.get('confirmChoice') === 'on' })} onSaved={() => setRefresh(value => value + 1)} /> : null}</> : <p>{ar ? 'لم تُعتمد خيارات بديلة لهذه المهمة.' : 'No alternative practices were approved for this task.'}</p>}</section>;
+}

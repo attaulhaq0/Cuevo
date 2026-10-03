@@ -32,4 +32,18 @@ describe('bounded API request protection', () => {
       expect((await app.inject({ url: '/health/live', headers })).statusCode).toBe(200);
     } finally { await app.close(); }
   });
+  it('bounds anonymous readiness requests separately while keeping liveness available', async () => {
+    const app = Fastify();
+    registerRequestLimits(app, { readiness: 2 });
+    let probes = 0;
+    app.get('/health/ready', async () => { probes++; return { status: 'ready' }; });
+    app.get('/health/live', async () => ({ status: 'ok' }));
+    try {
+      const responses = await Promise.all(Array.from({ length: 10 }, (_, i) => app.inject({ url: `/health/ready?probe=${i}`, headers: { authorization: `Bearer varied-${i}` } })));
+      expect(responses.filter(r => r.statusCode === 200)).toHaveLength(2);
+      expect(responses.filter(r => r.statusCode === 429)).toHaveLength(8);
+      expect(probes).toBe(2);
+      expect((await app.inject({ url: '/health/live' })).statusCode).toBe(200);
+    } finally { await app.close(); }
+  });
 });

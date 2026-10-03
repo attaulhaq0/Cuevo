@@ -1,4 +1,9 @@
-import{readFile,realpath}from'node:fs/promises';import{resolve,relative,isAbsolute}from'node:path';import{createHash}from'node:crypto';import{z}from'zod';import{DomainError}from'@cuevo/domain';import{curriculumVersionInputSchema,rubricInputSchema}from'@cuevo/contracts';import type{Database}from'../../platform/database/database';import{requireCapability,type ActorContext}from'@cuevo/domain';
+import{readFile,realpath}from'node:fs/promises';import{resolve,relative,isAbsolute}from'node:path';import{fileURLToPath}from'node:url';import{createHash}from'node:crypto';import{z}from'zod';import{DomainError}from'@cuevo/domain';import{curriculumVersionInputSchema,rubricInputSchema}from'@cuevo/contracts';import type{Database}from'../../platform/database/database';import{requireCapability,type ActorContext}from'@cuevo/domain';
+
+// Bundled delivery supplies this private build-time URL; source runtime uses the owner location.
+declare const CUEVO_LOCKED_PACK_ROOT_URL: string | undefined;
+const runtimePackRoot = fileURLToPath(typeof CUEVO_LOCKED_PACK_ROOT_URL === 'string' ? new URL(CUEVO_LOCKED_PACK_ROOT_URL, import.meta.url) : new URL('../../../../../supabase/seed/curriculum/', import.meta.url));
+export function loadRuntimeLockedPack(packDirectory: string) { return loadLockedPack(runtimePackRoot, packDirectory); }
 const key=z.string().min(1).max(100).regex(/^[a-z0-9-]+$/);const ref=z.object({key,parent:key.nullable(),type:z.enum(['stage','year','subject','strand','objective','outcome','criterion','syllabus_item']),title:z.string().min(1).max(200),description:z.string().min(1).max(4000),sequence:z.number().int().min(0)}).strict();
 const manifestSchema=z.object({packId:key,version:z.string().min(1),files:z.record(z.string(),z.string().regex(/^[a-f0-9]{64}$/))}).strict();
 const normalizedSchema=z.object({references:z.array(ref).min(1).max(100)}).strict();const assessmentSchema=z.object({models:z.array(z.enum(['numeric','rubric'])).min(1),numeric:z.object({maxScore:z.number().positive().max(100000),normalization:z.null()}).strict(),rubric:rubricInputSchema.omit({courseId:true})}).strict();

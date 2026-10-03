@@ -54,3 +54,9 @@ test('tooling names and unit tests cannot bypass canonical runtime/application o
   assert.ok(rules([file('apps/web/features/academic/model.ts', "import '../../next.config';"), file('apps/web/next.config.ts')]).includes('browser-server'));
   assert.ok(rules([file('apps/api/test/unit/worker.test.ts', "import '../../../worker/src/jobs/outbox/processor';"), file('apps/worker/src/jobs/outbox/processor.ts')]).includes('test-direction'));
 });
+
+test('only the documented portable analytics contract subpath crosses browser and Edge boundaries', () => {
+  const accepted = [file('apps/web/shared/diagnostics/client.ts', "import { analyticsEventNames } from '@cuevo/contracts/analytics';"), file('packages/contracts/src/analytics.ts')];
+  assert.deepEqual(rules(accepted), []);
+  assert.ok(rules([file('apps/web/shared/diagnostics/client.ts', "import data from '@cuevo/contracts/private';"), file('packages/contracts/src/private.ts')]).includes('unresolved-import'));
+});

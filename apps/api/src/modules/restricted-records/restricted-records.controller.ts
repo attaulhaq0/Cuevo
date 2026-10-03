@@ -1,0 +1,17 @@
+import{Controller,Get,Post,Req,Res,type Type}from'@nestjs/common';import{ApiBearerAuth,ApiBody,ApiHeader}from'@nestjs/swagger';import{z}from'zod';import type{FastifyRequest,FastifyReply}from'fastify';import{DomainError}from'@cuevo/domain';import type{IdentityService}from'../../platform/identity/identity.service';import type{Database}from'../../platform/database/database';import{RestrictedRecordsService,restrictedCommands,type RestrictedCommand}from'./restricted-records.service';
+const body=(kind:RestrictedCommand)=>ApiBody({required:true,schema:z.toJSONSchema(restrictedCommands[kind],{target:'openapi-3.0'})as never});
+export function createRestrictedRecordsController(identity:IdentityService,database:Database):Type<unknown>{const service=new RestrictedRecordsService(database);@Controller('/v1/restricted-records')@ApiBearerAuth()class RestrictedRecordsController{
+ private async respond(r:FastifyRequest,p:FastifyReply,run:(actor:Awaited<ReturnType<IdentityService['resolve']>>)=>Promise<unknown>){try{const school=r.headers['x-school-id'];if(Array.isArray(school))throw new DomainError('INVALID_INPUT',400,'School selector invalid.');const actor=await identity.resolve(r.headers.authorization,school);return p.code(200).header('Cache-Control','no-store').send(await run(actor));}catch(error){const safe=error instanceof DomainError?error:new DomainError('REQUEST_UNAVAILABLE',503,'Restricted school records unavailable.');return p.code(safe.status).header('Cache-Control','no-store').send({code:safe.code,message:safe.message,requestId:r.id});}}
+ private command(r:FastifyRequest,p:FastifyReply,kind:RestrictedCommand){return this.respond(r,p,actor=>service.command(actor,kind,(r.params as{id?:string}).id??null,r.body,r.headers['idempotency-key'],r.id));}
+ @Get('/policy')policy(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,actor=>service.policy(actor));}
+ @Post('/policy')@body('policy')@ApiHeader({name:'Idempotency-Key',required:true})configure(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'policy');}
+ @Get('/')list(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,actor=>service.list(actor,r.query));}
+ @Get('/choices')choices(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,actor=>service.choices(actor,null,r.query));}
+ @Get('/courses/:id/choices')learners(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,actor=>service.choices(actor,(r.params as{id:string}).id,r.query));}
+ @Post('/')@body('create')@ApiHeader({name:'Idempotency-Key',required:true})create(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'create');}
+ @Get('/:id/history')history(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,actor=>service.history(actor,(r.params as{id:string}).id,r.query));}
+ @Post('/:id/correct')@body('correct')@ApiHeader({name:'Idempotency-Key',required:true})correct(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'correct');}
+ @Post('/:id/approve')@body('approve')@ApiHeader({name:'Idempotency-Key',required:true})approve(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'approve');}
+ @Post('/:id/follow-up')@body('followup')@ApiHeader({name:'Idempotency-Key',required:true})followup(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'followup');}
+ }return RestrictedRecordsController;}
+

@@ -1,0 +1,10 @@
+begin;
+create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_api;set local search_path=extensions,pg_catalog;select no_plan();
+insert into app.community_rooms(school_id,id,class_id,name,type,owner_id,status)values('10000000-0000-4000-8000-000000000001','99600000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Archived prior group','GROUP','20000000-0000-4000-8000-000000000004','ARCHIVED');
+insert into app.community_members(school_id,room_id,actor_id,status,configured_by)values('10000000-0000-4000-8000-000000000001','99600000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000012','active','20000000-0000-4000-8000-000000000004');
+set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true);
+select throws_ok($$select internal.community_list('posts','99600000-0000-4000-8000-000000000001','{"limit":100}')$$,'42501',null,'new closed-history helper does not reopen old archived room');
+select ok(not exists(select 1 from jsonb_array_elements(internal.community_list('rooms',null,'{"limit":100}')->'items')r where r->>'id'='99600000-0000-4000-8000-000000000001'),'archived room remains outside member enumeration');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);
+select throws_ok($$select internal.community_maintenance_command('group','99600000-0000-4000-8000-000000000001','{"name":"No archived restore","state":"ACTIVE","expectedRevision":1,"reason":"Cannot reopen archived identity","confirmChange":true}','archived-group-reopen',repeat('a',64),'archived-test')$$,'42501',null,'group lifecycle cannot revive archived original source');
+select*from finish();rollback;

@@ -16,4 +16,12 @@ One navigation DOM becomes a horizontally scrollable desktop rail and fixed mobi
 
 `workspace-chrome.stories.tsx` uses the actual component with illustrative permitted items only. Its Student/Staff/Parent/Arabic/Dark/Unknown/Pending previews do not establish real role eligibility. Unit tests cover one navigation list, meaningful labels, pending state, unknown selection, deterministic rendering and RTL/disabled keyboard focus. Root-owned real mobile/zoom/keyboard/axe/history/source/auth checks and sole-runtime replacement remain acceptance gates; do not publish the shell redesign as connected before that integration.
 
+Desktop navigation has its own bounded vertical scroll area so all role actions remain reachable in shorter windows. The mobile rail continues to scroll horizontally. The customer primary-label traversal reproduced offscreen desktop account/access controls before this repair; final browser verification remains required.
+
+The view query parameter records current workspace navigation through the native history API. Only current role/entitlement navigation choices can render; invalid or forbidden view values return to the overview. Browser Back/Forward and a later sign-in can recover the permitted view. Auth remains memory-only. Persistent status messages describe confirmed commands without copying protected work or primary identifiers.
+
 Product source lookup: [task context map](../../../../docs/product/context-map.md); numbered IDs resolve through the product registry.
+
+Offered destinations use the shared browser-safe prerequisite policy; learning/assessment/curriculum context dependencies and parent-excluded intelligence/development are consistent with destination APIs. Current revocation still removes protected reads independently of navigation.
+
+Account composition consumes the school-owned `LearnerProfile` public UI. It does not assemble protected pupil context from unrelated queues or import school implementation internals.

@@ -15,7 +15,7 @@ Read root AGENTS/README/START-HERE, [constitution](overview/00-PRODUCT-CONSTITUT
 
 ## Task bundles
 
-Student XP/level/character/cosmetic work also loads the [Character Progression System foundation](../architecture/character-progression-system.md), its [decision](../decisions/2026-10-03-character-progression-foundation.md), sources 09/12/15/39/58/63/79/80 and current Development contract/worker/SQL/browser tests. It is a bounded founder-authorized extension, with implementation/verification status kept separate; payment/store and unrestricted student AI remain future scope.
+Student XP/level/character/cosmetic work also loads the [Character Progression System foundation](../architecture/character-progression-system.md), its [decision](../decisions/2026-10-03-character-progression-foundation.md), [queued backend plan](../superpowers/plans/2026-10-03-character-progression-foundation.md), sources 09/12/15/39/58/63/79/80 and current Development contract/worker/SQL/browser tests. It is a bounded founder-authorized extension, with implementation/verification status kept separate; payment/store and unrestricted student AI remain future scope.
 
 | Work | Required sources | Checks and context |
 |---|---|---|
@@ -37,3 +37,9 @@ Student XP/level/character/cosmetic work also loads the [Character Progression S
 Use `rg --files docs/product`, the full [index](index.md) or [registry](registry.json). Narrow text search by task folder, for example `rg 'native result' docs/product/domains docs/product/curriculum`. Every numbered ID and old root filename maps to one current source. Use current paths in new plans/owner READMEs; do not create duplicate specs at old locations.
 
 This guide governs context loading only. Product invariants, curriculum rights, approval boundaries and required verification are unchanged.
+
+For learner-state/outbox, worker transport, scheduling and asynchronous deployment tasks, also read the implementation [scalable event-processing plan](../architecture/scalable-event-processing.md) and [accepted worker direction](../decisions/2026-10-02-event-triggered-worker.md). They do not replace sources02/11/38/39/65/81/82/83 or establish implemented/hosted acceptance.
+
+For analytics/QA telemetry/dashboard work, also read [current PostHog operations](../operations/posthog.md) and [delivery/privacy ADR](../decisions/2026-10-02-posthog-current-repository.md). Source42/39 govern purpose and minimization; current source/environment labels and captured synthetic proof never establish real adoption, official academic support or causal impact.
+
+For the approved authenticated Trail redesign, also read [migration specification](../superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md), [companion strategy](../superpowers/specs/2026-10-03-student-companion-growth.md) and [implementation plan](../superpowers/plans/2026-10-03-cuevo-trail-implementation.md), plus the affected current domain/test bundle. One prepared visual system does not establish connected role or progression acceptance; approved authentication remains unchanged.

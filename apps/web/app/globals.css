@@ -51,6 +51,7 @@ html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 .access-state > p:not(.eyebrow) { color: var(--color-text-secondary); margin-block-start: var(--space-5); }
 .access-state__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center; margin-block-start: var(--space-8); }
 .support-reference { font-size: var(--type-xs); overflow-wrap: anywhere; }
+.workspace .support-reference > summary { min-block-size: 2.75rem; padding: var(--space-3) var(--space-2); cursor: pointer; }
 .loading-line { inline-size: 8rem; block-size: .25rem; background: var(--color-border); border-radius: var(--radius-pill); overflow: hidden; margin: var(--space-8) auto 0; }
 .loading-line::after { content: ''; display: block; inline-size: 50%; block-size: 100%; background: var(--color-accent); border-radius: inherit; animation: loading 1.3s ease-in-out infinite alternate; }
 @keyframes loading { from { transform: translateX(-20%); } to { transform: translateX(120%); } }
@@ -61,11 +62,11 @@ html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 .school-identity__icon { display: grid; place-items: center; inline-size: 2.375rem; block-size: 2.375rem; background: var(--color-surface-accent); color: var(--color-accent); border-radius: var(--radius-md); flex: none; }
 .school-identity p { font-size: var(--type-sm); font-weight: 600; line-height: 1.4; }
 .school-identity span:not(.school-identity__icon) { font-size: var(--type-xs); color: var(--color-text-muted); }
-.sidebar__nav { display: grid; gap: var(--space-2); }
+.sidebar__nav { display: grid; gap: var(--space-2); min-block-size: 0; overflow-y: auto; flex: 1; align-content: start; padding: var(--space-1); margin-inline: calc(-1 * var(--space-1)); }
 .nav-item { min-block-size: 2.875rem; display: flex; align-items: center; gap: var(--space-3); border: none; text-align: start; cursor: pointer; font-size: var(--type-sm); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: transparent; color: var(--color-text-secondary); }
 .nav-item:hover { background: var(--color-surface-muted); }
 .nav-item--active { color: var(--color-accent); background: var(--color-surface-accent); font-weight: 600; }
-.sidebar__bottom { margin-block-start: auto; padding-inline: var(--space-4); }
+.sidebar__bottom { margin-block-start: var(--space-4); padding-inline: var(--space-4); flex: none; }
 .sidebar__bottom p { margin-block-start: var(--space-5); color: var(--color-text-muted); font-size: var(--type-xs); }
 .workspace__body { min-inline-size: 0; background: var(--color-surface); }
 .workspace-header { display: flex; justify-content: space-between; gap: var(--space-4); align-items: center; min-block-size: 6rem; padding: var(--space-5) var(--space-10); border-block-end: 1px solid var(--color-border); }
@@ -141,7 +142,7 @@ html[dir="rtl"] .directional-icon { transform: rotate(180deg); }
   .workspace { display: block; }
   .sidebar { display: contents; }
   .sidebar__brand, .school-identity, .sidebar__bottom { display: none; }
-  .sidebar__nav { position: fixed; inset-block-end: 0; inset-inline: 0; z-index: 20; display: flex; justify-content: flex-start; gap: var(--space-2); overflow-x: auto; scroll-padding-inline: var(--space-3); padding: var(--space-2) var(--space-3) max(var(--space-2), env(safe-area-inset-bottom)); background: var(--color-surface); border-block-start: 1px solid var(--color-border); }
+  .sidebar__nav { position: fixed; inset-block-end: 0; inset-inline: 0; z-index: 20; display: flex; justify-content: flex-start; gap: var(--space-2); overflow-x: auto; overflow-y: hidden; margin-inline: 0; scroll-padding-inline: var(--space-3); padding: var(--space-2) var(--space-3) max(var(--space-2), env(safe-area-inset-bottom)); background: var(--color-surface); border-block-start: 1px solid var(--color-border); }
   .nav-item { min-inline-size: 3.75rem; max-inline-size: 8rem; justify-content: center; flex-direction: column; gap: var(--space-1); font-size: var(--type-xs); padding: var(--space-2); flex: 1 0 3.75rem; scroll-margin-inline: var(--space-2); }
   .workspace__body { min-block-size: 100dvh; }
   .workspace-header { min-block-size: 4.5rem; padding: var(--space-3) var(--space-6); }

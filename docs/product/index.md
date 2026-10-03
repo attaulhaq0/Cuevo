@@ -2,7 +2,7 @@
 
 All 89 original numbered sources retain their identities. Choose a task bundle in [context-map.md](context-map.md); use [registry.json](registry.json) for paths/hashes and [path-migration.md](path-migration.md) for historical names. Sources do not imply CUSTOMER_READY curriculum status.
 
-The 3 October founder-authorized [Character Progression System foundation](../architecture/character-progression-system.md) extends source 15's student recognition scope through existing Development ownership. Its [decision](../decisions/2026-10-03-character-progression-foundation.md) and tests distinguish requested levels/earned cosmetics from current XP implementation; this creates no new numbered source identity.
+The 3 October founder-authorized [Character Progression System foundation](../architecture/character-progression-system.md) extends source 15's recognition scope through existing Development ownership. Its [decision](../decisions/2026-10-03-character-progression-foundation.md) and [queued backend plan](../superpowers/plans/2026-10-03-character-progression-foundation.md) distinguish requested levels/earned cosmetics from current XP implementation; this creates no new numbered source identity.
 
 ## overview
 
@@ -119,3 +119,5 @@ The 3 October founder-authorized [Character Progression System foundation](../ar
 - [52-DECISION-LOG-MVP.md](research/52-DECISION-LOG-MVP.md)
 - [57-CURRENT-RESEARCH-CHECKLIST-2026-10-01.md](research/57-CURRENT-RESEARCH-CHECKLIST-2026-10-01.md)
 - [86-RESEARCH-SOURCE-INDEX-2026-10-01.md](research/86-RESEARCH-SOURCE-INDEX-2026-10-01.md)
+
+The approved [Trail migration](../superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md), [companion strategy](../superpowers/specs/2026-10-03-student-companion-growth.md) and [implementation plan](../superpowers/plans/2026-10-03-cuevo-trail-implementation.md) are implementation guidance, not additional numbered product sources or acceptance claims. Current registry paths/hashes remain the exact source authority.

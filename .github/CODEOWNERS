@@ -1,0 +1,14 @@
+# Branch rules must require owners and dismiss stale approvals. An agent is never a reviewer.
+* @attaulhaq0
+/.github/ @attaulhaq0
+/scripts/verification/ @attaulhaq0
+/scripts/database/ @attaulhaq0
+/scripts/runtime/ @attaulhaq0
+/supabase/ @attaulhaq0
+/packages/config/ @attaulhaq0
+/packages/contracts/ @attaulhaq0
+/apps/api/src/platform/ @attaulhaq0
+/apps/api/src/modules/improvement/ @attaulhaq0
+/docs/product/ @attaulhaq0
+/docs/decisions/ @attaulhaq0
+/docs/operations/ @attaulhaq0

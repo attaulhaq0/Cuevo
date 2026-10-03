@@ -6,3 +6,12 @@ const row = { id: '10000000-0000-4000-8000-000000000001', submissionId: '1000000
 const report = { schemaVersion: '1', schoolId: '10000000-0000-4000-8000-000000000008', learnerId: '10000000-0000-4000-8000-000000000004', generatedAt: '2026-10-01T00:01:00Z', scope: 'CURRENT_RELEASED_PAGE', coverage: 'NOT_ESTABLISHED', items: [row], nextCursor: null };
 test('report envelope keeps exact learner/current source and unknown coverage', () => { assert.equal(parseAcademicReport(report).items[0].model, 'numeric'); assert.throws(() => parseAcademicReport({ ...report, coverage: 'COMPLETE_TRANSCRIPT' }), LearningApiError); assert.throws(() => parseAcademicReport({ ...report, items: [{ ...row, learnerId: 'other' }] }), LearningApiError); });
 test('download report escapes school text and retains native zero plus Arabic RTL', () => { const html = renderAcademicReport(parseAcademicReport(report), 'ar'); assert.ok(html.includes('dir="rtl"')); assert.ok(html.includes('&lt;script&gt;unsafe&lt;/script&gt;')); assert.ok(!html.includes('<script>')); assert.ok(html.includes('0 / 10') || html.includes('٠ / ١٠')); assert.ok(html.includes('NOT_ESTABLISHED')); });
+
+test('current report presents authorized human school and learner identity before source IDs', () => {
+  const parsed = parseAcademicReport({ ...report, schoolName: 'Synthetic school — مدرسة', learnerName: 'Aisha <script>name</script>' });
+  const html = renderAcademicReport(parsed, 'en');
+  assert.ok(html.includes('Synthetic school — مدرسة'));
+  assert.ok(html.includes('Aisha &lt;script&gt;name&lt;/script&gt;'));
+  assert.ok(!html.includes('<script>name</script>'));
+});
+test('period report export states the exact school period and source date basis',()=>{const parsed=parseAcademicReport({...report,scope:'CURRENT_RELEASED_PERIOD_PAGE',period:{id:'10000000-0000-4000-8000-000000000009',name:'School source period',revision:2,startsOn:'2026-10-01',endsOn:'2026-10-31',basis:'SOURCE_SUBMITTED_DATE_UTC'}});const html=renderAcademicReport(parsed,'ar');assert.ok(html.includes('School source period'));assert.ok(html.includes('CURRENT_RELEASED_PERIOD_PAGE'));assert.ok(html.includes('UTC'));assert.throws(()=>parseAcademicReport({...report,scope:'CURRENT_RELEASED_PERIOD_PAGE'}),LearningApiError);});

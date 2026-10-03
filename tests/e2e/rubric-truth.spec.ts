@@ -74,6 +74,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
     }
   };
   const loadRow = async (row: ReturnType<typeof page.locator>) => {
+    await expect(page.getByText('Checking current child relationships…', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Loading academic records…', { exact: true })).toHaveCount(0);
     while (!await row.count()) {
       const more = page.getByRole('button', { name: 'Load more', exact: true });
@@ -90,20 +91,16 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await loadChoice(editor.getByLabel('Course', { exact: true }), course.id);
   await editor.getByLabel('Course', { exact: true }).selectOption(course.id);
   await editor.getByLabel('Title', { exact: true }).fill(`${title} native rubric`);
-  await editor.getByLabel('Version', { exact: true }).fill('synthetic-browser-v1');
-  await editor.getByLabel('Criterion key', { exact: true }).fill('reasoning');
   await editor.getByLabel('Criterion title', { exact: true }).fill('Reasoning evidence');
-  await editor.getByLabel('Level key', { exact: true }).fill('developing');
   await editor.getByLabel('Level label', { exact: true }).fill('Developing explanation');
   await editor.getByLabel('Level description', { exact: true }).fill('Explains part of the synthetic method.');
   await editor.getByRole('button', { name: 'Add allowed level', exact: true }).click();
-  await editor.getByLabel('Level key', { exact: true }).nth(1).fill('secure');
   await editor.getByLabel('Level label', { exact: true }).nth(1).fill('Secure explanation');
   await editor.getByLabel('Level description', { exact: true }).nth(1).fill('Explains each step using the synthetic source.');
   const created = mutation('/v1/rubrics');
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   const rubricResponse = await created; expect(rubricResponse.ok()).toBe(true);
-  const rubric = await rubricResponse.json() as { id: string };
+  const rubric = await rubricResponse.json() as { id: string; version: string };
   await expect(page.locator(`[data-rubric-id="${rubric.id}"]`)).toContainText('Secure explanation');
   await page.getByRole('button', { name: 'Configure assessment rubric', exact: true }).click();
   await loadChoice(page.getByLabel('Assessment', { exact: true }), assessment.id);
@@ -121,7 +118,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await loadRow(page.locator('.marking-queue__item').filter({ hasText: title }));
   await page.locator('.marking-queue__item').filter({ hasText: title }).click();
   let marking = page.getByRole('region', { name: 'Save marking draft', exact: true });
-  await marking.getByLabel('Reasoning evidence', { exact: true }).selectOption('developing');
+  await marking.getByLabel('Reasoning evidence', { exact: true }).selectOption({ label: 'Developing explanation — Explains part of the synthetic method.' });
   await marking.getByLabel('Teacher feedback', { exact: true }).fill('Teacher reviewed the permitted developing criterion.');
   await marking.getByRole('button', { name: 'Save marking draft', exact: true }).click();
   await expect(page.locator('.mark-review')).toContainText('Developing explanation');
@@ -138,6 +135,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await signOut();
 
   await signIn(parent);
+  const child=page.getByLabel('Child',{exact:true});await expect(child).toBeVisible();await expect(child.locator('option[value="20000000-0000-4000-8000-000000000012"]')).toHaveText(/^Lina Al-Kuwari(?: ·|$)/);await expect(child.locator('option[value="20000000-0000-4000-8000-000000000012"]')).toContainText('Year 1 · Cedar');await expect(child.locator('option[value="20000000-0000-4000-8000-000000000012"]')).toContainText('2026–2027');await child.selectOption('20000000-0000-4000-8000-000000000012');
   const parentResult = page.locator(`[data-result-id="${first.id}"]`);
   await loadRow(parentResult);
   await expect(parentResult).toContainText('Developing explanation');
@@ -152,7 +150,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await page.locator('.marking-queue__item').filter({ hasText: title }).click();
   await page.getByRole('button', { name: 'Create correction draft', exact: true }).click();
   marking = page.getByRole('region', { name: 'Create correction draft', exact: true });
-  await marking.getByLabel('Reasoning evidence', { exact: true }).selectOption('secure');
+  await marking.getByLabel('Reasoning evidence', { exact: true }).selectOption({ label: 'Secure explanation — Explains each step using the synthetic source.' });
   await marking.getByLabel('Teacher feedback', { exact: true }).fill('Corrected criterion after human evidence review.');
   await marking.getByRole('button', { name: 'Create correction draft', exact: true }).click();
   await page.getByRole('button', { name: 'Release result', exact: true }).click();
@@ -172,7 +170,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   const studentResult = page.locator(`[data-result-id="${correction.id}"]`);
   await loadRow(studentResult);
   await expect(studentResult).toContainText('Secure explanation');
-  await expect(studentResult).toContainText('synthetic-browser-v1');
+  await expect(studentResult).toContainText(rubric.version);
   await expect(studentResult.locator('.native-score')).toHaveCount(0);
   await studentResult.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(studentResult).toContainText(submission.id);

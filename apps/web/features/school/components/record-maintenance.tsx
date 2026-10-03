@@ -1,0 +1,19 @@
+'use client';
+import { useState } from 'react';
+import { Button } from '@cuevo/ui';
+import { useApp } from '../../../shared/session/providers';
+import { CommandForm, type FormField } from '../../../shared/components/command-form';
+import { schoolAr, schoolEn } from '../messages';
+import type { SchoolRow } from '../model';
+
+export function RecordMaintenance({ rows, resource, onChanged }: { rows: SchoolRow[]; resource: 'calendar' | 'timetable' | 'report-periods'; onChanged: () => void }) {
+  const { locale } = useApp(); const t = locale === 'ar' ? schoolAr : schoolEn; const context = resource === 'calendar' ? t.calendar : resource === 'timetable' ? t.timetable : t.periods; const [selected, setSelected] = useState<SchoolRow | null>(null); const [cancel, setCancel] = useState(false);
+  const field = (name: string, label: string, type: FormField['type'] = 'text'): FormField => ({ name, label, type, required: type !== 'checkbox' && name !== 'description' && name !== 'location', defaultValue: type === 'datetime-local' && typeof selected?.[name] === 'string' ? new Date(new Date(String(selected[name])).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : typeof selected?.[name] === 'string' ? String(selected[name]) : undefined, defaultChecked: selected?.[name] === true });
+  const editable: FormField[] = resource === 'calendar' ? [field('title', t.name), field('description', t.description, 'textarea'), field('startsAt', t.startsAt, 'datetime-local'), field('endsAt', t.endsAt, 'datetime-local'), field('parentVisible', t.parentVisible, 'checkbox')] : resource === 'report-periods' ? [field('name', t.name), field('startsOn', t.startsOn, 'date'), field('endsOn', t.endsOn, 'date'), field('parentVisible', t.parentVisible, 'checkbox')] : [field('startsAt', t.timeStart, 'time'), field('endsAt', t.timeEnd, 'time'), field('effectiveFrom', t.startsOn, 'date'), field('effectiveTo', t.endsOn, 'date'), field('location', t.location)];
+  return <section aria-label={`${context} · ${t.maintainRecords}`}>{rows.map(row => <article key={row.id}><p>{String(row.title ?? row.name ?? row.className ?? t.timetable)} · {t.revision} {Number(row.revision ?? 1)}</p><div className="learning-actions"><Button type="button" variant="quiet" onClick={() => { setSelected(row); setCancel(false); }}>{t.editRecord}</Button><Button type="button" variant="quiet" onClick={() => { setSelected(row); setCancel(true); }}>{t.cancelRecord}</Button></div></article>)}{selected ? <CommandForm key={`${selected.id}:${selected.revision}:${cancel}`} title={cancel ? t.cancelRecord : t.editRecord} path={`/v1/school/records/${selected.id}/${cancel ? 'cancel' : 'edit'}`} fields={[...(!cancel ? editable : []), { name: 'reason', label: t.correctionReason, type: 'textarea', required: true, maxLength: 1000 }, { name: 'confirmChange', label: t.confirmMaintenance, type: 'checkbox', required: true }]} body={values => {
+    const recordKeys = resource === 'calendar' ? ['classId', 'title', 'description', 'startsAt', 'endsAt', 'parentVisible'] : resource === 'timetable' ? ['classId', 'subjectId', 'teacherId', 'dayOfWeek', 'startsAt', 'endsAt', 'effectiveFrom', 'effectiveTo', 'location'] : ['termId', 'name', 'startsOn', 'endsOn', 'parentVisible'];
+    const record: Record<string, unknown> = Object.fromEntries(recordKeys.map(key => [key, selected[key]]));
+    if (!cancel) for (const entry of editable) record[entry.name] = entry.type === 'checkbox' ? values.get(entry.name) === 'on' : entry.type === 'datetime-local' ? new Date(String(values.get(entry.name))).toISOString() : String(values.get(entry.name));
+    return { resource, expectedRevision: Number(selected.revision ?? 1), reason: String(values.get('reason')), confirmChange: values.get('confirmChange') === 'on', ...(!cancel ? { record } : {}) };
+  }} onSaved={() => { setSelected(null); onChanged(); }} onCancel={() => setSelected(null)} /> : null}</section>;
+}

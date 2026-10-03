@@ -8,6 +8,7 @@ type Receipt = { id: string; [field: string]: unknown };
 
 test('fixture proposal, human approval and native follow-up refresh the own learner support and outcome', async ({ page }) => {
   test.setTimeout(90_000);
+  page.setDefaultTimeout(15000);
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
   const teacher = accounts.find(account => account.role === 'teacher')!;
   const student = accounts.find(account => account.role === 'student')!;
@@ -156,11 +157,14 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await loadRow(practice);
   await practice.getByRole('button', { name: 'Link follow-up assessment', exact: true }).click();
   const followUpForm = practice.getByRole('region', { name: 'Link follow-up assessment', exact: true });
+  const assessmentPages=page.getByRole('region',{name:'Published follow-up assessment',exact:true});
+  await expect(assessmentPages).toBeVisible();
+  await expect(assessmentPages.getByRole('status').filter({hasText:'Loading next steps…'})).toHaveCount(0);
   while (!await followUpForm.getByLabel('Published follow-up assessment').locator(`option[value="${followUpAssessment.id}"]`).count()) {
-    const more = page.getByRole('button', { name: 'Load more', exact: true });
+    const more = assessmentPages.getByRole('button', { name: 'Load more: Published follow-up assessment', exact: true });
     expect(await more.count()).toBeGreaterThan(0);
-    await more.last().click();
-    await expect(page.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0);
+    await more.click();
+    await expect(assessmentPages.getByRole('button', { name: 'Loading more…: Published follow-up assessment', exact: true })).toHaveCount(0);
   }
   await followUpForm.getByLabel('Published follow-up assessment').selectOption(followUpAssessment.id);
   const linked = mutation(`/v1/interventions/${interventionId}/reassessment`);
@@ -183,7 +187,13 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await expect.poll(async () => {
     const refreshed = page.waitForResponse(response => response.url().endsWith('/v1/learners/20000000-0000-4000-8000-000000000012/state') && response.request().method() === 'GET');
     await page.getByRole('button', { name: 'Refresh learner state', exact: true }).click();
-    expect((await refreshed).ok()).toBe(true);
+    const response = await refreshed;
+    let errorCode = 'UNAVAILABLE';
+    if (!response.ok()) {
+      const body: unknown = await response.json().catch(() => null);
+      if (body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' && /^[A-Z0-9_]{1,80}$/.test(body.code)) errorCode = body.code;
+    }
+    expect(response.ok(), `Learner state HTTP ${response.status()} ${errorCode}`).toBe(true);
     await expect(page.getByText('Loading learner state…', { exact: true })).toHaveCount(0);
     return page.locator(`[data-outcome-id="${outcome.id}"]`).count();
   }, { timeout: 15_000 }).toBe(1);
@@ -203,7 +213,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await signIn(parent);
   await expect(page.getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Progress', exact: true }).click();
-  await page.getByLabel('Learner', { exact: true }).selectOption('20000000-0000-4000-8000-000000000012');
+  await page.getByLabel('Child', { exact: true }).selectOption('20000000-0000-4000-8000-000000000012');
   await expect(page.getByText('This view shows only school-approved academic evidence. Learning-habit details are not shared here.', { exact: true }).first()).toBeVisible();
   await expect(page.locator(`[data-intervention-id="${interventionId}"]`)).toHaveCount(0);
   await expect(page.locator(`[data-outcome-id="${outcome.id}"]`)).toHaveCount(0);

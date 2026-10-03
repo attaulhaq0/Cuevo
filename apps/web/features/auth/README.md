@@ -16,4 +16,8 @@ The sole authentication method remains the existing school-issued email/password
 
 Current visual/test acceptance and the distinction between independent preview, mocked errors and real protected authentication are recorded in the [auth QA report](../../../../docs/reports/2026-10-01-auth-design-qa.md). Desktop and mobile visual approvals do not accept the wider role workspaces.
 
+The approved support-reference disclosure and access-recovery styling remain unchanged during Trail migration. Incoming workspace-only support sizing is scoped to authenticated roots; current denied/expired/unavailable browser checks remain a separate regression gate.
+
+Initial locale and access markup use the server-provided cookie/configuration consistently before browser effects. Hydration verification captures console warnings/errors as well as page errors in extension-free English/Arabic documents. hydration-diagnostics.spec.ts separately injects a known extension body attribute to distinguish an outside DOM mutation from application markup; no blanket body suppression masks a discrepancy.
+
 Product source lookup: [task context map](../../../../docs/product/context-map.md); numbered IDs resolve through the product registry.

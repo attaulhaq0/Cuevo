@@ -1,0 +1,13 @@
+# Parent context and truthful empty states
+
+Portfolio and Academic now withhold their empty-list claims until the parent has a currently resolved child and the authorized content read has completed. The existing child selector retains loading, relationship error, no authorized child and required selection as separate states. Progress already withheld its learner detail while no child resolved. No API, permission or parent projection changed.
+
+Screenshot review of the successful full learning loop found “Checking current child relationships…” alongside “No permitted selected work is available.” Source inspection confirmed a null query path produced an empty local array, which the owner rendered as an authorized empty result. The same condition existed in Academic's ReleasedResults component.
+
+The first browser test attempt timed out because its test oracle used `id` for the wire directory's `userId`, and the handler swallowed the assertion before resolving its observed promise. That was a harness failure, not a product diagnosis. The source was corrected and frozen before subsequent runs; error propagation now prevents an unobserved handler failure from becoming a timeout.
+
+The corrected production test reproduced the Portfolio false-empty message in11.6seconds. After requiring `items.loaded` and suppressing inactive content pagination, it passed that state and reproduced the Academic false-empty message in10.8seconds. Academic now gates ReleasedResults and content pagination on a resolved current child. The test then passed8.1seconds; the same production command also passed the full sharing-recovery chain16.4seconds, total30.0seconds/exit0.
+
+`tests/e2e/parent-context-loading.spec.ts` uses actual Auth/API setup for an approved numeric result, temporarily adds a second guardian relationship through the revision-checked admin command and restores its prior state in finally. It holds and eventually delivers the actual authorized directory response, verifies no premature dependent reads or content/false-empty message during English/Arabic loading, verifies an explicit child choice remains required, and checks the exact selected child's native result/feedback plus a fresh report receipt. These are scoped rendered tests, not every parent state or hosted/device acceptance. Source/SQL authorization continues to decide access.
+
+The current configured build, focused ESLint and the two-case production run passed. Final frozen all-role, browser, database, security and clean-demo verification remain required. No remote database, model, support ticket or deployment was changed.

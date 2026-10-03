@@ -39,9 +39,20 @@ async function signIn(page: Page, role: Role) {
   await page.goto('/'); await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
   await page.getByLabel('School email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(account.password);
+  const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
   await keyboardActivate(page, page.getByRole('button', { name: 'Sign in', exact: true }));
+  const current = await (await verified).json() as { displayName: string };
+  await expect(page.locator('.workspace-intro .eyebrow')).toContainText(current.displayName);
   await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Next action', exact: true })).toBeVisible();
+  if (role === 'parent') {
+    const child = page.getByLabel('Child', { exact: true });
+    const option = child.locator('option[value]:not([value=""]):not([disabled])').first();
+    await expect(option).toBeAttached();
+    if (await child.inputValue() === '') { await child.focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
+    await expect(child).not.toHaveValue(''); await settled(page);
+  }
+  return current.displayName;
 }
 
 async function settled(page: Page) {
@@ -109,7 +120,7 @@ for (const role of roles) {
       await expect(page.locator('main h1')).toBeFocused(); await settled(page);
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
       // Staff/parent progress must select a real permitted learner before reviewing evidence.
-      if (['Progress', 'Development'].includes(names[index].trim()) && role !== 'student') {
+      if (['Progress', 'Development'].includes(names[index].trim()) && role !== 'student' && role !== 'parent') {
         const learner = page.locator(names[index].trim() === 'Progress' ? '#learner-selection' : '#development-learner'); const option = learner.locator('option[value]:not([value=""])').first();
         await expect(option).toBeAttached(); await learner.focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
         await expect(learner).toHaveValue((await option.getAttribute('value'))!); await settled(page);
@@ -133,9 +144,9 @@ for (const role of roles) {
 }
 
 test('protected content clears offline and only returns after current membership revalidation', async ({ page, context }) => {
-  await signIn(page, 'student'); await mkdir(evidence, { recursive: true });
+  const displayName = await signIn(page, 'student'); await mkdir(evidence, { recursive: true });
   await context.setOffline(true); await expect(page.getByRole('heading', { name: 'You are offline', exact: true })).toBeVisible();
-  await expect(page.getByRole('navigation')).toHaveCount(0); await expect(page.getByText('Synthetic student', { exact: false })).toHaveCount(0);
+  await expect(page.getByRole('navigation')).toHaveCount(0); await expect(page.getByText(displayName, { exact: false })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeDisabled();
   await keyboardActivate(page, page.getByRole('button', { name: 'العربية', exact: true })); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.screenshot({ path: resolve(evidence, 'student-offline-ar.png') });
@@ -184,17 +195,19 @@ test('command form refusal is associated with named fields and supports keyboard
 
 for (const state of [{ status: 403, title: 'School access is unavailable for this account' }, { status: 401, title: 'Please sign in again' }, { status: 503, title: 'Your workspace is temporarily unavailable' }]) {
   test(`membership ${state.status} presentation removes protected content and keyboard retry restores verified access`, async ({ page }) => {
-    await signIn(page, 'parent'); await mkdir(evidence, { recursive: true });
+    const displayName = await signIn(page, 'parent'); await mkdir(evidence, { recursive: true });
     // Fault injection checks presentation/recovery only. API/SQL suites prove actual authorization denial.
     await page.route('**/v1/me', route => route.fulfill({ status: state.status, contentType: 'application/json', body: JSON.stringify({ code: 'TEST_MEMBERSHIP_FAILURE', requestId: `presentation-${state.status}` }), headers: { 'access-control-allow-origin': '*' } }));
     await keyboardActivate(page, page.getByRole('navigation').getByRole('button', { name: 'Access details', exact: true }));
     await keyboardActivate(page, page.getByRole('button', { name: 'Refresh access', exact: true }));
     await expect(page.getByRole('heading', { name: state.title, exact: true })).toBeVisible(); await expect(page.getByRole('navigation')).toHaveCount(0);
-    await expect(page.getByText('Synthetic parent', { exact: false })).toHaveCount(0); await expect(page.getByRole('status')).toBeVisible();
+    await expect(page.getByText(displayName, { exact: false })).toHaveCount(0); await expect(page.getByRole('status')).toBeVisible();
     expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
     await page.screenshot({ path: resolve(evidence, `parent-membership-${state.status}-en.png`) }); await page.unroute('**/v1/me');
     const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
     await keyboardActivate(page, page.getByRole('button', { name: 'Try again', exact: true })); expect((await verified).ok()).toBe(true);
-    await expect(page.getByRole('heading', { name: 'Next action', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your school access', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Current membership', exact: true })).toContainText('Parent / guardian');
+    await expect(page.locator('.workspace-intro .eyebrow')).toContainText(displayName);
   });
 }

@@ -20,7 +20,13 @@ Product sources live in `docs/product`. Read `docs/product/context-map.md` to lo
 
 For code navigation also read `docs/codebase-map.md`, `docs/architecture/repository-layout.md`, the nearest scoped `AGENTS.md`, and the affected feature/domain README. Scoped instructions add detail; they never weaken this constitution.
 
+For outbox, worker execution, event wakeups, scheduling or asynchronous workflow changes, read `docs/architecture/scalable-event-processing.md` and `docs/decisions/2026-10-02-event-triggered-worker.md`. They record the accepted full-app foundation, locally verified execution and remaining hosted/load gates; domain authority and numbered product requirements remain unchanged.
+
+For analytics, diagnostics or external dashboard changes, read `docs/operations/posthog.md` and `docs/decisions/2026-10-02-posthog-current-repository.md`. Capture must preserve current school approval, fixed environment/data class, source/lease authority, minimized fields and distinct destination receipts. Never relabel synthetic QA/demo/staging as real adoption, upload raw pupil content/console/stack/AI prompts, count missing capture as zero errors, or infer attainment/causation from product event totals. CI/ordinary tests must not silently enable remote ingestion. A project URL/source marker is not an authorization or ingestion firewall; complete legacy disconnection and external viewer isolation require separate evidence.
+
 For student XP, numbered levels, character progression, cosmetics or presentation selection, read `docs/architecture/character-progression-system.md` and `docs/decisions/2026-10-03-character-progression-foundation.md`, plus numbered sources 09/12/15/39/58/63/79/80 and current Development contracts/tests. The founder authorized this bounded foundation; documentation is not implementation acceptance. Extend the existing Development authority and source-backed XP ledger, never create a second award engine or per-school branch. School point/level/presentation policies are explicit, versioned and approved; new policy values never reprice historical awards or silently relevel existing tracks. Class-period rank, school-scoped progression, cosmetic ownership and academic attainment remain separate. Only authorized deterministic processing creates earned transitions/grants; frontend selections and AI never award them. Unknown/disabled progress stays nullable; cosmetic availability changes do not erase valid history. Preserve current scope, original-key retry, private grants/RLS, audit/outbox and append-only migrations. Paid store/wallet/payment flows and unrestricted student AI remain outside this foundation. Use the one Trail design system, English/Arabic, quiet/no-character alternatives and confirmed-receipt feedback.
+
+For the founder-approved Trail UI migration, read `docs/superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md`, `docs/superpowers/specs/2026-10-03-student-companion-growth.md` and the current implementation plan. Preserve the approved web/mobile authentication components, messages, assets, dimensions and styling. Authenticated tokens/themes stay scoped to workspace roots; real role/API/receipt integration and browser/RTL/mobile/accessibility acceptance remain separate from prepared pure views or asset generation. Keep the one `packages/ui` system and existing feature/shared ownership.
 
 ## Mandatory repository hierarchy rule
 
@@ -103,6 +109,8 @@ Worker
 
 Do not introduce microservices without an ADR proving a scaling/team/operational reason.
 
+Use the accepted event-driven foundation for new asynchronous capabilities: authorized source mutation, audit and durable outbox commit together; coalesced authenticated post-commit wakes request bounded worker execution; scheduled recovery finds due or abandoned work. Preserve the worker-owned processor and private domain authority. Immediate save confirmation does not wait for derived work, and an event never independently authorizes an AI call or high-impact action. Every new handler must define its event schema/version compatibility, owner, source validation, idempotency, completion/review semantics, privacy, recovery and latency/cost limits. Follow the staged full-app progression in the architecture plan; add durable long-job execution, tenant fairness or another runner only with requirements, measured need and an ADR. A wake is a delivery hint, not a second authoritative task ledger.
+
 ## MVP boundary
 
 Build the MVP only until Gate 5 passes.
@@ -157,6 +165,17 @@ Run as applicable:
 - build
 
 ## UI rule
+
+### Customer language and record identity
+
+- Never use a raw UUID, shortened hash, database key, enum or internal source/run/version identifier as a primary heading, card title, dropdown label, table label or navigation item.
+- Display authorized human context: person/course/assessment/objective name, class/year, date and meaningful revision/status as applicable. Distinguish same-name records with real context, never invented facts or an opaque ID suffix.
+- When a needed name/context is missing, show a clear localized unavailable/unknown state and an actionable recovery path. Do not silently replace it with an ID.
+- Keep technical identifiers available only inside an explicitly opened source/provenance or support detail when necessary for audit/support. Translate explanations into plain English/Arabic; customers should not need SQL, revisions, request keys or fixture terminology to operate supported workflows.
+- Preserve truthful demo, evidence, approval and curriculum limitations using concise customer language. Friendly wording never converts fixture/unverified content into live/official claims.
+- Review every affected role/screen and test representative primary labels, duplicates and unknown states. A screen that renders is not customer acceptance.
+- Keep acceptance-test records out of customer demonstrations. Restore the guarded synthetic reference-school environment after tests; never sanitize or overwrite customer-authored content to hide technical test titles.
+- Keep server HTML and the client's first render deterministic. Pass locale/snapshots from the server; run browser/time-dependent initialization after hydration when it changes visible markup. Test browser console warnings as well as page errors. Reproduce extension-injected DOM separately from application mismatches; never hide broad hydration failures with blanket suppression.
 
 Each screen must answer:
 

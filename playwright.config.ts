@@ -4,5 +4,5 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: { baseURL: 'http://localhost:3000', trace: 'off', screenshot: 'only-on-failure' },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
-  webServer: { command: 'npm run dev', url: 'http://localhost:3000', reuseExistingServer: !process.env.CI, timeout: 30000 },
+  webServer: { command: 'npm run dev', env: { CUEVO_POSTHOG_LOCAL_OVERLAY: 'false' }, url: 'http://localhost:3000', reuseExistingServer: !process.env.CI, timeout: 30000 },
 });

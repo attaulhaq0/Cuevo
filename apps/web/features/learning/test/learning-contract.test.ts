@@ -21,3 +21,12 @@ test('rubric assessments retain their model and rubric source without a numeric 
   assert.throws(() => parseAssessment({ ...assessment, rubricId: null }), LearningApiError);
   assert.throws(() => parseAssessment({ ...assessment, maxScore: 10 }), LearningApiError);
 });
+
+test('course paging preserves the selected unit and rejects incomplete completion receipts', () => {
+  const course = { id: 'c', classId: 'cl', subjectId: 's', title: 'Course', description: '', status: 'PUBLISHED', createdAt: '2026-10-01T00:00:00.000Z', units: [{ id: 'u', title: 'Unit', sequence: 1, lessons: [{ id: 'l', title: 'Lesson', body: 'Read', status: 'PUBLISHED', sequence: 1, activities: [{ id: 'a', title: 'Practice', kind: 'practice', instructions: 'Explain', sequence: 1, completion: { id: 'receipt' } }] }] }], selectedUnitId: 'u', nextUnitCursor: null, nextLessonCursor: null };
+  assert.throws(() => parseCourseDetail(course), LearningApiError);
+});
+test('private preparation requires its closed status and explicit intended configuration',()=>{
+ const draft={id:'a',courseId:'c',title:'Prepared task',instructions:'Explain',model:'numeric',maxScore:10,rubricId:null,status:'DRAFT',dueAt:null,policyVersion:1,availableFrom:null,availableUntil:null,allowLate:true,assignmentState:'CLOSED',availabilityVersion:1,submissionKind:'TEXT',preparationVersion:1,intendedSubmissionKind:'QUIZ',intendedModel:'rubric',referenceId:null};
+ assert.equal(parseAssessment(draft).status,'DRAFT');assert.throws(()=>parseAssessment({...draft,assignmentState:'OPEN'}),LearningApiError);assert.throws(()=>parseAssessment({...draft,preparationVersion:0}),LearningApiError);
+});

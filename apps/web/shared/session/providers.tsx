@@ -7,6 +7,8 @@ import { fetchMembership, MembershipError, type Membership } from './membership'
 import { getDictionary, type Locale } from '../i18n/locale';
 import { classifyAuthError } from './auth-error';
 import { CommandJournal } from '../api/client';
+import { FormDrafts } from './form-drafts';
+import { useBrowserDiagnostics, type DiagnosticSignal } from '../diagnostics/use-browser-diagnostics';
 
 type AuthState = 'initializing' | 'signed-out' | 'verifying' | 'ready' | 'error' | 'not-configured';
 type AppContext = {
@@ -24,6 +26,13 @@ type AppContext = {
   apiUrl: string;
   publicConfig:PublicConfig;
   commandJournal: CommandJournal;
+  formDrafts: FormDrafts;
+  notice: string | null;
+  announce: (message: string) => void;
+  selectedChildId: string;
+  selectChild: (id: string) => void;
+  accessGeneration: number;
+  reportDiagnostic: (value: DiagnosticSignal) => void;
 };
 const Context = createContext<AppContext | null>(null);
 
@@ -35,14 +44,22 @@ export function Providers({ children, initialLocale, config }: { children: React
   const [membership, setMembership] = useState<Membership | null>(null);
   const [failure, setFailure] = useState<MembershipError | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [accessGeneration, setAccessGeneration] = useState(0);
   const [online, setOnline] = useState(true);
   const selectedSchool = useRef<string | undefined>(undefined);
   const activeUser = useRef<string | undefined>(undefined);
   const accessVerified = useRef(false);
   const commandJournal = useRef(new CommandJournal());
+  const formDrafts = useRef(new FormDrafts());
+  const [notice, setNotice] = useState<string | null>(null);
+  const announce = useCallback((message: string) => setNotice(message), []);
+  const [selectedChildId, selectChild] = useState('');
 
   const setLocale = useCallback((nextLocale: Locale) => {
     updateLocale(nextLocale);
+    // Action confirmations describe the language in which the action completed.
+    // Clear that transient notice rather than leave a stale-language confirmation.
+    setNotice(null);
     document.documentElement.lang = nextLocale;
     document.documentElement.dir = nextLocale === 'ar' ? 'rtl' : 'ltr';
     document.cookie = `cuevo_locale=${nextLocale}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
@@ -51,7 +68,7 @@ export function Providers({ children, initialLocale, config }: { children: React
 
   useEffect(() => {
     const onOnline = () => { setOnline(true); refreshAccess(); };
-    const onOffline = () => { setOnline(false); setMembership(null); accessVerified.current = false; };
+    const onOffline = () => { setOnline(false); setMembership(null); accessVerified.current = false; formDrafts.current.clear(); setNotice(null); };
     setOnline(navigator.onLine);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -76,11 +93,12 @@ export function Providers({ children, initialLocale, config }: { children: React
         setMembership(null);
         accessVerified.current = false;
         commandJournal.current.clear();
+        formDrafts.current.clear(); setNotice(null); selectChild('');
         selectedSchool.current = undefined;
         activeUser.current = undefined;
         setStatus('signed-out');
       } else {
-        if (activeUser.current !== nextSession.user.id) { selectedSchool.current = undefined; accessVerified.current = false; setMembership(null); commandJournal.current.clear(); }
+        if (activeUser.current !== nextSession.user.id) { selectedSchool.current = undefined; accessVerified.current = false; setMembership(null); commandJournal.current.clear(); formDrafts.current.clear(); setNotice(null); selectChild(''); }
         activeUser.current = nextSession.user.id;
         if (!accessVerified.current) setStatus('verifying');
         refreshAccess();
@@ -96,6 +114,7 @@ export function Providers({ children, initialLocale, config }: { children: React
   }, [client, refreshAccess]);
 
   const accessToken = session?.access_token;
+  const reportDiagnostic = useBrowserDiagnostics({ apiUrl: config.apiUrl, userId: membership?.userId, schoolId: membership?.schoolId, accessToken: status === 'ready' ? accessToken : undefined, ready: status === 'ready', online, accessGeneration, locale });
   useEffect(() => {
     if (!accessToken || !online) return;
     const controller = new AbortController();
@@ -107,11 +126,13 @@ export function Providers({ children, initialLocale, config }: { children: React
         selectedSchool.current = current.schoolId;
         accessVerified.current = true;
         setMembership(current);
+        setAccessGeneration(value => value + 1);
         setStatus('ready');
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setMembership(null);
+        formDrafts.current.clear(); setNotice(null);
         accessVerified.current = false;
         setStatus('error');
         setFailure(error instanceof MembershipError ? error : new MembershipError('unavailable'));
@@ -138,12 +159,13 @@ export function Providers({ children, initialLocale, config }: { children: React
       selectedSchool.current = undefined;
       accessVerified.current = false;
       commandJournal.current.clear();
+      formDrafts.current.clear(); setNotice(null); selectChild('');
       setStatus('signed-out');
       return true;
     } catch { return false; }
   }, [client]);
 
-  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config,commandJournal: commandJournal.current }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
 }
 
 export function useApp() {

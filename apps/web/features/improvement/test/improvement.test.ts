@@ -14,7 +14,7 @@ test('unapproved proposals and explicit human origin stay separate from executed
 
 test('missing follow-up and unknown outcome state never become measured zero change', () => {
   const outcome = { id: 'o', interventionId: 'i', baselineResultId: 'b', followUpResultId: 'f', status: 'improved', difference: 2, minimumChange: 1, baseline: { score: 0, maxScore: 10 }, followUp: { score: 2, maxScore: 10 }, reason: 'OBSERVED_RAW_SCORE_CHANGE', limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF', measuredAt: '2026-10-01T00:00:00.000Z' };
-  assert.equal(parseOutcome(outcome).baseline.score, 0);
+  const parsed=parseOutcome(outcome);assert.ok('difference'in parsed);assert.equal(parsed.baseline.score,0);
   assert.throws(() => parseOutcome({ ...outcome, status: 'STUDENT_QUALITY_IMPROVED' }), LearningApiError);
   assert.throws(() => parseOutcome({ ...outcome, minimumChange: 0 }), LearningApiError);
   assert.throws(() => parseOutcome({ ...outcome, followUp: { maxScore: 10 } }), LearningApiError);
@@ -22,7 +22,7 @@ test('missing follow-up and unknown outcome state never become measured zero cha
 
 test('measured comparison refuses absent source, incompatible scale and fabricated raw difference', () => {
   const outcome = { id: 'o', interventionId: 'i', baselineResultId: 'b', followUpResultId: 'f', status: 'inconclusive', difference: -3, minimumChange: 2, baseline: { score: 3, maxScore: 10 }, followUp: { score: 0, maxScore: 10 }, reason: 'FOLLOW_UP_LOWER', limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF', measuredAt: '2026-10-01T00:00:00.000Z' };
-  assert.equal(parseOutcome(outcome).followUp.score, 0);
+  const parsed=parseOutcome(outcome);assert.ok('difference'in parsed);assert.equal(parsed.followUp.score,0);
   assert.throws(() => parseOutcome({ ...outcome, followUpResultId: null }), LearningApiError);
   assert.throws(() => parseOutcome({ ...outcome, difference: null }), LearningApiError);
   assert.throws(() => parseOutcome({ ...outcome, difference: 0 }), LearningApiError);
@@ -48,6 +48,6 @@ test('fixture analysis needs a persisted run and cannot masquerade as live or hu
 
 test('native comparison accepts decimal representation and requires the correct observed-change reason', () => {
   const outcome = { id: 'o', interventionId: 'i', baselineResultId: 'b', followUpResultId: 'f', status: 'improved', difference: 0.1, minimumChange: 0.05, baseline: { score: 99999.1, maxScore: 100000 }, followUp: { score: 99999.2, maxScore: 100000 }, reason: 'OBSERVED_RAW_SCORE_CHANGE', limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF', measuredAt: '2026-10-01T00:00:00.000Z' };
-  assert.equal(parseOutcome(outcome).difference, 0.1);
+  const parsed=parseOutcome(outcome);assert.ok('difference'in parsed);assert.equal(parsed.difference,0.1);
   assert.throws(() => parseOutcome({ ...outcome, reason: 'FOLLOW_UP_LOWER' }), LearningApiError);
 });

@@ -83,7 +83,7 @@ test('revoked membership errors stay distinct from a dependency outage and hide 
 test('multiple memberships require a school selection without manufacturing one', async () => {
   const server = createServer((_request, response) => {
     response.writeHead(409, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: 'MULTIPLE_SCHOOLS', requestId: 'request-multiple' }));
+    response.end(JSON.stringify({ code: 'SCHOOL_SELECTION_REQUIRED', requestId: 'request-multiple' }));
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {

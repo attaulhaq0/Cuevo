@@ -1,11 +1,13 @@
 import { LearningApiError } from '../../shared/api/client.ts';
 import { parseIntervention, parseOutcome, type Intervention, type Outcome } from '../improvement/model.ts';
 import { parseNativeResult, type NativeResult } from '../academic/model.ts';
+import { learnerProjectionSchema } from '@cuevo/contracts';
+import type { z } from 'zod';
 
-export type AcademicStateRow = { resultId: string; referenceId: string; referenceVersion: string; nativeResult: NativeResult; evidenceId: string; observedAt: string };
-export type LearnerState = { learnerId: string; status: 'READY' | 'UNKNOWN'; freshness?: 'CURRENT' | 'STALE' | 'APPROVED_PROJECTION'; generatedAt: string | null; version: number | null; academic: AcademicStateRow[]; development: { practice: { count: number | null; observationIds: string[] }; revision: { count: number | null; observationIds: string[] }; reflection: { count: number | null; observationIds: string[] }; windowStart: string | null; windowEnd: string | null; completeness?: 'RECORDED_ONLY' }; engagement: { completedActivityCount: number | null; lastCompletedAt: string | null }; support: { activeInterventionIds: string[]; items: Intervention[] }; impact: { status: 'unmeasured' | 'measured'; measurementIds: string[]; outcomes: Outcome[] }; sourceEventIds: string[] };
+export type AcademicStateRow = { resultId: string; referenceId: string; referenceVersion: string; nativeResult: NativeResult; evidenceId: string; observedAt: string; assessmentTitle?: string; referenceTitle?: string };
+export type LearnerState = { learnerId: string; status: 'READY' | 'UNKNOWN'; freshness?: 'CURRENT' | 'STALE' | 'APPROVED_PROJECTION'; generatedAt: string | null; version: number | null; academic: AcademicStateRow[]; development: { practice: { count: number | null; observationIds: string[] }; revision: { count: number | null; observationIds: string[] }; reflection: { count: number | null; observationIds: string[] }; windowStart: string | null; windowEnd: string | null; completeness?: 'RECORDED_ONLY' }; engagement: { completedActivityCount: number | null; lastCompletedAt: string | null }; support: { activeInterventionIds: string[]; items: Intervention[] }; impact: { status: 'unmeasured' | 'measured'; measurementIds: string[]; outcomes: Outcome[] }; sourceEventIds: string[]; projection?: z.infer<typeof learnerProjectionSchema> };
 export type Observation = { id: string; learnerId: string; kind: 'practice' | 'revision' | 'reflection'; sourceType: string; sourceObjectId: string; occurredAt: string; sourceEventId: string };
-export type Signal = { id: string; learnerId: string; type: 'practice_observed'; count: number; ruleVersion: number; createdAt: string; windowStart: string; windowEnd: string; sourceEventIds: string[]; observationIds: string[]; status: 'ACTIVE'; uncertainty: 'OBSERVATION_ONLY' };
+export type Signal = { id: string; learnerId: string; type: 'practice_observed'; count: number; ruleVersion: number; createdAt: string; windowStart: string; windowEnd: string; sourceEventIds: string[]; observationIds: string[]; status: 'ACTIVE'; uncertainty: 'OBSERVATION_ONLY'; sourceCoverage?: { totalCount: number; returnedCount: number; truncated: boolean } };
 type AttentionBase = { id: string; learnerId: string; ruleVersion: number; generatedAt: string; sourceEventIds: string[] };
 export type AttentionSignal = AttentionBase & ({ type: 'native_result_decline'; referenceId: string; referenceVersion: string; baselineResultId: string; followUpResultId: string; evidenceIds: string[]; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; difference: number; minimumDecline: number; uncertainty: 'OBSERVED_CHANGE_NOT_CAUSE' } | { type: 'missing_due_work'; count: number; missingAssessments: { id: string; title: string; dueAt: string }[]; uncertainty: 'MISSING_SUBMISSION_NOT_ZERO' });
 export function parseAttentionSignal(value: unknown): AttentionSignal {
@@ -30,6 +32,7 @@ export function parseLearnerState(value: unknown): LearnerState {
   for (const row of value.academic) {
     if (!object(row) || !strings(row, ['resultId', 'referenceId', 'referenceVersion', 'evidenceId']) || !date(row.observedAt) || !object(row.nativeResult) || row.nativeResult.normalized !== null) throw new LearningApiError('invalid');
     parseNativeResult(row.nativeResult);
+    if (['assessmentTitle', 'referenceTitle'].some(key => row[key] !== undefined && (typeof row[key] !== 'string' || !row[key]))) throw new LearningApiError('invalid');
   }
   for (const kind of ['practice', 'revision', 'reflection']) {
     const dimension = value.development[kind];
@@ -47,7 +50,16 @@ export function parseLearnerState(value: unknown): LearnerState {
   if (value.freshness !== undefined && !['CURRENT', 'STALE', 'APPROVED_PROJECTION'].includes(String(value.freshness)) || value.development.completeness !== undefined && value.development.completeness !== 'RECORDED_ONLY') throw new LearningApiError('invalid');
   if (value.status === 'UNKNOWN' && (value.generatedAt !== null || value.version !== null || value.academic.length || value.sourceEventIds.length || value.engagement.completedActivityCount !== null || ['practice', 'revision', 'reflection'].some((kind) => (value.development as Record<string, Record<string, unknown>>)[kind].count !== null))) throw new LearningApiError('invalid');
   if ((value.status === 'UNKNOWN' || value.freshness === 'APPROVED_PROJECTION') && (interventions.length || outcomes.length || value.support.activeInterventionIds.length || value.impact.measurementIds.length)) throw new LearningApiError('invalid');
+  if (value.projection !== undefined) {
+    const checked = learnerProjectionSchema.safeParse(value.projection);
+    if (!checked.success || checked.data.academic.returnedCount !== value.academic.length || checked.data.sourceEvents.returnedCount !== value.sourceEventIds.length) throw new LearningApiError('invalid');
+    for (const kind of ['practice', 'revision', 'reflection'] as const) {
+      const dimension = value.development[kind] as { count: number | null; observationIds: string[] };
+      if (checked.data.observations[kind].totalCount !== dimension.count || checked.data.observations[kind].returnedCount !== dimension.observationIds.length) throw new LearningApiError('invalid');
+    }
+    if (checked.data.support && checked.data.support.returnedCount !== interventions.length || checked.data.outcomes && checked.data.outcomes.returnedCount !== outcomes.length) throw new LearningApiError('invalid');
+  }
   return value as LearnerState;
 }
 export function parseObservation(value: unknown): Observation { if (!object(value) || !strings(value, ['id', 'learnerId', 'sourceObjectId', 'sourceEventId']) || !['practice', 'reflection', 'revision'].includes(String(value.kind)) || value.sourceType !== (value.kind === 'revision' ? 'SUBMISSION_REVISION' : 'ACTIVITY_COMPLETION') || !date(value.occurredAt)) throw new LearningApiError('invalid'); return value as Observation; }
-export function parseSignal(value: unknown): Signal { if (!object(value) || !strings(value, ['id', 'learnerId']) || typeof value.ruleVersion !== 'number' || !Number.isInteger(value.ruleVersion) || value.ruleVersion < 1 || value.type !== 'practice_observed' || typeof value.count !== 'number' || !count(value.count) || !date(value.createdAt) || !date(value.windowStart) || !date(value.windowEnd) || !ids(value.sourceEventIds) || !ids(value.observationIds) || value.status !== 'ACTIVE' || value.uncertainty !== 'OBSERVATION_ONLY') throw new LearningApiError('invalid'); return value as Signal; }
+export function parseSignal(value: unknown): Signal { if (!object(value) || !strings(value, ['id', 'learnerId']) || typeof value.ruleVersion !== 'number' || !Number.isInteger(value.ruleVersion) || value.ruleVersion < 1 || value.type !== 'practice_observed' || typeof value.count !== 'number' || !count(value.count) || !date(value.createdAt) || !date(value.windowStart) || !date(value.windowEnd) || !ids(value.sourceEventIds) || !ids(value.observationIds) || value.status !== 'ACTIVE' || value.uncertainty !== 'OBSERVATION_ONLY') throw new LearningApiError('invalid'); if (value.sourceCoverage !== undefined) { const coverage = value.sourceCoverage; if (!object(coverage) || coverage.totalCount !== value.count || coverage.returnedCount !== value.observationIds.length || coverage.truncated !== (Number(value.count) > value.observationIds.length)) throw new LearningApiError('invalid'); } return value as Signal; }

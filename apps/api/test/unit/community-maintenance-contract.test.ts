@@ -1,0 +1,6 @@
+import { describe,expect,it } from 'vitest';
+import { communityGroupLifecycleSchema,communityReportReviewSchema,communityAnnouncementRevisionSchema,communityExactReadSchema } from '@cuevo/contracts';
+describe('controlled community lifecycle boundaries',()=>{
+ it('requires human scope review and expected current versions',()=>{expect(communityGroupLifecycleSchema.safeParse({name:'Reviewed group',state:'CLOSED',expectedRevision:1,reason:'Teacher closes this group.',confirmChange:true}).success).toBe(true);expect(communityGroupLifecycleSchema.safeParse({name:'Group',state:'CLOSED',expectedRevision:1,reason:'Close',confirmChange:false}).success).toBe(false);expect(communityReportReviewSchema.safeParse({outcome:'RESOLVED',expectedRevision:0,reason:'Teacher reviewed exact report.',confirmReview:true}).success).toBe(true);});
+ it('does not silently read another announcement revision or inject audience',()=>{expect(communityExactReadSchema.safeParse({expectedRevision:2}).success).toBe(true);expect(communityExactReadSchema.safeParse({}).success).toBe(false);expect(communityAnnouncementRevisionSchema.safeParse({title:'Updated meeting',body:'Current explanation.',parentVisible:true,expectedRevision:1,reason:'School corrects dates.',confirmPublication:true,studentId:'injected'}).success).toBe(false);});
+});

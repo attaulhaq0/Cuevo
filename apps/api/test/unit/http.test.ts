@@ -64,4 +64,17 @@ describe('configured dependency health through the HTTP adapter', () => {
       expect(result.body).not.toContain('private provider failure');
     } finally { vi.unstubAllGlobals(); await runtime.close(); }
   });
+  it('a public readiness burst shares dependency work before exhausting its separate budget', async () => {
+    const runtime = await createApp(config());
+    const databaseProbe = vi.spyOn(runtime.database, 'ready').mockResolvedValue(true);
+    const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      const results = await Promise.all(Array.from({ length: 25 }, () => runtime.app.inject({ url: '/health/ready' })));
+      expect(results.every(result => result.statusCode === 200)).toBe(true);
+      expect(databaseProbe).toHaveBeenCalledTimes(1);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      for (const result of results) expect(result.json()).toMatchObject({ database: true, authentication: true });
+    } finally { vi.unstubAllGlobals(); await runtime.close(); }
+  });
 });

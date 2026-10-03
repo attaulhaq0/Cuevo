@@ -38,9 +38,12 @@ export function checkArchitecture(input: ArchitectureFile[], options: { navigati
     if (specifier.startsWith('.')) base = path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
     else if (specifier.startsWith('@cuevo/')) {
       const [name, ...subpath] = specifier.slice('@cuevo/'.length).split('/');
-      // The public workspace export lives at src/index.ts; UI exposes only tokens.css separately.
-      if (subpath.length && !(name === 'ui' && subpath.join('/') === 'tokens.css')) return undefined;
-      base = `packages/${name}/src/${subpath.length ? 'tokens.css' : 'index'}`;
+      // Explicit subpaths keep portable contracts separate from runtime validation and secrets.
+      const publicSubpath = name === 'ui' && subpath.join('/') === 'tokens.css' ? 'tokens.css'
+        : name === 'contracts' && subpath.join('/') === 'analytics' ? 'analytics'
+        : name === 'config' && subpath.join('/') === 'synthetic-runtime' ? 'synthetic-runtime' : undefined;
+      if (subpath.length && !publicSubpath) return undefined;
+      base = `packages/${name}/src/${publicSubpath ?? 'index'}`;
     } else return undefined;
     const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}/index.ts`, `${base}/index.tsx`];
     return candidates.find(candidate => paths.has(candidate));
@@ -51,8 +54,8 @@ export function checkArchitecture(input: ArchitectureFile[], options: { navigati
     const runtime = (from.startsWith('apps/api/src/') || from.startsWith('apps/worker/src/') || from.startsWith('apps/web/app/') || from.startsWith('apps/web/features/') || from.startsWith('apps/web/shared/') || from.startsWith('packages/') && !testFile(from));
     if (app === 'web' && !testFile(from) && !webRuntime(from) && !from.startsWith('apps/web/.storybook/') && !['apps/web/next.config.ts', 'apps/web/instrumentation.ts', 'apps/web/proxy.ts'].includes(from)) fail(from, 'layout', 'Web runtime source must belong to app, features or shared.');
     if (from.startsWith('apps/web/components/') || from.startsWith('apps/web/lib/') || from.startsWith('apps/web/messages/')) fail(from, 'layout', 'Web source must have feature or shared ownership.');
-    if (from.startsWith('apps/api/src/') && !['apps/api/src/app.ts', 'apps/api/src/main.ts'].includes(from) && !from.startsWith('apps/api/src/modules/') && !from.startsWith('apps/api/src/platform/')) fail(from, 'layout', 'API source belongs to a domain module or platform capability.');
-    if (from.startsWith('apps/worker/src/') && from !== 'apps/worker/src/main.ts' && !from.startsWith('apps/worker/src/jobs/') && !from.startsWith('apps/worker/src/platform/')) fail(from, 'layout', 'Worker source belongs to jobs or platform.');
+    if (from.startsWith('apps/api/src/') && !['apps/api/src/app.ts', 'apps/api/src/main.ts', 'apps/api/src/serverless.ts'].includes(from) && !from.startsWith('apps/api/src/modules/') && !from.startsWith('apps/api/src/platform/')) fail(from, 'layout', 'API source belongs to a domain module or platform capability.');
+    if (from.startsWith('apps/worker/src/') && !['apps/worker/src/main.ts', 'apps/worker/src/edge.ts'].includes(from) && !from.startsWith('apps/worker/src/jobs/') && !from.startsWith('apps/worker/src/platform/')) fail(from, 'layout', 'Worker source belongs to jobs or platform.');
     graph.set(from, []);
     for (const specifier of imports(file)) {
       const target = resolve(from, specifier);
