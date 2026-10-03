@@ -3,6 +3,7 @@ export type { StudentTrailAction, StudentTrailAssets, StudentTrailContext, Stude
 export type { TeacherTrailAction, TeacherTrailContext, TeacherTrailItem, TeacherTrailQueueState } from './teacher-trail-model.ts';
 export type { ParentTrailAction, ParentTrailChild, ParentTrailContext, ParentTrailSnapshot } from './parent-trail-model.ts';
 export type { CoordinatorTrailAction, CoordinatorTrailContext } from './coordinator-trail-model.ts';
+export type { AdminTrailAction, AdminTrailContext, AdminTrailState } from './admin-trail-model.ts';
 export type HomeTarget = 'learning' | 'academic' | 'progress' | 'improvement' | 'school' | 'community' | 'portfolio' | 'development' | 'curriculum';
 export type PendingWork = { assessmentId: string; title: string; dueAt: string | null; needsRevision: boolean };
 export function pendingWork(assessments: Assessment[], submissions: Submission[], learnerId: string, now: number): PendingWork[] {
