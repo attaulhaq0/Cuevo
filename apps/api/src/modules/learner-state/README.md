@@ -1,5 +1,7 @@
 # Learner state domain
 
+Outcome human context is attached only during current read after the existing authorized support/outcome filtering. Stored snapshots, source IDs/counts, native measurement and events remain unchanged; no parent outcome projection is added. The shared optional context contract binds supplied learner identity to the selected state, and malformed/context-mismatched reads fail closed.
+
 Entry: learner-state.controller.ts; public interface createLearnerStateController(identity,database). Private state processing lives in worker jobs and database source functions. Product source IDs 04, 08, 09, 11, 38, 39 and 81 apply.
 
 Keep academic, recorded development, engagement, support and impact separate. Missing/stale counts remain unknown; parent receives only approved projection. No composite intelligence/character score. Tests: API unit/learner-state-contract.test.ts, integration/learner-state-api.test.ts, worker tests and SQL 050. Shared boundary schema: @cuevo/contracts. Source-linked evidence does not imply official curriculum readiness.

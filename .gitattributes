@@ -2,6 +2,9 @@
 supabase/migrations/20261003032848_current_academic_source_candidates.sql -text -eol
 supabase/migrations/20261003035947_human_academic_source_context.sql -text -eol
 supabase/migrations/20261003040930_academic_reference_display_dates.sql -text -eol
+supabase/migrations/20261003043730_human_outcome_read_context.sql -text -eol
+supabase/migrations/20261003045152_outcome_context_authorized_projection.sql -text -eol
+supabase/migrations/20261003045559_intervention_history_exact_candidate.sql -text -eol
 *.png binary
 *.pdf binary
 # Preserve exact applied bytes for these newly authored migration sources.

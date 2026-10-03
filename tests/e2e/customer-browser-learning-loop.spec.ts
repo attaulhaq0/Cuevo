@@ -222,6 +222,10 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('student'); await navigate('Progress'); let state: Record<string, unknown> = {};
     await expect.poll(async () => { state = await refreshState(); return (state.impact as { outcomes: { id: string }[] }).outcomes.some(item => item.id === outcome.id); }, { timeout: 20000 }).toBe(true);
     expect((state.sourceEventIds as string[]).length).toBeGreaterThan(0); const outcomeRow = page.locator(`[data-outcome-id="${outcome.id}"]`); await expect(outcomeRow).toContainText('Observed change is not proof that the practice caused the outcome.');
+    await expect(outcomeRow.getByRole('heading',{name:practiceTitle,exact:true})).toBeVisible();
+    await expect(outcomeRow).toContainText(studentName);
+    await expect(outcomeRow).toContainText(baselineTitle);
+    await expect(outcomeRow).toContainText(followUpTitle);
     await capture('06-source-linked-measured-outcome.png'); await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const arabicFollowUp = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: followUpTitle, exact: true }) }).locator('.native-score');
     await expect(arabicFollowUp).toHaveAttribute('role', 'img');

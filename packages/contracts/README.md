@@ -1,5 +1,7 @@
 # Boundary contracts
 
+`outcome-display.ts` adds optional strict read-time context to numeric/rubric outcome responses. It requires exact learner identity, nullable registered names/source-task labels and dates, and explicit READY/REQUIRES_REVIEW. READY cannot claim missing or ambiguous context. Learner-state responses bind any supplied context to the selected learner. The existing native measurement schema, comparison rules, command/event values and legacy context-free snapshots stay compatible; this contract grants no source access and introduces no names into worker events.
+
 `academicEvidenceSchema`/`academicEvidenceContextSchema` validate exact numeric/rubric evidence with purpose-limited human source context. Names/fields may be null only under review; READY requires complete non-ambiguous context. This display projection grants no additional source, school or membership authority.
 
 Portable analytics contracts also describe strict intelligence metadata: fixed source event names, output/review/cost-basis enums, nullable source counts/usage, HMAC-ready run/context references and linked outcome comparability. The worker validates the constructed private projection; these types grant no retrieval or academic authority. No prompt/output/PII/free-text field is part of this analytics contract.

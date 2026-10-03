@@ -11,6 +11,7 @@ export * from './school-learning';
 export * from './academic';
 export * from './learner-state';
 export * from './improvement';
+export * from './outcome-display';
 export * from './school';
 export * from './school-support';
 export * from './school-maintenance';

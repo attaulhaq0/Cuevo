@@ -1,5 +1,9 @@
 # Improvement feature
 
+Outcome cards lead with permitted learner/class/course, approved practice and before/after task context. The read-only source extension preserves numeric difference/threshold and rubric UNKNOWN comparability; absence or ambiguity gets explicit review guidance. Progress reuses the same OutcomeList; coordinator Home uses the same parsed context in its compact cards. No ID substitutes for a missing human label.
+
+`parseOutcome` validates optional current registered learner/class/course and immutable practice/assessment display context, preserving context-free legacy outcomes. Missing or ambiguous context stays explicit review; it cannot be replaced with identifiers or inferred names. Progress passes the selected learner to the parser and the shared learner-state contract repeats that binding. Native numeric comparisons and rubric UNKNOWN comparability remain unchanged. The current server read and cards use this projection without altering measurement/event receipts.
+
 Numeric measured-outcome score/maximum pairs are isolated with explicit LTR bidi direction inside Arabic definition-list labels. This preserves native ordering without changing comparability, change threshold or causal limitations. The actual full-loop Arabic mobile browser case checks the exact baseline and follow-up ratio.
 
 Owns proposal review, approval, support completion and non-causal outcome comparison. Public interfaces: model.ts, ui.tsx (ImprovementWorkspace and the read-only OutcomeList shared with progress), copy.ts. Consume academic/learning public models and academic/ui evidence; use shared session/forms/retry/pagination. API owner: modules/improvement. Product source IDs 10, 12, 21 and 63.

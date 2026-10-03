@@ -1,4 +1,7 @@
 export const improvementEn = {
+  outcomeContextUnavailable: 'Practice context is unavailable. Refresh this view or ask the teacher to review the source.',
+  outcomeContextReview: 'Some current names or task details need school review. The measured result remains unchanged.',
+  outcomeNamesBasis: 'Current school names and the originally approved practice are shown.',
   nameUnavailable: 'Name unavailable in current records',
   sourceChanged: 'This practice and its comparison need teacher review because the assessment source changed.',
   showAnalysisContext: 'Show analysis source context', analysisContext: 'Authorized analysis context', contextCoverage: 'This is the bounded authorized context recorded for this run. It does not establish complete evidence coverage. Recorded facts remain separate from the proposal interpretation.', legacyContext: 'Detailed source context was not retained for this earlier run. Its absence is unknown, not proof that no source records existed.', referenceContext: 'Objective context', classContext: 'Class source', courseContext: 'Course source', sourceResults: 'Native result sources', recordedContext: 'Recorded learning observations', priorContext: 'Prior approved support and measured outcomes', availableOptions: 'Authorized teacher learning options', noRecordedContext: 'No observations were supplied in this bounded run context.', noPriorContext: 'No earlier support was supplied in this bounded run context.', noOptionsContext: 'No teacher learning options were supplied in this bounded run context.', contextKinds: { practice: 'Practice', revision: 'Revision', reflection: 'Reflection', reading: 'Reading' },
@@ -19,6 +22,9 @@ export const improvementEn = {
   humanNotice: 'Teacher proposals are human-authored interpretations of cited evidence. They are not AI analysis or authoritative academic records.',
 };
 export const improvementAr: typeof improvementEn = {
+  outcomeContextUnavailable: 'سياق التدريب غير متاح. حدّث العرض أو اطلب من المعلّم مراجعة المصدر.',
+  outcomeContextReview: 'تحتاج بعض الأسماء الحالية أو تفاصيل المهمة إلى مراجعة المدرسة. تبقى النتيجة المقاسة دون تغيير.',
+  outcomeNamesBasis: 'تظهر أسماء المدرسة الحالية والتدريب المعتمد أصلًا.',
   nameUnavailable: 'الاسم غير متاح في السجلات الحالية',
   sourceChanged: 'يحتاج هذا التدريب ومقارنته إلى مراجعة المعلّم لأن مصدر التقييم تغير.',
   showAnalysisContext: 'عرض سياق مصادر التحليل', analysisContext: 'سياق التحليل ضمن الصلاحيات', contextCoverage: 'هذا هو السياق المحدود ضمن الصلاحيات المسجّل لهذا التشغيل. لا يثبت اكتمال تغطية الشواهد. تبقى الحقائق المسجّلة منفصلة عن تفسير المقترح.', legacyContext: 'لم تُحفظ تفاصيل السياق المصدري لهذا التشغيل السابق. غيابها مجهول ولا يثبت عدم وجود سجلات مصدرية.', referenceContext: 'سياق الهدف', classContext: 'مصدر الصف', courseContext: 'مصدر المقرر', sourceResults: 'مصادر النتائج الأصلية', recordedContext: 'ملاحظات التعلّم المسجّلة', priorContext: 'الدعم المعتمد السابق والنتائج المقاسة', availableOptions: 'خيارات التعلّم التي أعدّها المعلّم ضمن الصلاحيات', noRecordedContext: 'لم تُقدّم ملاحظات في سياق التشغيل المحدود هذا.', noPriorContext: 'لم يُقدّم دعم سابق في سياق التشغيل المحدود هذا.', noOptionsContext: 'لم تُقدّم خيارات تعلّم للمعلّم في سياق التشغيل المحدود هذا.', contextKinds: { practice: 'التدريب', revision: 'المراجعة', reflection: 'التأمّل', reading: 'القراءة' },
