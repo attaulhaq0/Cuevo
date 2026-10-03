@@ -48,7 +48,7 @@ export type StudentTrailContext = {
     course: string | null;
     unit: string | null;
     stepNumber?: number;
-    state: 'available' | 'revision' | 'submitted' | 'processing' | 'unknown';
+    state: 'available' | 'revision' | 'submitted' | 'processing' | 'unknown' | 'empty';
     primaryAction: StudentTrailAction | null;
   } | null;
   stages: StudentTrailStage[];

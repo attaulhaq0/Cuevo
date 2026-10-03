@@ -1,5 +1,46 @@
 import type { ReactNode } from 'react';
 import type { CuevoIconName } from '@cuevo/ui';
+import { canOpenWorkspace, type WorkspaceTarget } from '../../shared/session/capabilities';
+import type { Membership } from '../../shared/session/membership';
+import { navigationParameters, type NavigationIntent } from '../../shared/session/navigation-intent';
+
+export type WorkspaceDestination = { id: WorkspaceTarget; label: string; icon: CuevoIconName };
+
+/** Enter creates an ordinary click; modifier/middle clicks retain link semantics. */
+export function isWorkspaceHomeActivation(event: Pick<MouseEvent, 'button' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+const destinations: { id: WorkspaceTarget; icon: CuevoIconName }[] = [
+  { id: 'overview', icon: 'home' }, { id: 'school', icon: 'school' },
+  { id: 'community', icon: 'community' }, { id: 'portfolio', icon: 'portfolio' },
+  { id: 'development', icon: 'development' }, { id: 'curriculum', icon: 'curriculum' },
+  { id: 'restricted', icon: 'shield' }, { id: 'learning', icon: 'learning' },
+  { id: 'academic', icon: 'assessment' }, { id: 'progress', icon: 'progress' },
+  { id: 'improvement', icon: 'arrow' }, { id: 'access', icon: 'shield' },
+  { id: 'account', icon: 'person' },
+];
+
+/** The existing shared prerequisite policy supplies presentation eligibility.
+ * Destination APIs still verify current record, relationship and source scope. */
+export function workspaceNavigation(membership: Pick<Membership, 'role' | 'entitlements'>, labels: Record<WorkspaceTarget, string>): WorkspaceDestination[] {
+  return destinations.filter(item => canOpenWorkspace(item.id, membership.entitlements, membership.role))
+    .map(item => ({ ...item, label: labels[item.id] }));
+}
+
+export function workspaceView(navigation: readonly WorkspaceDestination[], requested: string | null): WorkspaceTarget {
+  return navigation.find(item => item.id === requested)?.id ?? 'overview';
+}
+
+/** Uses the native history writer so Back/Forward retain exact source intent. */
+export function openWorkspaceDestination(destination: WorkspaceTarget | NavigationIntent, navigation: readonly WorkspaceDestination[], pathname: string, history: Pick<History, 'pushState'>): boolean {
+  const view = typeof destination === 'string' ? destination : destination.view;
+  if (!navigation.some(item => item.id === view)) return false;
+  const params = typeof destination === 'string' ? new URLSearchParams() : navigationParameters(destination);
+  if (view !== 'overview') params.set('view', view);
+  history.pushState(null, '', `${pathname}${params.size ? '?' + params : ''}`);
+  return true;
+}
 
 export type WorkspaceChromeAction = { label: string; onClick: () => void; disabled?: boolean; pending?: boolean };
 /** Owner already filtered these destinations through current capabilities.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type ReactNode, type Ref } from 'react';
 import { Button, CuevoIcon, type CuevoIconName } from '@cuevo/ui';
 import type { StudentTrailAction, StudentTrailAssets, StudentTrailContext, StudentTrailStage } from '../trail-model';
 import { studentTrailAr, studentTrailEn } from '../messages';
@@ -28,11 +28,11 @@ function TrailStage({ stage, src, locale }: { stage: StudentTrailStage; src: str
 
 /** The sole Student Trail composition, shared by runtime and its preview.
  * All visible facts and commands come from the authorized feature owner. */
-export function StudentTrailView({ context, assets, locale = 'en' }: { context: StudentTrailContext; assets: StudentTrailAssets; locale?: 'en' | 'ar' }) {
+export function StudentTrailView({ context, assets, locale = 'en', headingRef, nativeFeedback }: { context: StudentTrailContext; assets: StudentTrailAssets; locale?: 'en' | 'ar'; headingRef?: Ref<HTMLHeadingElement>; nativeFeedback?: ReactNode }) {
   const t = locale === 'ar' ? studentTrailAr : studentTrailEn;
   const challengeId = useId();
   const number = new Intl.NumberFormat(locale);
-  if (context.availability === 'denied' || context.availability === 'offline') return <section className="student-trail student-trail__denied" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1>{t.nextStep}</h1><p role="status">{context.notice || t[context.availability]}</p>{context.recovery ? <TrailAction action={context.recovery} /> : null}</section>;
+  if (context.availability === 'denied' || context.availability === 'offline') return <section className="student-trail student-trail__denied" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{t.nextStep}</h1><p role="status">{context.notice || t[context.availability]}</p>{context.recovery ? <TrailAction action={context.recovery} /> : null}</section>;
   const recognition = context.recognition;
   const knownPoints = recognition.status === 'recorded' && recognition.totalPoints !== null;
   const recognitionNote = recognition.status === 'disabled' ? t.recognitionDisabled : recognition.status === 'processing' ? t.recognitionProcessing : recognition.status === 'requires-review' ? t.recognitionReview : t.recognitionUnknown;
@@ -42,7 +42,7 @@ export function StudentTrailView({ context, assets, locale = 'en' }: { context: 
     <div className="student-trail__content">
       {availabilityNotice ? <div className="student-trail__notice" role={context.availability === 'error' ? 'alert' : 'status'}><p>{availabilityNotice}</p>{context.recovery ? <TrailAction action={context.recovery} /> : null}</div> : null}
       <div className="student-trail__intro-row">
-        <header className="student-trail__intro"><h1>{context.displayName ? <>{t.hello}, <bdi>{context.displayName}</bdi>!</> : t.helloUnknown}</h1><h2>{t.nextStep}</h2><p>{t.introduction}</p></header>
+        <header className="student-trail__intro"><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{context.displayName ? <>{t.hello}, <bdi>{context.displayName}</bdi>!</> : t.helloUnknown}</h1><h2>{t.nextStep}</h2><p>{t.introduction}</p></header>
       </div>
 
       <div className="student-trail__scene">
@@ -54,7 +54,7 @@ export function StudentTrailView({ context, assets, locale = 'en' }: { context: 
             <p className="student-trail__task-description">{context.task?.description || t.taskUnknownBody}</p>
             {context.task ? <div className="student-trail__task-context"><p><CuevoIcon name="learning" /><bdi>{context.task.course || t.courseUnknown}</bdi></p><p><CuevoIcon name="curriculum" /><bdi>{context.task.unit || t.unitUnknown}</bdi></p></div> : null}
             {context.task?.primaryAction ? <TrailAction action={context.task.primaryAction} primary /> : context.recovery ? <TrailAction action={context.recovery} primary /> : null}
-            {context.task && context.task.state !== 'available' && context.task.state !== 'revision' ? <p className="student-trail__record-state" role="status">{context.task.state === 'processing' ? t.taskProcessing : context.task.state === 'unknown' ? t.notYetKnown : t.submitted}</p> : null}
+            {context.task && ['submitted', 'processing', 'unknown'].includes(context.task.state) ? <p className="student-trail__record-state" role="status">{context.task.state === 'processing' ? t.taskProcessing : context.task.state === 'unknown' ? t.notYetKnown : t.submitted}</p> : null}
           </section>
         </div>
         <section className="student-trail__goal" aria-labelledby={`${challengeId}-goal`}>
@@ -62,11 +62,15 @@ export function StudentTrailView({ context, assets, locale = 'en' }: { context: 
           <div><h2 id={`${challengeId}-goal`}>{t.goal}</h2><p>{context.goal?.text || t.goalUnknown}</p></div>
           {context.goal?.action ? <Button type="button" variant="secondary" onClick={context.goal.action.onClick} disabled={context.goal.action.disabled || context.goal.action.pending} aria-busy={context.goal.action.pending || undefined}><CuevoIcon name="practice" />{context.goal.action.label}</Button> : null}
         </section>
+        {context.companion.alternative || context.companion.hideAction ? <aside className={`student-trail__companion-picker${context.companion.alternative ? '' : ' student-trail__companion-picker--compact'}`} aria-label={context.companion.name}>
+          {context.companion.alternative ? <><Illustration src={assets.owl} className="student-trail__owl" /><div className="student-trail__companion-copy"><h2>{context.companion.alternative.name}</h2><p>{context.companion.alternative.description}</p><Button type="button" variant="secondary" onClick={context.companion.alternative.action.onClick} disabled={context.companion.alternative.action.disabled || context.companion.alternative.action.pending} aria-busy={context.companion.alternative.action.pending || undefined}>{context.companion.alternative.action.label}</Button></div></> : null}
+          {context.companion.hideAction ? <Button type="button" variant="quiet" className="student-trail__hide" onClick={context.companion.hideAction.onClick} disabled={context.companion.hideAction.disabled || context.companion.hideAction.pending} aria-busy={context.companion.hideAction.pending || undefined}><span><CuevoIcon name={context.companion.visible ? 'eyeOff' : 'eye'} size={28} /></span>{context.companion.hideAction.label}</Button> : null}
+        </aside> : null}
         <ol className="student-trail__stages" aria-label={t.learningTrail}>{context.stages.map(stage => <TrailStage key={stage.key} stage={stage} src={assets[stage.key]} locale={locale} />)}</ol>
 
         <section className="student-trail__feedback student-trail__panel" aria-labelledby={`${challengeId}-feedback`}>
           <div className="student-trail__panel-heading"><span className="student-trail__symbol student-trail__symbol--feedback"><CuevoIcon name="feedback" variant="filled" size={23} /></span><h2 id={`${challengeId}-feedback`}>{t.teacherFeedback}</h2></div>
-          {context.feedback ? <><div className="student-trail__teacher">{context.feedback.teacherImage ? <img src={context.feedback.teacherImage} alt="" className="student-trail__teacher-image" /> : null}<div><h3><bdi>{context.feedback.teacherName || t.teacherUnknown}</bdi></h3>{context.feedback.teacherContext ? <p><bdi>{context.feedback.teacherContext}</bdi></p> : null}</div><p className="student-trail__date"><bdi>{context.feedback.dateLabel || t.dateUnknown}</bdi></p></div><blockquote><span aria-hidden="true">“</span><p>{context.feedback.text}</p></blockquote>{context.feedback.action ? <TrailAction action={context.feedback.action} icon="feedback" /> : null}</> : <p className="student-trail__empty">{t.feedbackUnknown}</p>}
+          {context.feedback ? <><div className="student-trail__teacher">{context.feedback.teacherImage ? <img src={context.feedback.teacherImage} alt="" className="student-trail__teacher-image" /> : null}<div><h3><bdi>{context.feedback.teacherName || t.teacherUnknown}</bdi></h3>{context.feedback.teacherContext ? <p><bdi>{context.feedback.teacherContext}</bdi></p> : null}</div><p className="student-trail__date"><bdi>{context.feedback.dateLabel || t.dateUnknown}</bdi></p></div><blockquote><span aria-hidden="true">“</span><p>{context.feedback.text}</p></blockquote>{nativeFeedback}{context.feedback.action ? <TrailAction action={context.feedback.action} icon="feedback" /> : null}</> : <p className="student-trail__empty">{t.feedbackUnknown}</p>}
         </section>
 
         <section className="student-trail__upcoming student-trail__panel" aria-labelledby={`${challengeId}-upcoming`}>
@@ -87,10 +91,7 @@ export function StudentTrailView({ context, assets, locale = 'en' }: { context: 
 
         {context.help ? <section className="student-trail__help student-trail__panel" aria-labelledby={`${challengeId}-help`}><div className="student-trail__panel-heading"><span className="student-trail__symbol"><CuevoIcon name="help" variant="filled" size={26} /></span><h2 id={`${challengeId}-help`}>{context.help.title}</h2><span className="student-trail__help-mode">{context.help.mode === 'future' ? t.future : context.help.mode === 'human' ? t.humanHelp : t.approvedMaterials}</span></div><div className="student-trail__help-body"><p>{context.help.description}</p>{assets.help ? <Illustration src={assets.help} className="student-trail__help-art" /> : null}</div>{context.help.action ? <TrailAction action={context.help.action} icon="goal" /> : null}<p className="student-trail__help-note">{context.help.note}</p></section> : null}
       </div>
-        {context.companion.alternative || context.companion.hideAction ? <aside className="student-trail__companion-picker" aria-label={context.companion.name}>
-          {context.companion.alternative ? <><Illustration src={assets.owl} className="student-trail__owl" /><div className="student-trail__companion-copy"><h2>{context.companion.alternative.name}</h2><p>{context.companion.alternative.description}</p><Button type="button" variant="secondary" onClick={context.companion.alternative.action.onClick} disabled={context.companion.alternative.action.disabled || context.companion.alternative.action.pending} aria-busy={context.companion.alternative.action.pending || undefined}>{context.companion.alternative.action.label}</Button></div></> : null}
-          {context.companion.hideAction ? <Button type="button" variant="quiet" className="student-trail__hide" onClick={context.companion.hideAction.onClick} disabled={context.companion.hideAction.disabled || context.companion.hideAction.pending} aria-busy={context.companion.hideAction.pending || undefined}><span><CuevoIcon name={context.companion.visible ? 'eyeOff' : 'eye'} size={28} /></span>{context.companion.hideAction.label}</Button> : null}
-        </aside> : null}
+
     </div>
   </div>;
 }

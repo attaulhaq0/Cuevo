@@ -1,6 +1,6 @@
-/* Canonical authenticated chrome. No global/auth selectors are changed. */
-.workspace.workspace-chrome { display: flex; flex-direction: column; min-block-size: 100dvh; grid-template-columns: none; }
-.workspace .workspace-chrome__header { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3) var(--space-6); min-block-size: 5rem; background: var(--color-material-chrome); border-block-end: 1px solid var(--color-border); }
+/* Canonical authenticated chrome. Authentication keeps its existing selectors. */
+.workspace.workspace-chrome { display: flex; flex-direction: column; min-block-size: 100dvh; }
+.workspace .workspace-chrome__header { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3) var(--space-6); min-block-size: var(--space-16); background: var(--color-material-chrome); border-block-end: 1px solid var(--color-border); }
 .workspace .workspace-chrome__brand { flex: none; }
 .workspace .workspace-chrome__brand .brand__mark { inline-size: 3rem; }
 .workspace .workspace-chrome__brand .brand__name { font: 900 2rem 'Cuevo Nunito Sans', var(--font-sans); }
@@ -20,7 +20,7 @@
 .workspace .workspace-chrome__rail { min-inline-size: 0; flex: 1; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: var(--space-3); }
 .workspace .workspace-chrome__rail ul { display: flex; align-items: stretch; justify-content: center; gap: var(--space-2); list-style: none; padding: var(--space-1); margin: 0; min-inline-size: max-content; }
 .workspace .workspace-chrome__rail li { display: flex; }
-.workspace .workspace-chrome__rail button { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--space-2); min-block-size: 4.5rem; min-inline-size: 6.75rem; max-inline-size: 10.5rem; padding: var(--space-2) var(--space-3); border: 1px solid transparent; border-radius: var(--radius-lg); background: transparent; color: var(--color-text); font: inherit; font-size: var(--type-xs); line-height: 1.3; cursor: pointer; text-align: center; scroll-margin-inline: var(--space-2); }
+.workspace .workspace-chrome__rail button { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--space-1); min-block-size: var(--space-16); min-inline-size: 6.75rem; max-inline-size: 10.5rem; padding: var(--space-2) var(--space-3); border: 1px solid transparent; border-radius: var(--radius-lg); background: transparent; color: var(--color-text); font: inherit; font-size: var(--type-xs); line-height: 1.3; cursor: pointer; text-align: center; scroll-margin-inline: var(--space-2); }
 .workspace .workspace-chrome__rail button > svg { color: var(--color-accent); }
 .workspace .workspace-chrome__rail button[aria-current="page"] { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-accent); font-weight: var(--font-weight-semibold); box-shadow: var(--elevation-control), var(--elevation-accent); }
 .workspace .workspace-chrome__rail button[aria-current="page"] svg { color: var(--color-on-brand); }
@@ -31,7 +31,9 @@
 .workspace[dir="rtl"] .workspace-chrome__rail-control--previous svg { transform: none; }
 .workspace[dir="rtl"] .workspace-chrome__rail-control--next svg { transform: rotate(180deg); }
 .workspace .workspace-chrome__navigation[data-overflow="false"] .workspace-chrome__rail-control { display: none; }
-.workspace .workspace-chrome__content { flex: 1; min-inline-size: 0; }
+.workspace .workspace-chrome__content { flex: 1; min-inline-size: 0; background: var(--color-surface); }
+.workspace .workspace-main--student-home { max-inline-size: none; padding: 0; }
+.workspace .workspace-main--student-home > :is(.notice, .workspace-footer, .form-error) { margin-inline: var(--space-6); }
 .workspace .workspace-chrome__empty { margin: 0; padding: var(--space-4); font-size: var(--type-sm); color: var(--color-text-secondary); }
 .workspace[data-expression="student"] .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }
 @media (max-width: 1100px) {
@@ -41,15 +43,15 @@
   .workspace .workspace-chrome__navigation { padding-inline: var(--space-4); }
 }
 @media (max-width: 800px) {
-  .workspace .workspace-chrome__header { flex-wrap: wrap; min-block-size: 4.5rem; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+  .workspace .workspace-chrome__header { flex-wrap: wrap; min-block-size: var(--space-16); gap: var(--space-3); padding: var(--space-3) var(--space-4); }
   .workspace .workspace-chrome__brand .brand__mark { inline-size: 2.25rem; }
   .workspace .workspace-chrome__brand .brand__name { font-size: 1.5rem; }
-  .workspace .workspace-chrome__school { order: 3; inline-size: 100%; border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-2); }
+  .workspace .workspace-chrome__school { order: 3; flex: 1 1 10rem; }
   .workspace .workspace-chrome__school > bdi { max-inline-size: none; }
   .workspace .workspace-chrome__person { margin-inline-start: auto; }
   .workspace .workspace-chrome__person strong { max-inline-size: 10rem; }
   .workspace .workspace-chrome__avatar { inline-size: 2.75rem; block-size: 2.75rem; }
-  .workspace .workspace-chrome__utilities { order: 4; inline-size: 100%; margin: 0; justify-content: end; }
+  .workspace .workspace-chrome__utilities { order: 4; margin: 0; justify-content: end; }
   .workspace .workspace-chrome__utilities .language-switch { margin-inline-start: auto; }
   .workspace .workspace-chrome__navigation { position: fixed; inset-block-end: 0; inset-inline: 0; padding: var(--space-1) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom)); border: 0; border-block-start: 1px solid var(--color-border); box-shadow: var(--elevation-subtle); }
   .workspace .workspace-chrome__rail ul { justify-content: start; gap: var(--space-1); }

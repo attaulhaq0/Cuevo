@@ -42,9 +42,15 @@ async function signIn(page: Page, role: Role) {
   const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
   await keyboardActivate(page, page.getByRole('button', { name: 'Sign in', exact: true }));
   const current = await (await verified).json() as { displayName: string };
-  await expect(page.locator('.workspace-intro .eyebrow')).toContainText(current.displayName);
-  await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Next action', exact: true })).toBeVisible();
+  if (role === 'student') {
+    await expect(page.locator('.student-trail__intro h1')).toContainText(current.displayName);
+    await expect(page.locator('.workspace-chrome__person')).toContainText('Student');
+    await expect(page.getByRole('heading', { name: 'Your next learning step', exact: true })).toBeVisible();
+  } else {
+    await expect(page.locator('.workspace-intro .eyebrow')).toContainText(current.displayName);
+    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Next action', exact: true })).toBeVisible();
+  }
   if (role === 'parent') {
     const child = page.getByLabel('Child', { exact: true });
     const option = child.locator('option[value]:not([value=""]):not([disabled])').first();
@@ -109,7 +115,7 @@ for (const role of roles) {
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await signIn(page, role); await page.emulateMedia({ reducedMotion: 'reduce' });
     const navigation = page.getByRole('navigation', { name: 'Workspace navigation', exact: true });
-    const names = await navigation.getByRole('button').allTextContents();
+    const names = await navigation.locator('button[data-workspace-destination]').allTextContents();
     expect(names).toContain('Learning'); expect(names).toContain('Academic'); expect(names).toContain('Progress');
     if (role === 'parent') { expect(names).not.toContain('Development'); expect(names).not.toContain('Next steps'); expect(names).not.toContain('Curriculum context'); }
     if (role === 'student') expect(names).not.toContain('Curriculum context');

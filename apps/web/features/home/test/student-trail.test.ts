@@ -89,3 +89,19 @@ test('current-step illustration composes one separate platform with an unstretch
   assert.doesNotMatch(html, /class="student-trail__illustration student-trail__work"/);
   assert.equal((html.match(/src="\/pedestal.svg"/g) || []).length, 1);
 });
+
+test('sole heading owns workspace focus in ready and denied states and current native feedback remains supplied UI', () => {
+  const value = context(); value.feedback = { teacherName: null, teacherContext: null, dateLabel: null, text: 'Use the released descriptors.' };
+  const headingRef = { current: null };
+  const html = renderToStaticMarkup(createElement(StudentTrailView, { context: value, assets, locale: 'en', headingRef, nativeFeedback: createElement('dl', { 'aria-label': 'Released native rubric' }, createElement('dd', null, 'School-authored descriptor')) }));
+  assert.equal((html.match(/<h1/g) || []).length, 1); assert.match(html, /<h1 tabindex="-1"/); assert.match(html, /Released native rubric/); assert.match(html, /School-authored descriptor/);
+  value.availability = 'denied';
+  const denied = renderToStaticMarkup(createElement(StudentTrailView, { context: value, assets, locale: 'en', headingRef }));
+  assert.equal((denied.match(/<h1/g) || []).length, 1); assert.match(denied, /<h1 tabindex="-1"/);
+});
+
+test('confirmed empty work does not receive submitted or unknown task status', () => {
+  const value = context(); value.stages = [];
+  value.task = { title: 'No new work is waiting', description: 'Current available records are complete.', course: null, unit: null, state: 'empty', primaryAction: null };
+  const html = render(value); assert.match(html, /No new work is waiting/); assert.doesNotMatch(html, /student-trail__record-state|Submitted for review/);
+});
