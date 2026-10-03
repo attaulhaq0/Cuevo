@@ -158,6 +158,7 @@ html[dir="rtl"] .auth-side { padding-inline:0; }
   .learning-loop__stage--progress { grid-column:8; }
   .auth-stage-art { inline-size:9.440104cqi; block-size:9.440104cqi; }
   .learning-loop__roles { position:relative; inset:auto; margin-inline-start:var(--studio-roles-x); inline-size:var(--studio-roles-width); padding:1.1cqi 1.7cqi; }
+  .learning-loop__roles { background:var(--color-surface-muted); }
   .learning-loop__roles > div { grid-template-columns:repeat(auto-fit,minmax(min(100%,5.5em),1fr)); gap:1cqi; font-size:clamp(.75rem,1cqi,1rem); }
   .learning-loop__roles > div > span > span { max-inline-size:100%; overflow-wrap:normal; word-break:normal; }
   .learning-loop__roles > div > span { font-size:clamp(.75rem,1cqi,1rem); }
@@ -170,7 +171,7 @@ html[dir="rtl"] .auth-side { padding-inline:0; }
   .auth-story__intro { padding-block-start:0; }
 }
 /* At short/tablet layouts, crop that same desk camera into normal document flow. */
-@media(min-width:768px) and (max-width:1100px), (min-width:768px) and (max-height:700px) {
+@media(min-width:768px) and (max-width:1100px) {
   .auth-page::before { background:none; }
   .auth-story { position:relative; display:block; }
   .auth-visual { position:relative; inline-size:100%; block-size:auto; aspect-ratio:auto; min-block-size:68cqi; margin-block-start:var(--space-4); container-type:inline-size; }
@@ -190,6 +191,35 @@ html[dir="rtl"] .auth-side { padding-inline:0; }
   .auth-visual { grid-column:1; grid-row:4; inline-size:min(calc(100% - 2 * var(--space-5)),62.5rem); margin-inline:auto; margin-block:var(--space-4); }
   .auth-side { grid-column:1; grid-row:3; inline-size:min(100%,36rem); justify-self:end; }
   .auth-panel { margin-block-start:var(--space-4); }
+}
+/* Desktop keeps its paired scene at short window heights. Size the camera and
+   native content together; expanded text/disclosures retain normal page scroll. */
+@media(min-width:1101px) {
+  .auth-header .brand__mark { inline-size:3.25rem; }
+  .auth-header .brand__name { font-size:2.25rem; }
+  .auth-story__intro h1 { font-size:clamp(2.25rem,3vw,2.75rem); }
+  .auth-story__intro p { font-size:var(--type-body); }
+  .auth-panel { padding:var(--space-6); }
+  .auth-panel__intro h2 { font-size:1.75rem; }
+  .auth-panel .auth-language { margin-block-end:var(--space-3); }
+  .auth-panel__intro,.auth-panel__tabs { margin-block-end:var(--space-3); }
+  .auth-panel__intro p { margin-block-start:var(--space-2); }
+  .auth-form { gap:var(--space-3); }
+  .auth-input input,.auth-submit { min-block-size:3.375rem; }
+  .auth-footer { margin-block-start:var(--space-3); }
+  .auth-stage-art { inline-size:7.8125cqi; block-size:7.8125cqi; }
+  .auth-role-art { inline-size:4.6875cqi; block-size:4.6875cqi; background:transparent; }
+}
+@media(min-width:1101px) and (max-height:660px) {
+  .auth-story__intro h1 { font-size:2rem; }
+  .auth-side { padding-block:var(--space-4); }
+  .auth-panel { padding:var(--space-4); }
+  .auth-panel__intro h2 { font-size:1.5rem; }
+  .auth-panel .auth-language,.auth-panel__intro,.auth-panel__tabs { margin-block-end:var(--space-2); }
+  .auth-panel__intro p { margin-block-start:var(--space-1); }
+  .auth-form { gap:var(--space-2); }
+  .auth-input input,.auth-submit { min-block-size:3rem; padding-block:var(--space-2); }
+  .auth-footer { margin-block-start:var(--space-2); padding-block-start:var(--space-2); }
 }
 @media(max-width:767px) {
   .auth-studio-scene { display:contents; }

@@ -237,7 +237,7 @@ for (const locale of locales) {
   });
 
   test(`${locale}: normal desktop uses the window edges and fits the form and role tray`, async ({ page }) => {
-    for (const viewport of [{ width: 1882, height: 856 }, { width: 1536, height: 1024 }, { width: 1366, height: 768 }]) {
+    for (const viewport of [{ width: 1366, height: 600 }, { width: 1536, height: 688 }, { width: 1906, height: 860 }, { width: 1920, height: 864 }, { width: 1536, height: 864 }, { width: 1536, height: 850 }, { width: 1536, height: 851 }, { width: 1882, height: 856 }, { width: 1536, height: 1024 }, { width: 1366, height: 768 }]) {
       await page.setViewportSize(viewport); await open(page, locale);
       const bounds = await page.evaluate(() => {
         const box = (selector: string) => { const r = document.querySelector(selector)!.getBoundingClientRect(); return { x: r.x, right:r.right, bottom:r.bottom, width:r.width }; };
@@ -247,9 +247,25 @@ for (const locale of locales) {
       expect(locale === 'en' ? bounds.brand.x : viewport.width-bounds.brand.right).toBeLessThanOrEqual(48);
       expect(locale === 'en' ? viewport.width-bounds.panel.right : bounds.panel.x).toBeLessThanOrEqual(40);
       expect(bounds.panel.width).toBeGreaterThanOrEqual(420);
-      expect(bounds.height).toBeLessThanOrEqual(viewport.height+1);
+      expect(bounds.height, `${locale}/${viewport.width}x${viewport.height}: default desktop must fit without vertical scrolling`).toBeLessThanOrEqual(viewport.height+1);
       expect(bounds.roles.bottom).toBeLessThanOrEqual(viewport.height+1);
-      expect(bounds.trayBackground).not.toBe('rgba(0, 0, 0, 0)');
+      expect(bounds.trayBackground, 'Transparent role art sits on the shared muted gray pill').toBe('rgb(237, 243, 250)');
+      const artwork = await page.locator('.auth-role-art').evaluateAll(async images => {
+        await Promise.all(images.map(image => (image as HTMLImageElement).decode()));
+        return images.map(element => {
+          const image = element as HTMLImageElement, canvas = document.createElement('canvas');
+          canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+          const context = canvas.getContext('2d')!; context.drawImage(image, 0, 0);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          return { width: image.getBoundingClientRect().width, corners: [0, canvas.width - 1, (canvas.height - 1) * canvas.width, canvas.width * canvas.height - 1].map(index => pixels[index * 4 + 3]), opaque: pixels.some((value, index) => index % 4 === 3 && value === 255) };
+        });
+      });
+      expect(artwork).toHaveLength(5);
+      for (const art of artwork) {
+        expect(art.corners, 'Role images have transparent corners rather than white backplates').toEqual([0, 0, 0, 0]);
+        expect(art.opaque).toBe(true);
+        expect(art.width, 'Role art remains a supporting illustration').toBeLessThanOrEqual(80);
+      }
     }
   });
 
