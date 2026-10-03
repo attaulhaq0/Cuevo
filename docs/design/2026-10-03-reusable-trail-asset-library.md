@@ -6,6 +6,8 @@ The founder requests at least 200 icons with animations, transparent PNG deliver
 
 Latest delivery requirement also covers the complete all-role/profile/section/subsection UI kit as separate reusable parts, multiple dimensions and 4K presentation masters. Cards/forms/tables/dialogs/navigation stay native editable UI with shared tokens. Individual artwork is not combined into a screen image. Plan future-LXP role/task/state coverage before activation, with current MVP and future use explicitly distinguished.
 
+Final founder instruction requires one production asset per image-generation call to maximize dedicated native pixels. Multi-object sheets already generated remain draft/reference evidence. Their individually extracted PNGs are not the final separately generated production sources. The production catalog prepares 208 separate icon calls (200 expansion plus eight current task subjects) and 200 separate character-pose calls with current high-quality deployed model. At this checkpoint those individual generations are in progress, not accepted or complete.
+
 ## Content and output contract
 
 The additional icon catalog covers learning, creative work, staff planning, assessment formats, academic record/source handling, curriculum configuration, communication, operations, safety, recovery and optional progression presentation. Each entry has a distinct intended metaphor, stable versioned identifier, category, source prompt/reference, exact source and derivative hash, intrinsic dimensions, usage constraints and static fallback. Labels remain localized HTML; images contain no invented school facts or primary text.
