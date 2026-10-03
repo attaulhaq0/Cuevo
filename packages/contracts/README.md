@@ -1,5 +1,7 @@
 # Boundary contracts
 
+`academicEvidenceSchema`/`academicEvidenceContextSchema` validate exact numeric/rubric evidence with purpose-limited human source context. Names/fields may be null only under review; READY requires complete non-ambiguous context. This display projection grants no additional source, school or membership authority.
+
 Portable analytics contracts also describe strict intelligence metadata: fixed source event names, output/review/cost-basis enums, nullable source counts/usage, HMAC-ready run/context references and linked outcome comparability. The worker validates the constructed private projection; these types grant no retrieval or academic authority. No prompt/output/PII/free-text field is part of this analytics contract.
 
 Public API: @cuevo/contracts through src/index.ts. Files group identity, school-learning, academic, learner-state and improvement schemas. These browser-safe schemas describe data boundaries; they never fetch data or grant authorization. Import the public package instead of relative src paths. API unit/contract tests and actual integration exercise consumers; new schemas should have owner tests here when useful.

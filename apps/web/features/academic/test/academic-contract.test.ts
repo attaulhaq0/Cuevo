@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseReference, parseMarkingItem, parseReleasedResult, parseEvidence, canMarkSubmission,currentReleasedResultId } from '../model.ts';
+import { parseReference, parseMarkingItem, parseReleasedResult, parseEvidence, canMarkSubmission,currentReleasedResultId,academicReferenceChoice } from '../model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
 test('closed correction resolves the released result identity separately from its marking identity',()=>{
  const marking={id:'mark-1',resultId:'result-1',revision:1,feedback:'Reviewed',status:'RELEASED'as const,model:'numeric'as const,score:3,maxScore:10};assert.equal(currentReleasedResultId(marking),'result-1');assert.equal(currentReleasedResultId({...marking,resultId:undefined}),null);assert.equal(currentReleasedResultId({...marking,status:'REVIEW'}),null);
@@ -39,4 +39,8 @@ test('objective approval context requires its complete bounded saved description
   assert.throws(() => parseReference({ ...reference, description: undefined }), LearningApiError);
   assert.throws(() => parseReference({ ...reference, description: '' }), LearningApiError);
   assert.throws(() => parseReference({ ...reference, description: 'x'.repeat(4001) }), LearningApiError);
+});
+test('objective choices use real approval dates and parent context without inventing a version label',()=>{
+ const reference={id:'ref-1',title:'Checking',description:'Explain a checking step.',code:null,version:'opaque-unverified-v7',status:'APPROVED'as const,sourceType:'SCHOOL_AUTHORED'as const,createdBy:'teacher',approvedBy:'coordinator',parentTitle:'Year 1 mathematics',approvedAt:'2026-10-03T09:15:00Z'};
+ const label=academicReferenceChoice(reference,'en');assert.ok(label.includes('Checking'));assert.ok(label.includes('Year 1 mathematics'));assert.ok(label.includes('UTC'));assert.ok(!label.includes(reference.version));assert.throws(()=>parseReference({...reference,approvedAt:'unknown'}),LearningApiError);
 });

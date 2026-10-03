@@ -1,4 +1,5 @@
 export const progressEn = {
+  objectiveUnavailable: 'Objective context is unavailable. Refresh or ask your teacher to review the source.',
   currentLearnerEvidence: 'Current learner evidence', learnerContextUnavailable: 'Learner name unavailable in current records',
   exportCombined: 'Download current results across pages', combinedReportNote: 'The export follows current authorized pages, up to 1,000 records. Any remaining continuation is disclosed; curriculum coverage is unknown.',
   currentResultPages: 'Browse current result pages', reportPage: 'Page', previousReportPage: 'Previous result page', nextReportPage: 'Next result page', currentPagesFinished: 'No further current result page. Curriculum coverage remains unknown.',
@@ -24,6 +25,7 @@ export const progressEn = {
   stale: 'Snapshot awaiting refresh', staleBody: 'Academic evidence remains traceable. Recent activity counts are not available until a current snapshot is produced.', snapshotAsOf: 'Snapshot as of', recordedOnly: 'Recorded observations only', recordedOnlyBody: 'Counts include persisted observations in this window. They do not prove that all learning activity was recorded.', current: 'Current snapshot',
 };
 export const progressAr: typeof progressEn = {
+  objectiveUnavailable: 'سياق الهدف غير متاح. حدّث العرض أو اطلب من المعلّم مراجعة المصدر.',
   currentLearnerEvidence: 'شواهد الطالب الحالي', learnerContextUnavailable: 'اسم الطالب غير متاح في السجلات الحالية',
   exportCombined: 'تنزيل النتائج الحالية عبر الصفحات', combinedReportNote: 'يتبع التصدير الصفحات الحالية المسموح بها حتى ١٠٠٠ سجل. يُذكر أي استمرار متبقٍ؛ تغطية المنهج مجهولة.',
   currentResultPages: 'تصفح صفحات النتائج الحالية', reportPage: 'صفحة', previousReportPage: 'صفحة النتائج السابقة', nextReportPage: 'صفحة النتائج التالية', currentPagesFinished: 'لا توجد صفحة نتائج حالية أخرى. تبقى تغطية المنهج مجهولة.',

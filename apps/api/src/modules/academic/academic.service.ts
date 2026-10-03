@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
 import { DomainError, requireCapability, type ActorContext } from '@cuevo/domain';
-import { referenceInputSchema, referenceLinkSchema, markingInputSchema, resultReleaseSchema,closedResultCorrectionSchema, rubricInputSchema, assessmentRubricSchema, publishInputSchema, paginationSchema, idempotencyKeySchema, academicReportSchema,academicReportQuerySchema,gradebookQuerySchema,gradebookPageSchema,gradebookPreviewSchema,gradebookReleaseSchema,gradebookPreviewResponseSchema,nativeAcademicSourceSchema,resultPublicationSchema,resultPublicationResponseSchema } from '@cuevo/contracts';
+import { referenceInputSchema, referenceLinkSchema, markingInputSchema, resultReleaseSchema,closedResultCorrectionSchema, rubricInputSchema, assessmentRubricSchema, publishInputSchema, paginationSchema, idempotencyKeySchema, academicReportSchema,academicReportQuerySchema,gradebookQuerySchema,gradebookPageSchema,gradebookPreviewSchema,gradebookReleaseSchema,gradebookPreviewResponseSchema,nativeAcademicSourceSchema,resultPublicationSchema,resultPublicationResponseSchema,academicEvidenceSchema } from '@cuevo/contracts';
 import type { Database } from '../../platform/database/database';
 import{validateCourseAssessmentCommand}from'../curriculum/public';
 
-const referenceFields = `r.id,r.title,r.description,r.code,v.version,r.status,v.source_type as "sourceType",r.created_by as "createdBy",r.approved_by as "approvedBy"`;
+const referenceFields = `r.id,r.title,r.description,r.code,v.version,r.status,v.source_type as "sourceType",r.created_by as "createdBy",r.approved_by as "approvedBy",r.created_at as "createdAt",r.approved_at as "approvedAt",v.created_at as "versionCreatedAt"`;
 const rubricFields = `r.id,r.course_id as "courseId",r.title,r.version,r.criteria,r.source_type as "sourceType",r.created_by as "createdBy",r.created_at as "createdAt"`;
 const markingFields = `m.id,m.submission_id as "submissionId",m.learner_id as "learnerId",m.revision,m.score::float8 as score,m.max_score::float8 as "maxScore",m.feedback,'REVIEW' as status,m.policy_version as "policyVersion",m.reference_id as "referenceId",'numeric' as model`;
 const rubricMarkingFields = `m.id,m.submission_id as "submissionId",m.learner_id as "learnerId",m.revision,m.native_result as "nativeResult",m.feedback,'REVIEW' as status,m.policy_version as "policyVersion",m.reference_id as "referenceId",'rubric' as model`;
@@ -14,7 +14,6 @@ const resultFields = `r.id,r.submission_id as "submissionId",r.assessment_id as 
 const rubricResultFields = `r.id,r.submission_id as "submissionId",r.assessment_id as "assessmentId",r.learner_id as "learnerId",r.revision,null::float8 as score,null::float8 as "maxScore",r.feedback,'RELEASED' as status,r.policy_version as "policyVersion",r.reference_id as "referenceId",r.reference_version as "referenceVersion",r.evidence_id as "evidenceId",r.created_at as "createdAt",r.created_by as "actorId",r.parent_visible as "parentVisible",r.native_result as "nativeResult",a.title as "assessmentTitle",ref.title as "referenceTitle",'rubric' as model`;
 const resultFrom = `app.result_revisions r join app.assessments a on a.school_id=r.school_id and a.id=r.assessment_id join app.school_custom_references ref on ref.school_id=r.school_id and ref.id=r.reference_id`;
 const rubricResultFrom = `app.rubric_result_revisions r join app.assessments a on a.school_id=r.school_id and a.id=r.assessment_id join app.school_custom_references ref on ref.school_id=r.school_id and ref.id=r.reference_id`;
-const evidenceFields = `id,source_type as "sourceType",source_object_id as "sourceObjectId",learner_id as "learnerId",actor_id as "actorId",created_at as "createdAt",quality,reference_id as "referenceId",reference_version as "referenceVersion",policy_version as "policyVersion",result_id as "resultId",revision,case when parent_visible then 'PARENT_APPROVED'else 'LEARNER_PRIVATE'end as visibility,review_status as "reviewStatus"`;
 export type AcademicCommand = 'reference.create' | 'reference.approve' | 'assessment.reference' | 'rubric.create' | 'assessment.rubric' | 'marking.create' | 'result.release'|'result.closed-correction';
 const schemas = { 'reference.create': referenceInputSchema, 'reference.approve': publishInputSchema, 'assessment.reference': referenceLinkSchema, 'rubric.create': rubricInputSchema, 'assessment.rubric': assessmentRubricSchema, 'marking.create': markingInputSchema, 'result.release': resultReleaseSchema,'result.closed-correction':closedResultCorrectionSchema };
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -117,10 +116,17 @@ export class AcademicService {
   async reportPeriods(actor:ActorContext,learnerId:string,query:unknown){this.capability(actor,['admin','coordinator','teacher','student','parent']);parse(z.uuid(),learnerId);const page=parse(paginationSchema,query);if(page.limit>25)throw new DomainError('INVALID_INPUT',400,'Review a bounded period list.');return this.gradebookTransaction(actor,async client=>(await client.query('select internal.read_learner_report_periods($1,$2,$3)as page',[learnerId,page.limit,page.cursor??null])).rows[0]?.page);}
   async evidence(actor: ActorContext, id: string) {
     this.capability(actor, ['admin', 'coordinator', 'teacher', 'student', 'parent']); parse(z.uuid(), id);
-    return this.database.actorTransaction(actor.userId, actor.schoolId, async client => {
-      const row = (await client.query(`select ${evidenceFields},'numeric'as model from app.academic_evidence where id=$1 union all select ${evidenceFields},'rubric'as model from app.rubric_evidence where id=$1`, [id])).rows[0];
-      if (!row) unavailable();const publication=parse(resultPublicationResponseSchema,(await client.query('select internal.read_result_publication($1)as publication',[row.resultId])).rows[0]?.publication);return{...row,visibility:publication.parentVisible?'PARENT_APPROVED':'LEARNER_PRIVATE'};
-    });
+    try { return await this.database.actorTransaction(actor.userId, actor.schoolId, async client => {
+      const row = (await client.query('select internal.read_academic_evidence_context($1)as evidence', [id])).rows[0]?.evidence;
+      const evidence = academicEvidenceSchema.safeParse(row);
+      if (!evidence.success || evidence.data.id !== id) throw new DomainError('REQUEST_UNAVAILABLE', 503, 'The evidence source context requires review.');
+      return evidence.data;
+    }); } catch (error) {
+      if (error instanceof DomainError) throw error;
+      const code = error !== null && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+      if (['P0002', '42501'].includes(code)) unavailable();
+      throw new DomainError('REQUEST_UNAVAILABLE', 503, 'Academic evidence is temporarily unavailable.');
+    }
   }
   async history(actor:ActorContext,id:string,query:unknown){this.capability(actor,['admin','coordinator','teacher','student','parent']);parse(z.uuid(),id);const page=parse(paginationSchema,query);try{return await this.database.actorTransaction(actor.userId,actor.schoolId,async client=>{const response=(await client.query('select internal.read_academic_revision_page($1,$2,$3)as page',[id,page.limit,page.cursor??null])).rows[0]?.page;if(!response||!Array.isArray(response.items))throw new DomainError('REQUEST_UNAVAILABLE',503,'Academic history is temporarily unavailable.');return response;});}catch(error){if(error instanceof DomainError)throw error;const code=typeof error==='object'&&error!==null&&'code'in error?String(error.code):'';throw new DomainError(code==='42501'?'FORBIDDEN':code==='22023'?'ACADEMIC_CONFLICT':'REQUEST_UNAVAILABLE',code==='42501'?403:code==='22023'?409:503,'Academic history is unavailable for current access.');}}
   async command(actor: ActorContext, command: AcademicCommand, target: string | undefined, body: unknown, key: unknown, requestId: string) {

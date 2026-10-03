@@ -22,6 +22,11 @@ export const academicEn = { parentPublication:'Parent result sharing',sharedWith
   learnerPrivate: 'Learner and authorized school staff', parentApproved: 'Approved current parent / guardian view',
   sourceUnavailable: 'This source is returned or closed. Review its feedback/history; marking requires the current open submission.',
   outOf: 'out of',
+  contextUnavailable: 'Objective context is unavailable. Refresh this view or ask your teacher to review the source.',
+  contextReview: 'Some names or source details need school review. The recorded result remains separate from this context.',
+  currentSourceNames: 'Names reflect the current school record; task details come from the submitted source.',
+  nameUnavailable: 'Name unavailable in current school records',
+  sourceDetails: 'Technical source details',
 };
 export const academicAr: typeof academicEn = { parentPublication:'مشاركة النتيجة مع وليّ الأمر',sharedWithParents:'مشتركة مع أولياء الأمور الحاليين',privateFromParents:'خاصة وغير مشتركة مع وليّ الأمر',publicationNote:'تخص المشاركة هذه النتيجة الصادرة وشواهدها فقط. لا تغير الدرجة أو إصدار نتيجة آخر. تبقى علاقة وليّ الأمر الحالية مطلوبة.',revokePublication:'إلغاء المشاركة مع وليّ الأمر',sharePublication:'مشاركة مع أولياء الأمور الحاليين',publicationReason:'سبب قرار نشر النتيجة',publicationConfirm:'راجعت هذه النتيجة المحددة وأعتمد قرار مشاركتها مع وليّ الأمر', gradebookRetryNote:'لم تتأكد استجابة إصدار سابق محدد. أعد المحاولة بالطلب نفسه لمعرفة نتيجته؛ تعاد مراجعة الصلاحيات الحالية.', gradebookIdentityReview:'لهؤلاء الطلاب الاسم نفسه في الصف. اطلب من المنسق توضيح سياق هويتهم قبل إصدار نتائجهم ضمن مجموعة.', gradebook:'سجل درجات الصف', chooseGradebookCourse:'اختر مقررًا لسجل درجات الصف', gradebookNote:'أعمال الصف الحالية والنتائج الأصلية المراجَعة. لا درجة للعمل المفقود، وتبقى النتيجة السابقة عند وجود مسودة تصحيح.', gradebookTable:'نتائج تقييمات الصف', learners:'الطلاب', assessments:'التقييمات', gradebookStates:{NO_SUBMISSION:'لا عمل مسلّم',UNMARKED:'بانتظار التقييم',REVIEW:'مسودة مراجَعة لم تصدر',RELEASED:'نتيجة صادرة',RETURNED:'أعيد للمراجعة',CLOSED:'عمل مغلق'}, previouslyReleased:'النتيجة الصادرة السابقة',selectRelease:'تحديد نتيجة مراجَعة للإصدار',openGradebookWork:'فتح عمل الطالب',firstGradebook:'صفحة الصف الأولى',nextLearners:'الطلاب التالون',nextAssessments:'التقييمات التالية',previewReleases:'مراجعة الإصدارات المحددة',batchReleaseNote:'راجع كل طالب وهدف ونتيجة أصلية وملاحظات. تعاد مراجعة جميع المصادر قبل إصدار أي نتيجة.',confirmSelectedRelease:'تأكيد الإصدارات المحددة',confirmSelectedReleaseApproval:'راجعت كل مصدر محدد وأعتمد إصدار هذه النتائج',releaseSelected:'إصدار النتائج المحددة',closeGradebookDetail:'إغلاق تفاصيل الطالب',
   resultHistory:'سجل النتائج الصادرة',closedCorrectionNote:'يبقى العمل مغلقًا. ينشئ التصحيح المصرّح به إصدارًا مُراجَعًا جديدًا ويحفظ النتيجة والشواهد السابقة.',correctClosed:'تصحيح نتيجة عمل مغلق',markClosed:'مراجعة عمل مغلق دون تصحيح',correctionReason:'سبب التصحيح الأكاديمي',confirmClosedCorrection:'راجعت هذا المصدر المغلق وأوافق على إصدار النتيجة الأصلية الجديدة',confirmAndRelease:'تأكيد التصحيح وإصداره',
@@ -47,4 +52,9 @@ export const academicAr: typeof academicEn = { parentPublication:'مشاركة �
   learnerPrivate: 'الطالب وموظفو المدرسة المخوّلون', parentApproved: 'عرض وليّ الأمر الحالي المعتمد',
   sourceUnavailable: 'هذا المصدر معاد أو مغلق. راجع ملاحظاته وسجله؛ يتطلب التصحيح التسليم الحالي المفتوح.',
   outOf: 'من',
+  contextUnavailable: 'سياق الهدف غير متاح. حدّث العرض أو اطلب من المعلّم مراجعة المصدر.',
+  contextReview: 'تحتاج بعض الأسماء أو تفاصيل المصدر إلى مراجعة المدرسة. تبقى النتيجة المسجّلة منفصلة عن هذا السياق.',
+  currentSourceNames: 'تعكس الأسماء سجل المدرسة الحالي؛ وتأتي تفاصيل المهمة من المصدر المسلّم.',
+  nameUnavailable: 'الاسم غير متاح في سجل المدرسة الحالي',
+  sourceDetails: 'تفاصيل المصدر التقنية',
 };

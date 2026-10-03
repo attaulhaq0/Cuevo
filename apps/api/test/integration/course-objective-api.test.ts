@@ -49,6 +49,7 @@ describe.skipIf(!enabled)('approved course curriculum objectives',()=>{
    expect((await context.request('teacher',`/v1/assessments/${draft.id}/preparation`,{title,instructions:'Wrong curriculum context.',dueAt:null,maxScore:10,referenceId:context.referenceId,rubricId:null,expectedPreparationVersion:1})).statusCode).toBe(409);
    const edited=await context.command('teacher',`/v1/assessments/${draft.id}/preparation`,{title,instructions:'Use the selected approved school objective.',dueAt:null,maxScore:10,referenceId,rubricId:null,expectedPreparationVersion:1});
    const exact=await context.request('teacher',`/v1/assessments/${draft.id}/academic-reference`);expect(exact.statusCode,exact.body).toBe(200);expect(exact.json()).toMatchObject({id:referenceId,title,version:'school-objectives-1',status:'APPROVED'});
+   expect(exact.json().approvedAt).toEqual(expect.any(String));expect(exact.json().versionCreatedAt).toEqual(expect.any(String));
    expect((await context.request('otherTeacher',`/v1/assessments/${draft.id}/academic-reference`)).statusCode).toBe(403);
    await context.command('teacher',`/v1/assessments/${draft.id}/publish`,{expectedPreparationVersion:edited.preparationVersion,expectedPolicyVersion:edited.policyVersion,expectedAvailabilityVersion:edited.availabilityVersion});
    const submission=await context.command('strong',`/v1/assessments/${draft.id}/submissions`,{content:'School example with checking evidence.'});

@@ -1,4 +1,22 @@
 import { z } from 'zod';
+const evidenceName = z.string().min(1).max(200).nullable();
+export const academicEvidenceContextSchema = z.object({
+ status: z.enum(['READY', 'REQUIRES_REVIEW']), labelBasis: z.literal('CURRENT_REGISTERED_NAMES_AND_SOURCE_TASK'),
+ identityRequiresReview: z.boolean(), learnerName: evidenceName, recordedByName: evidenceName,
+ assessmentTitle: evidenceName, courseTitle: evidenceName, className: evidenceName,
+ yearGroupName: evidenceName, academicYearName: evidenceName, referenceTitle: evidenceName,
+ submittedAt: z.iso.datetime({ offset: true }).nullable(), submissionRevision: z.number().int().positive().nullable(),
+}).strict().superRefine((value, ctx) => {
+ if (value.status === 'READY' && (value.identityRequiresReview || Object.entries(value).some(([key, entry]) => !['status', 'labelBasis', 'identityRequiresReview'].includes(key) && entry === null))) ctx.addIssue({ code: 'custom', message: 'Ready evidence context requires exact non-ambiguous source names and facts.' });
+});
+export const academicEvidenceSchema = z.object({
+ id: z.uuid(), sourceType: z.literal('SUBMISSION'), sourceObjectId: z.uuid(), learnerId: z.uuid(), actorId: z.uuid(),
+ createdAt: z.iso.datetime({ offset: true }), quality: z.literal('TEACHER_ENTERED'), referenceId: z.uuid(),
+ referenceVersion: z.string().min(1).max(100), policyVersion: z.number().int().positive(), resultId: z.uuid(),
+ revision: z.number().int().positive(), visibility: z.enum(['LEARNER_PRIVATE', 'PARENT_APPROVED']),
+ reviewStatus: z.literal('APPROVED'), model: z.enum(['numeric', 'rubric']), context: academicEvidenceContextSchema,
+}).strict();
+export type AcademicEvidence = z.infer<typeof academicEvidenceSchema>;
 export const referenceInputSchema=z.object({title:z.string().trim().min(1).max(200),description:z.string().trim().min(1).max(4000),version:z.string().trim().min(1).max(100)}).strict();
 export const referenceLinkSchema=z.object({referenceId:z.uuid(),expectedPolicyVersion:z.number().int().min(1)}).strict();
 const rubricKey=z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_.:-]+$/);

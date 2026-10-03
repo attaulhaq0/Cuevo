@@ -1,5 +1,7 @@
 # Academic feature
 
+Result cards lead with task/objective/native values and actual revision/date; exact version/policy tokens are in explicit technical source details. Evidence leads with authorized source task/class/recorder context, preserving nullable names and school review guidance. Objective and rubric choices use real source dates; they never infer version numbers from opaque tokens. Browser evidence verifies primary text and opened technical provenance separately. Cross-feature consumers continue through academic/model and academic/ui.
+
 Native numeric display isolates score/maximum in an LTR bidi span in both locales, with a localized accessible score-out-of-maximum label. This preserves actual native values and prevents RTL reordering; the visible full-loop Arabic mobile regression checks the rendered ratio direction and accessible label. Rubric descriptor/version handling remains separate.
 
 Owns objective approval, immutable school rubric configuration, numeric/criterion marking/review/release and evidence presentation. Public interfaces: model.ts for response validation and discriminated native results, ui.tsx for AcademicWorkspace/EvidenceDetail/NativeResultView, copy.ts for shell labels. Progress reuses native validation/display through those public surfaces. Internal components, messages and styles stay here. API owner: apps/api/src/modules/academic. Product source IDs 04, 17, 18 and 63.

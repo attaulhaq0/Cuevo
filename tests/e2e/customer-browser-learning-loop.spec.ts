@@ -81,7 +81,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await form.getByLabel('Instructions', { exact: true }).fill('Explain the school-authored example and describe a checking step.');
     const result = await visibleMutation('/v1/assessments', () => form.getByRole('button', { name: 'Save', exact: true }).click());
     const row=page.locator('.assessment-section').filter({has:page.getByRole('heading',{name:label,exact:true})});await expect(row).toBeVisible();
-    const preparation=row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Edit task preparation',exact:true})}).last();await selectHumanLabel(preparation.getByLabel('Approved learning objective',{exact:true}),'Synthetic school-authored explanation objective');await visibleMutation(`/v1/assessments/${result.id}/preparation`,()=>preparation.getByRole('button',{name:'Save preparation',exact:true}).click());
+    const preparation=row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Edit task preparation',exact:true})}).last();await selectHumanLabel(preparation.getByLabel('Approved learning objective',{exact:true}),/^Synthetic school-authored explanation objective(?: · .*)?$/);await visibleMutation(`/v1/assessments/${result.id}/preparation`,()=>preparation.getByRole('button',{name:'Save preparation',exact:true}).click());
     await visibleMutation(`/v1/assessments/${result.id}/publish`,()=>row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Publish prepared assessment',exact:true})}).last().getByRole('button',{name:'Publish prepared assessment',exact:true}).click());return result;
   }
   async function submitAssessment(label: string, assessmentId: string, useDraft: boolean) {
@@ -166,9 +166,18 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('student'); await navigate('Academic');
     const feedback = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: baselineTitle, exact: true }) });
     await loadTarget(feedback, page.locator('.academic-workspace')); await expect(feedback.locator('.native-score strong')).toHaveText('2');
+    expect(await feedback.innerText()).not.toContain('synthetic-school-1');
     const evidenceRead = page.waitForResponse(response => response.url() === `${api}/v1/evidence/${baseline.evidenceId}` && response.request().method() === 'GET');
     await feedback.getByRole('button', { name: 'View evidence', exact: true }).click();
+    await expect(feedback.locator('.evidence-context')).toContainText(baselineTitle);
+    await expect(feedback.locator('.evidence-context')).toContainText('Samira Hassan');
+    expect(await feedback.locator('.evidence-context').innerText()).not.toContain(baselineSubmission.id);
     const evidence = await (await evidenceRead).json(); expect(evidence).toMatchObject({ resultId: baseline.id, sourceObjectId: baselineSubmission.id, learnerId: baselineSubmission.learnerId });
+    const technicalEvidence = feedback.locator('.evidence-provenance > details');
+    await technicalEvidence.getByText('Technical source details', { exact: true }).click();
+    await expect(technicalEvidence).toContainText(evidence.referenceVersion);
+    await expect(technicalEvidence).toContainText(baselineSubmission.id);
+    await technicalEvidence.getByText('Technical source details', { exact: true }).click();
     await navigate('Progress'); await expect.poll(async () => (await refreshState()).academic.some((source: { resultId: string }) => source.resultId === baseline.id), { timeout: 20000 }).toBe(true); await signOut();
 
     await signIn('teacher'); await navigate('Next steps'); await page.getByRole('button', { name: 'Request analysis', exact: true }).click();

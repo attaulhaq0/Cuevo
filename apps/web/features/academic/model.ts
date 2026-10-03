@@ -1,7 +1,11 @@
 import { LearningApiError } from '../../shared/api/client.ts';
+import { academicEvidenceSchema, type AcademicEvidence } from '@cuevo/contracts';
 
-export type AcademicReference = { id: string; title: string; description: string; code: string | null; version: string; status: 'DRAFT' | 'APPROVED'; sourceType: 'SCHOOL_AUTHORED'; createdBy: string; approvedBy: string | null;parentTitle?:string|null };
-export function academicReferenceChoice(reference:AcademicReference){return reference.parentTitle?`${reference.title} · ${reference.parentTitle} · ${reference.version}`:reference.title;}
+export type AcademicReference = { id: string; title: string; description: string; code: string | null; version: string; status: 'DRAFT' | 'APPROVED'; sourceType: 'SCHOOL_AUTHORED'; createdBy: string; approvedBy: string | null;parentTitle?:string|null;createdAt?:string;approvedAt?:string|null;versionCreatedAt?:string };
+export function academicReferenceChoice(reference:AcademicReference,locale:'en'|'ar'='en'){
+ const reviewed = reference.approvedAt ?? reference.createdAt;
+ return [reference.title,reference.parentTitle,reviewed ? new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}).format(new Date(reviewed))+' UTC' : null].filter(Boolean).join(' · ');
+}
 export type RubricLevel = { key: string; label: string; description: string };
 export type RubricCriterion = { key: string; title: string; levels: RubricLevel[] };
 export type RubricContext = { id: string; title: string; version: string; criteria: RubricCriterion[] };
@@ -16,7 +20,7 @@ export type MarkingItem = MarkingBase & ({ model: 'numeric'; maxScore: number; r
 type ReleasedBase = { id: string; submissionId: string; assessmentId?: string; learnerId: string; revision: number; feedback: string; status: 'RELEASED'; policyVersion: number; referenceId: string; referenceVersion: string; evidenceId: string; createdAt: string; assessmentTitle?: string; referenceTitle?: string; learnerName?: string;correctionReason?:string|null;previousResultId?:string|null };
 export type NumericReleasedResult = ReleasedBase & { model: 'numeric'; score: number; maxScore: number; nativeResult: NativeNumericResult };
 export type ReleasedResult = NumericReleasedResult | ReleasedBase & { model: 'rubric'; nativeResult: NativeRubricResult };
-export type Evidence = { id: string; sourceType: 'SUBMISSION'; sourceObjectId: string; learnerId: string; actorId: string; createdAt: string; quality: 'TEACHER_ENTERED'; referenceId: string; referenceVersion: string; policyVersion: number; resultId: string; revision: number; visibility: string; reviewStatus: string };
+export type Evidence = AcademicEvidence;
 export function canMarkSubmission(referenceId: string | null, references: AcademicReference[]) { return referenceId !== null && references.some((reference) => reference.id === referenceId && reference.status === 'APPROVED'); }
 export function currentReleasedResultId(result:MarkRevision|null){return result?.status==='RELEASED'&&result.resultId?result.resultId:null;}
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }
@@ -51,6 +55,7 @@ export function parseNativeResult(value: unknown): NativeResult {
 export function isNumericResult(result: ReleasedResult): result is NumericReleasedResult { return result.model === 'numeric'; }
 export function parseReference(value: unknown): AcademicReference {
   if (!object(value) || !strings(value, ['id', 'title', 'description', 'version', 'createdBy']) || String(value.description).trim().length === 0 || String(value.description).length > 4000 || !nullableString(value.code) || !nullableString(value.approvedBy) || (value.parentTitle!==undefined&&!nullableString(value.parentTitle)) || (value.status !== 'DRAFT' && value.status !== 'APPROVED') || value.sourceType !== 'SCHOOL_AUTHORED' || (value.status === 'APPROVED' && !value.approvedBy)) throw new LearningApiError('invalid');
+  if (['createdAt','versionCreatedAt'].some(key=>value[key]!==undefined&&(typeof value[key]!=='string'||!Number.isFinite(Date.parse(String(value[key]))))) || value.approvedAt!==undefined&&value.approvedAt!==null&&(typeof value.approvedAt!=='string'||!Number.isFinite(Date.parse(String(value.approvedAt))))) throw new LearningApiError('invalid');
   return value as AcademicReference;
 }
 export function parseOptionalReference(value:unknown){return value===null?null:parseReference(value);}
@@ -80,12 +85,14 @@ export function parseMarkingItem(value: unknown): MarkingItem {
 }
 export function parseReleasedResult(value: unknown): ReleasedResult {
   if (!object(value) || !strings(value, ['id', 'submissionId', 'learnerId', 'referenceId', 'referenceVersion', 'evidenceId', 'createdAt']) || !Number.isFinite(Date.parse(String(value.createdAt))) || value.status !== 'RELEASED' || !integer(value.revision) || !integer(value.policyVersion) || typeof value.feedback !== 'string') throw new LearningApiError('invalid');
+  if (['assessmentTitle','referenceTitle','learnerName'].some(key=>value[key]!==undefined&&(typeof value[key]!=='string'||!value[key]))) throw new LearningApiError('invalid');
   const nativeResult = parseNativeResult(value.nativeResult);
   const model = value.model ?? 'numeric';
   if (model !== nativeResult.type || nativeResult.policyVersion !== value.policyVersion || (nativeResult.type === 'numeric' ? nativeResult.score !== value.score || nativeResult.maxScore !== value.maxScore : value.score !== undefined || value.maxScore !== undefined)) throw new LearningApiError('invalid');
   return { ...value, model, nativeResult } as ReleasedResult;
 }
 export function parseEvidence(value: unknown): Evidence {
-  if (!object(value) || !strings(value, ['id', 'sourceObjectId', 'learnerId', 'actorId', 'createdAt', 'referenceId', 'referenceVersion', 'resultId', 'visibility', 'reviewStatus']) || !Number.isFinite(Date.parse(String(value.createdAt))) || value.sourceType !== 'SUBMISSION' || value.quality !== 'TEACHER_ENTERED' || !['LEARNER_PRIVATE', 'PARENT_APPROVED'].includes(String(value.visibility)) || value.reviewStatus !== 'APPROVED' || !integer(value.policyVersion) || !integer(value.revision)) throw new LearningApiError('invalid');
-  return value as Evidence;
+  const result = academicEvidenceSchema.safeParse(value);
+  if (!result.success) throw new LearningApiError('invalid');
+  return result.data;
 }

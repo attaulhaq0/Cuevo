@@ -1,5 +1,7 @@
 # Progress feature
 
+Primary academic rows/report previews retain authorized objective/task/native facts. Exact objective/rubric version identifiers remain in explicit source disclosures, including standalone exports. Missing objective context gives localized refresh/teacher-review guidance rather than a fabricated label. No reporting scale, evidence coverage or source identity changes.
+
 Standalone academic exports isolate each numeric score/maximum ratio with explicit LTR bidi direction while retaining the report's Arabic RTL structure. A report test checks nonzero native facts and exact rendered order; missing/zero and rubric/native rules remain separate.
 
 Class review and explicit learner selection open one named current learner evidence region. After its initial source read settles, the detail heading receives focus and an instant logical scroll; denied/unknown reads retain the same named destination and recovery meaning. Refresh and locale changes do not refocus it. The class/source selection provides its authorized human label; no identifier substitutes for missing context. `customer-navigation-context.spec.ts` verifies keyboard selection, visible heading, refresh focus, denied/unknown reads and Arabic mobile reduced motion.
