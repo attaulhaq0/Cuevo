@@ -1,6 +1,7 @@
 import type { Assessment, Submission } from '../learning/model.ts';
 export type { StudentTrailAction, StudentTrailAssets, StudentTrailContext, StudentTrailStage, StudentTrailStageKey } from './trail-model.ts';
 export type { TeacherTrailAction, TeacherTrailContext, TeacherTrailItem, TeacherTrailQueueState } from './teacher-trail-model.ts';
+export type { ParentTrailAction, ParentTrailChild, ParentTrailContext, ParentTrailSnapshot } from './parent-trail-model.ts';
 export type HomeTarget = 'learning' | 'academic' | 'progress' | 'improvement' | 'school' | 'community' | 'portfolio' | 'development' | 'curriculum';
 export type PendingWork = { assessmentId: string; title: string; dueAt: string | null; needsRevision: boolean };
 export function pendingWork(assessments: Assessment[], submissions: Submission[], learnerId: string, now: number): PendingWork[] {

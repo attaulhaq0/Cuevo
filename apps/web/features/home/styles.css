@@ -1,4 +1,5 @@
 @import './teacher-trail.css';
+@import './parent-trail.css';
 
 .role-home { margin-block-start: var(--space-6); }
 .home-action-section, .home-context-section { margin-block: var(--space-6) var(--space-8); }

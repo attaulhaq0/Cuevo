@@ -1,0 +1,19 @@
+/* Parent Storybook chrome only; the one runtime shell remains its owner. */
+.parent-trail-preview.workspace { display: block; min-block-size: 100dvh; }
+.parent-trail-preview__header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-3) var(--space-10); background: var(--color-material-chrome); }
+.parent-trail-preview__header .brand__mark { inline-size: 3.5rem; }
+.parent-trail-preview__header .brand__name { font: 900 2.25rem 'Cuevo Nunito Sans', var(--font-sans); }
+.parent-trail-preview__header nav { display: flex; gap: var(--space-2); align-items: stretch; padding: var(--space-2); border-radius: var(--radius-xl); background: var(--color-surface-muted); flex: 1; justify-content: center; }
+.parent-trail-preview__header nav button { display: flex; gap: var(--space-2); align-items: center; justify-content: center; flex-direction: column; min-block-size: 3.75rem; border: 1px solid transparent; border-radius: var(--radius-lg); padding: var(--space-2) var(--space-4); font: inherit; font-size: var(--type-xs); color: var(--color-text); background: transparent; cursor: pointer; }
+.parent-trail-preview__header nav button[aria-current="page"] { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-accent); }
+.parent-trail-preview__account { display: flex; gap: var(--space-3); align-items: center; flex: none; }
+.parent-trail-preview__account > svg { background: var(--color-learning-surface); color: var(--color-accent); border-radius: var(--radius-pill); padding: var(--space-3); inline-size: 3.5rem; block-size: 3.5rem; }
+.parent-trail-preview__account strong { font-size: var(--type-sm); }
+.parent-trail-preview__account p { margin: 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
+.parent-trail-preview__selector { display: grid; gap: var(--space-1); font-size: var(--type-xs); }
+.parent-trail-preview__selector select { font: inherit; min-block-size: 2.75rem; color: var(--color-text); padding: var(--space-2); background: var(--color-surface); border: 1px solid var(--color-control-border); border-radius: var(--radius-md); max-inline-size: 100%; }
+.parent-trail-preview__receipt { position: fixed; z-index: 20; inset-block-end: var(--space-5); inset-inline-end: var(--space-5); display: flex; gap: var(--space-3); align-items: center; padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-material-reading); border: 1px solid var(--color-border); box-shadow: var(--elevation-floating); max-inline-size: min(32rem, calc(100% - 2rem)); }
+.parent-trail-preview__receipt p { margin: 0; }
+@media (max-width: 1200px) { .parent-trail-preview__header { gap: var(--space-4); padding-inline: var(--space-6); } .parent-trail-preview__header nav button { padding-inline: var(--space-2); } }
+@media (max-width: 900px) { .parent-trail-preview__header { flex-wrap: wrap; } .parent-trail-preview__header nav { order: 3; flex-basis: 100%; overflow-x: auto; justify-content: start; } .parent-trail-preview__header nav button { flex: 1 0 6rem; } .parent-trail-preview__account { margin-inline-start: auto; } }
+@media (max-width: 500px) { .parent-trail-preview__header { padding: var(--space-3) var(--space-4); gap: var(--space-3); } .parent-trail-preview__header .brand__name { font-size: 1.5rem; } .parent-trail-preview__header .brand__mark { inline-size: 2.25rem; } .parent-trail-preview__account strong { display: block; max-inline-size: 7rem; overflow-wrap: anywhere; } .parent-trail-preview__account > svg { inline-size: 2.75rem; block-size: 2.75rem; padding: var(--space-2); } }
