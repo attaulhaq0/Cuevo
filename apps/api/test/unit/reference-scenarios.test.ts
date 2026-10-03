@@ -1,5 +1,6 @@
-import{describe,it,expect}from'vitest';import{fixtureId,validateFixtureDatabase,scenarioLearners,referenceScenarioScores}from'../../../../scripts/seed-reference-scenarios';
+import{describe,it,expect}from'vitest';import{fixtureId,validateFixtureDatabase,scenarioLearners,referenceScenarioScores,referenceTaskTitle}from'../../../../scripts/seed-reference-scenarios';
 describe('guarded deterministic reference seed',()=>{
+ it('uses human task titles while technical scenario identities remain separate',()=>{expect(referenceTaskTitle('A',1)).toBe('Explain a checking step · Task 1');expect(referenceTaskTitle('G',2)).toBe('Explain a checking step · Task 2');expect(referenceTaskTitle('C',3)).not.toContain('Reference C');});
  it('refuses hosted or unrelated database targets before any source write',()=>{for(const url of['postgres://postgres:secret@remote.invalid:5432/postgres','postgres://postgres:local@127.0.0.1:54322/postgres','https://127.0.0.1:56322/postgres'])expect(()=>validateFixtureDatabase(url)).toThrow();expect(validateFixtureDatabase('postgresql://cuevo_api:local@127.0.0.1:56322/postgres').port).toBe('56322');});
  it.each([
   'postgresql://cuevo_api:local@127.0.0.1:56322/postgres?host=remote.invalid',
