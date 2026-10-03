@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import type { Assessment, Submission, SubmissionDraft } from '../model';
-import { assessmentWorkAvailable, currentSubmissionActionReceipt, currentSubmissionDraft, currentSubmissionReceipt, parseSubmission, preferredSubmissionDraft } from '../model';
+import { assessmentWorkAvailable, currentSubmissionActionReceipt, currentSubmissionDraft, currentTextDraftReceipt, currentSubmissionReceipt, parseSubmission, preferredSubmissionDraft } from '../model';
 import { useLearningApi } from '../api';
 import { useApi, useApiQuery } from '../../../shared/hooks/use-api';
 import { useApp } from '../../../shared/session/providers';
@@ -11,7 +11,6 @@ import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-q
 import { CommandForm } from '../../../shared/components/command-form';
 import { LearningError } from '../../../shared/components/feedback';
 import { LoadMore } from '../../../shared/components/load-more';
-import { LearningApiError } from '../../../shared/api/client';
 import { LearningSourceContext } from './source-context';
 
 export function LearnerSubmission({ assessment, submission, onChanged }: { assessment: Assessment; submission?: Submission; onChanged: () => void }) {
@@ -30,23 +29,15 @@ export function LearnerSubmission({ assessment, submission, onChanged }: { asses
   const modesLocked = commandLocked || !!journal.get(`/v1/assessments/${assessment.id}/draft`) || !!journal.get(`/v1/assessments/${assessment.id}/submissions`);
   function saved(result: unknown) {
     if (action === 'draft') {
-      const command = journal.get(`/v1/assessments/${assessment.id}/draft`);
-      if (!command || typeof command.body.expectedRevision !== 'number') throw new LearningApiError('invalid', true);
-      const receipt = currentSubmissionDraft(result, assessment.id, command.body.expectedRevision);
-      if (receipt.content !== command.body.content) throw new LearningApiError('invalid', true);
-      setSavedDraft(receipt); setAction('submit'); setDraftOpened(true);
+      setSavedDraft(result as SubmissionDraft); setAction('submit'); setDraftOpened(true);
     } else {
-      const path = submission ? `/v1/submissions/${submission.id}/resubmit` : `/v1/assessments/${assessment.id}/submissions`;
-      const command = journal.get(path);
-      if (!command) throw new LearningApiError('invalid', true);
-      currentSubmissionReceipt(result, assessment.id, membership?.userId, command.body, submission?.id);
       setAction(null); setSavedDraft(null); setRefresh(value => value + 1); onChanged();
     }
   }
   if (submission) return <div className="submission-work">
     <div className="submission-work-heading"><CuevoIcon name={submission.status === 'RETURNED' ? 'feedback' : 'assessment'} variant="filled" size={26} /><div><h4>{t.currentWork}</h4><p><bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(submission.submittedAt))}</bdi></p></div><Status tone={submission.status === 'RETURNED' ? 'warning' : 'neutral'}>{submission.status === 'RETURNED' ? t.returned : submission.status === 'CLOSED' ? t.closed : submission.status === 'RESUBMITTED' ? t.resubmitted : t.submitted}</Status></div>
     {submission.returnFeedback ? <div className="submission-revision-feedback"><h4><CuevoIcon name="feedback" variant="filled" size={22} />{t.returnFeedback}</h4><p className="lesson-content" dir="auto">{submission.returnFeedback}</p></div> : null}
-    {submission.status === 'RETURNED' && available ? <CommandForm title={t.resubmit} path={`/v1/submissions/${submission.id}/resubmit`} fields={[{ name: 'content', label: t.content, type: 'textarea', required: true, defaultValue: submission.content, maxLength: 50000 }]} body={values => ({ content: String(values.get('content')), returnId: submission.returnId, expectedRevision: submission.revision })} onSaved={saved} actionLabel={t.resubmit} note={t.draftNote} /> : <section className="submission-response" aria-label={t.response}><h4>{t.response}</h4><p className="lesson-content" dir="auto">{submission.content}</p><p className="learning-form__note">{t.evidenceNote}</p></section>}
+    {submission.status === 'RETURNED' && available ? <CommandForm title={t.resubmit} path={`/v1/submissions/${submission.id}/resubmit`} fields={[{ name: 'content', label: t.content, type: 'textarea', required: true, defaultValue: submission.content, maxLength: 50000 }]} body={values => ({ content: String(values.get('content')), returnId: submission.returnId, expectedRevision: submission.revision })} validateReceipt={(result, originalCommand) => { currentSubmissionReceipt(result, assessment.id, membership?.userId, originalCommand.body, submission.id); }} onSaved={saved} actionLabel={t.resubmit} note={t.draftNote} /> : <section className="submission-response" aria-label={t.response}><h4>{t.response}</h4><p className="lesson-content" dir="auto">{submission.content}</p><p className="learning-form__note">{t.evidenceNote}</p></section>}
     <LearningSourceContext type="submission" sourceId={submission.id} />
     <SubmissionHistory submissionId={submission.id} />
   </div>;
@@ -55,7 +46,7 @@ export function LearnerSubmission({ assessment, submission, onChanged }: { asses
     <div className="submission-work-heading"><CuevoIcon name="practice" variant="filled" size={26} /><div><h4>{t.draftStage}</h4><p>{t.draftStageBody}</p></div></div>
     {draft.error ? <LearningError error={draft.error} /> : null}
     <div className="learning-actions submission-work-modes">{action !== 'draft' ? <Button type="button" variant="secondary" disabled={modesLocked} onClick={() => { setAction('draft'); setDraftOpened(true); }}><CuevoIcon name="assessment" size={18} />{t.saveDraft}</Button> : null}{action !== 'submit' ? <Button type="button" disabled={modesLocked} onClick={() => { setAction('submit'); setDraftOpened(true); }}><CuevoIcon name="arrow" size={18} />{t.submit}</Button> : null}</div>
-    {draftOpened && (!currentDraft || draft.loading) && !draft.error ? <p role="status" data-work-loading="true">{t.loading}</p> : draft.error ? null : action ? <CommandForm key={`${action}:${currentDraft?.revision ?? 0}`} draftKey={`assessment-response:${assessment.id}`} title={action === 'draft' ? t.saveDraft : t.submit} path={`/v1/assessments/${assessment.id}/${action === 'draft' ? 'draft' : 'submissions'}`} fields={[{ name: 'content', label: t.content, type: 'textarea', required: action === 'submit', defaultValue: currentDraft?.content, maxLength: 50000 }]} body={values => ({ content: String(values.get('content')), ...(action === 'draft' ? { expectedRevision: currentDraft?.revision ?? 0 } : {}) })} onSaved={saved} onLockedChange={setCommandLocked} onCancel={() => setAction(null)} actionLabel={action === 'draft' ? t.saveDraft : t.submit} note={t.draftNote} /> : null}
+    {draftOpened && (!currentDraft || draft.loading) && !draft.error ? <p role="status" data-work-loading="true">{t.loading}</p> : draft.error ? null : action ? <CommandForm key={`${action}:${currentDraft?.revision ?? 0}`} draftKey={`assessment-response:${assessment.id}`} title={action === 'draft' ? t.saveDraft : t.submit} path={`/v1/assessments/${assessment.id}/${action === 'draft' ? 'draft' : 'submissions'}`} fields={[{ name: 'content', label: t.content, type: 'textarea', required: action === 'submit', defaultValue: currentDraft?.content, maxLength: 50000 }]} body={values => ({ content: String(values.get('content')), ...(action === 'draft' ? { expectedRevision: currentDraft?.revision ?? 0 } : {}) })} validateReceipt={(result, originalCommand) => { if (action === 'draft') currentTextDraftReceipt(result, assessment.id, originalCommand.body); else currentSubmissionReceipt(result, assessment.id, membership?.userId, originalCommand.body); }} onSaved={saved} onLockedChange={setCommandLocked} onCancel={() => setAction(null)} actionLabel={action === 'draft' ? t.saveDraft : t.submit} note={t.draftNote} /> : null}
   </div>;
 }
 
@@ -74,5 +65,5 @@ export function TeacherSubmissionActions({ submission, onChanged }: { submission
   const [action, setAction] = useState<'return' | 'close' | null>(() => journal.get(`/v1/submissions/${submission.id}/return`) ? 'return' : journal.get(`/v1/submissions/${submission.id}/close`) ? 'close' : null);
   const [commandLocked, setCommandLocked] = useState(false);
   const modesLocked = commandLocked || !!journal.get(`/v1/submissions/${submission.id}/return`) || !!journal.get(`/v1/submissions/${submission.id}/close`);
-  return <div>{submission.status !== 'RETURNED' && submission.status !== 'CLOSED' ? <div className="learning-actions"><Button type="button" variant="secondary" disabled={modesLocked} onClick={() => setAction('return')}><CuevoIcon name="feedback" size={18} />{t.returnWork}</Button><Button type="button" variant="quiet" disabled={modesLocked} onClick={() => setAction('close')}>{t.closeWork}</Button></div> : null}{action ? <CommandForm title={action === 'return' ? t.returnWork : t.closeWork} path={`/v1/submissions/${submission.id}/${action}`} fields={action === 'return' ? [{ name: 'feedback', label: t.returnFeedback, type: 'textarea', required: true, maxLength: 10000 }] : []} body={values => ({ expectedRevision: submission.revision, ...(action === 'return' ? { feedback: String(values.get('feedback')) } : {}) })} onLockedChange={setCommandLocked} onSaved={result => { const command = journal.get(`/v1/submissions/${submission.id}/${action}`); if (!command) throw new LearningApiError('invalid', true); currentSubmissionActionReceipt(result, action, submission.id, membership?.userId, command.body); setAction(null); onChanged(); }} onCancel={() => setAction(null)} actionLabel={action === 'return' ? t.returnWork : t.closeWork} /> : null}<SubmissionHistory submissionId={submission.id} /></div>;
+  return <div>{submission.status !== 'RETURNED' && submission.status !== 'CLOSED' ? <div className="learning-actions"><Button type="button" variant="secondary" disabled={modesLocked} onClick={() => setAction('return')}><CuevoIcon name="feedback" size={18} />{t.returnWork}</Button><Button type="button" variant="quiet" disabled={modesLocked} onClick={() => setAction('close')}>{t.closeWork}</Button></div> : null}{action ? <CommandForm title={action === 'return' ? t.returnWork : t.closeWork} path={`/v1/submissions/${submission.id}/${action}`} fields={action === 'return' ? [{ name: 'feedback', label: t.returnFeedback, type: 'textarea', required: true, maxLength: 10000 }] : []} body={values => ({ expectedRevision: submission.revision, ...(action === 'return' ? { feedback: String(values.get('feedback')) } : {}) })} onLockedChange={setCommandLocked} validateReceipt={(result, originalCommand) => { currentSubmissionActionReceipt(result, action, submission.id, membership?.userId, originalCommand.body); }} onSaved={() => { setAction(null); onChanged(); }} onCancel={() => setAction(null)} actionLabel={action === 'return' ? t.returnWork : t.closeWork} /> : null}<SubmissionHistory submissionId={submission.id} /></div>;
 }

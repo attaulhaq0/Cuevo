@@ -5,7 +5,7 @@ export type Intervention = SourceReview & IntelligenceMetadata & { id: string; r
 export type NumericOutcome = SourceReview & { id: string; interventionId: string; baselineResultId: string; followUpResultId: string; status: 'improved' | 'no_meaningful_change' | 'inconclusive'; difference: number; minimumChange: number; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; reason: string; limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF'; measuredAt: string };
 export type Outcome=NumericOutcome|z.infer<typeof nativeInterventionOutcomeSchema>;
 import { LearningApiError } from '../../shared/api/client.ts';
-import { insightContextSchema,intelligenceAnalysisSchema,nativeInterventionOutcomeSchema,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
+import { insightContextSchema,intelligenceAnalysisSchema,nativeInterventionOutcomeSchema,interventionHelpStatusSchema,interventionChoiceStatusSchema,interventionChoiceInputSchema,interventionHelpInputSchema,interventionHelpReplyInputSchema,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
 import { z } from 'zod';
 const insightEnvelopeSchema = z.object({ runId: z.uuid(), context: insightContextSchema.nullable() }).strict();
 export type InsightContextEnvelope = { runId: string; context: InsightContext | null };
@@ -47,4 +47,37 @@ export function parseOutcome(value: unknown): Outcome {
   if (Math.abs(value.difference - difference) > 1e-9 || value.status !== expectedStatus || value.reason !== expectedReason) throw new LearningApiError('invalid');
   if (!validReview(value)) throw new LearningApiError('invalid');
   return value as Outcome;
+}
+export type ImprovementReadContext={apiUrl:string;membership:{schoolId:string;userId:string;role:string}|null;accessToken:string|null;accessGeneration:number;online:boolean;status:string};
+export type ImprovementRead<T>={scope:string|null;value:T};
+export function improvementReadScope(context:ImprovementReadContext,path:string|null,refresh:number):string|null {
+ if(!path||context.status!=='ready'||!context.online||!context.membership||!context.accessToken)return null;
+ return JSON.stringify([context.apiUrl,context.membership.schoolId,context.membership.userId,context.membership.role,context.accessToken,context.accessGeneration,path,refresh]);
+}
+export function currentImprovementRead<T>(response:ImprovementRead<T>|null|undefined,scope:string|null):T|null{return scope&&response?.scope===scope?response.value:null;}
+export function parseCurrentIntervention(value:unknown,learnerId:string|null,interventionId?:string):Intervention {
+ const task=parseIntervention(value);if(learnerId&&task.learnerId!==learnerId||interventionId&&task.id!==interventionId)throw new LearningApiError('invalid');return task;
+}
+export function parseCurrentInterventionHelp(value:unknown,interventionId:string) {
+ const parsed=interventionHelpStatusSchema.safeParse(value);if(!parsed.success||parsed.data.id!==interventionId||parsed.data.interventionId!==interventionId)throw new LearningApiError('invalid');return parsed.data;
+}
+export function parseCurrentInterventionChoices(value:unknown,interventionId:string) {
+ const parsed=interventionChoiceStatusSchema.safeParse(value);if(!parsed.success||parsed.data.id!==interventionId||parsed.data.interventionId!==interventionId||new Set(parsed.data.options.map(option=>option.activityId)).size!==parsed.data.options.length)throw new LearningApiError('invalid');
+ const {options,choice}=parsed.data;if(choice&&!options.some(option=>option.activityId===choice.activityId&&option.title===choice.title&&option.instructions===choice.instructions))throw new LearningApiError('invalid');return parsed.data;
+}
+export function approvedPracticeChoiceOptions(status:ReturnType<typeof parseCurrentInterventionChoices>) {
+ return status.options.filter(option=>option.available&&status.options.filter(candidate=>candidate.title.trim()===option.title.trim()).length===1).map(option=>({value:option.activityId,label:option.title}));
+}
+export function validatePracticeCompletionReceipt(value:unknown,expected:Intervention):void {
+ try{const task=parseIntervention(value);if(task.status!=='COMPLETED'||['id','recommendationId','learnerId','referenceId','baselineResultId','title','instructions','createdAt'].some(key=>task[key as keyof Intervention]!==expected[key as keyof Intervention]))throw new LearningApiError('invalid');}catch{throw new LearningApiError('invalid',true);}
+}
+export function validateInterventionHelpReceipt(value:unknown,interventionId:string,body:Record<string,unknown>,reply:boolean):void {
+ try{const status=parseCurrentInterventionHelp(value,interventionId);if(reply){const sent=interventionHelpReplyInputSchema.parse(body);if(!status.help?.response||status.help.response.text!==sent.response)throw new LearningApiError('invalid');}else{const sent=interventionHelpInputSchema.parse(body);if(!status.help||status.help.kind!==sent.kind||status.help.question!==sent.question)throw new LearningApiError('invalid');}}catch{throw new LearningApiError('invalid',true);}
+}
+export function validateInterventionChoiceReceipt(value:unknown,interventionId:string,body:Record<string,unknown>):void {
+ try{const status=parseCurrentInterventionChoices(value,interventionId),sent=interventionChoiceInputSchema.parse(body);if(status.choice?.activityId!==sent.activityId)throw new LearningApiError('invalid');}catch{throw new LearningApiError('invalid',true);}
+}
+export function currentStudentOutcome(value:unknown,tasks:Intervention[],learnerId:string):Outcome {
+ const outcome=parseOutcome(value);const task=tasks.find(task=>task.id===outcome.interventionId&&task.learnerId===learnerId);
+ if(!task||outcome.baselineResultId!==task.baselineResultId)throw new LearningApiError('invalid');return outcome;
 }

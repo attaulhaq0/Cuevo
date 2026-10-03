@@ -1,4 +1,7 @@
 export const communityEn = {
+  classConnection: 'Learn with your class', classConnectionBody: 'Share ideas, ask questions and learn together in school-approved spaces.', familyUpdates: 'Stay connected with school', familyUpdatesBody: 'Read approved updates and open your current school conversations.',
+  discussionAbout: 'About this discussion', discussionAboutBody: 'This space follows your current class or teacher-led group membership.', currentMembers: 'Current school-approved members', discussionFeed: 'Class discussion', mentionMembers: 'Mention current members (at most five)',
+  reactionsUnavailable: 'Count unavailable',
   parentNotLoaded: 'Earlier reply context is not loaded. Load more posts to review it.',
   openAnnouncement: 'Open announcement', closeAnnouncement: 'Close announcement',
   conversations: 'Parent and teacher conversations',
@@ -10,6 +13,9 @@ export const communityEn = {
   connecting: 'Connecting to private updates…', connected: 'Private updates connected', offline: 'Offline — reconnect to refresh', unavailable: 'Live updates unavailable — refresh the discussion',
 };
 export const communityAr: typeof communityEn = {
+  classConnection: 'تعلّم مع صفّك', classConnectionBody: 'شارك الأفكار واطرح الأسئلة وتعلّم مع الآخرين في مساحات تعتمدها المدرسة.', familyUpdates: 'تواصل مع المدرسة', familyUpdatesBody: 'اقرأ التحديثات المعتمدة وافتح محادثاتك المدرسية الحالية.',
+  discussionAbout: 'عن هذه المناقشة', discussionAboutBody: 'تتبع هذه المساحة عضويتك الحالية في الصف أو المجموعة التي يقودها المعلّم.', currentMembers: 'أعضاء حاليون معتمدون من المدرسة', discussionFeed: 'مناقشة الصف', mentionMembers: 'ذكر أعضاء حاليين (خمسة كحد أقصى)',
+  reactionsUnavailable: 'العدد غير متاح',
   parentNotLoaded: 'لم يُحمّل سياق الرد السابق. حمّل مزيدًا من المنشورات لمراجعته.',
   openAnnouncement: 'فتح الإعلان', closeAnnouncement: 'إغلاق الإعلان',
   conversations: 'محادثات أولياء الأمور والمعلّمين',

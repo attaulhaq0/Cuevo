@@ -19,8 +19,9 @@ export function activityKindLabel(kind: string, labels: Record<string, string>, 
 export function activityCompletionState(activity: Activity): 'confirmed' | 'not-recorded' | 'unknown' {
   return activity.completion ? 'confirmed' : activity.completion === null ? 'not-recorded' : 'unknown';
 }
-export function currentActivityCompletion(value: unknown, activityId: string, learnerId: string): NonNullable<Activity['completion']> {
+export function currentActivityCompletion(value: unknown, activityId: string, learnerId: string, body?: Record<string, unknown>): NonNullable<Activity['completion']> {
   if (!isObject(value) || typeof value.id !== 'string' || !value.id || value.activityId !== activityId || value.learnerId !== learnerId || !date(value.completedAt) || !(value.reflection === null || typeof value.reflection === 'string')) throw new LearningApiError('invalid', true);
+  if (body && value.reflection !== (body.reflection ?? null)) throw new LearningApiError('invalid', true);
   return { id: value.id, completedAt: value.completedAt as string };
 }
 export function currentCourseReading(value: unknown, courseId: string, selectedUnitId: string | null): CourseDetail {
@@ -74,6 +75,14 @@ export function currentSubmissionDraft(value: unknown, assessmentId: string, exp
     if (draft.assessmentId !== assessmentId || expectedRevision !== undefined && draft.revision !== expectedRevision + 1) throw new LearningApiError('invalid');
     return draft;
   } catch { throw new LearningApiError('invalid', expectedRevision !== undefined); }
+}
+/** Draft receipts preserve raw saved text and the original revision basis;
+ * submission trimming belongs to the existing submission input contract. */
+export function currentTextDraftReceipt(value: unknown, assessmentId: string, body: Record<string, unknown>): SubmissionDraft {
+  if (!Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 0 || typeof body.content !== 'string') throw new LearningApiError('invalid', true);
+  const receipt = currentSubmissionDraft(value, assessmentId, Number(body.expectedRevision));
+  if (receipt.content !== body.content) throw new LearningApiError('invalid', true);
+  return receipt;
 }
 export function preferredSubmissionDraft(assessmentId: string, read: SubmissionDraft | null | undefined, receipt: SubmissionDraft | null): SubmissionDraft | null | undefined {
   return receipt && receipt.assessmentId === assessmentId && receipt.revision >= (read?.revision ?? 0) ? receipt : read;

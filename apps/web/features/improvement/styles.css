@@ -15,3 +15,63 @@
 .insight-context h6 { font-size: var(--type-sm); }
 .insight-context li, .insight-context article { margin-block: var(--space-4); }
 .insight-context bdi { overflow-wrap: anywhere; }
+.support-trail-heading { display: flex; align-items: center; gap: var(--space-5); margin-block: var(--space-6); }
+.support-trail-heading > img { inline-size: 5.5rem; block-size: 5.5rem; flex: none; object-fit: contain; }
+.support-trail-heading > div { min-inline-size: 0; }
+.support-trail-heading h2 { font-size: var(--type-title); line-height: var(--line-height-tight); }
+.support-trail-heading p { color: var(--color-text-secondary); max-inline-size: 65ch; font-size: var(--type-lg); line-height: var(--line-height-body); margin-block-start: var(--space-3); }
+.student-practices { display: grid; gap: var(--space-6); }
+.support-practice, .support-empty { background: var(--color-material-reading); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--elevation-subtle); min-inline-size: 0; }
+.support-practice-heading { display: flex; align-items: center; gap: var(--space-4); }
+.support-practice-heading > img { inline-size: 4rem; block-size: 4rem; flex: none; object-fit: contain; }
+.support-practice-heading > div { flex: 1; min-inline-size: 0; }
+.support-practice-heading .eyebrow { color: var(--color-link); margin-block-end: var(--space-2); }
+.support-practice-heading :is(h2,h3) { font-size: var(--type-subheading); line-height: var(--line-height-tight); overflow-wrap: anywhere; }
+.support-practice-heading .status { margin-block-start: var(--space-3); }
+.support-practice-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--space-6); margin-block-start: var(--space-6); align-items: start; }
+.support-practice-main, .support-practice-context { min-inline-size: 0; }
+.support-instructions { background: var(--color-learning-surface); padding: var(--space-5); border-radius: var(--radius-lg); }
+.support-instructions :is(h3,h4), .support-completion :is(h3,h4), .support-completion-recorded :is(h3,h4) { display: flex; align-items: center; gap: var(--space-3); font-size: var(--type-lg); margin-block-end: var(--space-4); }
+.support-instructions svg { color: var(--color-learning-symbol); flex: none; }
+.support-instructions p { white-space: pre-wrap; overflow-wrap: anywhere; max-inline-size: 65ch; line-height: var(--line-height-reading); }
+.support-completion { margin-block-start: var(--space-6); }
+.support-completion svg { color: var(--color-practice-symbol); flex: none; }
+.support-completion > p { color: var(--color-text-secondary); }
+.support-completion .learning-form { padding: var(--space-5); margin-block-start: var(--space-4); background: var(--color-surface-muted); }
+.support-completion .learning-form > h3 { font-size: var(--type-body); }
+.support-completion .learning-form textarea { min-block-size: 10rem; }
+.support-completion-recorded { margin-block-start: var(--space-6); background: var(--color-positive-surface); padding: var(--space-5); border-radius: var(--radius-lg); }
+.support-completion-recorded svg { color: var(--color-positive); flex: none; }
+.support-completion-recorded p { margin-block-start: var(--space-3); line-height: var(--line-height-body); }
+.support-practice-context { display: grid; gap: var(--space-5); }
+.support-task-help, .support-task-choices { background: var(--color-surface-muted); border: 1px solid var(--color-border); padding: var(--space-5); border-radius: var(--radius-lg); }
+.support-task-help h3, .support-task-choices h3 { font-size: var(--type-lg); line-height: var(--line-height-tight); margin-block-end: var(--space-4); overflow-wrap: anywhere; }
+.support-task-help p, .support-task-choices p { color: var(--color-text-secondary); margin-block: var(--space-3); overflow-wrap: anywhere; line-height: var(--line-height-body); }
+.support-task-help .lesson-content, .support-task-choices .lesson-content { color: var(--color-text); }
+.support-task-help .learning-form, .support-task-choices .learning-form { padding: 0; background: transparent; border: 0; margin-block-start: var(--space-5); }
+.support-task-help .learning-form__fields, .support-task-choices .learning-form__fields { display: flex; flex-direction: column; }
+.support-task-choices article { border-block-start: 1px solid var(--color-border); padding-block: var(--space-4); }
+.support-task-choices article h4 { font-size: var(--type-body); overflow-wrap: anywhere; }
+.support-source-disclosure { margin-block-start: var(--space-5); border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-3); }
+.support-source-disclosure summary { display: flex; align-items: center; gap: var(--space-2); color: var(--color-link); font-weight: var(--font-weight-semibold); min-block-size: var(--control-min-size); cursor: pointer; }
+.support-source-disclosure > p { margin-block: var(--space-3); overflow-wrap: anywhere; }
+.support-empty { text-align: center; padding-block: var(--space-8); }
+.support-empty img { inline-size: 5.5rem; block-size: 5.5rem; object-fit: contain; margin-block-end: var(--space-4); }
+.support-empty h3 { font-size: var(--type-subheading); }
+.support-empty p { margin-block-start: var(--space-3); color: var(--color-text-secondary); }
+@media (max-width: 767px) {
+  .support-trail-heading { gap: var(--space-3); }
+  .support-trail-heading > img { inline-size: 4rem; block-size: 4rem; }
+  .support-trail-heading h2 { font-size: var(--type-subheading); }
+  .support-trail-heading p { font-size: var(--type-body); }
+  .support-practice, .support-empty { padding: var(--space-4); }
+  .support-practice-heading { flex-wrap: wrap; gap: var(--space-3); }
+  .support-practice-heading :is(h2,h3) { font-size: var(--type-lg); }
+  .support-practice-heading > .button { inline-size: 100%; }
+  .support-practice-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .support-instructions, .support-completion .learning-form, .support-completion-recorded, .support-task-help, .support-task-choices { padding: var(--space-4); }
+  .support-completion .learning-form__actions > .button { inline-size: 100%; }
+}
+.support-outcome-disclosure { margin-block: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-material-reading); }
+.support-outcome-disclosure > h3 { margin-block: var(--space-5); font-size: var(--type-subheading); overflow-wrap: anywhere; }
+.support-outcome-disclosure > .button { white-space: normal; text-align: start; }

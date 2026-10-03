@@ -55,6 +55,14 @@ test('completion feedback requires the exact learner and activity receipt before
   assert.throws(() => currentActivityCompletion({ ...receipt, completedAt: 'unknown' }, 'a2', 'learner-id'));
 });
 
+test('completion receipt confirms the reflection actually sent without altering its stored text', () => {
+  const receipt = { id: 'completion-id', activityId: 'a2', learnerId: 'learner-id', completedAt: '2026-10-03T00:00:00.000Z', reflection: 'My checked step.' };
+  assert.deepEqual(currentActivityCompletion(receipt, 'a2', 'learner-id', { reflection: 'My checked step.' }), { id: receipt.id, completedAt: receipt.completedAt });
+  assert.throws(() => currentActivityCompletion({ ...receipt, reflection: 'Another reflection' }, 'a2', 'learner-id', { reflection: 'My checked step.' }));
+  assert.throws(() => currentActivityCompletion(receipt, 'a2', 'learner-id', {}));
+  assert.deepEqual(currentActivityCompletion({ ...receipt, reflection: null }, 'a2', 'learner-id', {}), { id: receipt.id, completedAt: receipt.completedAt });
+});
+
 test('current course read rejects a different course or selected unit before mounting its reader', () => {
   assert.equal(currentCourseReading(course, course.id, 'u2').id, course.id);
   assert.throws(() => currentCourseReading(course, 'different-course', null));

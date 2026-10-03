@@ -26,6 +26,10 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
     observer.observe(element);
     return () => observer.disconnect();
   }, [context.navigation]);
+  useEffect(() => {
+    const active = context.selectedId ? buttons.current.get(context.selectedId) : null;
+    active?.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
+  }, [context.selectedId, context.locale, overflowing]);
   function scrollRail(forward: boolean) {
     const element = rail.current;
     if (element) element.scrollBy({ left: element.clientWidth * .7 * (forward ? 1 : -1) * (rtl ? -1 : 1), behavior: 'instant' });

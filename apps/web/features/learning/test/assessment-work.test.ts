@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assessmentSubmissionContext, assessmentWorkAvailable, assessmentWorkPresentation, currentSubmissionDraft, currentSubmissionReceipt, currentSubmissionActionReceipt, currentStudentQuiz, currentQuizReceipt, currentSubmissionWorkDraft, currentSubmissionWorkReceipt, currentWorkArtifact, preferredSubmissionDraft, type Assessment, type Submission } from '../model.ts';
-import { LearningApiError } from '../../../shared/api/client.ts';
+import { assessmentSubmissionContext, assessmentWorkAvailable, assessmentWorkPresentation, currentSubmissionDraft, currentTextDraftReceipt, currentSubmissionReceipt, currentSubmissionActionReceipt, currentStudentQuiz, currentQuizReceipt, currentSubmissionWorkDraft, currentSubmissionWorkReceipt, currentWorkArtifact, preferredSubmissionDraft, type Assessment, type Submission } from '../model.ts';
+import { CommandJournal, confirmCommandReceipt, LearningApiError } from '../../../shared/api/client.ts';
 
 const assessment: Assessment = { id: 'task', courseId: 'course', title: 'Explain your method', instructions: 'Show the steps.', status: 'PUBLISHED', dueAt: null, policyVersion: 1, availableFrom: null, availableUntil: null, allowLate: false, assignmentState: 'OPEN', availabilityVersion: 1, submissionKind: 'TEXT', model: 'numeric', maxScore: 10, rubricId: null };
 const submission: Submission = { id: 'work', assessmentId: 'task', learnerId: 'learner', content: 'My method', status: 'SUBMITTED', revision: 1, submittedAt: '2026-10-03T10:00:00Z', assessmentTitle: 'Explain your method', learnerName: 'Learner', previousSubmissionId: null, sourceReturnId: null, returnId: null, returnFeedback: null, returnedAt: null };
@@ -45,6 +45,30 @@ test('a draft-save receipt must belong to the selected task and next expected re
   assert.throws(() => currentSubmissionDraft({ ...saved, assessmentId: 'other' }, 'task'), LearningApiError);
   assert.throws(() => currentSubmissionDraft({ ...saved, revision: 1 }, 'task', 1), (error: unknown) => error instanceof LearningApiError && error.uncertain);
   assert.throws(() => currentSubmissionDraft({ ...saved, revision: 3 }, 'task', 1), (error: unknown) => error instanceof LearningApiError && error.uncertain);
+});
+
+test('an unmounted text draft validates original content and revision before its key settles', () => {
+  const journal = new CommandJournal();
+  const path = '/v1/assessments/task/draft';
+  const original = journal.prepare(path, path, { expectedRevision: 1, content: '\n My exact draft \n' });
+  const receipt = { id: 'draft', assessmentId: 'task', content: original.body.content, status: 'DRAFT', revision: 2, updatedAt: '2026-10-03T10:00:00Z' };
+  const validate = (value: unknown, command: typeof original) => { currentTextDraftReceipt(value, 'task', command.body); };
+  for (const patch of [{ revision: 3 }, { content: 'My exact draft' }, { assessmentId: 'other-task' }]) {
+    assert.throws(() => confirmCommandReceipt(journal, path, original.key, { ...receipt, ...patch }, undefined, validate), error => error instanceof LearningApiError && error.uncertain);
+    assert.equal(journal.get(path), original);
+  }
+  assert.equal(confirmCommandReceipt(journal, path, original.key, receipt, undefined, validate), true);
+  assert.equal(journal.get(path), undefined);
+});
+
+test('unmounted resubmission validation retains the original returned-work link and key', () => {
+  const journal = new CommandJournal(); const path = '/v1/submissions/work/resubmit';
+  const command = journal.prepare(path, path, { content: '\n My method \n', expectedRevision: 1, returnId: 'return' });
+  const revised = { ...submission, id: 'revised', status: 'RESUBMITTED', revision: 2, previousSubmissionId: 'work', sourceReturnId: 'return' };
+  const validate = (value: unknown, original: typeof command) => { currentSubmissionReceipt(value, 'task', 'learner', original.body, 'work'); };
+  assert.throws(() => confirmCommandReceipt(journal, path, command.key, { ...revised, sourceReturnId: 'other-return' }, undefined, validate), error => error instanceof LearningApiError && error.uncertain);
+  assert.equal(journal.get(path), command);
+  assert.equal(confirmCommandReceipt(journal, path, command.key, revised, undefined, validate), true);
 });
 test('a confirmed current draft receipt survives a delayed earlier read while a newer read can advance it', () => {
   const read = currentSubmissionDraft({ id: 'draft', assessmentId: 'task', content: 'Before save', status: 'DRAFT', revision: 1, updatedAt: '2026-10-03T09:00:00Z' }, 'task');
