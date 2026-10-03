@@ -6,6 +6,7 @@ import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { Brand } from '../../../shared/components/brand';
 import { LanguageSwitch } from '../../../shared/components/language-switch';
+import { trailAssets } from '../../../shared/characters/assets';
 import type { Membership } from '../../../shared/session/membership';
 import type { WorkspaceTarget } from '../../../shared/session/capabilities';
 import{parseNavigationIntent,type NavigationIntent}from'../../../shared/session/navigation-intent';
@@ -92,7 +93,8 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     accountAction: { label: t.profile, onClick: () => selectView('account') },
     searchAction,
   }}>
-      <main id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}`} tabIndex={-1}>
+      <img className="workspace-chrome__background" src={trailAssets.background} alt="" aria-hidden="true" />
+      <main id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}${view === 'learning' && membership.role === 'student' ? ' workspace-main--student-learning' : ''}`} tabIndex={-1}>
         {studentHome ? null : <div className="workspace-intro"><div><p className="eyebrow">{t.greeting} <bdi>{membership.displayName}</bdi></p><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{body}</p></div><Status tone="positive">{t.sessionVerified}</Status></div>}
         {notice ? <p className="notice" role="status">{notice}</p> : null}
         {view==='restricted'?<RestrictedRecordsWorkspace/>:view === 'portfolio' ? <PortfolioWorkspace /> : view === 'development' ? <DevelopmentWorkspace /> : view === 'curriculum' ? <CurriculumWorkspace /> : view === 'community' ? <CommunityWorkspace /> : view === 'school' ? <SchoolWorkspace onAutomationControl={selectView}/> : view === 'improvement' ? <ImprovementWorkspace intent={intent?.view==='improvement'?intent:null} /> : view === 'progress' ? <ProgressWorkspace /> : view === 'academic' ? <AcademicWorkspace intent={intent?.view==='academic'?intent:null} /> : view === 'learning' ? <LearningWorkspace intent={intent?.view==='learning'?intent:null} /> : view === 'overview' ? <RoleHome onNavigate={selectView} headingRef={studentHome ? heading : undefined} /> : view === 'access' ? <>

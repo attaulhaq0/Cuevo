@@ -33,7 +33,18 @@
 .workspace[dir="rtl"] .workspace-chrome__rail-control--previous svg { transform: none; }
 .workspace[dir="rtl"] .workspace-chrome__rail-control--next svg { transform: rotate(180deg); }
 .workspace .workspace-chrome__navigation[data-overflow="false"] .workspace-chrome__rail-control { display: none; }
-.workspace .workspace-chrome__content { flex: 1; min-inline-size: 0; background: var(--color-surface); }
+.workspace .workspace-chrome__content { position: relative; isolation: isolate; flex: 1; min-inline-size: 0; background: var(--color-canvas); }
+.workspace .workspace-chrome__background { position: absolute; inset: 0; z-index: -1; inline-size: 100%; block-size: 100%; object-fit: cover; object-position: center top; filter: var(--trail-background-filter); pointer-events: none; }
+.workspace .workspace-main--student-learning { padding-block-start: var(--space-6); }
+.workspace .workspace-main--student-learning .workspace-intro { margin-block-end: var(--space-5); }
+.workspace .workspace-main--student-learning .workspace-intro h1 { font-size: var(--type-xl); margin-block-start: var(--space-1); }
+.workspace .workspace-main--student-learning .workspace-intro > div > p:last-child { margin-block-start: var(--space-2); font-size: var(--type-sm); }
+@media (max-width: 800px) {
+  .workspace .workspace-main--student-learning { padding-block-start: var(--space-3); }
+  .workspace .workspace-main--student-learning .workspace-intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; margin-block-end: var(--space-3); }
+  .workspace .workspace-main--student-learning .workspace-intro .eyebrow { display: none; }
+  .workspace .workspace-main--student-learning .workspace-intro > div > p:last-child { display: none; }
+}
 .workspace .workspace-main--student-home { max-inline-size: none; padding: 0; }
 .workspace .workspace-main--student-home > :is(.notice, .workspace-footer, .form-error) { margin-inline: var(--space-6); }
 .workspace .workspace-chrome__empty { margin: 0; padding: var(--space-4); font-size: var(--type-sm); color: var(--color-text-secondary); }

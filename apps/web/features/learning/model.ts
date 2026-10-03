@@ -9,6 +9,32 @@ export type Activity = { assessmentId?:string|null;contentRevision?:number;conte
 export type Lesson = ContentMetadata & { id: string; title: string; sequence: number; body: string; status: string; activities: Activity[] };
 export type Unit = ContentMetadata & { id: string; title: string; sequence: number; lessons: Lesson[]; nextLessonSequence?: number };
 export type CourseDetail = Course & { units: Unit[]; selectedUnitId?: string | null; nextUnitCursor?: string | null; nextLessonCursor?: string | null; nextUnitSequence?: number; curriculumContext?: { version: number; programmeId: string | null; referenceId: string | null } };
+
+/** Display helpers consume current authorized projections; they add no school facts. */
+export function learningTitle(title: string, unavailable: string): string { return title.trim() || unavailable; }
+export function activityKindLabel(kind: string, labels: Record<string, string>, unavailable: string): string {
+  return Object.hasOwn(labels, kind) ? labels[kind] : unavailable;
+}
+export function activityCompletionState(activity: Activity): 'confirmed' | 'not-recorded' | 'unknown' {
+  return activity.completion ? 'confirmed' : activity.completion === null ? 'not-recorded' : 'unknown';
+}
+export function currentActivityCompletion(value: unknown, activityId: string, learnerId: string): NonNullable<Activity['completion']> {
+  if (!isObject(value) || typeof value.id !== 'string' || !value.id || value.activityId !== activityId || value.learnerId !== learnerId || !date(value.completedAt) || !(value.reflection === null || typeof value.reflection === 'string')) throw new LearningApiError('invalid', true);
+  return { id: value.id, completedAt: value.completedAt as string };
+}
+export function currentCourseReading(value: unknown, courseId: string, selectedUnitId: string | null): CourseDetail {
+  const course = parseCourseDetail(value);
+  if (course.id !== courseId || selectedUnitId && course.selectedUnitId !== undefined && course.selectedUnitId !== selectedUnitId) throw new LearningApiError('invalid');
+  return course;
+}
+export function courseReadingContext(course: CourseDetail, lessonId: string | null, activityId: string | null) {
+  const unit = course.selectedUnitId !== undefined
+    ? course.units.find(item => item.id === course.selectedUnitId) ?? null
+    : course.units.find(item => item.lessons.some(lesson => lesson.id === lessonId)) ?? course.units.find(item => item.lessons.length > 0) ?? course.units[0] ?? null;
+  const lesson = unit?.lessons.find(item => item.id === lessonId) ?? null;
+  const activity = lesson?.activities.find(item => item.id === activityId) ?? null;
+  return { unit, lesson, activity };
+}
 type AssessmentBase = { courseTitle?:string|null;id: string; courseId: string; title: string; instructions: string; status: string; dueAt: string | null; policyVersion: number; availableFrom: string | null; availableUntil: string | null; allowLate: boolean; assignmentState: 'OPEN' | 'CLOSED'; availabilityVersion: number; submissionKind: 'TEXT' | 'QUIZ';preparationVersion?:number;intendedSubmissionKind?:'TEXT'|'QUIZ';intendedModel?:'numeric'|'rubric';referenceId?:string|null; currentSubmission?: Submission | null };
 export type NumericAssessment = AssessmentBase & { model: 'numeric'; maxScore: number; rubricId: null };
 export type Assessment = NumericAssessment | AssessmentBase & { model: 'rubric'; rubricId: string };

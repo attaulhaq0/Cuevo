@@ -2,10 +2,9 @@
 
 
 import { useState } from 'react';
-import { ArrowRight, Plus, RefreshCw } from 'lucide-react';
-import { Button, Status } from '@cuevo/ui';
+import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
-import { parseChoice,choiceLabel, parseCourse, parseAssessment, parseSubmission, type Choice, type Course, type Assessment, type Submission } from '../model';
+import { parseChoice,choiceLabel, learningTitle, parseCourse, parseAssessment, parseSubmission, type Choice, type Course, type Assessment, type Submission } from '../model';
 import { useLearningApi } from '../api';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { LearningError } from '../../../shared/components/feedback';
@@ -16,6 +15,7 @@ import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-q
 import { LoadMore } from '../../../shared/components/load-more';
 import type{NavigationIntent}from'../../../shared/session/navigation-intent';
 import{LearningApiError}from'../../../shared/api/client';
+import { trailAssets } from '../../../shared/characters/assets';
 
 type Tab = 'courses' | 'assessments' | 'submissions';
 
@@ -48,8 +48,8 @@ export function LearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{vi
   const currentSourceLoading = tab === 'assessments' && membership?.role === 'student' && needsSubmissionQueue && submissions.loading;
   const currentSourceError = tab === 'assessments' && membership?.role === 'student' && needsSubmissionQueue ? submissions.error : null;
   const tabs: Tab[] = ['courses', ...(hasAssessment ? ['assessments' as const] : []), ...(hasAssessment && canSeeSubmissions ? ['submissions' as const] : [])];
-  return <div className="learning-workspace"><aside className="synthetic-notice"><strong>{t.demoTitle}</strong><p>{t.demoBody}</p></aside><div className="learning-toolbar"><div className="learning-tabs" role="group" aria-label={t.learning}>{tabs.map((item) => <button key={item} type="button" aria-pressed={tab === item} onClick={() => { setTab(item); setCreating(null); }}>{t[item]}</button>)}</div><Button type="button" variant="quiet" onClick={reload}><RefreshCw size={15} aria-hidden="true" />{t.refresh}</Button></div>
-    {canAuthor ? <div className="learning-actions">{tab === 'courses' ? <Button type="button" onClick={() => setCreating('course')}><Plus size={16} aria-hidden="true" />{t.createCourse}</Button> : tab === 'assessments' && hasAssessment ? <Button type="button" disabled={!courses.data?.length} onClick={() => setCreating('assessment')}><Plus size={16} aria-hidden="true" />{t.createAssessment}</Button> : null}</div> : <p className="learning-form__note">{membership?.role !== 'student' ? t.readOnly : ''}</p>}
+  return <div className="learning-workspace">{membership?.role === 'student' && tab === 'courses' ? <div className="learning-path-heading"><div><p className="eyebrow">{t.learningPath}</p><p className="learning-path-heading__body">{t.learningPathBody}</p></div><img src={trailAssets.lesson} width={112} height={112} alt="" aria-hidden="true" /></div> : null}<aside className="synthetic-notice"><strong>{t.demoTitle}</strong><p>{t.demoBody}</p></aside><div className="learning-toolbar"><div className="learning-tabs" role="group" aria-label={t.learning}>{tabs.map((item) => <button key={item} type="button" aria-pressed={tab === item} onClick={() => { setTab(item); setCreating(null); }}>{t[item]}</button>)}</div><Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" size={18} />{t.refresh}</Button></div>
+    {canAuthor ? <div className="learning-actions">{tab === 'courses' ? <Button type="button" onClick={() => setCreating('course')}><CuevoIcon name="practice" size={18} />{t.createCourse}</Button> : tab === 'assessments' && hasAssessment ? <Button type="button" disabled={!courses.data?.length} onClick={() => setCreating('assessment')}><CuevoIcon name="practice" size={18} />{t.createAssessment}</Button> : null}</div> : membership?.role !== 'student' ? <p className="learning-form__note">{t.readOnly}</p> : null}
     {creating === 'course' ? <>{classes.data?.length && subjects.data?.length ? <CreateCourse classes={classes.data} subjects={subjects.data} onSaved={saved} onCancel={() => setCreating(null)} /> : classes.error ? <LearningError error={classes.error} /> : subjects.error ? <LearningError error={subjects.error} /> : <p className="notice">{classes.loading || subjects.loading ? t.loading : t.choicesUnavailable}</p>}<LoadMore query={classes} label={t.class}/><LoadMore query={subjects} label={t.subject}/></> : null}
     {creating === 'assessment' && courses.data ? <CreateAssessment courses={courses.data} onSaved={saved} onCancel={() => setCreating(null)} /> : null}
     {active.loading || currentSourceLoading ? <p className="learning-empty" role="status">{t.loading}</p> : active.error || currentSourceError ? <LearningError error={(active.error ?? currentSourceError)!} /> : tab === 'courses' ? <CourseList courses={courses.data ?? []} onOpen={setCourseId} /> : tab === 'assessments' ? <AssessmentList assessments={(assessments.data ?? []) as Assessment[]} submissions={(submissions.data ?? []) as Submission[]} submissionsComplete={submissions.loaded && !submissions.nextCursor && !submissions.error} onSubmitted={reload} /> : <SubmissionList submissions={submissions.data ?? []} onChanged={reload} />}
@@ -59,7 +59,7 @@ export function LearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{vi
 
 function CourseList({ courses, onOpen }: { courses: Course[]; onOpen: (id: string) => void }) {
   const { t } = useLearningApi();
-  return courses.length ? <ul className="course-list">{courses.map((course) => <li key={course.id}><div><Status tone={course.status === 'PUBLISHED' ? 'positive' : 'neutral'}>{course.status === 'PUBLISHED' ? t.published : t.draft}</Status><h3>{course.title}</h3><p>{course.description}</p></div><Button type="button" variant="secondary" onClick={() => onOpen(course.id)}>{t.start}<ArrowRight size={16} className="directional-icon" aria-hidden="true" /></Button></li>)}</ul> : <p className="learning-empty">{t.noCourses}</p>;
+  return courses.length ? <section className="learning-directory" aria-label={t.courseDirectory}><div className="learning-directory__heading"><h2>{t.courseDirectory}</h2><p>{t.courseDirectoryBody}</p></div><ul className="course-list">{courses.map((course) => <li key={course.id}><div className="course-list__art"><img src={trailAssets.lesson} width={88} height={88} alt="" aria-hidden="true" /></div><div className="course-list__body"><Status tone={course.status === 'PUBLISHED' ? 'positive' : 'neutral'}>{course.status === 'PUBLISHED' ? t.published : t.draft}</Status><h3><bdi>{learningTitle(course.title, t.courseUnavailable)}</bdi></h3><p dir="auto">{course.description.trim() || t.descriptionUnavailable}</p></div><Button type="button" variant="secondary" onClick={() => onOpen(course.id)}>{t.start}<CuevoIcon name="arrow" size={20} className="directional-icon" /></Button></li>)}</ul></section> : <p className="learning-empty">{t.noCourses}</p>;
 }
 function CreateCourse({ classes, subjects, onSaved, onCancel }: { classes: Choice[]; subjects: Choice[]; onSaved: () => void; onCancel: () => void }) {
   const { t } = useLearningApi();
