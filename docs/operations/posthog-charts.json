@@ -1,0 +1,1492 @@
+{
+  "projectId": 393668,
+  "organization": "Edeviser",
+  "product": "Cuevo",
+  "version": "2026-10-03",
+  "status": "implemented-query-verified",
+  "scope": "current-source minimized synthetic analytics; real-only charts prepared but capture unavailable",
+  "charts": [
+    {
+      "key": "qa_segments",
+      "id": 12469322,
+      "short_id": "mOH46tnM",
+      "name": "Cuevo QA — diagnostic actors by language and viewport",
+      "dashboards": [
+        2163643
+      ],
+      "description": "Distinct school-bound actors with a recorded QA diagnostic sample, segmented by language and viewport. Absent segments mean unobserved coverage. Capped samples are not a complete QA census.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "EventsNode",
+            "event": "cuevo_browser_diagnostic",
+            "custom_name": "Observed diagnostic actors",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT distinct_id)"
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "QA"
+          }
+        ],
+        "interval": "day",
+        "trendsFilter": {
+          "display": "ActionsBarValue",
+          "showLegend": true,
+          "showValuesOnSeries": true
+        },
+        "breakdownFilter": {
+          "breakdowns": [
+            {
+              "type": "event",
+              "property": "locale"
+            },
+            {
+              "type": "event",
+              "property": "viewport"
+            }
+          ],
+          "breakdown_limit": 30
+        }
+      }
+    },
+    {
+      "key": "qa_affected",
+      "id": 12469323,
+      "short_id": "SpLiT7GL",
+      "name": "Cuevo QA — actors with unavailable or invalid samples",
+      "dashboards": [
+        2163643
+      ],
+      "description": "Distinct actors with unavailable responses or invalid payload samples beside all observed diagnostic actors per feature. Categories overlap. Sample counts do not establish an API error rate.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT properties.feature AS feature, count(DISTINCT distinct_id) AS observed_diagnostic_actors, count(DISTINCT if(properties.status='unavailable', distinct_id, NULL)) AS unavailable_actors, count(DISTINCT if(properties.category='response_invalid', distinct_id, NULL)) AS invalid_payload_actors FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND properties.environment='QA' AND event='cuevo_browser_diagnostic' AND {filters} GROUP BY feature ORDER BY unavailable_actors DESC, invalid_payload_actors DESC LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "qa_access",
+      "id": 12469324,
+      "short_id": "r3eDM7PM",
+      "name": "Cuevo QA — access and conflict samples by role",
+      "dashboards": [
+        2163643
+      ],
+      "description": "Distinct actors in recorded QA unauthorized, denied or conflict samples by role and feature. Expected authorization denial is not automatically a defect or security incident. Segments overlap.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "EventsNode",
+            "event": "cuevo_browser_diagnostic",
+            "custom_name": "Observed actors",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT distinct_id)"
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "QA"
+          },
+          {
+            "key": "status",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "unauthorized",
+              "denied",
+              "conflict"
+            ]
+          }
+        ],
+        "interval": "day",
+        "trendsFilter": {
+          "display": "ActionsTable",
+          "showLegend": true
+        },
+        "breakdownFilter": {
+          "breakdowns": [
+            {
+              "type": "event",
+              "property": "actor_role"
+            },
+            {
+              "type": "event",
+              "property": "feature"
+            },
+            {
+              "type": "event",
+              "property": "status"
+            }
+          ],
+          "breakdown_limit": 30
+        }
+      }
+    },
+    {
+      "key": "qa_slow",
+      "id": 12469326,
+      "short_id": "PfSEIizx",
+      "name": "Cuevo QA — slow sample coverage and unknown timing",
+      "dashboards": [
+        2163643
+      ],
+      "description": "Request-sample actors by language/viewport with known timing, slow 5s+ observations and unknown timing. Only api_request/api_error count; parser failures can follow success. This is capped diagnostic coverage, not p95 or SLA.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT properties.locale AS language, properties.viewport AS viewport, count(DISTINCT distinct_id) AS request_sample_actors, count(DISTINCT if(properties.timing!='unknown', distinct_id, NULL)) AS known_timing_actors, count(DISTINCT if(properties.timing IN ('5_to_14s','15s_or_more'), distinct_id, NULL)) AS slow_sample_actors, count(DISTINCT if(properties.timing='unknown', distinct_id, NULL)) AS unknown_timing_actors FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND properties.environment='QA' AND event='cuevo_browser_diagnostic' AND {filters} AND properties.category IN ('api_request','api_error') GROUP BY language, viewport LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "team_roles",
+      "id": 12469327,
+      "short_id": "PPV1Ipp5",
+      "name": "Cuevo Team — observed product actors by role",
+      "dashboards": [
+        2163644
+      ],
+      "description": "Weekly distinct acting accounts with confirmed product actions, separated by role and synthetic environment. Teachers are acting accounts, not the learner whose result was released. Counts can overlap across roles and are not roster adoption. Identity version 1 only.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "GroupNode",
+            "operator": "OR",
+            "custom_name": "Observed product actors",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT distinct_id)",
+            "nodes": [
+              {
+                "kind": "EventsNode",
+                "event": "learning_activity_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_resubmitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "quiz_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_marked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "recommendation_reviewed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "intervention_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "reassessment_linked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "outcome_measured",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "community_post_created",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              }
+            ]
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          },
+          {
+            "key": "pseudonym_key_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 1
+          }
+        ],
+        "interval": "week",
+        "trendsFilter": {
+          "display": "ActionsLineGraph",
+          "showLegend": true
+        },
+        "breakdownFilter": {
+          "breakdowns": [
+            {
+              "type": "event",
+              "property": "actor_role"
+            },
+            {
+              "type": "event",
+              "property": "environment"
+            }
+          ],
+          "breakdown_limit": 30
+        }
+      }
+    },
+    {
+      "key": "team_days",
+      "id": 12469328,
+      "short_id": "AeTWiH01",
+      "name": "Cuevo Team — recorded action days per actor",
+      "dashboards": [
+        2163644
+      ],
+      "description": "Weekly distribution of observed product actors recording actions on one, two or three-plus UTC days (Sunday-start weeks). Identity-key version remains visible; partial weeks remain partial. Frequency is not attendance, habit or attainment. Newest-first; at most 1,000 segment rows.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT week, environment, key_version, action_days, count() AS observed_actors FROM (SELECT toStartOfWeek(timestamp) AS week, properties.environment AS environment, properties.pseudonym_key_version AS key_version, distinct_id, multiIf(count(DISTINCT toDate(timestamp))=1,'1 day',count(DISTINCT toDate(timestamp))=2,'2 days','3+ days') AS action_days FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event IN ('learning_activity_completed', 'assessment_submitted', 'assessment_resubmitted', 'quiz_submitted', 'assessment_marked', 'recommendation_reviewed', 'intervention_completed', 'reassessment_linked', 'outcome_measured', 'community_post_created') AND {filters} GROUP BY week, environment, key_version, distinct_id) GROUP BY week, environment, key_version, action_days ORDER BY week DESC, environment, key_version, action_days LIMIT 1000",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "team_workflows",
+      "id": 12469329,
+      "short_id": "IUE4ddqq",
+      "name": "Cuevo Team — role participation across workflows",
+      "dashboards": [
+        2163644
+      ],
+      "description": "Distinct observed acting accounts by role, environment and derived workflow family. Accounts can appear in multiple cells; cells must not be summed as people. Measures captured workflow participation, not permissions or educational quality.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT properties.environment AS environment, properties.actor_role AS role, multiIf(event='community_post_created','Community',event IN ('learning_activity_completed','quiz_submitted'),'Learning',event IN ('assessment_submitted','assessment_resubmitted','assessment_marked'),'Assessment','Reviewed support') AS workflow, count(DISTINCT distinct_id) AS observed_actors FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event IN ('learning_activity_completed', 'assessment_submitted', 'assessment_resubmitted', 'quiz_submitted', 'assessment_marked', 'recommendation_reviewed', 'intervention_completed', 'reassessment_linked', 'outcome_measured', 'community_post_created') AND {filters} GROUP BY environment, role, workflow ORDER BY environment, role, workflow LIMIT 80",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "submission_mix",
+      "id": 12469330,
+      "short_id": "NudCRmyB",
+      "name": "Cuevo — submission action mix",
+      "dashboards": [
+        2163644,
+        2163647
+      ],
+      "description": "Distinct confirmed assessment submission, resubmission and quiz actions. A resubmission proportion is an action mix, not assignments revised or learner completion. Unexercised event types may be empty. Institution dashboard selects DEMO.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "EventsNode",
+            "event": "assessment_submitted",
+            "custom_name": "assessment submitted",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT properties.$insert_id)"
+          },
+          {
+            "kind": "EventsNode",
+            "event": "assessment_resubmitted",
+            "custom_name": "assessment resubmitted",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT properties.$insert_id)"
+          },
+          {
+            "kind": "EventsNode",
+            "event": "quiz_submitted",
+            "custom_name": "quiz submitted",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT properties.$insert_id)"
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          }
+        ],
+        "interval": "day",
+        "trendsFilter": {
+          "display": "ActionsBarValue",
+          "showLegend": true,
+          "showValuesOnSeries": true
+        }
+      }
+    },
+    {
+      "key": "team_environments",
+      "id": 12469331,
+      "short_id": "vCCLgcrk",
+      "name": "Cuevo Team — captured activity by environment",
+      "dashboards": [
+        2163644
+      ],
+      "description": "Distinct confirmed product event identities per QA/DEMO/STAGING environment. Excludes diagnostics, probes and intelligence terminal/review observations. Useful for capture segmentation; synthetic totals are not customer adoption.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "GroupNode",
+            "operator": "OR",
+            "custom_name": "Confirmed product actions",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT properties.$insert_id)",
+            "nodes": [
+              {
+                "kind": "EventsNode",
+                "event": "learning_activity_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_resubmitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "quiz_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_marked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "recommendation_reviewed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "intervention_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "reassessment_linked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "outcome_measured",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "community_post_created",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT properties.$insert_id)"
+              }
+            ]
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          }
+        ],
+        "interval": "day",
+        "trendsFilter": {
+          "display": "ActionsBarValue",
+          "showLegend": true,
+          "showValuesOnSeries": true
+        },
+        "breakdownFilter": {
+          "breakdowns": [
+            {
+              "type": "event",
+              "property": "environment"
+            }
+          ],
+          "breakdown_limit": 30
+        }
+      }
+    },
+    {
+      "key": "ai_providers",
+      "id": 12469333,
+      "short_id": "OimlORdD",
+      "name": "Cuevo Intelligence — observed provider and model mix",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Distinct terminal run observations by execution mode/provider/model. FIXTURE means no external model. Only actual recorded runs appear; provider labels alone do not establish contact, quality or deployment acceptance.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "EventsNode",
+            "event": "cuevo_intelligence_run_observed",
+            "custom_name": "Terminal run observations",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT properties.$insert_id)"
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          }
+        ],
+        "interval": "day",
+        "trendsFilter": {
+          "display": "ActionsBarValue",
+          "showLegend": true,
+          "showValuesOnSeries": true
+        },
+        "breakdownFilter": {
+          "breakdowns": [
+            {
+              "type": "event",
+              "property": "generation_mode"
+            },
+            {
+              "type": "event",
+              "property": "ai_provider"
+            },
+            {
+              "type": "event",
+              "property": "ai_model"
+            }
+          ],
+          "breakdown_limit": 30
+        }
+      }
+    },
+    {
+      "key": "ai_latency",
+      "id": 12469334,
+      "short_id": "tHxL5CzI",
+      "name": "Cuevo Intelligence — retained latency with sample counts",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Known terminal generation-plus-validation latency median/p95 with known and unknown counts, by mode/provider/model. Excludes linked-stage repeats and queue/request duration. Sparse p95 is descriptive; unknown latency stays null. Conflicting duplicate metadata is shown.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT generation_mode AS mode, ai_provider AS provider, ai_model AS model, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(ai_latency_ms IS NOT NULL) AS known_latency_runs, countIf(ai_latency_ms IS NULL) AS unknown_latency_runs, if(countIf(ai_latency_ms IS NOT NULL)=0,NULL,quantile(0.5)(toFloatOrNull(ai_latency_ms))) AS median_ms, if(countIf(ai_latency_ms IS NOT NULL)=0,NULL,quantile(0.95)(toFloatOrNull(ai_latency_ms))) AS p95_ms FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.ai_provider, properties.ai_model, properties.ai_latency_ms)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.ai_provider) AS ai_provider, any(properties.ai_model) AS ai_model, any(properties.ai_latency_ms) AS ai_latency_ms FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode,provider,model LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "ai_tokens",
+      "id": 12469335,
+      "short_id": "YXt4QI2w",
+      "name": "Cuevo Intelligence — retained tokens and usage gaps",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Terminal run input/output token totals and per-field known/unknown counts. Null usage stays unknown; fixture zero is recorded zero. Linked support/review stages are excluded so one generation is not counted repeatedly. Conflicting duplicate metadata is shown.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT generation_mode AS mode, ai_provider AS provider, ai_model AS model, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(input_tokens IS NOT NULL) AS input_known, countIf(input_tokens IS NULL) AS input_unknown, if(countIf(input_tokens IS NOT NULL)=0,NULL,sum(toFloatOrNull(input_tokens))) AS recorded_input_tokens, countIf(output_tokens IS NOT NULL) AS output_known, countIf(output_tokens IS NULL) AS output_unknown, if(countIf(output_tokens IS NOT NULL)=0,NULL,sum(toFloatOrNull(output_tokens))) AS recorded_output_tokens FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.ai_provider, properties.ai_model, properties.input_tokens, properties.output_tokens)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.ai_provider) AS ai_provider, any(properties.ai_model) AS ai_model, any(properties.input_tokens) AS input_tokens, any(properties.output_tokens) AS output_tokens FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode,provider,model LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "ai_context",
+      "id": 12469345,
+      "short_id": "HrW0OJH8",
+      "name": "Cuevo Intelligence — supplied context and unknown counts",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Known/unknown terminal context-count metadata with recorded mean per category. Counts describe the bounded context supplied to the run, not all learner evidence or raw sources. Missing remains unknown; no sensitive context is exported. Conflicting duplicate metadata is shown.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT generation_mode AS mode, 'results' AS context_category, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(context_results_count IS NOT NULL) AS known_runs, countIf(context_results_count IS NULL) AS unknown_runs, if(countIf(context_results_count IS NOT NULL)=0,NULL,avg(toFloatOrNull(context_results_count))) AS recorded_mean FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.context_results_count)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.context_results_count) AS context_results_count FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode UNION ALL SELECT generation_mode AS mode, 'observations' AS context_category, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(context_observations_count IS NOT NULL) AS known_runs, countIf(context_observations_count IS NULL) AS unknown_runs, if(countIf(context_observations_count IS NOT NULL)=0,NULL,avg(toFloatOrNull(context_observations_count))) AS recorded_mean FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.context_observations_count)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.context_observations_count) AS context_observations_count FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode UNION ALL SELECT generation_mode AS mode, 'prior_interventions' AS context_category, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(context_prior_interventions_count IS NOT NULL) AS known_runs, countIf(context_prior_interventions_count IS NULL) AS unknown_runs, if(countIf(context_prior_interventions_count IS NOT NULL)=0,NULL,avg(toFloatOrNull(context_prior_interventions_count))) AS recorded_mean FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.context_prior_interventions_count)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.context_prior_interventions_count) AS context_prior_interventions_count FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode UNION ALL SELECT generation_mode AS mode, 'activities' AS context_category, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(context_activities_count IS NOT NULL) AS known_runs, countIf(context_activities_count IS NULL) AS unknown_runs, if(countIf(context_activities_count IS NOT NULL)=0,NULL,avg(toFloatOrNull(context_activities_count))) AS recorded_mean FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.context_activities_count)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.context_activities_count) AS context_activities_count FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "ai_budget",
+      "id": 12469346,
+      "short_id": "VdD2ATWp",
+      "name": "Cuevo Intelligence — reservations, estimates and unknown billing",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Terminal-only configured estimates and reserved budgets by basis/mode/provider, with unknown estimate and billing counts. A reservation is not expense. Custom event metadata never asserts an actual Foundry invoice. Conflicting duplicate metadata is shown.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT generation_mode AS mode, ai_provider AS provider, cost_basis AS basis, count() AS observed_runs, countIf(metadata_variants>1) AS conflicting_source_events, countIf(estimated_cost_usd IS NULL) AS estimate_unknown_runs, if(countIf(estimated_cost_usd IS NOT NULL)=0,NULL,sum(toFloatOrNull(estimated_cost_usd))) AS estimated_usd, sum(toFloatOrNull(reserved_budget_usd)) AS reserved_usd, countIf(billed_cost_status='UNKNOWN') AS billing_unknown_runs FROM (SELECT properties.$insert_id AS event_identity, uniqExact(tuple(properties.generation_mode, properties.ai_provider, properties.cost_basis, properties.estimated_cost_usd, properties.reserved_budget_usd, properties.billed_cost_status)) AS metadata_variants, any(properties.generation_mode) AS generation_mode, any(properties.ai_provider) AS ai_provider, any(properties.cost_basis) AS cost_basis, any(properties.estimated_cost_usd) AS estimated_cost_usd, any(properties.reserved_budget_usd) AS reserved_budget_usd, any(properties.billed_cost_status) AS billed_cost_status FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_run_observed' AND {filters} GROUP BY event_identity) GROUP BY mode,provider,basis LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "ai_failures",
+      "id": 12469348,
+      "short_id": "2mY3IwZD",
+      "name": "Cuevo Intelligence — observed terminal failures",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Distinct FAILED terminal observations by fixed failure code and mode. Empty means no qualifying captured failure, not zero provider failures across the whole system. No raw error or prompt is collected.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "EventsNode",
+            "event": "cuevo_intelligence_run_observed",
+            "custom_name": "Observed failed runs",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT properties.$insert_id)"
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          },
+          {
+            "key": "run_state",
+            "type": "event",
+            "operator": "exact",
+            "value": "FAILED"
+          }
+        ],
+        "interval": "day",
+        "trendsFilter": {
+          "display": "ActionsBarValue",
+          "showLegend": true,
+          "showValuesOnSeries": true
+        },
+        "breakdownFilter": {
+          "breakdowns": [
+            {
+              "type": "event",
+              "property": "failure_code"
+            },
+            {
+              "type": "event",
+              "property": "generation_mode"
+            }
+          ],
+          "breakdown_limit": 30
+        }
+      }
+    },
+    {
+      "key": "ai_quality",
+      "id": 12469349,
+      "short_id": "9NWLqqr5",
+      "name": "Cuevo Intelligence — human safety and grounding review coverage",
+      "dashboards": [
+        2163648
+      ],
+      "description": "Per-category recorded human judgments, assessed/UNKNOWN counts and observed issues. One run can have different reviewers. Unknown is not safe/supported; issue counts use only that category’s assessed judgments, not all runs.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT 'grounding' AS review_category, count(DISTINCT properties.$insert_id) AS recorded_reviews, count(DISTINCT if(properties.quality_grounding IS NOT NULL AND properties.quality_grounding!='UNKNOWN',properties.$insert_id,NULL)) AS assessed_reviews, count(DISTINCT if(properties.quality_grounding IS NULL OR properties.quality_grounding='UNKNOWN',properties.$insert_id,NULL)) AS unknown_reviews, count(DISTINCT if(properties.quality_grounding='UNSUPPORTED_CLAIM_OBSERVED',properties.$insert_id,NULL)) AS issue_observed_reviews FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_quality_reviewed' AND {filters} UNION ALL SELECT 'privacy' AS review_category, count(DISTINCT properties.$insert_id) AS recorded_reviews, count(DISTINCT if(properties.quality_privacy IS NOT NULL AND properties.quality_privacy!='UNKNOWN',properties.$insert_id,NULL)) AS assessed_reviews, count(DISTINCT if(properties.quality_privacy IS NULL OR properties.quality_privacy='UNKNOWN',properties.$insert_id,NULL)) AS unknown_reviews, count(DISTINCT if(properties.quality_privacy='CONTEXT_ISSUE_OBSERVED',properties.$insert_id,NULL)) AS issue_observed_reviews FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_quality_reviewed' AND {filters} UNION ALL SELECT 'tool_safety' AS review_category, count(DISTINCT properties.$insert_id) AS recorded_reviews, count(DISTINCT if(properties.quality_tool_safety IS NOT NULL AND properties.quality_tool_safety!='UNKNOWN',properties.$insert_id,NULL)) AS assessed_reviews, count(DISTINCT if(properties.quality_tool_safety IS NULL OR properties.quality_tool_safety='UNKNOWN',properties.$insert_id,NULL)) AS unknown_reviews, count(DISTINCT if(properties.quality_tool_safety='INVALID_TOOL_OBSERVED',properties.$insert_id,NULL)) AS issue_observed_reviews FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='cuevo_intelligence_quality_reviewed' AND {filters}",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "ai_override",
+      "id": 12469350,
+      "short_id": "BQBzLUzJ",
+      "name": "Cuevo Intelligence — edited or rejected decisions",
+      "dashboards": [
+        2163648
+      ],
+      "description": "AI-linked human decisions with true/false and unknown override values by decision/mode. True includes rejected proposals and edited approvals. Only known booleans support an override proportion; missing is not false.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT properties.generation_mode AS mode, properties.decision AS decision, count(DISTINCT properties.$insert_id) AS recorded_decisions, count(DISTINCT if(properties.decision_override=true,properties.$insert_id,NULL)) AS edited_or_rejected, count(DISTINCT if(properties.decision_override=false,properties.$insert_id,NULL)) AS unchanged, count(DISTINCT if(properties.decision_override IS NULL,properties.$insert_id,NULL)) AS unknown_override FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND event='recommendation_reviewed' AND properties.intelligence_run IS NOT NULL AND {filters} GROUP BY mode,decision LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "demo_outcomes",
+      "id": 12469351,
+      "short_id": "llWKo9ZE",
+      "name": "Cuevo Institution — recorded outcome comparability",
+      "dashboards": [
+        2163647
+      ],
+      "description": "DEMO-only measured-outcome action counts by native model/comparability/status. Rubric UNKNOWN/inconclusive stays separate; missing legacy metadata is unavailable. Recorded improvement is not causal AI impact or official attainment.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "SELECT coalesce(properties.outcome_model,'UNAVAILABLE') AS native_model, coalesce(properties.outcome_comparability,'UNAVAILABLE') AS comparability, coalesce(properties.outcome_status,'UNAVAILABLE') AS recorded_status, count(DISTINCT properties.$insert_id) AS recorded_outcomes FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND properties.environment='DEMO' AND event='outcome_measured' AND {filters} GROUP BY native_model,comparability,recorded_status ORDER BY native_model,comparability,recorded_status LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "investor_week",
+      "id": 12469352,
+      "short_id": "GJ4yptBg",
+      "name": "Cuevo Investor — weekly observed product actors",
+      "dashboards": [
+        2163646
+      ],
+      "description": "Distinct school-bound accounts performing confirmed product actions per UTC calendar week, REAL/PRODUCTION only. Partial periods remain partial. Synthetic and legacy excluded. Empty until separately authorized real capture; not total customers. Identity version 1 only.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "GroupNode",
+            "operator": "OR",
+            "custom_name": "Weekly observed product actors",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT distinct_id)",
+            "nodes": [
+              {
+                "kind": "EventsNode",
+                "event": "learning_activity_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_resubmitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "quiz_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_marked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "recommendation_reviewed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "intervention_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "reassessment_linked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "outcome_measured",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "community_post_created",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              }
+            ]
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "REAL"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "false"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "PRODUCTION"
+          },
+          {
+            "key": "pseudonym_key_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 1
+          }
+        ],
+        "interval": "week",
+        "trendsFilter": {
+          "display": "ActionsLineGraph",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "key": "investor_month",
+      "id": 12469353,
+      "short_id": "cLlnvz9T",
+      "name": "Cuevo Investor — monthly observed product actors",
+      "dashboards": [
+        2163646
+      ],
+      "description": "Distinct school-bound accounts performing confirmed product actions per UTC calendar month, REAL/PRODUCTION only. Partial periods remain partial. Not rolling 30-day users, contracts or revenue. Empty until approved real capture. Identity version 1 only.",
+      "query": {
+        "kind": "TrendsQuery",
+        "series": [
+          {
+            "kind": "GroupNode",
+            "operator": "OR",
+            "custom_name": "Monthly observed product actors",
+            "math": "hogql",
+            "math_hogql": "count(DISTINCT distinct_id)",
+            "nodes": [
+              {
+                "kind": "EventsNode",
+                "event": "learning_activity_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_resubmitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "quiz_submitted",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "assessment_marked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "recommendation_reviewed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "intervention_completed",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "reassessment_linked",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "outcome_measured",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              },
+              {
+                "kind": "EventsNode",
+                "event": "community_post_created",
+                "math": "hogql",
+                "math_hogql": "count(DISTINCT distinct_id)"
+              }
+            ]
+          }
+        ],
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "REAL"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "false"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "PRODUCTION"
+          },
+          {
+            "key": "pseudonym_key_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 1
+          }
+        ],
+        "interval": "month",
+        "trendsFilter": {
+          "display": "ActionsLineGraph",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "key": "ai_followthrough",
+      "id": 12469355,
+      "short_id": "oBc9X6bs",
+      "name": "Cuevo — approved run follow-through observations",
+      "dashboards": [
+        2163648,
+        2163647
+      ],
+      "description": "Unique AI-linked approved runs with source-ordered support completion, reassessment link and recorded outcome by reporting cutoff. Cross-role run linkage, not a person funnel. Recent approvals and capture gaps do not imply failure.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "WITH staged AS (SELECT properties.school AS school, properties.environment AS environment, properties.pseudonym_key_version AS key_version, properties.intelligence_run AS run, properties.generation_mode AS mode, event, properties.decision AS decision, timestamp FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND properties.intelligence_run IS NOT NULL AND event IN ('recommendation_reviewed','intervention_completed','reassessment_linked','outcome_measured') AND {filters}), linked AS (SELECT school,environment,key_version,run,mode,min(if(event='recommendation_reviewed' AND decision='APPROVED',timestamp,NULL)) AS approved_at,min(if(event='intervention_completed',timestamp,NULL)) AS completed_at,min(if(event='reassessment_linked',timestamp,NULL)) AS linked_at,min(if(event='outcome_measured',timestamp,NULL)) AS outcome_at FROM staged GROUP BY school,environment,key_version,run,mode), ordered AS (SELECT *, completed_at>=approved_at AS completed_ordered, completed_at>=approved_at AND linked_at>=completed_at AS link_ordered, completed_at>=approved_at AND linked_at>=completed_at AND outcome_at>=linked_at AS outcome_ordered FROM linked WHERE approved_at IS NOT NULL) SELECT environment,mode,count() AS approved_runs,countIf(completed_ordered) AS support_completion_observed,countIf(link_ordered) AS reassessment_link_observed,countIf(outcome_ordered) AS outcome_observed,countIf(NOT coalesce(outcome_ordered,false)) AS no_ordered_outcome_observed FROM ordered GROUP BY environment,mode LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "ai_followuplag",
+      "id": 12469356,
+      "short_id": "GkdtNpQA",
+      "name": "Cuevo — matched approved-run stage timing",
+      "dashboards": [
+        2163648,
+        2163647
+      ],
+      "description": "Matched ordered stage-pair counts and median seconds from source timestamps. Approval→support, support→reassessment link, link→outcome. Missing pairs excluded, so timings are not whole-cohort completion time or causal impact.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "query": "WITH staged AS (SELECT properties.school AS school, properties.environment AS environment, properties.pseudonym_key_version AS key_version, properties.intelligence_run AS run, properties.generation_mode AS mode, event, properties.decision AS decision, timestamp FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND properties.intelligence_run IS NOT NULL AND event IN ('recommendation_reviewed','intervention_completed','reassessment_linked','outcome_measured') AND {filters}), linked AS (SELECT school,environment,key_version,run,mode,min(if(event='recommendation_reviewed' AND decision='APPROVED',timestamp,NULL)) AS approved_at,min(if(event='intervention_completed',timestamp,NULL)) AS completed_at,min(if(event='reassessment_linked',timestamp,NULL)) AS linked_at,min(if(event='outcome_measured',timestamp,NULL)) AS outcome_at FROM staged GROUP BY school,environment,key_version,run,mode), ordered AS (SELECT *, completed_at>=approved_at AS completed_ordered, completed_at>=approved_at AND linked_at>=completed_at AS link_ordered, completed_at>=approved_at AND linked_at>=completed_at AND outcome_at>=linked_at AS outcome_ordered FROM linked WHERE approved_at IS NOT NULL) SELECT environment,mode,count() AS approved_runs,countIf(completed_ordered) AS completion_pairs,if(countIf(completed_ordered)=0,NULL,quantile(0.5)(if(completed_ordered,dateDiff('second',approved_at,completed_at),NULL))) AS approval_to_completion_median_s,countIf(link_ordered) AS link_pairs,if(countIf(link_ordered)=0,NULL,quantile(0.5)(if(link_ordered,dateDiff('second',completed_at,linked_at),NULL))) AS completion_to_link_median_s,countIf(outcome_ordered) AS outcome_pairs,if(countIf(outcome_ordered)=0,NULL,quantile(0.5)(if(outcome_ordered,dateDiff('second',linked_at,outcome_at),NULL))) AS link_to_outcome_median_s FROM ordered GROUP BY environment,mode LIMIT 30",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          }
+        }
+      }
+    },
+    {
+      "key": "team_retention",
+      "id": 12469357,
+      "short_id": "rczWYJtl",
+      "name": "Cuevo Team — repeat recorded learning actions",
+      "dashboards": [
+        2163644
+      ],
+      "description": "QA-only native recurring weekly learning-action retention for the same observed acting account. Only completed return periods are interpretable; future zero cells are not yet observable. No signup/customer/learner retention claim. Capture pauses and key changes limit interpretation. Identity version 1 only.",
+      "query": {
+        "kind": "RetentionQuery",
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "SYNTHETIC"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": [
+              "QA",
+              "DEMO",
+              "STAGING"
+            ]
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "QA"
+          },
+          {
+            "key": "pseudonym_key_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 1
+          }
+        ],
+        "retentionFilter": {
+          "targetEntity": {
+            "id": "learning_activity_completed",
+            "type": "events"
+          },
+          "returningEntity": {
+            "id": "learning_activity_completed",
+            "type": "events"
+          },
+          "period": "Week",
+          "totalIntervals": 4,
+          "retentionType": "retention_recurring",
+          "timeWindowMode": "strict_calendar_dates",
+          "cumulative": false,
+          "meanRetentionCalculation": "none"
+        }
+      }
+    },
+    {
+      "key": "investor_retention",
+      "id": 12469358,
+      "short_id": "9cEnXFFi",
+      "name": "Cuevo Investor — repeat recorded learning actions",
+      "dashboards": [
+        2163646
+      ],
+      "description": "Native recurring weekly learning_activity_completed→learning_activity_completed retention. Same school-bound observed acting account, not signup, roster or customer retention. Future periods are unobservable. Capture pauses/key rotation limit interpretation; synthetic excluded from investor. Identity version 1 only.",
+      "query": {
+        "kind": "RetentionQuery",
+        "dateRange": {
+          "date_from": "-30d"
+        },
+        "filterTestAccounts": false,
+        "properties": [
+          {
+            "key": "cuevo_source",
+            "type": "event",
+            "operator": "exact",
+            "value": "cuevo-repository"
+          },
+          {
+            "key": "schema_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 2
+          },
+          {
+            "key": "data_class",
+            "type": "event",
+            "operator": "exact",
+            "value": "REAL"
+          },
+          {
+            "key": "synthetic_environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "false"
+          },
+          {
+            "key": "environment",
+            "type": "event",
+            "operator": "exact",
+            "value": "PRODUCTION"
+          },
+          {
+            "key": "pseudonym_key_version",
+            "type": "event",
+            "operator": "exact",
+            "value": 1
+          }
+        ],
+        "retentionFilter": {
+          "targetEntity": {
+            "id": "learning_activity_completed",
+            "type": "events"
+          },
+          "returningEntity": {
+            "id": "learning_activity_completed",
+            "type": "events"
+          },
+          "period": "Week",
+          "totalIntervals": 4,
+          "retentionType": "retention_recurring",
+          "timeWindowMode": "strict_calendar_dates",
+          "cumulative": false,
+          "meanRetentionCalculation": "none"
+        }
+      }
+    },
+    {
+      "key": "ai_followupwindow",
+      "id": 12469359,
+      "short_id": "HmDhOoLf",
+      "name": "Cuevo — seven-day observed follow-through window",
+      "dashboards": [
+        2163648,
+        2163647
+      ],
+      "description": "Selected approved runs aged seven days at displayed query cutoff versus younger approvals; observation may be truncated by date filters/capture pauses. Ordered follow-through within seven days/later/unobserved. This is analytical age and observed counts, not school deadlines or full completion rates.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsTable",
+        "source": {
+          "kind": "HogQLQuery",
+          "filters": {
+            "dateRange": {
+              "date_from": "-30d"
+            },
+            "filterTestAccounts": false
+          },
+          "query": "WITH staged AS (SELECT properties.school AS school, properties.environment AS environment, properties.pseudonym_key_version AS key_version, properties.intelligence_run AS run, properties.generation_mode AS mode, event, properties.decision AS decision, timestamp FROM events WHERE properties.cuevo_source = 'cuevo-repository' AND properties.schema_version = 2 AND properties.data_class = 'SYNTHETIC' AND properties.synthetic_environment = true AND properties.environment IN ('QA', 'DEMO', 'STAGING') AND properties.intelligence_run IS NOT NULL AND event IN ('recommendation_reviewed','intervention_completed','reassessment_linked','outcome_measured') AND {filters}), linked AS (SELECT school,environment,key_version,run,mode,min(if(event='recommendation_reviewed' AND decision='APPROVED',timestamp,NULL)) AS approved_at,min(if(event='intervention_completed',timestamp,NULL)) AS completed_at,min(if(event='reassessment_linked',timestamp,NULL)) AS linked_at,min(if(event='outcome_measured',timestamp,NULL)) AS outcome_at FROM staged GROUP BY school,environment,key_version,run,mode), ordered AS (SELECT *, completed_at>=approved_at AS completed_ordered, completed_at>=approved_at AND linked_at>=completed_at AS link_ordered, completed_at>=approved_at AND linked_at>=completed_at AND outcome_at>=linked_at AS outcome_ordered FROM linked WHERE approved_at IS NOT NULL) SELECT environment,mode,now() AS query_cutoff,countIf(approved_at+INTERVAL 7 DAY<=now()) AS approvals_aged_7d,countIf(approved_at+INTERVAL 7 DAY>now()) AS awaiting_full_window,countIf(approved_at+INTERVAL 7 DAY<=now() AND completed_ordered AND completed_at<=approved_at+INTERVAL 7 DAY) AS completion_within_7d,countIf(approved_at+INTERVAL 7 DAY<=now() AND link_ordered AND linked_at<=approved_at+INTERVAL 7 DAY) AS link_within_7d,countIf(approved_at+INTERVAL 7 DAY<=now() AND outcome_ordered AND outcome_at<=approved_at+INTERVAL 7 DAY) AS outcome_within_7d,countIf(approved_at+INTERVAL 7 DAY<=now() AND outcome_ordered AND outcome_at>approved_at+INTERVAL 7 DAY) AS outcome_observed_later,countIf(approved_at+INTERVAL 7 DAY<=now() AND NOT coalesce(outcome_ordered,false)) AS no_ordered_outcome_observed FROM ordered GROUP BY environment,mode LIMIT 30"
+        }
+      }
+    }
+  ]
+}

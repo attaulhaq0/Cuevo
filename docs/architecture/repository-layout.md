@@ -14,6 +14,8 @@ apps/
     src/
       app.ts                         # API composition and HTTP setup
       main.ts                        # Process entrypoint
+      serverless.ts                  # Hosted HTTP composition, existing API domain boundary
+      # Curriculum pack/spool paths are owner- or artifact-relative, never implicit cwd configuration.
       modules/<domain>/              # Domain controllers/services/orchestration
       platform/<capability>/         # Identity and database infrastructure
     test/unit/                       # Isolated API/contract checks
@@ -37,18 +39,21 @@ apps/
       i18n/                          # Global locale and common copy
       session/                       # Browser auth/session context and membership verification
   worker/
-    src/main.ts                      # Process and scheduling composition
+    src/main.ts                      # Local/persistent process composition
+    src/edge.ts                      # Bounded hosted worker composition
+    # Edge imports only exact portable contracts/analytics and config/synthetic-runtime surfaces.
     src/jobs/<job>/                  # Outbox job processors
     src/platform/                   # Worker infrastructure
     test/
 packages/
   contracts/                         # Browser-safe boundary schemas
   domain/                            # Pure domain rules; no app/provider I/O
-  config/                            # Server configuration and integration policies
+  config/                            # Server configuration/policies; exact portable synthetic-runtime export for Edge
   ui/                                # Browser-safe design primitives and tokens
 supabase/{migrations,seed,tests}/      # Database authority and authorization tests
 tests/e2e/                           # Cross-application browser journeys
 scripts/                             # Development and verification entrypoints
+scripts/runtime/                     # Operator-owned child environment/process launch
 docker/                              # Container definitions
 docs/{architecture,decisions,reports}/
 docs/product/                        # Canonical product corpus, registry and context map
@@ -73,9 +78,13 @@ Do not create empty future folders or placeholder packages. Add packages/testing
 
 ## Product documentation and source history
 
+Customer presentation follows root AGENTS UI rules: primary labels use authorized names and meaningful class/date/revision context. Internal IDs, hashes and source/run keys never substitute for a customer label; explicit provenance/support details retain auditability. Missing context stays unknown and actionable in English/Arabic.
+
 Root Markdown is limited to README, AGENTS and START-HERE. The 00–88 product specification corpus lives in docs/product grouped by purpose, with numbered identities, source facts and versions preserved. Product index/context-map/registry route agents and humans to the relevant source. The original manifest and full earlier brief are historical snapshots there, not current path instructions. This newer user-authorized decision supersedes the temporary source-at-root exception. Applied SQL history remains untouched; historical reports retain the paths/hashes they originally reviewed and resolve old filenames through registry.json.
 
 Keep the original manifest and earlier briefs together in docs/product/history. Each active specification/implementation has one home. Do not keep copy/backup source trees, empty legacy directories or speculative placeholder modules in authored paths. Check physical directories after source moves as well as Git status; Git does not represent empty folders. Ignored local recovery archives are not committed source context.
+
+Applied migration bytes remain immutable through Git filters as well as editing. New migrations use LF before first application; any required exact-path preservation for already applied bytes must have a staged/check-out hash check. The [Git byte preservation decision](../decisions/2026-10-02-migration-git-byte-preservation.md) preserves12 newly applied CRLF sources without changing historical canonical blobs.
 
 ## Enforcement and verification
 

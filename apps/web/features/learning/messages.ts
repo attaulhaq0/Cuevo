@@ -1,10 +1,15 @@
 import { commonEn, commonAr } from '../../shared/i18n/common';
-export const learningEn = {
+export const learningEn = { retiredCourseNote:'This curriculum source is retired. The task is read only; previous results and evidence remain available.',
+  openTask: 'Open task', closeTask: 'Close task', taskDetails: 'Task details',
+  preparationNote:'Prepare this task privately. Learners can begin only after you review and publish its objective and task configuration.',taskType:'Response type',textTask:'Written response',numericModel:'School numeric scale',editPreparation:'Edit task preparation',savePreparation:'Save preparation',publishAssessment:'Publish prepared assessment',publishAssessmentNote:'Publish the reviewed objective and configuration for current enrolled learners.',preparationObjective:'Approved learning objective',objectiveNeeded:'Ask a coordinator to approve an objective for this programme course in Curriculum context, or approve a School Custom objective in Academic for an unbound course. Then refresh these choices.',rubricNeeded:'Create a rubric for this course in Academic, then refresh these choices.',quizPreparationNeeded:'Review and publish the quiz version before publishing this task.',refreshChoices:'Refresh preparation choices',
+  openUnit: 'Open unit', nextLessons: 'Next lessons', firstLessons: 'First lessons', nextUnits: 'Next units', firstUnits: 'First units',
+  correctAnswer: 'Correct answer',
   ...commonEn,
   learning: 'Learning', learningBody: 'Your school courses, lessons and submitted work.',
   demoTitle: 'Synthetic school learning', demoBody: 'This development environment uses school-authored synthetic content. It does not represent an official curriculum or grading standard.',
   courses: 'Courses', assessments: 'Assessments', submissions: 'Submissions', refresh: 'Refresh', loading: 'Loading learning…',
 
+  submissionUnknown: 'Load the remaining submitted work to confirm this task’s current status before editing.',
   noCourses: 'No courses are available yet.', noAssessments: 'No assessments are available yet.', noSubmissions: 'No submissions are available yet.',
   createCourse: 'Create course', createUnit: 'Add unit', createLesson: 'Add lesson', createActivity: 'Add activity', createAssessment: 'Create assessment',
   title: 'Title', description: 'Description', class: 'Class', subject: 'Subject',  body: 'Lesson content', instructions: 'Instructions',
@@ -25,11 +30,17 @@ export const learningEn = {
   createQuiz: 'Create quiz version', publishQuiz: 'Publish quiz version', quizVersion: 'Quiz version', quizQuestions: 'Quiz questions', questionKey: 'Question key', questionPrompt: 'Question prompt', optionKey: 'Option key', optionLabel: 'Option label', correctOption: 'Correct option key', question: 'Question', option: 'Option', addQuestion: 'Add question', addOption: 'Add option', submitQuiz: 'Check my answers', checkedNotGraded: 'Answers checked — not graded', quizNote: 'Checking compares the selected answers with the teacher-defined key. It does not release an academic grade.', correct: 'Correct', incorrect: 'Incorrect', noQuiz: 'No published quiz is available.', authorQuiz: 'Quiz versions', quizPublishNote: 'Review the immutable questions and answer keys before publishing. Learner views never receive raw answer keys.',
 };
 export const learningAr: typeof learningEn = {
+  openTask: 'فتح التقييم', closeTask: 'إغلاق التقييم', taskDetails: 'تفاصيل التقييم',
+  retiredCourseNote:'تقاعد مصدر هذا المنهج. التقييم للقراءة فقط؛ تبقى النتائج والشواهد السابقة متاحة.',
+  preparationNote:'أعدّ هذا التقييم بصورة خاصة. لا يبدأ الطلاب إلا بعد مراجعة الهدف وإعدادات التقييم ونشرها.',taskType:'نوع الإجابة',textTask:'إجابة كتابية',numericModel:'سلّم رقمي مدرسي',editPreparation:'تحرير إعداد التقييم',savePreparation:'حفظ الإعداد',publishAssessment:'نشر التقييم المُعَدّ',publishAssessmentNote:'انشر الهدف والإعدادات المُراجَعة للطلاب المسجّلين حاليًا.',preparationObjective:'هدف تعلّم معتمد',objectiveNeeded:'اطلب من المنسق اعتماد هدف لمقرر البرنامج في سياق المنهج، أو اعتماد هدف مدرسي في السجل الأكاديمي للمقرر غير المرتبط. ثم حدّث الخيارات.',rubricNeeded:'أنشئ سلّم تقدير لهذا المقرر في السجل الأكاديمي، ثم حدّث الخيارات.',quizPreparationNeeded:'راجع إصدار الاختبار وانشره قبل نشر هذا التقييم.',refreshChoices:'تحديث خيارات الإعداد',
+  openUnit: 'فتح الوحدة', nextLessons: 'الدروس التالية', firstLessons: 'الدروس الأولى', nextUnits: 'الوحدات التالية', firstUnits: 'الوحدات الأولى',
+  correctAnswer: 'الإجابة الصحيحة',
   ...commonAr,
   learning: 'التعلّم', learningBody: 'مقررات مدرستك ودروسها والأعمال المسلّمة.',
   demoTitle: 'تعلّم مدرسي ببيانات اصطناعية', demoBody: 'تستخدم بيئة التطوير هذه محتوى اصطناعيًا من إعداد المدرسة. لا يمثّل منهجًا رسميًا أو معيارًا رسميًا للدرجات.',
   courses: 'المقررات', assessments: 'التقييمات', submissions: 'التسليمات', refresh: 'تحديث', loading: 'جارٍ تحميل التعلّم…',
 
+  submissionUnknown: 'حمّل بقية الأعمال المسلّمة لتأكيد الحالة الحالية لهذا التقييم قبل تحريره.',
   noCourses: 'لا توجد مقررات متاحة بعد.', noAssessments: 'لا توجد تقييمات متاحة بعد.', noSubmissions: 'لا توجد تسليمات متاحة بعد.',
   createCourse: 'إنشاء مقرر', createUnit: 'إضافة وحدة', createLesson: 'إضافة درس', createActivity: 'إضافة نشاط', createAssessment: 'إنشاء تقييم',
   title: 'العنوان', description: 'الوصف', class: 'الصف', subject: 'المادة',  body: 'محتوى الدرس', instructions: 'التعليمات',

@@ -7,3 +7,5 @@ Public feature surfaces: model.ts (response types/validation), api.ts (feature h
 Run from root: `npm run build -w @cuevo/web`, `npm run typecheck`, `npm run lint`, `npm run test -w @cuevo/web`, `npm run e2e` against the configured local app, and `npm run storybook:build`. scripts/test-web.ts discovers all feature/shared Node test files. Feature CSS is imported in stable order by app/layout.tsx. Initial sessions remain in memory and offline protected caching remains disabled.
 
 Product source lookup: [task context map](../../docs/product/context-map.md); numbered IDs resolve through the product registry.
+
+Rendered customer focus/class-context regressions are in `tests/e2e/customer-navigation-context.spec.ts`. The opt-in `customer-performance.spec.ts` uses the production build and normal local API/worker for action-to-visible-content, private bytes and two-browser Realtime measurements; it labels cancelled requests separately and writes only ignored scalar evidence. Read [measured scope and remaining limits](../../docs/reports/customer-browser-performance.md). These checks do not substitute for the complete all-role/frozen release gate.

@@ -45,7 +45,7 @@ describe.skipIf(!enabled)('school learning real Auth/API/Postgres journey',()=>{
   afterAll(async()=>{await app?.close();await database?.close();await admin?.end();});
   const request=(role:string,url:string,body?:Record<string,unknown>,key=randomUUID())=>app.inject({method:body===undefined?'GET':'POST',url,headers:{authorization:`Bearer ${tokens[role]}`,'x-school-id':school,'idempotency-key':key},payload:body});
   it('teacher and student complete a real published learning and submission journey',async()=>{
-    const key=randomUUID();const body={classId,subjectId,title:`Synthetic-${key}`,description:'School authored'};
+    const key=randomUUID();const body={classId,subjectId,title:'Synthetic school learning verification',description:'School authored'};
     const first=await request('teacher','/v1/courses',body,key);expect(first.statusCode,first.body).toBe(200);ids.course=first.json().id;
     const replay=await request('teacher','/v1/courses',body,key);expect(replay.json()).toEqual(first.json());
     const mismatch=await request('teacher','/v1/courses',{...body,title:'Different'},key);expect(mismatch.statusCode).toBe(409);
@@ -116,9 +116,19 @@ describe('learning replay authorization and bounded detail',()=>{
     await expect(new SchoolLearningService(db).command(actor,'unit.create','50000000-0000-4000-8000-000000000001',{title:'Unit',sequence:1},'replay-key','request')).rejects.toMatchObject({status:403});
     expect(client.query.mock.calls.some(([sql])=>sql.includes('begin_command'))).toBe(false);
   });
-  it('rejects an oversized tree instead of fetching arbitrary nested lesson bodies',async()=>{
-    const client={query:vi.fn(async(sql:string)=>sql.includes('app.courses')?{rows:[{id:'50000000-0000-4000-8000-000000000001'}]}:sql.includes('app.units')?{rows:Array.from({length:101},(_,sequence)=>({id:String(sequence),title:'Large',sequence}))}:{rows:[]})};
+  it('pages a large unit collection and fetches bodies only for the selected unit',async()=>{
+    const id=(index:number)=>`50000000-0000-4000-8000-${String(index).padStart(12,'0')}`;
+    const client={query:vi.fn(async(sql:string,values:unknown[])=>sql.includes('read_learning_content_set')?{rows:[{items:JSON.parse(String(values[0])).map((target:{resource:string;id:string})=>({resource:target.resource,sourceId:target.id,revision:1,state:'PUBLISHED',title:target.resource==='lesson'?'Selected lesson':'School content',content:'School content'}))}]}:sql.includes('app.courses')?{rows:[{id:id(1)}]}:sql.includes('coalesce(max(sequence)+1,1)sequence')?{rows:[{sequence:102}]}:sql.includes('app.units')?{rows:Array.from({length:Number(values[3])},(_,index)=>({id:id(index+10),title:`School unit ${index+1}`,sequence:index+1,nextLessonSequence:2}))}:sql.includes('app.lessons')?{rows:[{id:id(100),title:'Selected lesson',sequence:1,body:'School content',status:'PUBLISHED'}]}:{rows:[]})};
     const db={actorTransaction:async(_actor:string,_school:string,run:(client:unknown)=>Promise<unknown>)=>run(client)}as unknown as Database;
-    await expect(new SchoolLearningService(db).detail(actor,'50000000-0000-4000-8000-000000000001')).rejects.toMatchObject({code:'LEARNING_DETAIL_TOO_LARGE',status:413});
+    const result=await new SchoolLearningService(db).detail(actor,id(1));
+    expect(result.units).toHaveLength(10);expect(result.nextUnitCursor).toBe(id(19));expect(result.selectedUnitId).toBe(id(10));expect(result.nextUnitSequence).toBe(102);
+    expect(result.units[0].lessons).toMatchObject([{id:id(100),body:'School content'}]);expect(result.units.slice(1).every((unit:{lessons:unknown[]})=>unit.lessons.length===0)).toBe(true);
+    const lessonCalls=client.query.mock.calls.filter(([sql])=>sql.includes('from app.lessons where unit_id=$1'));expect(lessonCalls).toHaveLength(1);expect(lessonCalls[0][1]).toEqual([id(10),null,null,11]);
+    const queries=client.query.mock.calls.length;await expect(new SchoolLearningService(db).detail(actor,id(1),{limit:100})).rejects.toMatchObject({code:'INVALID_INPUT',status:400});expect(client.query.mock.calls).toHaveLength(queries);
+  });
+  it('rejects guessed unit and lesson anchors instead of changing the authorized course page',async()=>{
+    const client={query:vi.fn(async(sql:string)=>sql.includes('app.courses')?{rows:[{id:'50000000-0000-4000-8000-000000000001'}]}:{rows:[]})};
+    const db={actorTransaction:async(_actor:string,_school:string,run:(client:unknown)=>Promise<unknown>)=>run(client)}as unknown as Database;
+    for(const query of[{unitId:randomUUID()},{unitCursor:randomUUID()}])await expect(new SchoolLearningService(db).detail(actor,'50000000-0000-4000-8000-000000000001',query)).rejects.toMatchObject({code:'LEARNING_NOT_FOUND',status:404});
   });
 });

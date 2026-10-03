@@ -52,7 +52,7 @@ describe.skipIf(!enabled)('actual private Realtime authorized joins and reconnec
     await client.removeChannel(channel); client.realtime.disconnect(); return status;
   }
   it('denies outside-group parent foreign and public joins then denies revoked reconnect', async () => {
-    const room = await command('/v1/community/rooms', { classId: '30000000-0000-4000-8000-000000000001', name: `Realtime proof ${randomUUID()}`, type: 'GROUP', memberIds: ['20000000-0000-4000-8000-000000000012'] });
+    const room = await command('/v1/community/rooms', { classId: '30000000-0000-4000-8000-000000000001', name: 'Realtime synthetic verification', type: 'GROUP', memberIds: ['20000000-0000-4000-8000-000000000012'] });
     const topic = `cuevo:${school}:room:${room.id}`;
     expect(await join('teacher', topic)).toBe('SUBSCRIBED');
     expect(await join('student', topic)).toBe('SUBSCRIBED');

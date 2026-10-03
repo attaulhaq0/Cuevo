@@ -22,6 +22,7 @@ describe('native rubric academic commands', () => {
       calls.push({ sql, values });
       if (sql.includes('as allowed')) return { rows: [{ allowed: true }] };
       if (sql.includes('as approved')) return { rows: [{ approved: true }] };
+      if(sql.startsWith('select assessment.course_id as id')||sql.startsWith('select course_id as id from app.assessments'))return{rows:[{id:'75000000-0000-4000-8000-000000000001'}]};
       if (sql.includes('begin_command')) return { rows: [{ reservation: { state: 'NEW' } }] };
       if (sql.includes('mark_rubric_submission')) return { rows: [{ id: markId }] };
       if (sql.includes('rubric_marking_revisions')) return { rows: [mark] };
@@ -59,6 +60,7 @@ describe('native rubric academic commands', () => {
     const db = database(async sql => {
       calls.push(sql);
       if (sql.includes('as allowed')) return { rows: [{ allowed: true }] };
+      if(sql.startsWith('select assessment.course_id as id')||sql.startsWith('select course_id as id from app.assessments'))return{rows:[{id:'75000000-0000-4000-8000-000000000001'}]};
       if (sql.includes('begin_command')) return { rows: [{ reservation: { state: 'NEW' } }] };
       if (sql.includes('existing_native_result')) return { rows: [released] };
       return { rows: [{}] };

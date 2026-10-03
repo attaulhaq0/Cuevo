@@ -1,5 +1,7 @@
 import { LearningApiError } from '../../shared/api/client.ts';
-export type Summary = { learnerId: string; status: 'DISABLED' | 'RECORDED_ONLY'; totalPoints: number | null; periodId: string | null; leaderboardEnabled: boolean };
+export {currentLearnerChoices as developmentLearnerChoices} from '../../shared/api/people.ts';
+export type RecordedDayStreak = { status: 'PERIOD_REQUIRED' | 'DISABLED' | 'UNOBSERVED' | 'RECORDED' | 'REQUIRES_REVIEW'; basis: 'VERIFIED_RECOGNIZED_ACTION_DAYS'; timezone: 'UTC'; days: number | null; endingOn: string | null; recordedDays: number | null; sourceCount: number | null };
+export type Summary = { learnerId: string; status: 'DISABLED' | 'RECORDED_ONLY'; totalPoints: number | null; periodId: string | null; leaderboardEnabled: boolean; streak: RecordedDayStreak };
 export type Policy = { id: string; version: number; points: { practice: number; revision: number; reflection: number }; milestones: { key: string; title: string; minimumPoints: number }[]; approvedBy: string; approvedAt: string };
 export type Period = { id: string; classId: string; policyId: string; title: string; startsAt: string; endsAt: string };
 export type Ledger = { id: string; learnerId: string; periodId: string; observationId: string; kind: 'practice' | 'revision' | 'reflection'; points: number; occurredAt: string; policyId: string };
@@ -9,7 +11,18 @@ const object = (value: unknown): value is Record<string, unknown> => !!value && 
 const strings = (row: Record<string, unknown>, keys: string[]) => keys.every(key => typeof row[key] === 'string' && row[key] !== '');
 const count = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 0;
 const date = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value));
-export function parseSummary(value: unknown): Summary { if (!object(value) || !strings(value, ['learnerId']) || !['DISABLED', 'RECORDED_ONLY'].includes(String(value.status)) || !(value.periodId === null || typeof value.periodId === 'string') || typeof value.leaderboardEnabled !== 'boolean' || (value.status === 'DISABLED' ? value.totalPoints !== null : !count(value.totalPoints))) throw new LearningApiError('invalid'); return value as Summary; }
+const utcDay = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && date(value) && new Date(value).toISOString().slice(0, 10) === value;
+const positiveCount = (value: unknown) => count(value) && Number.isSafeInteger(value) && Number(value) > 0;
+export function parseSummary(value: unknown): Summary {
+  if (!object(value) || !strings(value, ['learnerId']) || !['DISABLED', 'RECORDED_ONLY'].includes(String(value.status)) || !(value.periodId === null || typeof value.periodId === 'string' && value.periodId !== '') || typeof value.leaderboardEnabled !== 'boolean' || (value.status === 'DISABLED' ? value.totalPoints !== null : !count(value.totalPoints))) throw new LearningApiError('invalid');
+  const streak = value.streak;
+  if (!object(streak) || !['PERIOD_REQUIRED', 'DISABLED', 'UNOBSERVED', 'RECORDED', 'REQUIRES_REVIEW'].includes(String(streak.status)) || streak.basis !== 'VERIFIED_RECOGNIZED_ACTION_DAYS' || streak.timezone !== 'UTC') throw new LearningApiError('invalid');
+  if (value.periodId === null ? streak.status !== 'PERIOD_REQUIRED' : streak.status === 'PERIOD_REQUIRED' || (value.status === 'DISABLED' ? streak.status !== 'DISABLED' : streak.status === 'DISABLED')) throw new LearningApiError('invalid');
+  if (streak.status === 'RECORDED') {
+    if (!positiveCount(streak.days) || !positiveCount(streak.recordedDays) || !positiveCount(streak.sourceCount) || Number(streak.days) > Number(streak.recordedDays) || Number(streak.recordedDays) > Number(streak.sourceCount) || !utcDay(streak.endingOn)) throw new LearningApiError('invalid');
+  } else if (['days', 'endingOn', 'recordedDays', 'sourceCount'].some(key => streak[key] !== null)) throw new LearningApiError('invalid');
+  return value as Summary;
+}
 export function parsePolicy(value: unknown): Policy { if (!object(value) || !strings(value, ['id', 'approvedBy']) || !count(value.version) || Number(value.version) < 1 || !date(value.approvedAt) || !object(value.points) || ['practice', 'revision', 'reflection'].some(key => !count((value.points as Record<string, unknown>)[key])) || !Array.isArray(value.milestones) || value.milestones.some(item => !object(item) || !strings(item, ['key', 'title']) || !count(item.minimumPoints) || Number(item.minimumPoints) < 1)) throw new LearningApiError('invalid'); return value as Policy; }
 export function parsePeriod(value: unknown): Period { if (!object(value) || !strings(value, ['id', 'classId', 'policyId', 'title']) || !date(value.startsAt) || !date(value.endsAt) || Date.parse(String(value.endsAt)) <= Date.parse(String(value.startsAt))) throw new LearningApiError('invalid'); return value as Period; }
 export function parseLedger(value: unknown): Ledger { if (!object(value) || !strings(value, ['id', 'learnerId', 'periodId', 'observationId', 'policyId']) || !['practice', 'revision', 'reflection'].includes(String(value.kind)) || !count(value.points) || !date(value.occurredAt)) throw new LearningApiError('invalid'); return value as Ledger; }

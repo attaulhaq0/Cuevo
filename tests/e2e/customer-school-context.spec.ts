@@ -1,0 +1,34 @@
+import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
+
+test('parent chooses a current child and sees named attendance and complete timetable context', async ({ page }) => {
+  const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as { role: string; email: string; password: string }[];
+  const parent = accounts.find(account => account.role === 'parent')!;
+  const identities = JSON.parse(await readFile('supabase/seed/identities.json', 'utf8')) as { actors: { actorId: string; displayName: string }[] };
+  const learnerName = identities.actors.find(person => person.actorId === '20000000-0000-4000-8000-000000000012')!.displayName;
+  const admin = accounts.find(account => account.role === 'admin')!;
+  await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByLabel('School email', { exact: true }).fill(admin.email); await page.getByLabel('Password', { exact: true }).fill(admin.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click(); await page.getByRole('button', { name: 'Policies', exact: true }).click();
+  const policy = page.getByRole('region', { name: 'Approve school policy', exact: true }); await policy.getByLabel('Share approved child attendance with parents', { exact: true }).check(); await policy.getByLabel('Share approved upcoming school context with parents', { exact: true }).check(); await policy.getByLabel('Approval reason', { exact: true }).fill('Synthetic family daily context review'); await policy.getByLabel('I approve this policy version', { exact: true }).check(); await policy.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Daily operations', exact: true }).click(); await page.getByRole('button', { name: 'Record attendance', exact: true }).click(); await page.getByLabel('Class for attendance', { exact: true }).selectOption('30000000-0000-4000-8000-000000000001');
+  const form = page.getByRole('region', { name: 'Record attendance', exact: true }); await form.getByLabel('Student', { exact: true }).selectOption('20000000-0000-4000-8000-000000000012'); await form.getByLabel('Attendance date (YYYY-MM-DD)', { exact: true }).fill('2027-06-01'); await form.getByLabel('Status', { exact: true }).selectOption('late'); await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Create timetable entry', exact: true }).click(); const slot = page.getByRole('region', { name: 'Create timetable entry', exact: true }); await slot.getByLabel('Class', { exact: true }).selectOption('30000000-0000-4000-8000-000000000001'); await slot.getByLabel('Subject', { exact: true }).selectOption('43000000-0000-4000-8000-000000000001'); await slot.getByLabel('Teacher', { exact: true }).selectOption('20000000-0000-4000-8000-000000000004'); await slot.getByLabel('Day of week', { exact: true }).selectOption({ label: 'Friday' }); await slot.getByLabel('Start time (HH:MM)', { exact: true }).fill('15:00'); await slot.getByLabel('End time (HH:MM)', { exact: true }).fill('16:00'); await slot.getByLabel('Starts on (YYYY-MM-DD)', { exact: true }).fill('2029-01-01'); await slot.getByLabel('Ends on (YYYY-MM-DD)', { exact: true }).fill('2029-12-31'); await slot.getByLabel('Location', { exact: true }).fill('Synthetic family schedule'); await slot.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+  await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByLabel('School email', { exact: true }).fill(parent.email); await page.getByLabel('Password', { exact: true }).fill(parent.password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click();
+  await page.getByLabel('Child', { exact: true }).selectOption('20000000-0000-4000-8000-000000000012');
+  const attendance = page.getByRole('region', { name: 'Attendance', exact: true });
+  await expect(attendance).toContainText(learnerName);
+  await expect(attendance).not.toContainText('Name unavailable');
+  const timetable = page.getByRole('region', { name: 'Timetable', exact: true });
+  await expect(timetable.getByRole('columnheader', { name: 'Subject', exact: true })).toBeVisible();
+  await expect(timetable.getByRole('columnheader', { name: 'Teacher', exact: true })).toBeVisible();
+  await expect(timetable).not.toContainText('Name unavailable');
+  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+});

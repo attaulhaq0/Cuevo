@@ -1,0 +1,7 @@
+import{describe,expect,it}from'vitest';import type{PoolClient}from'pg';import type{Database}from'../../src/platform/database/database';import{CommunityMaintenanceService}from'../../src/modules/community/maintenance.service';
+const id='00000000-0000-4000-8000-000000000001';const actor={userId:id,schoolId:id,membershipId:id,role:'student'as const,entitlements:['community']};
+function db(){let writes=0;return{database:{actorTransaction:async(_actor:string,_school:string,run:(client:PoolClient)=>Promise<unknown>)=>run({query:async()=>{writes++;return{rows:[{response:{id,revision:2,status:'CLOSED'}}]};}}as unknown as PoolClient)}as unknown as Database,count:()=>writes};}
+describe('current community maintenance API',()=>{
+ it('denies learner lifecycle authority before SQL',async()=>{const d=db();await expect(new CommunityMaintenanceService(d.database).command(actor,'group',id,{name:'Group',state:'CLOSED',expectedRevision:1,reason:'Attempt',confirmChange:true},'group-close-key','test')).rejects.toMatchObject({status:403});expect(d.count()).toBe(0);});
+ it('rejects arbitrary permission or audience mutation fields',async()=>{const d=db();await expect(new CommunityMaintenanceService(d.database).command({...actor,role:'teacher'},'announcement',id,{title:'Updated',body:'School note',parentVisible:true,expectedRevision:1,reason:'Reviewed',confirmPublication:true,classId:id},'announcement-update-key','test')).rejects.toMatchObject({status:400});expect(d.count()).toBe(0);});
+});

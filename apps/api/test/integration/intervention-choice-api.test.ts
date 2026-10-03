@@ -1,0 +1,56 @@
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { config as dotenv } from 'dotenv';
+import { randomUUID } from 'node:crypto';
+import { createCustomerContext, customerCourse, customerReleased, type CustomerContext } from './customer-test-context';
+import{CooperativeFixtureScope}from'./cooperative-fixture-scope';
+import{cooperativeCustomerContext}from'./cooperative-customer-context';
+import{withFixtureCleanup}from'./fixture-cleanup';
+dotenv({ path: '.env.local', quiet: true });
+describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('exact teacher-approved practice choices actual Auth API', () => {
+  let context: CustomerContext;
+  let ownerContext:CustomerContext;let caseScope:CooperativeFixtureScope|undefined;
+  function journey(work:()=>Promise<void>){const scope=new CooperativeFixtureScope(60000);caseScope=scope;context=cooperativeCustomerContext(ownerContext,scope);return scope.run(work);}
+  beforeAll(async () => { ownerContext = await createCustomerContext();context=ownerContext; }, 60000);
+  afterEach(async()=>{await withFixtureCleanup(async()=>{await caseScope?.cancelAndWait();},[()=>ownerContext.client.query('RESET ROLE'),()=>{caseScope=undefined;}]);});
+  afterAll(async () => {await withFixtureCleanup(async()=>{await caseScope?.cancelAndWait();},[()=>ownerContext?.close()]);});
+  it('permits only exact approved choices, records one learner selection and preserves approval history', () => journey(async () => {
+    const course = await customerCourse(context, 'Approved choice context');
+    const alternative = await context.command('teacher', `/v1/lessons/${course.lessonId}/activities`, { title: 'Teacher practice', kind: 'practice', instructions: 'Use a second worked example and explain the check.', sequence: 2 });
+    const unapproved = await context.command('teacher', `/v1/lessons/${course.lessonId}/activities`, { title: 'Unapproved extension', kind: 'practice', instructions: 'Another source the teacher did not approve.', sequence: 3 });
+    const baseline = await customerReleased(context, 'strong', course.courseId, 'Choice baseline', 3); await context.drain();
+    const proposal = await context.command('teacher', '/v1/intelligence/analyze', { baselineResultId: baseline.resultId });
+    const decision = { decision: 'APPROVE', reason: 'Teacher reviewed exact alternatives.', approvedActivityIds: [course.practiceId, alternative.id] };
+    const key = randomUUID(); const approved = await context.command('teacher', `/v1/recommendations/${proposal.id}/decision`, decision, key);
+    expect((await context.request('teacher', `/v1/recommendations/${proposal.id}/decision`, decision, key)).json()).toEqual(approved);
+    const path = `/v1/interventions/${approved.interventionId}/choices`; const options = await context.request('strong', path); expect(options.statusCode).toBe(200);
+    expect(options.json().options.map((option: { activityId: string }) => option.activityId)).toEqual([course.practiceId, alternative.id]); expect(options.json().choice).toBeNull();
+    for (const role of ['parent', 'coordinator', 'otherTeacher', 'observed'] as const) expect((await context.request(role, path)).statusCode).toBe(403);
+    expect((await context.request('strong', path, { activityId: unapproved.id, confirmChoice: true })).statusCode).toBe(403);
+    const choiceKey = randomUUID(); const chosen = await context.command('strong', path, { activityId: alternative.id, confirmChoice: true }, choiceKey);
+    expect(chosen.choice).toMatchObject({ activityId: alternative.id, title: alternative.title, instructions: alternative.instructions });
+    expect((await context.request('strong', path, { activityId: alternative.id, confirmChoice: true }, choiceKey)).json()).toEqual(chosen);
+    expect((await context.request('strong', path, { activityId: course.practiceId, confirmChoice: true })).statusCode).toBe(409);
+    await context.command('strong', `/v1/interventions/${approved.interventionId}/complete`, { reflection: 'I used the second worked example.' });
+    expect((await context.client.query('select chosen_activity_id from app.intervention_completions where school_id=$1 and intervention_id=$2', [context.school, approved.interventionId])).rows[0].chosen_activity_id).toBe(alternative.id);
+    expect((await context.client.query('select selected_activity_id,title from app.interventions where school_id=$1 and id=$2', [context.school, approved.interventionId])).rows[0]).toMatchObject({ selected_activity_id: course.practiceId, title: proposal.activityTitle });
+    await context.drain();expect((await context.client.query("select count(*)::integer count from internal.outbox_events where school_id=$1 and type='intervention.activity.chosen'and state='COMPLETED'", [context.school])).rows[0].count).toBe(1);
+  }),60000);
+  it('denies changed option content and feedback-only school policy without losing historical choices', () => journey(async () => {
+    const course = await customerCourse(context, 'Changed approved choice'); const baseline = await customerReleased(context, 'observed', course.courseId, 'Choice source two', 3); await context.drain();
+    const proposal = await context.command('teacher', '/v1/intelligence/analyze', { baselineResultId: baseline.resultId });
+    const approved = await context.command('teacher', `/v1/recommendations/${proposal.id}/decision`, { decision: 'APPROVE', reason: 'Review before source edit.', approvedActivityIds: [course.practiceId] });
+    const sourcePath = `/v1/learning-content/activity/${course.practiceId}`;
+    const source = (await context.request('teacher', sourcePath)).json();
+    const draft = await context.command('teacher', sourcePath + '/draft', { resource: 'activity', title: source.title, content: 'Teacher changed this practice after approval.', kind: 'practice', assessmentId: null, expectedRevision: source.revision, reason: 'Teacher deliberately changes the approved published source.' });
+    const path = `/v1/interventions/${approved.interventionId}/choices`;
+    expect((await context.request('observed', path)).json().options[0].available).toBe(true);
+    await context.command('teacher', sourcePath + '/publish', { expectedRevision: draft.revision, confirmPublication: true });
+    const current = await context.request('observed', path); expect(current.statusCode).toBe(200); expect(current.json().options[0].available).toBe(false);
+    expect((await context.request('observed', path, { activityId: course.practiceId, confirmChoice: true })).statusCode).toBe(403);
+    const policy = (await context.request('admin', '/v1/intelligence/policy')).json().policy;
+    await context.command('admin', '/v1/intelligence/policy', { purpose: 'NEXT_LEARNING_ACTION', dataClassification: 'SCHOOL_CUSTOM_NUMERIC', fixtureEnabled: true, liveEnabled: false, allowedActions: ['REVIEW_FEEDBACK'], expectedVersion: policy.version, confirmApproval: true, reason: 'Feedback-only school review.' });
+    const fresh = await customerReleased(context, 'decline', course.courseId, 'Feedback source', 3); await context.drain(); const feedback = await context.command('teacher', '/v1/intelligence/analyze', { baselineResultId: fresh.resultId });
+    expect((await context.request('teacher', `/v1/recommendations/${feedback.id}/decision`, { decision: 'APPROVE', reason: 'An invalid practice alternative.', approvedActivityIds: [course.practiceId] })).statusCode).toBe(409);
+    expect((await context.request('observed', path)).json().options[0].title).toBe('Teacher practice');
+  }),60000);
+});

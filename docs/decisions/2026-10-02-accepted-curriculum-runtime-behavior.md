@@ -1,0 +1,11 @@
+# Accepted curriculum behavior is runtime source data
+
+Date: 2 October 2026. Owner: curriculum; consumers: learning and academic server public surface.
+
+Lifecycle/source approval alone does not guarantee assessment authoring uses a pack's declared native behavior. An append-only curriculum_behavior_acceptances record therefore pins the exact source version/lifecycle revision, review basis, manifest digest/directory and validated numeric/rubric behavior. School-authored contexts use their explicitly reviewed source basis and native engine models; source-locked contexts use checksum-validated local pack bytes. Neither basis establishes official or customer-ready acceptance.
+
+The API curriculum owner exposes `public.ts` with current course/programme source validation. Learning assessment creation/preparation/publication and academic rubric creation/link call it after exact role/course authorization and before command replay. Source-locked authoring reloads local bytes and compares the accepted digest/version; the native model/maximum and criterion/descriptor definition must match. SQL stores validated behavior data and repeats deterministic constraints on assessment/rubric writes, without filesystem/network code in the database.
+
+Existing accepted lifecycle digests lacking an artifact directory cannot be reverse-inferred from titles or pack IDs. An explicit server source validation/acceptance command records the missing provenance from the actual artifact and verifies stored hierarchy/source checksum/version. Superseded existing courses retain original accepted behavior; retirement continues to deny new writes. Historical results/evidence keep their immutable native identity. Unknown/tampered/mismatched sources require review, with no normalization or guessed grading rule.
+
+One implementation uses data-defined behavior for generic and locked contexts. It never branches by school/customer/curriculum brand, copies pack trees, imports another app, or weakens approval/publication authority. The reference-school seeder records actual locked acceptance before creating assessment sources. SQL/API/browser verification covers wrong scales, rubric substitutions, unavailable acceptance, current scope and usable approved native authoring.

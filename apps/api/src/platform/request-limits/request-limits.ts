@@ -22,12 +22,17 @@ export class RequestBudget {
   }
 }
 
-export function registerRequestLimits(instance: FastifyInstance, limits: { reads?: number; writes?: number; addresses?: number } = {}) {
+export function registerRequestLimits(instance: FastifyInstance, limits: { reads?: number; writes?: number; addresses?: number; readiness?: number } = {}) {
   const reads = new RequestBudget(limits.reads ?? 600);
   const writes = new RequestBudget(limits.writes ?? 120);
   const addresses = new RequestBudget(limits.addresses ?? 3000);
+  const readiness = new RequestBudget(limits.readiness ?? 120);
   const digest = (value: string) => createHash('sha256').update(value).digest('hex');
   instance.addHook('onRequest', async (request, reply) => {
+    if (request.url.split('?')[0] === '/health/ready') {
+      if (!readiness.consume(digest(request.ip))) return reply.code(429).header('Cache-Control', 'no-store').header('Retry-After', '60').send({ code: 'REQUEST_LIMIT_REACHED', message: 'Readiness checks are temporarily limited.', requestId: request.id });
+      return;
+    }
     if (!request.url.startsWith('/v1/') || request.method === 'OPTIONS') return;
     const address = digest(request.ip);
     const authorization = request.headers.authorization;

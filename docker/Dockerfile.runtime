@@ -1,0 +1,24 @@
+# Compiled API/worker image. Existing Dockerfile remains the local development skeleton.
+FROM node:24.16.0-bookworm-slim AS build
+WORKDIR /app
+ENV SCARF_ANALYTICS=false
+COPY . .
+RUN npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund \
+    && npm ci --ignore-scripts --no-audit --no-fund \
+    && node node_modules/esbuild/install.js
+ARG SERVICE
+RUN case "$SERVICE" in api|worker) node --import tsx scripts/runtime/build-artifacts.ts "$SERVICE" ;; *) exit 2 ;; esac
+
+FROM node:24.16.0-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ARG SERVICE
+ENV CUEVO_RUNTIME_SERVICE=$SERVICE
+COPY --from=build --chown=node:node /app/.local/runtime-artifacts/${SERVICE}/ /app/
+RUN npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund \
+    && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+    && npm cache clean --force
+USER node
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+  CMD node --input-type=module -e "const port=process.env.CUEVO_RUNTIME_SERVICE==='api'?(process.env.API_PORT??4000):(process.env.WORKER_PORT??4001);try{const response=await fetch('http://127.0.0.1:'+port+'/health/ready',{signal:AbortSignal.timeout(4000)});if(!response.ok)process.exit(1)}catch{process.exit(1)}"
+CMD ["node", "main.mjs"]

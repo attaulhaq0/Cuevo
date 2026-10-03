@@ -63,8 +63,9 @@ select throws_ok($$select internal.process_learner_event('85000000-0000-4000-800
 reset role;
 select is((select count(*)from internal.processed_events where event_id='85000000-0000-4000-8000-000000000003'),0::bigint,'invalid source leaves no processed marker');
 set local role cuevo_api;select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true);select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);
-select is((select count(*)from app.learner_state_snapshots where learner_id='20000000-0000-4000-8000-000000000012'),1::bigint,'student sees own state');
-select set_config('app.actor_id','20000000-0000-4000-8000-000000000013',true);select is((select count(*)from app.learner_state_snapshots where learner_id='20000000-0000-4000-8000-000000000012'),0::bigint,'peer denied state');
+select is(internal.read_current_learner_projection('20000000-0000-4000-8000-000000000012')->>'status','READY','student sees own source-authorized state');
+select throws_ok('select*from app.learner_state_snapshots','42501',null,'student cannot bypass source-authorized state through cached JSON');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000013',true);select throws_ok($$select internal.read_current_learner_projection('20000000-0000-4000-8000-000000000012')$$,'42501',null,'peer denied source-authorized state');
 select set_config('app.actor_id','20000000-0000-4000-8000-000000000072',true);select is((select count(*)from app.habit_observations),0::bigint,'parent excluded rawhabit');
 reset role;
 select *from finish();rollback;

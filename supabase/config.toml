@@ -54,3 +54,11 @@ port = 56327
 
 [edge_runtime]
 enabled = false
+
+# Generated delivery artifact only; implementation stays apps/worker/src/edge.ts.
+# Machine wake authentication is validated by the handler before opening the DB.
+[functions.cuevo-worker]
+enabled = true
+verify_jwt = false
+entrypoint = '../.local/edge-artifacts/cuevo-worker/index.ts'
+import_map = '../.local/edge-artifacts/cuevo-worker/deno.json'

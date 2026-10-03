@@ -1,0 +1,10 @@
+begin;create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_api;set local search_path=extensions,pg_catalog;select no_plan();
+select ok(not has_table_privilege('cuevo_api','internal.academic_result_sources','SELECT,INSERT,UPDATE,DELETE'),'Native bridge has no raw runtime grant');
+select ok(not has_function_privilege('authenticated','internal.read_native_academic_source(uuid)','EXECUTE'),'Native source is not a browser Data API');
+select ok(not has_function_privilege('cuevo_api','internal.native_academic_source(uuid,uuid)','EXECUTE'),'Raw native source descriptor helper remains private');
+select is((select count(*)from internal.academic_result_sources source join app.result_revisions result on result.school_id=source.school_id and result.id=source.id where source.model='numeric'),(select count(*)from app.result_revisions),'All existing numeric identities are retained');
+select is((select count(*)from internal.academic_result_sources source join app.rubric_result_revisions result on result.school_id=source.school_id and result.id=source.id where source.model='rubric'),(select count(*)from app.rubric_result_revisions),'All existing rubric identities are retained');
+select throws_ok($$insert into internal.academic_result_sources(school_id,id,learner_id,model)values('10000000-0000-4000-8000-000000000001','16300000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000012','rubric')$$,'23514',null,'Native identity cannot omit its exact result source');
+set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000013',true);
+select throws_ok($$select internal.read_native_academic_source('16300000-0000-4000-8000-000000000001')$$,'42501',null,'Missing or foreign native source is denied');
+reset role;select*from finish();rollback;

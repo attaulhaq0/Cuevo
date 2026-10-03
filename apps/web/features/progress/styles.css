@@ -2,6 +2,7 @@
 .progress-toolbar > .field { flex: 1; max-inline-size: 36rem; }
 .progress-section { margin-block-start: var(--space-8); border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-6); }
 .progress-section > h2 { font-size: var(--type-lg); }
+.learner-detail-heading { margin-block-start: var(--space-8); scroll-margin-block-start: var(--space-8); overflow-wrap: anywhere; }
 .observation-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-block: var(--space-6); }
 .observation-counts > div { padding-inline: var(--space-5); border-inline-start: 1px solid var(--color-border); }
 .observation-counts > div:first-child { padding-inline-start: 0; border-inline-start: 0; }

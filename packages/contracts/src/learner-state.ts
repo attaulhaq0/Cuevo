@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { nativeInterventionOutcomeSchema } from './improvement';
 
 export const learnerStateQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.uuid().optional(), learnerId: z.uuid().optional() }).strict();
 export const classLearningSummaryQuerySchema=z.object({limit:z.coerce.number().int().min(1).max(100).default(25),cursor:z.uuid().optional()}).strict();
@@ -9,23 +10,29 @@ export const learnerSupportItemSchema = z.object({
   id: z.uuid(), recommendationId: z.uuid(), learnerId: z.uuid(), referenceId: z.uuid(), baselineResultId: z.uuid(),
   title: z.string().min(1).max(200), instructions: z.string().min(1).max(4000), status: z.enum(['ASSIGNED', 'COMPLETED', 'MEASURED']),
   createdAt: z.iso.datetime({ offset: true }), completedAt: z.iso.datetime({ offset: true }).nullable(), followUpAssessmentId: z.uuid().nullable(),
+  requiresReview:z.boolean().optional(),reviewReason:z.literal('ACADEMIC_SOURCE_CHANGED').nullable().optional(),
 }).strict();
-export const learnerOutcomeSchema = z.object({
+const numericLearnerOutcomeSchema = z.object({
   id: z.uuid(), interventionId: z.uuid(), baselineResultId: z.uuid(), followUpResultId: z.uuid(),
   status: z.enum(['improved', 'no_meaningful_change', 'inconclusive']), difference: z.number(), minimumChange: z.number().positive().max(100000),
   baseline: z.object({ score: z.number().min(0), maxScore: z.number().positive().max(100000) }).strict(),
   followUp: z.object({ score: z.number().min(0), maxScore: z.number().positive().max(100000) }).strict(),
   reason: z.enum(['OBSERVED_RAW_SCORE_CHANGE', 'FOLLOW_UP_LOWER']), limitation: z.literal('OBSERVED_CHANGE_NOT_CAUSAL_PROOF'), measuredAt: z.iso.datetime({ offset: true }),
+  requiresReview:z.boolean().optional(),reviewReason:z.literal('ACADEMIC_SOURCE_CHANGED').nullable().optional(),
 }).strict();
+export const learnerOutcomeSchema=z.union([numericLearnerOutcomeSchema,nativeInterventionOutcomeSchema]);
+const boundedCountSchema=z.object({totalCount:z.number().int().nonnegative().nullable(),returnedCount:z.number().int().nonnegative(),truncated:z.boolean()}).strict().superRefine((value,ctx)=>{if(value.totalCount===null&&(value.returnedCount!==0||value.truncated)||value.totalCount!==null&&(value.returnedCount>value.totalCount||value.truncated!==(value.returnedCount<value.totalCount)))ctx.addIssue({code:'custom',message:'Bounded source coverage must preserve its denominator.'});});
+export const learnerProjectionSchema=z.object({scope:z.literal('CURRENT_AUTHORIZED_SOURCES'),academic:boundedCountSchema.safeExtend({nextCursor:z.uuid().nullable()}),observations:z.object({practice:boundedCountSchema,revision:boundedCountSchema,reflection:boundedCountSchema}).strict(),sourceEvents:boundedCountSchema,support:boundedCountSchema.optional(),outcomes:boundedCountSchema.optional()}).strict();
 export const learnerStateSchema = z.object({
   learnerId: z.uuid(), status: z.enum(['READY', 'UNKNOWN']), freshness: z.enum(['CURRENT', 'STALE', 'APPROVED_PROJECTION']).optional(),
   generatedAt: z.iso.datetime({ offset: true }).nullable(), version: z.number().int().positive().nullable(),
-  academic: z.array(z.object({ resultId: z.uuid(), referenceId: z.uuid(), referenceVersion: z.string(), nativeResult: z.discriminatedUnion('type',[nativeNumericSchema,nativeRubricSchema]), evidenceId: z.uuid(), observedAt: z.iso.datetime({ offset: true }) })).max(100),
+  academic: z.array(z.object({ resultId: z.uuid(), referenceId: z.uuid(), referenceVersion: z.string(), nativeResult: z.discriminatedUnion('type',[nativeNumericSchema,nativeRubricSchema]), evidenceId: z.uuid(), observedAt: z.iso.datetime({ offset: true }),assessmentTitle:z.string().min(1).max(200).optional(),referenceTitle:z.string().min(1).max(200).optional() })).max(100),
   development: z.object({ completeness: z.literal('RECORDED_ONLY').optional(), practice: observationCountSchema, revision: observationCountSchema, reflection: observationCountSchema, windowStart: z.iso.datetime({ offset: true }).nullable(), windowEnd: z.iso.datetime({ offset: true }).nullable() }),
   engagement: z.object({ completedActivityCount: z.number().int().min(0).nullable(), lastCompletedAt: z.iso.datetime({ offset: true }).nullable() }),
   support: z.object({ activeInterventionIds: z.array(z.uuid()).max(100), items: z.array(learnerSupportItemSchema).max(100).default([]) }),
   impact: z.object({ status: z.enum(['unmeasured', 'measured']), measurementIds: z.array(z.uuid()).max(100), outcomes: z.array(learnerOutcomeSchema).max(100).default([]) }),
   sourceEventIds: z.array(z.uuid()).max(1000),
+  projection:learnerProjectionSchema.optional(),
 }).superRefine((value, ctx) => {
   const fail = (message: string) => ctx.addIssue({ code: 'custom', message });
   if (value.status === 'UNKNOWN' && (value.academic.length || value.generatedAt !== null || value.version !== null || value.development.practice.count !== null || value.development.revision.count !== null || value.development.reflection.count !== null || value.engagement.completedActivityCount !== null || value.sourceEventIds.length)) fail('Unknown state cannot assert measurements');
@@ -34,6 +41,8 @@ export const learnerStateSchema = z.object({
   if (!sameIds(value.support.activeInterventionIds, value.support.items.filter(item => item.status !== 'MEASURED').map(item => item.id))) fail('Active support requires matching source items');
   if (!sameIds(value.impact.measurementIds, value.impact.outcomes.map(item => item.id)) || (value.impact.status === 'measured') !== (value.impact.outcomes.length > 0)) fail('Measured impact requires matching outcome sources');
   if (new Set(value.support.items.map(item => item.id)).size !== value.support.items.length) fail('Support source IDs must be unique');
+  if(value.projection){if(value.projection.academic.returnedCount!==value.academic.length||value.projection.sourceEvents.returnedCount!==value.sourceEventIds.length)fail('Projection coverage must match returned source IDs');for(const kind of ['practice','revision','reflection']as const)if(value.projection.observations[kind].returnedCount!==value.development[kind].observationIds.length||value.projection.observations[kind].totalCount!==value.development[kind].count)fail('Observation coverage must match authorized counts');}
+  if(value.projection?.support&&value.projection.support.returnedCount!==value.support.items.length||value.projection?.outcomes&&value.projection.outcomes.returnedCount!==value.impact.outcomes.length)fail('Support coverage must match returned sources');
   for (const row of value.academic) {
     if (row.nativeResult.type === 'numeric' && row.nativeResult.score > row.nativeResult.maxScore) fail('Native score exceeds scale');
     if (row.nativeResult.type === 'rubric' && new Set(row.nativeResult.criteria.map(criterion => criterion.criterionKey)).size !== row.nativeResult.criteria.length) fail('Rubric native criteria must be unique');
@@ -45,6 +54,7 @@ export const learnerStateSchema = z.object({
   for (const outcome of value.impact.outcomes) {
     const support = value.support.items.find(item => item.id === outcome.interventionId);
     if (!support || support.status !== 'MEASURED' || support.baselineResultId !== outcome.baselineResultId || support.completedAt === null || Date.parse(outcome.measuredAt) < Date.parse(support.completedAt)) fail('Outcome must trace to completed support and baseline');
+    if(!('difference'in outcome))continue;
     if (outcome.baseline.maxScore !== outcome.followUp.maxScore || outcome.baseline.score > outcome.baseline.maxScore || outcome.followUp.score > outcome.followUp.maxScore || Math.abs(outcome.difference - (outcome.followUp.score - outcome.baseline.score)) > 1e-9) fail('Outcome must preserve compatible native values');
     const expectedStatus = outcome.difference >= outcome.minimumChange ? 'improved' : Math.abs(outcome.difference) < outcome.minimumChange ? 'no_meaningful_change' : 'inconclusive';
     const expectedReason = outcome.difference <= -outcome.minimumChange ? 'FOLLOW_UP_LOWER' : 'OBSERVED_RAW_SCORE_CHANGE';

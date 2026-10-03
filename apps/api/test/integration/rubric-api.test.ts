@@ -65,7 +65,7 @@ describe.skipIf(!enabled)('native rubric actual Auth API database journey', () =
   };
 
   it('releases complete criterion levels with immutable correction and explicit parent access', async () => {
-    const course = await command('teacher', '/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title: `Rubric ${randomUUID()}`, description: 'Synthetic teacher-authored rubric case.' });
+    const course = await command('teacher', '/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title: 'Rubric synthetic verification', description: 'Synthetic teacher-authored rubric case.' });
     await command('teacher', `/v1/courses/${course.id}/publish`, {});
     const criteria = [
       { key: 'explanation', title: 'Explanation', levels: [{ key: 'developing', label: 'Developing', description: 'Explain one step.' }, { key: 'secure', label: 'Secure', description: 'Explain connected steps.' }] },

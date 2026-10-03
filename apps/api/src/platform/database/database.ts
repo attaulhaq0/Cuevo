@@ -3,8 +3,9 @@ import { DomainError } from '@cuevo/domain';
 import { databaseTransactionRecord } from '../telemetry/telemetry';
 export class Database {
   readonly pool: Pool | undefined;
-  constructor(url: string | undefined) {
-    this.pool = url ? new Pool({ connectionString: url, max: 10, connectionTimeoutMillis: 3000, idleTimeoutMillis: 10000, statement_timeout: 5000 }) : undefined;
+  constructor(url: string | undefined, private readonly settings: { tls?: boolean; ca?: string; syntheticOnly?: boolean } = {}) {
+    if (url && settings.tls && new URL(url).search) throw new Error('Certificate-verified TLS database connections forbid URL options.');
+    this.pool = url ? new Pool({ connectionString: url, max: 10, connectionTimeoutMillis: 3000, idleTimeoutMillis: 10000, statement_timeout: 5000, ...(settings.tls ? { ssl: { rejectUnauthorized: true, ...(settings.ca ? { ca: settings.ca } : {}) } } : {}) }) : undefined;
     // pg-pool removes the failed idle client. Consume its event without exposing connection details.
     this.pool?.on('error', () => { console.error(JSON.stringify({ service: 'cuevo-api', code: 'DATABASE_IDLE_CONNECTION_FAILED' })); });
   }
@@ -15,6 +16,7 @@ export class Database {
     try {
       await client.query('BEGIN');
       await client.query("select set_config('app.actor_id',$1,true), set_config('app.school_id',$2,true)", [userId, schoolId ?? '']);
+      if (schoolId && this.settings.syntheticOnly && (await client.query<{ allowed: boolean }>('select internal.synthetic_school_runtime_allowed($1::uuid) as allowed', [schoolId])).rows[0]?.allowed !== true) throw new DomainError('SYNTHETIC_SCHOOL_REQUIRED', 403, 'This staging environment requires a current entirely synthetic school.');
       const result = await fn(client); await client.query('COMMIT');outcome='COMMITTED'; return result;
     } catch (error) {outcome='REJECTED'; await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release();try{console.log(JSON.stringify(databaseTransactionRecord(performance.now()-started,outcome,this.pool.waitingCount)));}catch{/* Metrics cannot change transaction receipts. */} }

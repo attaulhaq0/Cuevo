@@ -1,5 +1,7 @@
 # Cuevo Technical MVP final implementation report
 
+Historical report for the 1 October 2026 source snapshot. The current 2 October local verification, repaired functionality and remaining external boundaries are recorded in the [current acceptance report](../product/qa/CUSTOMER-READINESS-ACCEPTANCE-REPORT.md) and [implementation status](../implementation-status.md). Counts and claims below retain their original scope; they do not certify the later source or hosted deployment.
+
 E Deviser is the company. Cuevo is the product. **Technical MVP Complete is verified in the local synthetic reference-school environment.** This is the founder-authorized technical acceptance using explicit fixture intelligence, not an official curriculum, customer, live-model or production launch claim.
 
 ## What works

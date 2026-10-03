@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orchestrateProposal, type AIProvider, type MinimalEvidenceContext } from '../../src/modules/improvement/orchestrator';
+import { orchestrateProposal, ProposalEvaluationError, type AIProvider, type MinimalEvidenceContext } from '../../src/modules/improvement/orchestrator';
 
 const context: MinimalEvidenceContext = {
   resultId: '00000000-0000-4000-8000-000000000001', evidenceId: '00000000-0000-4000-8000-000000000002',
@@ -58,5 +58,9 @@ describe('source-78 deterministic intelligence evaluation', () => {
   it('sanitizes provider failures', async () => {
     await expect(orchestrateProposal({ generate: async () => { throw Error('secret raw prompt'); } }, context, policy)).rejects.toMatchObject({ code: 'INTELLIGENCE_PROVIDER_FAILED', message: 'Intelligence generation is temporarily unavailable.' });
   });
+  it('distinguishes rejected received output from an unevaluated provider failure',async()=>{
+    await expect(orchestrateProposal(provider({...output,facts:[]}),context,policy)).rejects.toBeInstanceOf(ProposalEvaluationError);
+    let received:unknown;try{await orchestrateProposal({generate:async()=>{throw Error('private transport failure');}},context,policy);}catch(error){received=error;}
+    expect(received).not.toBeInstanceOf(ProposalEvaluationError);expect(received).toMatchObject({code:'INTELLIGENCE_PROVIDER_FAILED'});
+  });
 });
-

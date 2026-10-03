@@ -11,25 +11,45 @@ import { Database } from './platform/database/database';
 import { IdentityService, type MembershipRow } from './platform/identity/identity.service';
 import { createUserVerifier, isAuthReady } from './platform/identity/supabase-auth';
 import { createSchoolLearningController } from './modules/school-learning/learning.controller';
+import { createLearningResourceController } from './modules/school-learning/resource.controller';
+import { createSubmissionAssetController } from './modules/school-learning/submission-asset.controller';
+import { createPortfolioArtifactController } from './modules/portfolio/portfolio-artifact.controller';
 import { createAcademicController } from './modules/academic/academic.controller';
 import { createLearnerStateController } from './modules/learner-state/learner-state.controller';
 import { createImprovementController } from './modules/improvement/improvement.controller';
 import { createIntelligenceService } from './modules/improvement/intelligence.service';
 import { createSchoolController } from './modules/school/school.controller';
+import{createSchoolSupportController}from'./modules/school/support.controller';
+import{createLearnerProfileController}from'./modules/school/profile.controller';
+import{createRestrictedRecordsController}from'./modules/restricted-records/restricted-records.controller';
+import{createSchoolAutomationController}from'./modules/school/automation.controller';
 import { createCurriculumController } from './modules/curriculum/curriculum.controller';
 import { createAssetController } from './modules/assets/assets.controller';
 import { createCommunityController } from './modules/community/community.controller';
+import { createParentConversationController } from './modules/community/conversation.controller';
+import { createCommunityMaintenanceController } from './modules/community/maintenance.controller';
+import { createCommunityMentionController } from './modules/community/mentions.controller';
+import{createLearnerGoalController}from'./modules/development/learner-goal.controller';
+import { createLearningContentController } from './modules/school-learning/content.controller';
 import { createPortfolioController } from './modules/portfolio/portfolio.controller';
+import { createPortfolioOrganizationController } from './modules/portfolio/organization.controller';
 import { createDevelopmentController } from './modules/development/development.controller';
 import { registerApiTelemetry } from './platform/telemetry/telemetry';
+import { createBrowserDiagnosticsController } from './platform/telemetry/browser-diagnostics.controller';
 import { registerRequestLimits } from './platform/request-limits/request-limits';
+import { ReadinessProbe } from './platform/health/readiness';
 import { createAttentionController } from './modules/learner-state/attention.controller';
 
-export async function createApp(config: ServerConfig = parseServerConfig(process.env)) {
-  const database = new Database(config.databaseUrl);
+export async function createApp(config: ServerConfig = parseServerConfig(process.env, 'api')) {
+  const syntheticOnly = config.deploymentEnvironment === 'synthetic-staging';
+  const database = new Database(config.databaseUrl, { tls: config.databaseTls, ca: config.databaseTlsCa, syntheticOnly });
+  const readiness = new ReadinessProbe(async () => {
+    const [dbReady, authReady] = await Promise.all([database.ready(), isAuthReady(config)]);
+    return { database: dbReady, authentication: authReady };
+  });
   const identity = new IdentityService({
     verifyUser: createUserVerifier(config),
-    currentMemberships: userId => database.actorTransaction(userId, undefined, async client => (await client.query<MembershipRow>('select * from "authorization".current_memberships()')).rows),
+    currentMemberships: userId => database.actorTransaction(userId, undefined, async client => (await client.query<MembershipRow>(syntheticOnly ? 'select membership.* from "authorization".current_memberships() membership where internal.synthetic_school_runtime_allowed(membership.school_id)' : 'select * from "authorization".current_memberships()')).rows),
     isCurrentSession: (userId, sessionId) => database.actorTransaction(userId, undefined, async client => Boolean((await client.query<{ active: boolean }>('select "authorization".is_current_session($1::uuid) as active', [sessionId])).rows[0]?.active)),
   });
   @Controller()
@@ -38,7 +58,7 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
     live() { return { status: 'ok', service: 'cuevo-api' }; }
     @Get('/health/ready') @ApiOperation({ summary: 'Dependency readiness' })
     async ready(@Res({ passthrough: true }) reply: FastifyReply) {
-      const [dbReady, authReady] = await Promise.all([database.ready(), isAuthReady(config)]);
+      const { database: dbReady, authentication: authReady } = await readiness.check();
       reply.code(dbReady && authReady ? 200 : 503).header('Cache-Control', 'no-store');
       return { status: dbReady && authReady ? 'ready' : 'unavailable', database: dbReady, authentication: authReady };
     }
@@ -55,7 +75,7 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
       }
     }
   }
-  @Module({ controllers: [FoundationController,createAttentionController(identity,database),createPortfolioController(identity,database),createDevelopmentController(identity,database),createCommunityController(identity,database),createAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createCurriculumController(identity,database), createSchoolController(identity,database), createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database), createImprovementController(identity, database, createIntelligenceService(identity,database,config))] }) class FoundationModule {}
+  @Module({ controllers: [FoundationController,createBrowserDiagnosticsController(identity,database),createAttentionController(identity,database),createPortfolioController(identity,database),createPortfolioOrganizationController(identity,database),createDevelopmentController(identity,database),createCommunityController(identity,database),createParentConversationController(identity,database),createCommunityMaintenanceController(identity,database),createCommunityMentionController(identity,database),createLearnerGoalController(identity,database),createLearningContentController(identity,database),createAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createLearningResourceController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createSubmissionAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createPortfolioArtifactController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createCurriculumController(identity,database), createSchoolController(identity,database),createSchoolSupportController(identity,database),createLearnerProfileController(identity,database),createRestrictedRecordsController(identity,database),createSchoolAutomationController(identity,database), createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database), createImprovementController(identity, database, createIntelligenceService(identity,database,config))] }) class FoundationModule {}
   const adapter = new FastifyAdapter({ bodyLimit: 1024 * 1024, requestIdHeader: false, logger: false });
   const app = await NestFactory.create<NestFastifyApplication>(FoundationModule, adapter, { logger: ['error', 'warn'] });
   registerApiTelemetry(adapter.getInstance());

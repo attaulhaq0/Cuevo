@@ -1,0 +1,7 @@
+# Development selector continuation and identity recovery
+
+Root identified the Development people selector as a remaining bounded UI defect. Sources09/39 and the repository customer-language rule require current authorized context, private personal progress and no opaque record labels. The old useApiQuery/parseList path discarded nextCursor and class labels from /v1/people; later authorized records were inaccessible and duplicate plain names were indistinguishable.
+
+Use the existing shared paginated hook and parsePersonChoice, show full class/year context, provide LoadMore and localized source recovery, and gate selected-person private reads until all current choices are known and uniquely labeled. Preserve student own-goal actions. Convert the same owner period class choices to paginated parseChoice plus LoadMore. Keep grants/domain/API authority unchanged.
+
+Focused units first reproduced missing selector-model behavior, then passed after the bounded fix: later-page IDs/class context, role filter, identical names/context and unknown class labels. Owner lint and web TypeScript pass; root schedules runtime/browser checks. Other-owner long-selector findings are reported without editing their implementation. Optional goal objective selection currently remains unsupported in the UI despite nullable server data; it needs a separate learner-purpose approved-choice route before implementation.

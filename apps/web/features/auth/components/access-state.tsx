@@ -36,7 +36,7 @@ export function AccessState() {
         <Button type="button" onClick={refreshAccess} disabled={!online}><RefreshCw size={16} aria-hidden="true" />{t.retry}</Button>
         <Button type="button" variant="quiet" disabled={signingOut} onClick={() => void returnToSignIn()}>{signingOut ? t.signingOut : t.returnSignIn}</Button>
       </div>}
-      {failure?.requestId ? <p className="support-reference">{t.reference}: <bdi>{failure.requestId}</bdi></p> : null}
+      {failure?.requestId ? <details className="support-reference"><summary>{t.reference}</summary><bdi>{failure.requestId}</bdi></details> : null}
       {signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null}
     </main>
     <footer className="public-footer"><span>{t.company}</span><span>{t.foundation}</span></footer>

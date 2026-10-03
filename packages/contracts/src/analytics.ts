@@ -1,0 +1,98 @@
+// Portable analytics names/types only. This exact public subpath is shared with Edge.
+export const analyticsEventNames = ['learning_activity_completed', 'assessment_submitted', 'assessment_resubmitted', 'quiz_submitted', 'assessment_marked', 'recommendation_reviewed', 'intervention_created', 'intervention_completed', 'reassessment_linked', 'outcome_measured', 'community_post_created', 'cuevo_browser_diagnostic', 'cuevo_intelligence_run_observed', 'cuevo_intelligence_quality_reviewed'] as const;
+export type AnalyticsEventName = typeof analyticsEventNames[number];
+export type AnalyticsEnvironment = 'QA' | 'DEMO' | 'STAGING';
+export const analyticsSourceNames = { 'activity.complete': 'learning_activity_completed', 'submission.create': 'assessment_submitted', 'submission.resubmitted': 'assessment_resubmitted', 'quiz.submitted': 'quiz_submitted', 'result.released': 'assessment_marked', 'rubric.result.released': 'assessment_marked', 'recommendation.approved': 'recommendation_reviewed', 'recommendation.rejected': 'recommendation_reviewed', 'intervention.created': 'intervention_created', 'intervention.completed': 'intervention_completed', 'reassessment.linked': 'reassessment_linked', 'outcome.measured': 'outcome_measured', 'community.post_created': 'community_post_created', 'diagnostic.browser': 'cuevo_browser_diagnostic', 'intelligence.run_observed': 'cuevo_intelligence_run_observed', 'intelligence.quality.reviewed': 'cuevo_intelligence_quality_reviewed' } as const satisfies Record<string, AnalyticsEventName>;
+export const diagnosticCategories = ['api_request', 'api_error', 'response_invalid', 'runtime_error', 'unhandled_rejection', 'hydration_error'] as const;
+export const diagnosticFeatures = ['school', 'learning', 'academic', 'curriculum', 'progress', 'improvement', 'community', 'portfolio', 'development', 'files', 'session', 'other'] as const;
+export const diagnosticStatuses = ['success', 'unauthorized', 'denied', 'conflict', 'invalid', 'unavailable', 'unknown'] as const;
+export const diagnosticTimings = ['under_250ms', '250_to_999ms', '1_to_4s', '5_to_14s', '15s_or_more', 'unknown'] as const;
+export const diagnosticLocales = ['en', 'ar'] as const;
+export const diagnosticViewports = ['mobile', 'tablet', 'desktop', 'unknown'] as const;
+export type DiagnosticCategory = typeof diagnosticCategories[number];
+export type DiagnosticFeature = typeof diagnosticFeatures[number];
+export type DiagnosticStatus = typeof diagnosticStatuses[number];
+export type DiagnosticTiming = typeof diagnosticTimings[number];
+export type DiagnosticLocale = typeof diagnosticLocales[number];
+export type DiagnosticViewport = typeof diagnosticViewports[number];
+export type BrowserDiagnosticObservation = { category: DiagnosticCategory; feature: DiagnosticFeature; status: DiagnosticStatus; timing: DiagnosticTiming; locale: DiagnosticLocale; viewport: DiagnosticViewport };
+export type BrowserDiagnostic = BrowserDiagnosticObservation & { diagnosticId: string };
+
+export const intelligenceAnalyticsFailureCodes = ['INTELLIGENCE_TIMEOUT', 'INTELLIGENCE_LIMIT_EXCEEDED', 'INTELLIGENCE_PROVIDER_FAILED', 'INTELLIGENCE_REQUIRES_REVIEW', 'INTELLIGENCE_INSUFFICIENT_EVIDENCE', 'INTELLIGENCE_UNAVAILABLE'] as const;
+export const intelligenceAnalyticsCostBases = ['DETERMINISTIC_FIXTURE', 'CONFIGURED_TOKEN_RATES', 'BUDGET_RESERVATION', 'LEGACY_UNSPECIFIED'] as const;
+export const intelligenceAnalyticsUsefulness = ['USEFUL', 'NOT_USEFUL', 'UNKNOWN'] as const;
+export const intelligenceAnalyticsGrounding = ['SUPPORTED', 'UNSUPPORTED_CLAIM_OBSERVED', 'UNKNOWN'] as const;
+export const intelligenceAnalyticsPrivacy = ['NO_ISSUE_OBSERVED', 'CONTEXT_ISSUE_OBSERVED', 'UNKNOWN'] as const;
+export const intelligenceAnalyticsToolSafety = ['NO_ISSUE_OBSERVED', 'INVALID_TOOL_OBSERVED', 'UNKNOWN'] as const;
+export type IntelligenceAnalyticsFailureCode = typeof intelligenceAnalyticsFailureCodes[number];
+export type IntelligenceAnalyticsCostBasis = typeof intelligenceAnalyticsCostBases[number];
+export type IntelligenceAnalyticsReview = {
+  usefulness: typeof intelligenceAnalyticsUsefulness[number];
+  grounding: typeof intelligenceAnalyticsGrounding[number];
+  privacy: typeof intelligenceAnalyticsPrivacy[number];
+  toolSafety: typeof intelligenceAnalyticsToolSafety[number];
+};
+export type IntelligenceAnalyticsOutcome = {
+  status: 'improved' | 'no_meaningful_change' | 'inconclusive';
+  model: 'numeric' | 'rubric';
+  comparability: 'COMPARABLE' | 'UNKNOWN';
+};
+/** Private SQL projection shape. Raw run/context identities never become capture properties. */
+export type IntelligenceAnalyticsContext = {
+  runId: string;
+  purpose: 'NEXT_LEARNING_ACTION';
+  generationMode: 'FIXTURE' | 'LIVE';
+  provider: string;
+  model: string;
+  promptVersion: '1' | '2' | '3';
+  promptDigest: string;
+  evaluationVersion: 'source-78-checked-evidence-1';
+  contextDigest: string;
+  contextCounts: { results: number | null; observations: number | null; priorInterventions: number | null; activities: number | null };
+  runState: 'PROPOSAL_READY' | 'FAILED';
+  outputObservation: 'ACCEPTED' | 'REJECTED' | 'NOT_EVALUATED';
+  failureCode: IntelligenceAnalyticsFailureCode | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  latencyMs: number | null;
+  costBasis: IntelligenceAnalyticsCostBasis;
+  cost: number | null;
+  reservedBudget: number;
+  review?: IntelligenceAnalyticsReview;
+  decisionOverride?: boolean | null;
+  outcome?: IntelligenceAnalyticsOutcome;
+};
+/** Explicit custom-event fields; estimates and reservations never assert provider billing. */
+export type IntelligenceAnalyticsProperties = {
+  ai_purpose: 'NEXT_LEARNING_ACTION';
+  generation_mode: IntelligenceAnalyticsContext['generationMode'];
+  ai_provider: string;
+  ai_model: string;
+  prompt_version: IntelligenceAnalyticsContext['promptVersion'];
+  prompt_digest: string;
+  evaluation_version: IntelligenceAnalyticsContext['evaluationVersion'];
+  intelligence_run: string;
+  context_reference: string;
+  context_results_count: number | null;
+  context_observations_count: number | null;
+  context_prior_interventions_count: number | null;
+  context_activities_count: number | null;
+  output_observation: IntelligenceAnalyticsContext['outputObservation'];
+  run_state: IntelligenceAnalyticsContext['runState'];
+  failure_code: IntelligenceAnalyticsFailureCode | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  ai_latency_ms: number | null;
+  cost_basis: IntelligenceAnalyticsCostBasis;
+  estimated_cost_usd: number | null;
+  reserved_budget_usd: number;
+  billed_cost_status: 'UNKNOWN';
+  quality_usefulness?: IntelligenceAnalyticsReview['usefulness'];
+  quality_grounding?: IntelligenceAnalyticsReview['grounding'];
+  quality_privacy?: IntelligenceAnalyticsReview['privacy'];
+  quality_tool_safety?: IntelligenceAnalyticsReview['toolSafety'];
+  decision_override?: boolean | null;
+  outcome_status?: IntelligenceAnalyticsOutcome['status'];
+  outcome_model?: IntelligenceAnalyticsOutcome['model'];
+  outcome_comparability?: IntelligenceAnalyticsOutcome['comparability'];
+};

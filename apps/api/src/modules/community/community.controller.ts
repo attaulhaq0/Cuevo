@@ -8,6 +8,7 @@ private list(r:FastifyRequest,p:FastifyReply,kind:CommunityResource){return this
 @Get('/rooms/:id/posts')posts(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'posts');}
 @Get('/rooms/:id/reports')reports(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'reports');}
 @Get('/announcements')announcements(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'announcements');}
+@Get('/announcements/:id')announcement(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,a=>service.announcement(a,(r.params as{id:string}).id));}
 @Get('/notifications')notifications(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'notifications');}
 @Post('/rooms')@body('room.create')@ApiHeader({name:'Idempotency-Key',required:true})create(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'room.create');}
 @Post('/rooms/:id/members')@body('member.configure')@ApiHeader({name:'Idempotency-Key',required:true})members(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'member.configure');}

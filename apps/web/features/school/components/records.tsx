@@ -3,11 +3,17 @@ import type { SchoolRow } from '../model';
 import { useApp } from '../../../shared/session/providers';
 import { schoolAr, schoolEn } from '../messages';
 
-export function SchoolRecords({ title, rows, columns }: { title: string; rows: SchoolRow[]; columns: { key: string; label: string }[] }) {
+export function SchoolRecords({ title, rows, columns, names = {} }: { title: string; rows: SchoolRow[]; columns: { key: string; label: string }[]; names?: Record<string, string> }) {
   const { locale, dictionary } = useApp(); const t = locale === 'ar' ? schoolAr : schoolEn;
   const labels: Record<string, string> = { active: t.active, suspended: t.suspended, revoked: t.revoked, pending: t.pending, completed: t.completed, present: t.present, absent: t.absent, late: t.late, excused: t.excused };
   function display(row: SchoolRow, key: string) {
     const value = row[key]; if (value === null || value === undefined) return '—';
+    if (key.endsWith('Id')) {
+      const labelKey = key === 'learnerId' || key === 'studentId' ? 'learnerName' : key.replace(/Id$/, 'Name');
+      const sourceLabel = row[labelKey];
+      return typeof sourceLabel === 'string' && sourceLabel.trim() ? [sourceLabel, ...(key === 'classId' && row.academicYearName ? [row.academicYearName] : [])].join(' · ') : names[String(value)] ?? t.nameUnavailable;
+    }
+    if (typeof value === 'boolean') return value ? t.approved : t.notEnabled;
     if (key === 'role' && ['admin', 'coordinator', 'teacher', 'student', 'parent'].includes(String(value))) return dictionary.roles[value as keyof typeof dictionary.roles];
     if (key === 'dayOfWeek' && typeof value === 'number') return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 0, 4 + value)));
     if (typeof value === 'number') return new Intl.NumberFormat(locale).format(value);

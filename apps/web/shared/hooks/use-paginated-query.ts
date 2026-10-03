@@ -10,13 +10,14 @@ type PageState<T> = { data: T[]; nextCursor: string | null; loading: boolean; lo
 function empty<T>(context: string, loading: boolean): PageState<T> { return { data: [], nextCursor: null, loading, loadingMore: false, error: null, moreError: null, loaded: false, context }; }
 
 export function usePaginatedLearningQuery<T extends { id: string }>(path: string | null, parse: (value: unknown) => T, refresh: number) {
-  const { request } = useApi();
-  const { membership, apiUrl } = useApp();
-  const context = `${apiUrl}:${membership?.userId ?? ''}:${membership?.schoolId ?? ''}:${path ?? ''}:${refresh}`;
+  const { request, parseResponse } = useApi();
+  const { membership, apiUrl, formDrafts, accessGeneration } = useApp();
+  const context = `${apiUrl}:${membership?.userId ?? ''}:${membership?.schoolId ?? ''}:${path ?? ''}:${refresh}:${accessGeneration}`;
   const accumulator = useRef(new PageAccumulator<T>());
   const pending = useRef(false);
   const moreController = useRef<AbortController | null>(null);
   const requestRef = useRef(request); requestRef.current = request;
+  const parseResponseRef = useRef(parseResponse); parseResponseRef.current = parseResponse;
   const [state, setState] = useState<PageState<T>>(() => empty(context, !!path));
   useEffect(() => {
     accumulator.current.reset(context); pending.current = false;
@@ -24,24 +25,26 @@ export function usePaginatedLearningQuery<T extends { id: string }>(path: string
     setState(empty(context, !!path));
     if (!path) return;
     const controller = new AbortController();
+    const currentParseResponse = parseResponseRef.current;
     void requestRef.current(path, { signal: controller.signal }).then((value) => {
       if (controller.signal.aborted) return;
-      const page = parsePage(value, parse);
+      const page = currentParseResponse(path, value, value => parsePage(value, parse));
       if (accumulator.current.apply(context, null, page)) setState({ ...empty<T>(context, false), data: accumulator.current.items, nextCursor: page.nextCursor, loaded: true });
     }).catch((error: unknown) => {
-      if (!controller.signal.aborted && accumulator.current.context === context) setState({ ...empty<T>(context, false), error: error instanceof LearningApiError ? error : new LearningApiError('invalid') });
+      if (!controller.signal.aborted && accumulator.current.context === context) { formDrafts.clearRead(`${membership?.schoolId}:${membership?.userId}:`, path); setState({ ...empty<T>(context, false), error: error instanceof LearningApiError ? error : new LearningApiError('invalid') }); }
     });
     return () => { controller.abort(); moreController.current?.abort(); };
-  }, [context, path, parse]);
+  }, [context, path, parse, formDrafts]);
 
   const loadMore = useCallback(() => {
     if (!path || pending.current || accumulator.current.context !== context || !accumulator.current.nextCursor) return;
     const cursor = accumulator.current.nextCursor;
     const controller = new AbortController(); moreController.current = controller; pending.current = true;
+    const currentParseResponse = parseResponseRef.current;
     setState((value) => ({ ...value, loadingMore: true, moreError: null }));
     void requestRef.current(pagePath(path, cursor), { signal: controller.signal }).then((value) => {
       if (controller.signal.aborted) return;
-      const page = parsePage(value, parse);
+      const page = currentParseResponse(path, value, value => parsePage(value, parse));
       if (accumulator.current.apply(context, cursor, page)) setState((current) => ({ ...current, data: accumulator.current.items, nextCursor: page.nextCursor, loadingMore: false }));
     }).catch((error: unknown) => {
       if (!controller.signal.aborted && accumulator.current.context === context) setState((value) => ({ ...value, loadingMore: false, moreError: error instanceof LearningApiError ? error : new LearningApiError('invalid') }));

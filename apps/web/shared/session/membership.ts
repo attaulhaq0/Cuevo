@@ -61,7 +61,7 @@ export async function fetchMembership(options: { apiUrl: string; accessToken: st
   if (!response.ok) {
     const requestId = object(body) && text(body.requestId) ? body.requestId : undefined;
     const code = object(body) && text(body.code) ? body.code : '';
-    const kind: MembershipFailure = code === 'MULTIPLE_SCHOOLS' ? 'multiple-schools'
+    const kind: MembershipFailure = code === 'MULTIPLE_SCHOOLS' || code === 'SCHOOL_SELECTION_REQUIRED' ? 'multiple-schools'
       : response.status === 401 ? 'unauthorized'
         : response.status === 403 ? 'denied'
           : response.status >= 500 ? 'unavailable' : 'invalid-response';

@@ -1,0 +1,1 @@
+export{validateAcceptedAssessment,acceptedCourseBehavior,validateCourseAssessmentCommand,validateProgrammeCourseBinding}from'./runtime-behavior';

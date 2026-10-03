@@ -1,0 +1,11 @@
+begin;create extension if not exists pgtap with schema extensions;set local search_path=extensions,pg_catalog;select no_plan();
+select ok(not has_function_privilege('cuevo_api','internal.measure_native_intervention(uuid,uuid)','EXECUTE'),'Native measurement cannot bypass public intervention authority');
+select ok(not has_function_privilege('authenticated','internal.intervention_outcome_projection(uuid)','EXECUTE'),'Native outcome source is not a Data API');
+select ok(not has_function_privilege('cuevo_api','internal.native_outcome_value(uuid,uuid)','EXECUTE'),'Raw native outcome projection helper stays private');
+select ok(exists(select 1 from pg_constraint where conrelid='app.outcome_measurements'::regclass and contype='c'and pg_get_constraintdef(oid)like'%NO_APPROVED_RUBRIC_COMPARISON_POLICY%'),'Rubric comparison cannot fabricate improvement or scalar value');
+select ok(position('existing app.outcome_measurements;id uuid;'in pg_get_functiondef('internal.measure_native_intervention(uuid,uuid)'::regprocedure))=0,'Native measurement result variable does not shadow source row identities');
+select ok(not has_function_privilege('cuevo_api','internal.native_intervention_outcome_allowed(uuid,uuid)','EXECUTE'),'Pure worker integrity helper remains private');
+select ok(has_function_privilege('cuevo_api','internal.can_read_native_outcome(uuid,uuid)','EXECUTE'),'RLS uses the current actor purpose-scoped native read boundary');
+grant usage on schema extensions to cuevo_api;set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true);
+select is(internal.can_read_native_outcome('10000000-0000-4000-8000-000000000002','16600000-0000-4000-8000-000000000001'),false,'Native outcome scope wrapper rejects an arbitrary foreign school');reset role;
+select*from finish();rollback;

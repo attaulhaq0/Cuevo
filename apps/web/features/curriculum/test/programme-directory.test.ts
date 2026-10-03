@@ -1,0 +1,6 @@
+import assert from'node:assert/strict';import test from'node:test';
+import{parseProgramme,parseProgrammeLearnerPage,programmeChoice}from'../model.ts';
+import{LearningApiError}from'../../../shared/api/client.ts';
+const id='90000000-0000-4000-8000-000000000001';const programme={id,packVersionId:id,name:'Checking',classId:id,className:'Cedar',subjectId:id,subjectName:'Mathematics',yearGroupId:id,yearGroupName:'Year 1',academicYearName:'2026–2027',framework:'School Custom',packProgramme:'Primary',packVersion:'v1'};
+test('programme labels retain current class/subject/year/version without opaque IDs',()=>{assert.equal(programmeChoice(parseProgramme(programme)),'Checking · Cedar · Mathematics · Year 1 · 2026–2027 · v1');assert.throws(()=>parseProgramme({...programme,className:''}),LearningApiError);});
+test('assignment parser rejects another programme and preserves revoked facts',()=>{const row={id,programmeId:id,learnerId:id,learnerName:'Aisha',status:'revoked',approvedByName:'Coordinator',updatedAt:'2026-10-02T00:00:00Z'};assert.equal(parseProgrammeLearnerPage({programme,items:[row],nextCursor:null}).items[0].status,'revoked');assert.throws(()=>parseProgrammeLearnerPage({programme,items:[{...row,programmeId:'90000000-0000-4000-8000-000000000002'}],nextCursor:null}),LearningApiError);});

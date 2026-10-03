@@ -56,8 +56,7 @@ test('current support keeps its authorized intervention and baseline source inst
 test('measured impact preserves a zero baseline and source-linked native follow-up', () => {
   const state = parseLearnerState({ ...ready, support: { activeInterventionIds: [], items: [{ ...support, status: 'MEASURED', completedAt: '2026-10-01T00:01:00.000Z', followUpAssessmentId: 'assessment-1' }] }, impact: { status: 'measured', measurementIds: ['outcome-1'], outcomes: [outcome] } });
   assert.equal(state.impact.status, 'measured');
-  assert.equal(state.impact.outcomes[0].baseline.score, 0);
-  assert.equal(state.impact.outcomes[0].difference, 2);
+  const measured=state.impact.outcomes[0];assert.ok('difference'in measured);assert.equal(measured.baseline.score,0);assert.equal(measured.difference,2);
   assert.throws(() => parseLearnerState({ ...ready, impact: { status: 'measured', measurementIds: [], outcomes: [] } }), LearningApiError);
   assert.throws(() => parseLearnerState({ ...ready, impact: { status: 'measured', measurementIds: ['other-outcome'], outcomes: [outcome] } }), LearningApiError);
 });
@@ -89,4 +88,15 @@ test('revision observations require actual resubmission source after teacher fee
   const observation = { id: 'o', learnerId: 'l', kind: 'revision', sourceType: 'SUBMISSION_REVISION', sourceObjectId: 'resubmission-2', occurredAt: '2026-10-01T00:02:00Z', sourceEventId: 'e' };
   assert.equal(parseObservation(observation).kind, 'revision');
   assert.throws(() => parseObservation({ ...observation, sourceType: 'ACTIVITY_COMPLETION' }), LearningApiError);
+});
+
+test('bounded projection rejects a denominator that does not match the returned academic sources', () => {
+  const empty = { totalCount: 0, returnedCount: 0, truncated: false };
+  assert.throws(() => parseLearnerState({ ...ready, projection: { scope: 'CURRENT_AUTHORIZED_SOURCES', academic: { totalCount: 101, returnedCount: 100, truncated: true, nextCursor: 'cursor' }, observations: { practice: { ...empty, totalCount: null }, revision: { ...empty, totalCount: null }, reflection: { ...empty, totalCount: null } }, sourceEvents: empty } }), LearningApiError);
+});
+
+test('practice signal source coverage cannot report the wrong recorded-count denominator', () => {
+  const signal = { id: 'signal-1', learnerId: 'learner-1', type: 'practice_observed', count: 1002, ruleVersion: 1, windowStart: '2026-09-17T00:00:00.000Z', windowEnd: '2026-10-01T00:00:00.000Z', sourceEventIds: ['event-1'], observationIds: ['observation-1'], status: 'ACTIVE', uncertainty: 'OBSERVATION_ONLY', createdAt: '2026-10-01T00:00:00.000Z', sourceCoverage: { totalCount: 1002, returnedCount: 1, truncated: true } };
+  assert.equal(parseSignal(signal).count, 1002);
+  assert.throws(() => parseSignal({ ...signal, sourceCoverage: { totalCount: 1, returnedCount: 1, truncated: false } }), LearningApiError);
 });

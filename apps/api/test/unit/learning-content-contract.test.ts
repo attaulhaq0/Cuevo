@@ -1,0 +1,7 @@
+import { describe, expect, it } from 'vitest';
+import { learningContentDraftSchema, learningContentPublishSchema, learningContentSchema } from '@cuevo/contracts';
+const id='00000000-0000-4000-8000-000000000001';
+describe('versioned learning content boundaries',()=>{
+ it('requires exact expected revision and assignment task context',()=>{expect(learningContentDraftSchema.safeParse({resource:'activity',expectedRevision:1,title:'Check',content:'Show one step',kind:'assignment',assessmentId:id,reason:'Teacher revises source'}).success).toBe(true);expect(learningContentDraftSchema.safeParse({resource:'activity',expectedRevision:1,title:'Check',content:'Show step',kind:'reading',assessmentId:id,reason:'Change'}).success).toBe(false);expect(learningContentDraftSchema.safeParse({resource:'activity',expectedRevision:1,title:'Check',content:'Show step',kind:'quiz',assessmentId:null,reason:'Change'}).success).toBe(false);});
+ it('requires explicit publication and makes missing historical source unknown',()=>{expect(learningContentPublishSchema.safeParse({expectedRevision:2,confirmPublication:false}).success).toBe(false);expect(learningContentSchema.safeParse({id,courseId:id,resource:'lesson',sourceId:id,revision:2,title:'Published lesson',content:'Exact text',kind:null,assessmentId:null,state:'PUBLISHED',createdAt:'2026-10-02T00:00:00Z',publishedRevision:2,draftRevision:2}).success).toBe(true);});
+});

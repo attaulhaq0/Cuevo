@@ -31,3 +31,10 @@ test('assignment policy fields remain explicit instead of guessing late permissi
   const assessment = { id: 'a', courseId: 'c', title: 'Task', instructions: 'Explain', model: 'numeric', maxScore: 10, rubricId: null, status: 'PUBLISHED', dueAt: null, policyVersion: 1, availableFrom: null, availableUntil: null, assignmentState: 'OPEN', availabilityVersion: 1, submissionKind: 'TEXT' };
   assert.throws(() => parseAssessment(assessment), LearningApiError);
 });
+test('an assessment current submission projection preserves its exact source and rejects a different task', () => {
+  const assessment = { id: 'a', courseId: 'c', title: 'Task', instructions: 'Explain', model: 'numeric', maxScore: 10, rubricId: null, status: 'PUBLISHED', dueAt: null, policyVersion: 1, availableFrom: null, availableUntil: null, allowLate: true, assignmentState: 'OPEN', availabilityVersion: 1, submissionKind: 'TEXT' };
+  assert.equal(parseAssessment({ ...assessment, currentSubmission: null }).currentSubmission, null);
+  assert.equal(parseAssessment({ ...assessment, currentSubmission: submission }).currentSubmission?.id, 's');
+  assert.throws(() => parseAssessment({ ...assessment, currentSubmission: { ...submission, assessmentId: 'foreign' } }), LearningApiError);
+  assert.throws(() => parseAssessment({ ...assessment, currentSubmission: { ...submission, status: 'UNKNOWN' } }), LearningApiError);
+});

@@ -8,4 +8,12 @@ tests/e2e/role-accessibility.spec.ts traverses current permitted navigation and 
 
 Responsive navigation styles belong to the global shell stylesheet. Feature styles do not override nav-item/sidebar__nav. A focused mobile navigation item scrolls instantly into the visible navigation area with logical spacing for its outline. Global document scrolling remains instant so keyboard focus does not wait for a decorative scroll animation.
 
+Desktop navigation has its own bounded vertical scroll area so all role actions remain reachable in shorter windows. The mobile rail continues to scroll horizontally. The customer primary-label traversal reproduced offscreen desktop account/access controls before this repair; final browser verification remains required.
+
+The view query parameter records current workspace navigation through the native history API. Only current role/entitlement navigation choices can render; invalid or forbidden view values return to the overview. Browser Back/Forward and a later sign-in can recover the permitted view. Auth remains memory-only. Persistent status messages describe confirmed commands without copying protected work or primary identifiers.
+
 Product source lookup: [task context map](../../../../docs/product/context-map.md); numbered IDs resolve through the product registry.
+
+Offered destinations use the shared browser-safe prerequisite policy; learning/assessment/curriculum context dependencies and parent-excluded intelligence/development are consistent with destination APIs. Current revocation still removes protected reads independently of navigation.
+
+Account composition consumes the school-owned `LearnerProfile` public UI. It does not assemble protected pupil context from unrelated queues or import school implementation internals.

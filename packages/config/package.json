@@ -1,1 +1,1 @@
-{ "name": "@cuevo/config", "version": "0.1.0", "private": true, "type": "module", "exports": "./src/index.ts" }
+{ "name": "@cuevo/config", "version": "0.1.0", "private": true, "type": "module", "exports": { ".": "./src/index.ts", "./synthetic-runtime": "./src/synthetic-runtime.ts" } }

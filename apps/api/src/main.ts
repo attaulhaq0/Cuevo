@@ -1,6 +1,6 @@
 import { parseServerConfig } from '@cuevo/config';
 import { createApp } from './app';
-const config = parseServerConfig(process.env);
+const config = parseServerConfig(process.env, 'api');
 const { app, close } = await createApp(config);
 await app.listen(config.apiPort, '0.0.0.0');
 console.log(`Cuevo API listening on ${config.apiPort}`);

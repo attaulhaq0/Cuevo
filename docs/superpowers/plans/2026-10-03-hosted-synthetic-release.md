@@ -1,0 +1,14 @@
+# Hosted synthetic release implementation plan
+
+**Goal:** Prepare a functioning separated Cuevo hosted synthetic release within the existing API/worker boundaries, then deploy only with truthful source/CI/hosted evidence.
+
+**Sources:** [design](../specs/2026-10-03-hosted-synthetic-release-design.md), product02/39/40/68/81/82, [CI/CD operations](../../operations/ci-cd.md), accepted event architecture, source78 evaluation and scoped owner READMEs/tests.
+
+- [x] Verify connected Vercel/Supabase/GitHub, finish PostHog App repository permission readback and create a dedicated Cuevo web project without touching former hosting.
+- [x] Runtime-policy owner: exact project/origin/role-bound stage config, truthful HOSTED_SYNTHETIC_FIXTURE and private populated-synthetic source guards implemented; post-review production completeness/TLS and general protected stage transaction/identity filtering fixed. Source-policy/per-request CLI migrations, focused272units, stagedAuthAPI1 and179SQLassertions pass; current full regression remains required.
+- [x] API-host owner: compiled createApp/rawHTTP Vercel adapter, prebuilt helpers-disabled output/pinned dependencies/private packs and actual metadata release descriptor implemented. HTTP22/CICD19/packaging2 and non-root Node24 ready/denied smoke pass; root artifact/workspace path checks correct hidden cwd assumptions. Hosted acceptance remains separate.
+- [ ] Root: review both scopes and test architecture/security/contracts/packaging; preserve current work and create a reviewable source checkpoint/PR with evidence. Do not bypass independent review/main-only release checks.
+- [x] Root: read-only hosted planner verifies exact healthy Cuevo and empty Auth/Storage/application/migration state; records182unchanged ordered migration hashes in ignored metadata. Four target/lock/order tests pass. It applies no remote SQL or seed. Provider-owned ACL correction has a [ready support request](../../operations/supabase-worker-owner-request.md); effective denial remains an external prerequisite. Full incremental remote application/identity provisioning remains to implement and verify after source review.
+- [ ] Run current-source checks, then canonical CI and hosted staged API/DB/worker/private-file/Realtime/role/main-loop verification when prerequisites permit. Record evidence; publish Vercel preview only after dependency and source admission. No new model calls or invented passing manifests.
+
+Current external evidence: Supabase Cuevo has no application schemas/roles; Vault grants originate from supabase_admin and ordinary rollback revoke leaves service_role usage true. The operator is not a member of that owner role. No remote migration/seed/deployment has occurred. The founder was given the ready owner request after resource setup and tested delivery preparation; owner support remains pending while remaining code/verification proceeds.

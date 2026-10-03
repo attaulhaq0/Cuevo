@@ -1,0 +1,13 @@
+begin;create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_api;set local search_path=extensions,pg_catalog;select no_plan();
+select ok(not has_table_privilege('cuevo_api','internal.intervention_learner_notes','SELECT,INSERT,UPDATE,DELETE'),'Private learner-note sources are not exposed as raw tables');
+select ok(not has_table_privilege('authenticated','internal.intervention_help_requests','SELECT,INSERT,UPDATE,DELETE'),'Data API cannot read or author task help');
+select ok(not has_function_privilege('authenticated','internal.reply_intervention_help(uuid,jsonb,text,text,text)','EXECUTE'),'Data API cannot respond as teaching staff');
+set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000072',true);
+select throws_ok($$select internal.read_intervention_help('16100000-0000-4000-8000-000000000001')$$,'42501',null,'Parent cannot read private task help');
+select throws_ok($$select internal.request_intervention_help('16100000-0000-4000-8000-000000000001','{}','help',repeat('a',64),'request')$$,'22023',null,'Missing confirmed bounded help fields are rejected');
+reset role;
+insert into internal.outbox_events(id,school_id,actor_id,type,entity_type,entity_id,version,metadata,deduplication_key,state,lease_token,lease_until)values('16100000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000012','intervention.help.requested','intervention_help_request','16100000-0000-4000-8000-000000000003',1,'{}','invalid-task-help-source','PROCESSING','16100000-0000-4000-8000-000000000004',clock_timestamp()+interval '30 seconds');
+grant usage on schema extensions to cuevo_worker;set local role cuevo_worker;
+select throws_ok($$select internal.process_learner_event('16100000-0000-4000-8000-000000000002','16100000-0000-4000-8000-000000000004')$$,'22023',null,'Help worker cannot acknowledge an event without its exact immutable request');
+reset role;select is((select state from internal.outbox_events where id='16100000-0000-4000-8000-000000000002'),'PROCESSING','Invalid help source remains unacknowledged');
+select*from finish();rollback;

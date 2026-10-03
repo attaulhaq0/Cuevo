@@ -48,7 +48,7 @@ describe.skipIf(!enabled)('governed fixture intelligence real Auth API database 
   const request = (role: string, url: string, payload?: Record<string, unknown>, key = randomUUID()) => app.inject({ method: payload === undefined ? 'GET' : 'POST', url, headers: { authorization: `Bearer ${tokens[role]}`, 'x-school-id': school, 'idempotency-key': key }, payload });
   const command = async (role: string, url: string, payload: Record<string, unknown>) => { const response = await request(role, url, payload); expect(response.statusCode, response.body).toBe(200); return response.json(); };
   it('persists minimum authorized context, replays one proposal and requires human rejection or approval', async () => {
-    const course = await command('teacher', '/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title: `Intelligence ${randomUUID()}`, description: 'School authored' });
+    const course = await command('teacher', '/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title: 'Synthetic guided learning review', description: 'School authored' });
     await command('teacher', `/v1/courses/${course.id}/publish`, {});
     const unit=await command('teacher',`/v1/courses/${course.id}/units`,{title:'Reviewed learning options',sequence:1});
     const lesson=await command('teacher',`/v1/units/${unit.id}/lessons`,{title:'Approved source example',sequence:1,body:'School-authored worked example.'});
