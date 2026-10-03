@@ -230,6 +230,9 @@ test('administrator corrects and cancels timetable and report period, then creat
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
   const context = await fixture(page);
+  const runtimeErrors: string[] = [];
+  page.on('pageerror', error => runtimeErrors.push(error.name));
+  page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning' && /hydrat/i.test(message.text())) runtimeErrors.push(message.type()); });
   const term = await context.command('admin', '/v1/school/terms', { academicYearId: year, name: `Lifecycle school term ${context.stamp}`, startsOn: '2026-10-01', endsOn: '2026-12-31' });
   const location = `School lifecycle room ${context.stamp}`;
   const periodName = `School lifecycle report ${context.stamp}`;
@@ -237,8 +240,10 @@ test('administrator corrects and cancels timetable and report period, then creat
   const initialPeriod = { termId: term.id, name: periodName, startsOn: '2026-10-01', endsOn: '2026-10-31', parentVisible: true };
   // Only initial source setup uses API; corrections, cancellations and reviewed replacements below are visible operations.
   const slot = await context.command('admin', '/v1/school/timetable', initialSlot);
+  const otherLocation = `North teaching space ${context.stamp}`;
+  const otherSlot = await context.command('admin', '/v1/school/timetable', { ...initialSlot, dayOfWeek: 5, startsAt: '15:00', endsAt: '16:00', location: otherLocation });
   const period = await context.command('admin', '/v1/school/report-periods', initialPeriod);
-  const currentIds = { timetable: [slot.id], 'report-periods': [period.id] };
+  const currentIds = { timetable: [slot.id, otherSlot.id], 'report-periods': [period.id] };
   const daily = async () => {
     await context.signIn('admin');
     await page.getByRole('button', { name: 'Daily operations', exact: true }).click();
@@ -249,12 +254,17 @@ test('administrator corrects and cancels timetable and report period, then creat
   const maintain = async (resource: 'timetable' | 'report-periods', id: string, title: string, cancel: boolean, edit?: (form: Locator) => Promise<void>) => {
     await daily();
     const section = page.getByRole('region', { name: `${resource === 'timetable' ? 'Timetable' : 'Report periods'} · Manage current records`, exact: true });
-    const row = section.locator('article').filter({ hasText: title });
-    await expect(row).toHaveCount(1);
-    await row.getByRole('button', { name: cancel ? 'Cancel current record' : 'Correct current record', exact: true }).click();
-    const form = section.getByRole('region', { name: cancel ? 'Cancel current record' : 'Correct current record', exact: true });
     const current = (await context.rows(`/v1/school/${resource}`)).find(item => item.id === id);
     if (!current) throw new Error('Maintenance requires one exact current source.');
+    const row = resource === 'timetable' ? section.locator('article').filter({ hasText: title }).filter({ hasText: String(current.location) }) : section.locator('article').filter({ hasText: title });
+    await expect(row).toHaveCount(1);
+    if (resource === 'timetable') {
+      await expect(row).toContainText('Mathematics');
+      await expect(row).toContainText(context.selected.teacher.displayName);
+      await expect(row).toContainText(`${current.startsAt}–${current.endsAt}`);
+      await row.getByRole('button', { name: cancel ? /^Cancel current record · / : /^Correct current record · / }).click();
+    } else await row.getByRole('button', { name: cancel ? 'Cancel current record' : 'Correct current record', exact: true }).click();
+    const form = section.getByRole('region', { name: cancel ? 'Cancel current record' : 'Correct current record', exact: true });
     if (edit) await edit(form);
     await form.getByLabel('Correction reason', { exact: true }).fill('Administrator reviewed this exact current timetable or report-period source.');
     await expect(form.getByLabel('I reviewed this source and approve the change', { exact: true })).not.toBeChecked();
@@ -281,6 +291,16 @@ test('administrator corrects and cancels timetable and report period, then creat
   };
   let primaryError: unknown;
   try {
+    await daily();
+    const maintenance = page.getByRole('region', { name: 'Timetable · Manage current records', exact: true });
+    const sameClassSlots = maintenance.locator('article').filter({ hasText: context.className });
+    await expect(sameClassSlots).toHaveCount(2);
+    await expect(sameClassSlots.filter({ hasText: otherLocation })).toContainText('Friday');
+    await expect(sameClassSlots.filter({ hasText: location })).toContainText('Saturday');
+    const editNames = await sameClassSlots.getByRole('button', { name: /^Correct current record · / }).evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
+    expect(new Set(editNames).size).toBe(2);
+    await maintenance.scrollIntoViewIfNeeded();
+    await maintenance.screenshot({ path: testInfo.outputPath('named-timetable-desktop.png') });
     const correctedLocation = `${location} corrected`;
     await maintain('timetable', slot.id, context.className, false, async form => {
       await expect(form.getByLabel('Start time (HH:MM)', { exact: true })).toHaveValue('17:00');
@@ -345,6 +365,11 @@ test('administrator corrects and cancels timetable and report period, then creat
     await page.getByRole('button', { name: 'العربية', exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]);
+    const arabicMaintenance = page.getByRole('region', { name: 'الجدول الدراسي · إدارة السجلات الحالية', exact: true });
+    await expect(arabicMaintenance.locator('article').filter({ hasText: otherLocation })).toContainText('الجمعة');
+    await arabicMaintenance.scrollIntoViewIfNeeded();
+    await arabicMaintenance.screenshot({ path: testInfo.outputPath('named-timetable-arabic-mobile.png') });
+    expect(runtimeErrors).toEqual([]);
   } catch (error) { primaryError = error; }
   test.setTimeout(testInfo.timeout + 45_000);
   const cleanupErrors: unknown[] = [];
