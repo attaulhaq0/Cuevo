@@ -28,15 +28,16 @@ async function geometry(page: Page) {
     const named = (selector: string) => [...document.querySelectorAll(selector)]
       .filter(element => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0)
       .map(element => ({ name: element.id || element.className || element.tagName, ...rect(element) }));
-    const sections = Object.fromEntries(['header', 'story', 'visual', 'panel', 'footer']
-      .map(name => [name, rect(document.querySelector(`.auth-${name}`)!)]));
+    const sectionSelectors = { header: '.auth-header', story: '.auth-story', intro: '.auth-story__intro', visual: '.auth-visual', panel: '.auth-panel', footer: '.auth-footer' };
+    const sections = Object.fromEntries(Object.entries(sectionSelectors)
+      .map(([name, selector]) => [name, rect(document.querySelector(selector)!)]));
     return {
       viewport: { width: innerWidth, height: innerHeight },
       document: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
       sections,
-      containedSectionPairs: ['header', 'story', 'visual', 'panel', 'footer'].flatMap(name =>
-        ['header', 'story', 'visual', 'panel', 'footer'].filter(other => name !== other
-          && document.querySelector(`.auth-${name}`)!.contains(document.querySelector(`.auth-${other}`)!))
+      containedSectionPairs: Object.keys(sectionSelectors).flatMap(name =>
+        Object.keys(sectionSelectors).filter(other => name !== other
+          && document.querySelector(sectionSelectors[name as keyof typeof sectionSelectors])!.contains(document.querySelector(sectionSelectors[other as keyof typeof sectionSelectors])!))
           .map(other => `${name}/${other}`)),
       controls: named('.auth-header button, .auth-panel button, .auth-panel input, .auth-privacy summary'),
       fields: named('.auth-form > .field, .auth-device-note, .auth-form [role="alert"], .auth-submit, .auth-help-link'),
@@ -263,6 +264,43 @@ for (const locale of locales) {
     }
   });
 
+  test(`${locale}: tablet credentials precede the supporting scene`, async ({ page }) => {
+    for (const viewport of [{ width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
+      await page.setViewportSize(viewport); await open(page, locale);
+      const bounds = await geometry(page);
+      const email = await page.locator('#email').boundingBox();
+      expect(email).not.toBeNull();
+      expect(email!.y + email!.height, 'The first credential is visible before scrolling').toBeLessThanOrEqual(viewport.height);
+      expect(bounds.sections.panel.y, 'The form follows the introduction').toBeGreaterThanOrEqual(bounds.sections.intro.bottom);
+      expect(bounds.sections.visual.y, 'Supporting artwork follows the complete form').toBeGreaterThanOrEqual(bounds.sections.panel.bottom);
+      await expect(page.locator('.auth-form')).toHaveCount(1);
+      assertLayout(bounds, `${locale}/${viewport.width}: tablet form priority`);
+    }
+  });
+
+  test(`${locale}: role captions stay separate at native and enlarged text sizes`, async ({ page }) => {
+    for (const width of [1366, 1536]) {
+      for (const factor of [1, 2]) {
+        await page.setViewportSize({ width, height: width === 1366 ? 768 : 1024 }); await open(page, locale);
+        if (factor > 1) await page.locator('.auth-page').evaluate((element, size) => {
+          const nodes = [...element.querySelectorAll<HTMLElement>('*')];
+          const fonts = nodes.map(node => parseFloat(getComputedStyle(node).fontSize));
+          nodes.forEach((node, index) => { node.style.fontSize = `${fonts[index] * size}px`; });
+        }, factor);
+        const captions = await page.locator('.learning-loop__roles > div > span > span').evaluateAll(elements => elements.map(element => {
+          const r = element.getBoundingClientRect();
+          return { text: element.textContent, x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
+        }));
+        expect(captions).toHaveLength(5);
+        for (let i = 0; i < captions.length; i++) {
+          expect(captions[i].scrollWidth, `${captions[i].text}: caption stays within its lane`).toBeLessThanOrEqual(captions[i].clientWidth + 2);
+          for (const next of captions.slice(i + 1)) expect(intersects(captions[i], next), `${captions[i].text} and ${next.text} remain separate`).toBe(false);
+          if (factor === 1) expect(Math.abs(captions[i].y - captions[0].y), 'Normal text retains the five-role row').toBeLessThanOrEqual(tolerance);
+        }
+      }
+    }
+  });
+
   test(`${locale}: normal flow stays anchored when height, help and privacy change`, async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 900 }); await open(page, locale);
     const measurements = [];
@@ -274,7 +312,7 @@ for (const locale of locales) {
       measurements.push({ width, short, tall });
       assertLayout(short, `${locale}/${width}: short normal flow`);
       assertLayout(tall, `${locale}/${width}: tall normal flow`);
-      for (const section of ['header', 'story', 'visual', 'panel'] as const) {
+      for (const section of ['header', 'story', 'intro', 'visual', 'panel'] as const) {
         // The selected Studio composition has an intentional compact-height
         // mode. Anchoring remains invariant within a mode; all short/tall
         // layouts are still checked above for overlap and reachable content.
@@ -285,7 +323,7 @@ for (const locale of locales) {
       await page.locator('.auth-panel__tabs button').nth(1).click();
       const help = await geometry(page); measurements.push({ width, help });
       assertLayout(help, `${locale}/${width}: account help`);
-      for (const section of ['header', 'story', 'panel'] as const) {
+      for (const section of ['header', 'story', 'intro', 'panel'] as const) {
         expect.soft(Math.abs(help.sections[section].y - tall.sections[section].y),
           `${locale}/${width}: opening account help must not lift preceding ${section}`).toBeLessThanOrEqual(tolerance);
       }
@@ -294,7 +332,16 @@ for (const locale of locales) {
       await page.locator('.auth-privacy summary').click();
       const privacy = await geometry(page); measurements.push({ width, privacy });
       assertLayout(privacy, `${locale}/${width}: privacy expanded`);
-      for (const section of ['header', 'story', 'visual', 'panel'] as const) {
+      for (const section of ['header', 'story', 'intro', 'visual', 'panel'] as const) {
+        if (section === 'visual' && width >= 768 && width <= 1100) {
+          // The tablet scene follows the form. An expanded disclosure must push
+          // it down by the same amount, while preceding content stays anchored.
+          const movement = privacy.sections.visual.y - closed.sections.visual.y;
+          expect.soft(movement, `${locale}/${width}: expanded privacy cannot lift the following scene`).toBeGreaterThanOrEqual(-tolerance);
+          expect.soft(Math.abs(movement - (privacy.sections.panel.bottom - closed.sections.panel.bottom)),
+            `${locale}/${width}: following scene tracks form expansion`).toBeLessThanOrEqual(tolerance);
+          continue;
+        }
         expect.soft(Math.abs(privacy.sections[section].y - closed.sections[section].y),
           `${locale}/${width}: opening footer privacy must not lift preceding ${section}`).toBeLessThanOrEqual(tolerance);
       }

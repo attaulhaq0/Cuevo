@@ -16,6 +16,8 @@ Current approved palette/material: follow the [Royal/Pearl/Midnight shared rule]
 
 ## Global constraints
 
+Latest founder clarification: preserve the approved mobile authentication layout. Remaining Auth refinement is web-only from768px upward, with matched mobile regression captures. Keep one form, current static artwork and all sign-in/session behavior; do not restart mobile design exploration.
+
 Latest authentication review: the founder selected exact Learning Studio concept 08 at1536×1024, with the same desk/camera/character/form composition. Use the approved static Foxi/Owl paired image. Authentication has no video, playback controls, motion effects or decoder; responsive layout and image loading remain independent of the sign-in form. All earlier connector/two/four-character alternatives are historical. Current app icons use one38name reviewed dimensional registry, with23missing icons individually generated and15reused. Distinct desktop/mobile compositions and backend-preservation scope remain approved.
 
 - One Trail visual system and sole implementation per page/feature; no old/new or Trail/Momentum switch, copied app or duplicate submission/reward engine.

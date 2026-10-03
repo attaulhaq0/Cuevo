@@ -16,6 +16,8 @@ Latest review amendment: Coordinator and Admin/shared references are stored with
 
 Latest authentication placement refinement: use the full viewport for the logical-start brand/heading and logical-end wider sign-in form. Bound only the decorative artwork; group the five separate role icons/labels in a real pill tray and keep Learn/Practice clear of the paired books with a central gutter. The current normal desktop default fits without scroll, while expanded recovery/privacy and enlarged text retain natural scroll access. Sign-in/session behavior and static companions remain unchanged.
 
+Latest founder clarification: the approved mobile authentication version is already good. Preserve its single Foxi, pale ribbon background, native form and mobile spacing. Remaining authentication refinements apply only at web widths from768px upward. Verify mobile against the approved baseline after every shared or desktop change; this refinement does not authorize another mobile redesign.
+
 ## Decision and scope
 
 The founder and team selected the Trail approach. Preserve its dimensional filled icons, cyan/navy palette, pearl-blue ribbon background, section hierarchy, buttons, spacing and welcoming learner presentation. The additional student reference places Foxi beside the current task. This supersedes the earlier small character-preview-only placement for the student home. Authentication follows the latest approved static Learning Studio refinement, preserving sign-in/session authority.
