@@ -147,9 +147,11 @@ test('administrator revokes and restores current teacher, learner and guardian s
     const current = (await context.rows(paths[kind])).find(row => matches(kind, row));
     if (!current) throw new Error('Current relationship lookup is unavailable.');
     const personName = kind === 'assignment' ? context.selected.teacher.displayName : context.selected.student.displayName;
-    let record = page.locator(`[data-access-kind="${kind}"]`).filter({ hasText: personName });
-    record = kind === 'guardian' ? record.filter({ hasText: context.selected.parent.displayName }) : record.filter({ hasText: context.className });
+    let record = page.locator(`[data-access-kind="${kind}"]`).filter({ has: page.locator('[data-relationship-person]').filter({ hasText: personName }) });
+    record = kind === 'guardian' ? record.filter({ has: page.locator('[data-relationship-person]').filter({ hasText: context.selected.parent.displayName }) }) : record.filter({ has: page.locator('[data-relationship-class]').filter({ has: page.getByText(context.className, { exact: true }) }) });
     await expect(record).toHaveCount(1);
+    await expect(record).toHaveAttribute('data-access-id',current.id);
+    if(kind!=='guardian'){await expect(record.locator('[data-relationship-class]')).toHaveText(context.className);await expect(record).toContainText('Year 1');await expect(record).toContainText('2026–2027');}
     await record.getByRole('button', { name: titles[kind], exact: true }).click();
     const form = page.getByRole('region', { name: titles[kind], exact: true }).filter({ has: page.locator('form') });
     if (kind === 'guardian') {

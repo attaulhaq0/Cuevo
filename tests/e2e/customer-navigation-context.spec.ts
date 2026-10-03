@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { selectHumanChoice } from './human-choice';
 
 const root = resolve(import.meta.dirname, '../..');
 async function login(page: Page) {
@@ -46,10 +47,10 @@ test('class review brings the current named learner detail into keyboard focus a
 test('class review announces the named denied or unknown detail and class choices retain exact year context', async ({ page }) => {
   await login(page); await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
   const classOption = 'Year 1 · Cedar · Year 1 · 2026–2027';
-  await page.getByLabel('Daily class records', { exact: true }).selectOption({ label: classOption });
-  await expect(page.getByLabel('Daily class records', { exact: true }).locator('option:checked')).toHaveText(classOption);
+  const schoolClassOption = 'Class: Year 1 · Cedar · Year group: Year 1 · Academic year: 2026–2027';
+  await selectHumanChoice(page.getByLabel('Daily class records', { exact: true }),schoolClassOption,'30000000-0000-4000-8000-000000000001');
   await page.getByRole('button', { name: 'Record attendance', exact: true }).click();
-  await expect(page.getByLabel('Class for attendance', { exact: true }).locator('option').filter({ hasText: classOption })).toHaveCount(1);
+  const attendanceClass=page.getByLabel('Class for attendance', { exact: true }).getByRole('option',{name:schoolClassOption,exact:true});await expect(attendanceClass).toHaveCount(1);await expect(attendanceClass).toHaveAttribute('value','30000000-0000-4000-8000-000000000001');
   await page.getByRole('navigation').getByRole('button', { name: 'Progress', exact: true }).click(); await settled(page);
   await page.getByLabel('Class', { exact: true }).selectOption({ label: classOption });
   const row = page.locator('[data-class-learner-id]').filter({ has: page.getByRole('heading', { name: 'Lina Al-Kuwari', exact: true }) });
