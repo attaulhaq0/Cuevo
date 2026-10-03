@@ -30,8 +30,6 @@
 .workspace .community-reactions .learning-form__actions { margin: 0; gap: var(--space-2); }
 .workspace .community-reactions .learning-form__fields:empty { display: none; margin: 0; }
 .workspace .community-reactions .learning-form form, .workspace .community-reactions .learning-form fieldset { margin: 0; padding: 0; border: 0; }
-.workspace .community-reactions .button--primary { background: var(--color-feedback-surface); color: var(--color-violet); border-color: var(--color-border); box-shadow: none; }
-.workspace .community-reactions .button--primary:hover { background: var(--color-surface-accent); color: var(--color-link); }
 .community-discussion details summary { cursor: pointer; min-block-size: 2.75rem; }
 .community-member-option { display: flex; align-items: center; gap: var(--space-3); padding-block: var(--space-2); }
 .conversation-workspace { min-inline-size: 0; }

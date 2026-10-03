@@ -5,7 +5,7 @@
 .parent-trail-preview__header .brand__name { font: 900 2.25rem 'Cuevo Nunito Sans', var(--font-sans); }
 .parent-trail-preview__header nav { display: flex; gap: var(--space-2); align-items: stretch; padding: var(--space-2); border-radius: var(--radius-xl); background: var(--color-surface-muted); flex: 1; justify-content: center; }
 .parent-trail-preview__header nav button { display: flex; gap: var(--space-2); align-items: center; justify-content: center; flex-direction: column; min-block-size: 3.75rem; border: 1px solid transparent; border-radius: var(--radius-lg); padding: var(--space-2) var(--space-4); font: inherit; font-size: var(--type-xs); color: var(--color-text); background: transparent; cursor: pointer; }
-.parent-trail-preview__header nav button[aria-current="page"] { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-accent); }
+.parent-trail-preview__header nav button[aria-current="page"] { background: var(--color-selection-surface); color: var(--color-selection-text); border-color: var(--color-selection-border);  border-width: 2px;}
 .parent-trail-preview__account { display: flex; gap: var(--space-3); align-items: center; flex: none; }
 .parent-trail-preview__account > svg { background: var(--color-learning-surface); color: var(--color-accent); border-radius: var(--radius-pill); padding: var(--space-3); inline-size: 3.5rem; block-size: 3.5rem; }
 .parent-trail-preview__account strong { font-size: var(--type-sm); }

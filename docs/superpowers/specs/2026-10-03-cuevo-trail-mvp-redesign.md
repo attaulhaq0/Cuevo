@@ -8,6 +8,8 @@ Latest founder amendment, 3 October: authentication now permits targeted density
 
 Latest scope update: the founder explicitly requested backend implementation of the [Character Progression System foundation](../../architecture/character-progression-system.md), including school-configurable numbered levels, next-level progress, earned character/cosmetic grants and saved permitted presentation. These bounded contracts are no longer excluded merely as future phases; the backend chat owns their coordinated implementation. Paid shop/payment and unrestricted student AI remain excluded. The Website project's Sora design-time setup has been inspected safely and can support reviewed animation assets; no new live call or Cuevo runtime video API is implied.
 
+Latest color/material approval: the founder selected solid Royal blue primary actions, Pearl + blue edge selected controls, retained existing status badges, and dedicated Midnight Trail dark backgrounds. The [shared approved rule](../../design/2026-10-03-approved-trail-colors-and-background.md) supersedes the earlier gradient/cyan-selection/dimmed-light-image variants while preserving current semantics and backend contracts.
+
 ## Decision and scope
 
 The founder and team selected the Trail approach. Preserve its dimensional filled icons, cyan/navy palette, pearl-blue ribbon background, section hierarchy, buttons, spacing and welcoming learner presentation. The additional student reference places Foxi beside the current task. This supersedes the earlier small character-preview-only placement for the student home. Authentication follows the latest approved static Learning Studio refinement, preserving sign-in/session authority.

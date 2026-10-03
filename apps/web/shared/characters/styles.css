@@ -8,3 +8,7 @@
 
 .workspace .companion-view { display: inline-grid; max-inline-size: 100%; }
 .workspace .companion-view > img { display: block; max-inline-size: 100%; block-size: auto; object-fit: contain; pointer-events: none; user-select: none; }
+
+.workspace { --trail-background-dark: url('./assets/trail-background-midnight.webp'); }
+.trail-background { background-image:var(--trail-background-source,var(--trail-background-light)); background-position:center top; background-size:cover; background-repeat:no-repeat; }
+@media (forced-colors:active) { .workspace .trail-background { display:none; } }

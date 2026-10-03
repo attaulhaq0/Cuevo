@@ -1,5 +1,7 @@
 'use client';
 
+import { TrailBackground } from '../../../shared/characters/ui';
+
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
@@ -105,7 +107,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     profileNotice: signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null,
     searchAction,
   }}>
-      <img className="workspace-chrome__background" src={trailAssets.background} alt="" aria-hidden="true" />
+      <TrailBackground className="workspace-chrome__background" src={trailAssets.background} />
       <main id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}${view === 'learning' && membership.role === 'student' ? ' workspace-main--student-learning' : ''}${view === 'community' ? ' workspace-main--community' : ''}${view === 'academic' ? ' workspace-main--academic' : ''}`} tabIndex={-1}>
         {composedHome ? null : <div className="workspace-intro"><div><p className="eyebrow">{t.greeting} <bdi>{membership.displayName}</bdi></p><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{body}</p></div><Status tone="positive">{t.sessionVerified}</Status></div>}
         {notice ? <p className="notice" role="status">{notice}</p> : null}

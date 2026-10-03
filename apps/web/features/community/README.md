@@ -31,3 +31,5 @@ maintenance-messages/components own current teacher group lifecycle, report revi
 MentionSource consumes typed MENTION notifications and opens the exact permitted post before explicit read confirmation. Room composers choose at-most-five current named members rather than parse arbitrary text as recipient identity; shared original-key commands and owned session drafts retain the manifest. Hidden/revoked source failures remove protected content, with parent mention scope absent. Announcement source revision read remains separate.
 
 Room/group/announcement class choices use the shared paginated parseChoice hook and retain LoadMore instead of discarding later current authorized classes. Pagination appends choices without changing the same-source CommandForm or group selected members/original-key payload. Public choiceLabel displays server-provided class, year group and academic year names, distinguishing same-name classes with authorized context.
+
+Primary reaction submission now consumes the shared Royal blue action token instead of a feature-specific violet primary fill. Existing reaction forms/permissions/drafts/receipt handling remain unchanged.

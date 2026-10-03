@@ -15,10 +15,10 @@
 .student-trail-preview__nav > button > svg { color: var(--color-learning-symbol); }
 .student-trail-preview__nav > button:nth-child(2n) > svg { color: var(--color-feedback-symbol); }
 .student-trail-preview__nav > button:nth-child(4) > svg { color: var(--color-practice-symbol); }
-.student-trail-preview__nav > button[aria-current] { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-learning-symbol); box-shadow: var(--elevation-control); font-weight: var(--font-weight-bold); min-inline-size: 7rem; }
-.student-trail-preview__nav > button[aria-current] svg { color: var(--color-accent); }
-.student-trail-preview.workspace[data-theme="dark"] .student-trail-preview__nav > button[aria-current] svg { color: var(--color-on-brand); }
-.student-trail-preview__nav > button:hover { background: var(--color-surface-accent); }
+.student-trail-preview__nav > button[aria-current] { background: var(--color-selection-surface); color: var(--color-selection-text); border-color: var(--color-selection-border); box-shadow: inset 0 -3px var(--color-selection-border), var(--elevation-subtle); font-weight: var(--font-weight-bold); min-inline-size: 7rem;  border-width: 2px;}
+.student-trail-preview__nav > button[aria-current] svg { color: var(--color-selection-text); }
+.student-trail-preview.workspace[data-theme="dark"] .student-trail-preview__nav > button[aria-current] svg { color: var(--color-selection-text); }
+.student-trail-preview__nav > button:hover:not([aria-current]) { background: var(--color-surface-accent); }
 .student-trail-preview__footer { display: flex; gap: var(--space-5); align-items: center; min-block-size: 4rem; padding: var(--space-3) var(--space-8); background: var(--color-material-chrome); color: var(--color-text-secondary); font-size: .8125rem; }
 .student-trail-preview__footer .brand__mark { inline-size: 1.875rem; block-size: 1.875rem; }
 .student-trail-preview__footer .brand__name { font-size: 1.25rem; font-weight: 900; }
@@ -43,7 +43,7 @@
   .student-trail-preview__nav { margin-block-start: var(--space-2); gap: var(--space-1); }
   .student-trail-preview__nav > button { min-block-size: 3.5rem; gap: var(--space-1); font-size: .6875rem; padding-inline: var(--space-2); }
   .student-trail-preview__nav > button > svg { inline-size: 1.5rem; block-size: 1.5rem; }
-  .student-trail-preview__nav > button[aria-current] { min-inline-size: 5.5rem; }
+  .student-trail-preview__nav > button[aria-current] { min-inline-size: 5.5rem;  border-width: 2px;}
   .student-trail-preview__footer { padding-inline: var(--space-4); gap: var(--space-3); }
   .student-trail-preview__footer-links { margin: 0; inline-size: 100%; flex-wrap: wrap; gap: var(--space-3); }
 }

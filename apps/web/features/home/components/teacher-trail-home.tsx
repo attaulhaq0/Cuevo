@@ -1,5 +1,7 @@
 'use client';
 
+import { TrailBackground } from '../../../shared/characters/ui';
+
 import { useId, useState, type Ref } from 'react';
 import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
 import type { TeacherTrailAction, TeacherTrailContext, TeacherTrailItem, TeacherTrailQueueState } from '../teacher-trail-model';
@@ -33,7 +35,7 @@ export function TeacherTrailHomeView({ context, locale = 'en', background, headi
   const modeLabel = insight?.mode === 'fixture' ? t.simulated : insight?.mode === 'live' ? t.generated : t.human;
   const approvalLabel = insight?.approval === 'approved' ? t.approved : insight?.approval === 'rejected' ? t.rejected : insight?.approval === 'requires-review' ? t.requiresReview : t.awaiting;
   return <div className="teacher-trail" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} data-availability={context.availability}>
-    {background ? <img className="teacher-trail__background" src={background} alt="" /> : null}
+    {background ? <TrailBackground className="teacher-trail__background" src={background} /> : null}
     <div className="teacher-trail__layout"><div className="teacher-trail__main"><header className="teacher-trail__intro"><div><h1 ref={headingRef} tabIndex={-1}>{t.title}</h1><p>{t.introduction}</p></div><p className="teacher-trail__date"><bdi>{context.dateLabel || t.dateUnknown}</bdi></p></header>
       {context.availability !== 'ready' ? <div className="teacher-trail__notice" role={context.availability === 'error' ? 'alert' : 'status'}><p>{context.notice || t[context.availability]}</p>{context.recovery ? <Action action={context.recovery} variant="quiet" /> : null}</div> : null}
       <section className="teacher-trail__attention" aria-labelledby={`${sourcePrefix}-attention`}><h2 id={`${sourcePrefix}-attention`} className="teacher-trail__sr-only">{t.attention}</h2><div className="teacher-trail__filters" role="group" aria-label={t.filters}>{filters.map(value => <button type="button" key={value.key} aria-pressed={filter === value.key} onClick={() => setFilter(value.key)}>{value.label}</button>)}</div><ul className="teacher-trail__queue">{items.map((item, index) => <QueueItem key={item.key} item={item} expanded={expanded === item.key} onToggle={() => setExpanded(expanded === item.key ? null : item.key)} locale={locale} sourceId={`${sourcePrefix}-source-${index}`} />)}</ul>{!items.length ? <p className="teacher-trail__empty" role="status">{context.attention.status === 'loading' ? t.loading : context.attention.status === 'partial' ? t.partial : context.attention.status === 'unavailable' ? t.attentionUnknown : filter === 'all' ? t.empty : t.filteredEmpty}</p> : null}{context.attention.status === 'partial' && items.length ? <p className="teacher-trail__coverage">{t.partial}</p> : null}{context.attention.viewAll ? <Action action={context.attention.viewAll} variant="quiet" /> : null}</section>

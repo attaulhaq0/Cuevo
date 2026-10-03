@@ -1,5 +1,7 @@
 'use client';
 
+import { TrailBackground } from '../../../shared/characters/ui';
+
 import { useId, type Ref } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import type { ParentTrailAction, ParentTrailContext } from '../parent-trail-model';
@@ -26,7 +28,7 @@ export function ParentTrailHomeView({ context, locale = 'en', background, headin
   const portfolio = snapshot.portfolio?.publication === 'approved' ? snapshot.portfolio : null;
   const communication = snapshot.communication?.status === 'available' ? snapshot.communication : null;
   return <div className="parent-trail" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
-    {background ? <img className="parent-trail__background" src={background} alt="" /> : null}
+    {background ? <TrailBackground className="parent-trail__background" src={background} /> : null}
     <div className="parent-trail__content"><header className="parent-trail__intro"><div><h1 ref={headingRef} tabIndex={-1}>{child.name ? <>{t.childHeading} <bdi>{child.name}</bdi></> : t.heading}</h1><p>{t.introduction}</p></div><div className="parent-trail__child-context"><CuevoIcon name="school" variant="filled" size={28} /><div>{context.selector}</div></div></header>
       {context.availability !== 'ready' || snapshot.status === 'partial' ? <p className="parent-trail__notice" role="status">{context.notice || (snapshot.status === 'partial' ? t.partial : t[context.availability === 'ready' ? 'loading' : context.availability])}</p> : null}
       <div className="parent-trail__grid"><div className="parent-trail__left"><section className="parent-trail__feedback parent-trail__panel" aria-labelledby={`${id}-feedback`}><div className="parent-trail__panel-heading"><span><CuevoIcon name="reflection" variant="filled" size={25} /></span><h2 id={`${id}-feedback`}>{t.latestFeedback}</h2>{feedback ? <><Status tone="positive">{t.approved}</Status><p className="parent-trail__date"><bdi>{feedback.dateLabel || t.dateUnknown}</bdi></p></> : null}</div>{feedback ? <><div className="parent-trail__feedback-next"><strong><bdi>{feedback.title}</bdi></strong>{feedback.action ? <Action action={feedback.action} primary /> : null}</div><div className="parent-trail__feedback-body"><div className="parent-trail__teacher"><span aria-hidden="true"><CuevoIcon name="person" /></span><div><h3><bdi>{feedback.teacherName || t.teacherUnknown}</bdi></h3><p>{t.teacher}</p></div></div><blockquote><span aria-hidden="true">“</span><p>{feedback.text}</p><span aria-hidden="true">”</span></blockquote><div className="parent-trail__feedback-about"><h3>{t.aboutFeedback}</h3><p>{feedback.description}</p></div></div><div className="parent-trail__native-context"><CuevoIcon name="curriculum" size={26} /><div>{feedback.nativeResultView}</div><p>{t.approved}</p></div></> : <p className="parent-trail__empty">{t.feedbackUnknown}</p>}</section>

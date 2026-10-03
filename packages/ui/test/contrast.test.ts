@@ -38,9 +38,12 @@ const textPairs = [
   ['--color-text-muted', '--color-canvas'],
   ['--color-link', '--color-surface'],
   ['--color-accent', '--color-surface-accent'],
-  ['--color-on-accent', '--color-action-start'],
-  ['--color-on-accent', '--color-action-end'],
+  ['--color-on-primary', '--color-action-start'],
+  ['--color-on-primary', '--color-action-end'],
   ['--color-on-accent', '--color-accent-hover'],
+  ['--color-on-primary', '--color-primary'],
+  ['--color-on-primary', '--color-primary-hover'],
+  ['--color-selection-text', '--color-selection-surface'],
   ['--color-on-brand', '--color-brand'],
   ['--color-text-secondary', '--color-surface-muted'],
   ['--color-positive', '--color-positive-surface'],
@@ -55,7 +58,7 @@ describe.each(['light', 'dark'] as const)('Trail %s semantic contrast', theme =>
     expect(ratio, `${foreground} on ${background}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(['--color-control-border', '--color-focus'] as const)('%s identifies controls on reading surfaces', foreground => {
+  it.each(['--color-control-border', '--color-focus', '--color-selection-border', '--color-primary-border'] as const)('%s identifies controls on reading surfaces', foreground => {
     const ratio = contrast(color(foreground, theme), color('--color-material-reading', theme));
     expect(ratio, `${foreground}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
   });

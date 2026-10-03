@@ -34,3 +34,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 <!-- END:nextjs-agent-rules -->
 
 Shared UI semantic icon pixels stay under packages/ui/src/assets/icons; browser features use @cuevo/ui CuevoIcon names. Do not add random direct icon-library imports, duplicate a raster per feature, present PNGs as editable vectors, or turn illustration selection into source/role/academic authority. Keep directional transforms and disabled/focus/text semantics in the existing owner. Optical review at20–32px and theme/RTL/forced-color checks remain required.
+
+Read docs/design/2026-10-03-approved-trail-colors-and-background.md for current palette changes: solid Royal primary actions, Pearl + blue edge selected controls, retained status badges and dedicated Midnight dark material. Use existing primary/selection tokens and shared characters/ui TrailBackground; never revive rejected gradients, cyan selection fills or brightness-dimmed light backgrounds. Preserve independent generic accent/status meaning, native callbacks, English/Arabic and static authentication.

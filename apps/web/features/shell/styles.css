@@ -32,10 +32,10 @@
 .workspace .workspace-chrome__rail { min-inline-size: 0; flex: 1; overflow-x: auto; scrollbar-width: thin; scroll-padding-inline: var(--space-3); }
 .workspace .workspace-chrome__rail ul { display: flex; align-items: stretch; justify-content: center; gap: var(--space-2); list-style: none; padding: var(--space-1); margin: 0; min-inline-size: max-content; }
 .workspace .workspace-chrome__rail li { display: flex; }
-.workspace .workspace-chrome__rail button { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--space-1); min-block-size: var(--space-16); min-inline-size: 6.75rem; max-inline-size: 10.5rem; padding: var(--space-2) var(--space-3); border: 1px solid transparent; border-radius: var(--radius-lg); background: transparent; color: var(--color-text); font: inherit; font-size: var(--type-xs); line-height: 1.3; cursor: pointer; text-align: center; scroll-margin-inline: var(--space-2); }
+.workspace .workspace-chrome__rail button { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--space-1); min-block-size: var(--space-16); min-inline-size: 6.75rem; max-inline-size: 10.5rem; padding: var(--space-2) var(--space-3); border: 2px solid transparent; border-radius: var(--radius-lg); background: transparent; color: var(--color-text); font: inherit; font-size: var(--type-xs); line-height: 1.3; cursor: pointer; text-align: center; scroll-margin-inline: var(--space-2); }
 .workspace .workspace-chrome__rail button > svg { color: var(--color-accent); }
-.workspace .workspace-chrome__rail button[aria-current="page"] { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-accent); font-weight: var(--font-weight-semibold); box-shadow: var(--elevation-control), var(--elevation-accent); }
-.workspace .workspace-chrome__rail button[aria-current="page"] svg { color: var(--color-on-brand); }
+.workspace .workspace-chrome__rail button[aria-current="page"] { background: var(--color-selection-surface); color: var(--color-selection-text); border-color: var(--color-selection-border); border-width:2px; font-weight: var(--font-weight-semibold); box-shadow: inset 0 -3px var(--color-selection-border),var(--elevation-subtle); }
+.workspace .workspace-chrome__rail button[aria-current="page"] svg { color: var(--color-selection-text); }
 .workspace .workspace-chrome__rail button:hover:not(:disabled):not([aria-current]) { background: var(--color-surface-accent); }
 .workspace .workspace-chrome__rail button:disabled, .workspace .workspace-chrome__person > button:disabled { background: var(--color-disabled-surface); color: var(--color-disabled-text); cursor: wait; }
 .workspace .workspace-chrome__rail-control { min-inline-size: 2.75rem; padding-inline: var(--space-2); align-self: center; }
@@ -88,7 +88,7 @@
 .workspace .workspace-command__results button { display: flex; align-items: center; gap: var(--space-3); inline-size: 100%; min-block-size: 3.25rem; padding: var(--space-3); border: 1px solid transparent; border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font: inherit; text-align: start; cursor: pointer; }
 .workspace .workspace-command__results button > svg { color: var(--color-accent); flex: none; }
 .workspace .workspace-command__results button:hover:not(:disabled) { background: var(--color-surface-accent); }
-.workspace .workspace-command__results button[aria-current="page"] { border-color: var(--color-border-strong); background: var(--color-surface-accent); }
+.workspace .workspace-command__results button[aria-current="page"] { border-color: var(--color-selection-border); background: var(--color-selection-surface);  border-width: 2px;}
 .workspace .workspace-command__results button:disabled { background: var(--color-disabled-surface); color: var(--color-disabled-text); cursor: default; }
 .workspace .workspace-command__label { display: grid; gap: var(--space-1); min-inline-size: 0; overflow-wrap: anywhere; font-weight: var(--font-weight-semibold); }
 .workspace .workspace-command__label small { font-size: var(--type-xs); color: var(--color-text-secondary); font-weight: var(--font-weight-regular); }

@@ -36,3 +36,5 @@ For product requirements start with [product context](product/README.md) and its
 | Repository folder/copy hygiene evidence | [repository hygiene verification](reports/repository-hygiene-verification.md) |
 
 Product sources are grouped under product; source identities/facts/versions remain unchanged. Historical reports and review hashes describe their original snapshots; use the codebase map and product registry to resolve former paths. A plan or report is not proof that the full MVP passed.
+
+Current [approved Trail colors and background](design/2026-10-03-approved-trail-colors-and-background.md) govern the shared palette and media.

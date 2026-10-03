@@ -1,5 +1,7 @@
 'use client';
 
+import { TrailBackground } from '../../../shared/characters/ui';
+
 import { useId, type ReactNode, type Ref } from 'react';
 import { Button, CuevoIcon, type CuevoIconName } from '@cuevo/ui';
 import type { StudentTrailAction, StudentTrailAssets, StudentTrailContext, StudentTrailStage } from '../trail-model';
@@ -38,7 +40,7 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
   const recognitionNote = recognition.status === 'disabled' ? t.recognitionDisabled : recognition.status === 'processing' ? t.recognitionProcessing : recognition.status === 'requires-review' ? t.recognitionReview : t.recognitionUnknown;
   const availabilityNotice = context.availability === 'ready' ? null : context.notice || t[context.availability];
   return <div className="student-trail" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} data-availability={context.availability} data-character={context.companion.visible ? 'visible' : 'hidden'}>
-    <Illustration src={assets.background} className="student-trail__background" />
+    <TrailBackground src={assets.background} className="student-trail__background" />
       {availabilityNotice ? <div className="student-trail__notice" role={context.availability === 'error' ? 'alert' : 'status'}><p>{availabilityNotice}</p>{context.recovery ? <TrailAction action={context.recovery} /> : null}</div> : null}
     <div className="student-trail__content">
 
