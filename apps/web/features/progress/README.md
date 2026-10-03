@@ -1,5 +1,7 @@
 # Progress feature
 
+Standalone academic exports isolate each numeric score/maximum ratio with explicit LTR bidi direction while retaining the report's Arabic RTL structure. A report test checks nonzero native facts and exact rendered order; missing/zero and rubric/native rules remain separate.
+
 Class review and explicit learner selection open one named current learner evidence region. After its initial source read settles, the detail heading receives focus and an instant logical scroll; denied/unknown reads retain the same named destination and recovery meaning. Refresh and locale changes do not refocus it. The class/source selection provides its authorized human label; no identifier substitutes for missing context. `customer-navigation-context.spec.ts` verifies keyboard selection, visible heading, refresh focus, denied/unknown reads and Arabic mobile reduced motion.
 
 Copied selection captions are valid only within their current access generation and refresh. The existing class summary sends the selected learner's freshly authorized name and full class/year context after its current read settles; the current people page supplies a fallback, while missing current context becomes localized unavailable. No profile endpoint or extra entitlement is required. `progress-current-context.spec.ts` reproduced the stale caption with an actual school-record name correction and now verifies the refreshed heading and preserved focus, restoring the original name through the normal revision-checked command.

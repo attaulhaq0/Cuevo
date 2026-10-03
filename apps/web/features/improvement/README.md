@@ -1,5 +1,7 @@
 # Improvement feature
 
+Numeric measured-outcome score/maximum pairs are isolated with explicit LTR bidi direction inside Arabic definition-list labels. This preserves native ordering without changing comparability, change threshold or causal limitations. The actual full-loop Arabic mobile browser case checks the exact baseline and follow-up ratio.
+
 Owns proposal review, approval, support completion and non-causal outcome comparison. Public interfaces: model.ts, ui.tsx (ImprovementWorkspace and the read-only OutcomeList shared with progress), copy.ts. Consume academic/learning public models and academic/ui evidence; use shared session/forms/retry/pagination. API owner: modules/improvement. Product source IDs 10, 12, 21 and 63.
 
 Tests live in test. The technical intelligence/projection increment displays persisted HUMAN/FIXTURE/LIVE generation modes and a source run ID for generated proposals; fixture output is explicitly synthetic/test. Human action precedes intervention, parent internals remain excluded and native observed change never implies causal proof. The independently arranged browser journey is tests/e2e/improvement-loop.spec.ts; coordinated live API/worker/browser verification remains required before a gate claim.

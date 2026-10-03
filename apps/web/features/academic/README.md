@@ -1,5 +1,7 @@
 # Academic feature
 
+Native numeric display isolates score/maximum in an LTR bidi span in both locales, with a localized accessible score-out-of-maximum label. This preserves actual native values and prevents RTL reordering; the visible full-loop Arabic mobile regression checks the rendered ratio direction and accessible label. Rubric descriptor/version handling remains separate.
+
 Owns objective approval, immutable school rubric configuration, numeric/criterion marking/review/release and evidence presentation. Public interfaces: model.ts for response validation and discriminated native results, ui.tsx for AcademicWorkspace/EvidenceDetail/NativeResultView, copy.ts for shell labels. Progress reuses native validation/display through those public surfaces. Internal components, messages and styles stay here. API owner: apps/api/src/modules/academic. Product source IDs 04, 17, 18 and 63.
 
 Objective review displays the complete saved School Custom description before approval, using escaped text and automatic text direction. Rubric prerequisite errors take precedence over loading and display once; the existing academic Refresh action retries current protected reads. `tests/e2e/customer-academic-review-context.spec.ts` covers these user operations, including an injected503 and bilingual390px review.

@@ -213,6 +213,17 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await expect.poll(async () => { state = await refreshState(); return (state.impact as { outcomes: { id: string }[] }).outcomes.some(item => item.id === outcome.id); }, { timeout: 20000 }).toBe(true);
     expect((state.sourceEventIds as string[]).length).toBeGreaterThan(0); const outcomeRow = page.locator(`[data-outcome-id="${outcome.id}"]`); await expect(outcomeRow).toContainText('Observed change is not proof that the practice caused the outcome.');
     await capture('06-source-linked-measured-outcome.png'); await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    const arabicFollowUp = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: followUpTitle, exact: true }) }).locator('.native-score');
+    await expect(arabicFollowUp).toHaveAttribute('role', 'img');
+    await expect(arabicFollowUp).toHaveAttribute('aria-label', `${new Intl.NumberFormat('ar').format(7)} من ${new Intl.NumberFormat('ar').format(10)}`);
+    await expect(arabicFollowUp.locator('bdi')).toHaveAttribute('dir', 'ltr');
+    const direction = await arabicFollowUp.locator('bdi').evaluate(element => getComputedStyle(element).direction);
+    expect(direction).toBe('ltr');
+    const arabicOutcome = page.locator(`[data-outcome-id="${outcome.id}"]`);
+    const outcomeRatios = arabicOutcome.locator('.outcome-comparison dd bdi[dir="ltr"]');
+    await expect(outcomeRatios).toHaveCount(2);
+    await expect(outcomeRatios.nth(0)).toHaveText(`${new Intl.NumberFormat('ar').format(2)} / ${new Intl.NumberFormat('ar').format(10)}`);
+    await expect(outcomeRatios.nth(1)).toHaveText(`${new Intl.NumberFormat('ar').format(7)} / ${new Intl.NumberFormat('ar').format(10)}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.emulateMedia({ reducedMotion: 'reduce' }); expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]); await capture('07-arabic-mobile-outcome.png');
     await page.getByRole('button', { name: 'English', exact: true }).click(); await page.setViewportSize({ width: 1440, height: 900 }); await signOut();
 

@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseAcademicReport, renderAcademicReport } from '../report.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
+test('Arabic numeric report preserves score then maximum inside an explicit LTR ratio', () => {
+  const parsed = parseAcademicReport({ ...report, items: [{ ...row, score: 7, nativeResult: { ...row.nativeResult, score: 7 } }] });
+  const html = renderAcademicReport(parsed, 'ar');
+  const score = new Intl.NumberFormat('ar').format(7); const maximum = new Intl.NumberFormat('ar').format(10);
+  assert.ok(html.includes(`<bdi dir="ltr">${score} / ${maximum}</bdi>`));
+});
 const row = { id: '10000000-0000-4000-8000-000000000001', submissionId: '10000000-0000-4000-8000-000000000002', assessmentId: '10000000-0000-4000-8000-000000000003', learnerId: '10000000-0000-4000-8000-000000000004', actorId: '10000000-0000-4000-8000-000000000005', parentVisible: false, model: 'numeric', revision: 1, score: 0, maxScore: 10, feedback: '<script>unsafe</script>', status: 'RELEASED', policyVersion: 1, referenceId: '10000000-0000-4000-8000-000000000006', referenceVersion: 'v1', evidenceId: '10000000-0000-4000-8000-000000000007', createdAt: '2026-10-01T00:00:00Z', nativeResult: { type: 'numeric', score: 0, maxScore: 10, policyVersion: 1 }, assessmentTitle: '<b>School task</b>', referenceTitle: 'Objective' };
 const report = { schemaVersion: '1', schoolId: '10000000-0000-4000-8000-000000000008', learnerId: '10000000-0000-4000-8000-000000000004', generatedAt: '2026-10-01T00:01:00Z', scope: 'CURRENT_RELEASED_PAGE', coverage: 'NOT_ESTABLISHED', items: [row], nextCursor: null };
 test('report envelope keeps exact learner/current source and unknown coverage', () => { assert.equal(parseAcademicReport(report).items[0].model, 'numeric'); assert.throws(() => parseAcademicReport({ ...report, coverage: 'COMPLETE_TRANSCRIPT' }), LearningApiError); assert.throws(() => parseAcademicReport({ ...report, items: [{ ...row, learnerId: 'other' }] }), LearningApiError); });
