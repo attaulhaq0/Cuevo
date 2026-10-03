@@ -25,6 +25,7 @@ import assessmentArtwork from './assets/icons/assessment.webp';
 import developmentArtwork from './assets/icons/development.webp';
 import curriculumArtwork from './assets/icons/curriculum.webp';
 import settingsArtwork from './assets/icons/settings.webp';
+import appearanceArtwork from './assets/icons/appearance.webp';
 import notificationArtwork from './assets/icons/notification.webp';
 import searchArtwork from './assets/icons/search.webp';
 import calendarArtwork from './assets/icons/calendar.webp';
@@ -70,6 +71,7 @@ export const cuevoIllustratedIcons = {
   development: imageSource(developmentArtwork),
   curriculum: imageSource(curriculumArtwork),
   settings: imageSource(settingsArtwork),
+  appearance: imageSource(appearanceArtwork),
   notification: imageSource(notificationArtwork),
   search: imageSource(searchArtwork),
   calendar: imageSource(calendarArtwork),

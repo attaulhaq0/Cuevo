@@ -41,7 +41,7 @@ describe('controlled workspace icon coverage', () => {
   // Current supported destinations and actions, rather than a copy of registry keys.
   const workspaceNames: CuevoIconName[] = [
     'home', 'learning', 'community', 'portfolio', 'assessment', 'development',
-    'curriculum', 'school', 'settings', 'notification', 'search', 'calendar',
+    'curriculum', 'school', 'settings', 'appearance', 'notification', 'search', 'calendar',
     'goal', 'reflection', 'close', 'check', 'refresh', 'logout',
   ];
 

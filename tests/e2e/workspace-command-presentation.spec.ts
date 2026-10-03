@@ -63,7 +63,7 @@ for (const [name, width, height, arabic] of [
     await page.getByRole('combobox', { name: 'Recognition period', exact: true }).selectOption(periodId);
     await expect(page.locator('.student-trail__point-total strong')).toHaveText('0');
     await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
-    await page.getByRole('combobox', { name: 'Appearance', exact: true }).selectOption('dark');
+    await page.getByRole('group', { name: 'Appearance', exact: true }).getByRole('button', { name: 'Dark', exact: true }).click();
     await expect(page.locator('.workspace')).toHaveAttribute('data-theme', 'dark');
     await page.keyboard.press('Escape');
     const currentUrl = page.url(); const postCount = posts.length;
@@ -102,7 +102,7 @@ for (const [name, width, height, arabic] of [
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.locator('.workspace')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
-    await page.getByRole('combobox', { name: 'Appearance', exact: true }).selectOption('system');
+    await page.getByRole('checkbox', { name: 'Use device settings', exact: true }).check();
     await expect(page.locator('.workspace')).toHaveAttribute('data-theme', 'system');
   });
 }

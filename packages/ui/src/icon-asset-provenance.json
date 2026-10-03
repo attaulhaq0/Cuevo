@@ -1,7 +1,7 @@
 {
   "version": 1,
   "purpose": "Single Cuevo icon family: current runtime semantics, no role or record authority",
-  "count": 38,
+  "count": 39,
   "assets": [
     {
       "name": "arrow",
@@ -420,6 +420,19 @@
         128,
         128
       ]
+    },
+    {
+      "name": "appearance",
+      "runtimePath": "packages/ui/src/assets/icons/appearance.webp",
+      "runtimeSha256": "88392db3f9eba048f5c044a6fc186dbdc13c2320324e4464cb5d41ea908e8e36",
+      "nativeSourceSha256": "0edc527721d97d0a547d52c253d72a7b90d2d4bbfa4dbfa6e90c6d6c3be9457a",
+      "masterPng": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\icon\\display-theme\\master.png",
+      "runtimeDimensions": [
+        128,
+        128
+      ],
+      "sourceLibraryId": "trail.expanded-icon.display-theme",
+      "usage": "Display theme sun/moon, selected from existing individually generated icon library"
     }
   ]
 }

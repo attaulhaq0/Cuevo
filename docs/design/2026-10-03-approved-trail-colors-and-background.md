@@ -18,6 +18,8 @@ Use packages/ui/src/tokens.css semantic primary and selection tokens. Keep prima
 
 Cuevo brand cyan #4FC0DB remains an identity/illustration accent. Do not use it as the solid selected-navigation fill or as a primary-action fill. Success, warning, unknown, denied and academic status labels/tones retain their existing owner meaning and current colors. The founder retained the existing status badge alternative; this approval does not authorize the other badge explorations or reinterpret every warning as failure.
 
+The profile Appearance control uses the existing dedicated sun/moon illustration and two equal Light/Dark buttons with explicit pressed state and this same Pearl selection anatomy. A smaller Use device settings checkbox preserves the existing System preference. Neither manual button is pressed while System is selected; choosing a manual mode disables device preference, and unchecking device preference chooses Light. English/Arabic, 44px targets, focus, current cookie persistence and deterministic server initialization remain required. This presentation change grants no settings or backend authority.
+
 ## One background owner
 
 Shared characters/ui exposes TrailBackground. It renders decorative material in the current workspace boundary, with CSS selecting the light or dark source before first paint. All role Homes use this same component for standalone stories; connected role Homes suppress their duplicate material so the shell owns one background. Do not reintroduce browser-theme initialization, a second canvas, arbitrary feature color filters or brightness dimming of the light image.
