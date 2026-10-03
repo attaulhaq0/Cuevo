@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 const accountRole = z.enum(['admin', 'coordinator', 'teacher', 'student', 'parent']);
 const reason = z.string().trim().min(1).max(1000);
+/** Current setup only; this read does not approve or perform account operations. */
+export const schoolAccountAvailabilitySchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('AVAILABLE'), reason: z.null() }).strict(),
+  z.object({ state: z.literal('SETUP_REQUIRED'), reason: z.enum(['OPERATOR_APPROVAL_REQUIRED', 'DELIVERY_UNAVAILABLE']) }).strict(),
+]);
 export const schoolAccountInviteSchema = z.object({ displayName: z.string().trim().min(1).max(200), email: z.email().max(254), role: accountRole, reason, confirmInvitation: z.literal(true) }).strict();
 export const schoolAccountInvitationRevokeSchema = z.object({ expectedRevision: z.number().int().positive(), reason, confirmRevocation: z.literal(true) }).strict();
 export const schoolAccountClaimSchema = z.object({ id: z.uuid(), admissionSecret: z.string().regex(/^[a-f0-9]{64}$/), confirmAdmission: z.literal(true) }).strict();

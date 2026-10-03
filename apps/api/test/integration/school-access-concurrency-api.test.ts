@@ -2,7 +2,12 @@ import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { createCustomerContext, customerActor, type CustomerContext } from './customer-test-context';
 describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('school current access revisions', () => {
  let context: CustomerContext;
- beforeAll(async()=>{context=await createCustomerContext();},60000);
+ beforeAll(async()=>{
+  context=await createCustomerContext();
+  // This suite tests access revisions; duplicate caption denial is owned by school-selection-api.
+  await context.client.query('update app.people set display_name=case actor_id when $2 then $4 when $3 then $5 else display_name end where school_id=$1',[context.school,customerActor(12),customerActor(13),'Lina current learner','Maha current learner']);
+  await context.client.query('update app.classes set name=case id when $2 then $4 else $5 end where school_id=$1 and id=any($3::uuid[])',[context.school,context.classId,[context.classId,context.secondClassId],'Cedar current class','Palm current class']);
+ },60000);
  afterAll(async()=>{await context?.close();});
   it('requires a current revision to restore a revoked guardian and preserves original-key reconciliation',async()=>{
   const path='/v1/school/guardian-relationships';

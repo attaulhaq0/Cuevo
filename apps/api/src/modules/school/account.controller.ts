@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiHeader, ApiResponse } from '@nestjs/swagger'
 import { z } from 'zod';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { DomainError, requireCapability } from '@cuevo/domain';
-import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountDeliveryRequestSchema, schoolAccountEffectReceiptSchema, schoolAccountEffectStatusSchema, schoolAccountRecoveryRequestSchema, schoolAccountRecoveryAuthorizationSchema, schoolAccountRecoveryCompletionSchema, schoolAccountRecoveryReceiptSchema } from '@cuevo/contracts';
+import { schoolAccountAvailabilitySchema, schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountDeliveryRequestSchema, schoolAccountEffectReceiptSchema, schoolAccountEffectStatusSchema, schoolAccountRecoveryRequestSchema, schoolAccountRecoveryAuthorizationSchema, schoolAccountRecoveryCompletionSchema, schoolAccountRecoveryReceiptSchema } from '@cuevo/contracts';
 import type { IdentityService, AccountIdentityService } from '../../platform/identity/identity.service';
 import type { Database } from '../../platform/database/database';
 import { SchoolAccountService } from './account.service';
@@ -25,6 +25,13 @@ export function createSchoolAccountController(identity: IdentityService, account
       const school = request.headers['x-school-id'];
       if (typeof school !== 'string' || !z.uuid().safeParse(school).success) throw new DomainError('INVALID_SCHOOL', 400, 'Select the current school for this account operation.');
       return identity.resolve(request.headers.authorization, school);
+    }
+    @Get('/school/accounts/availability') @ApiHeader({ name: 'X-School-Id', required: true }) @ApiResponse({ status: 200, schema: schema(schoolAccountAvailabilitySchema) })
+    availability(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {
+      return this.respond(request, reply, async () => {
+        const status = await service.availability(await this.administrator(request));
+        return status.state === 'AVAILABLE' && !effects ? { state: 'SETUP_REQUIRED', reason: 'DELIVERY_UNAVAILABLE' } : status;
+      });
     }
     @Post('/school/accounts/invitations') @ApiHeader({ name: 'X-School-Id', required: true }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiBody({ required: true, schema: schema(schoolAccountInviteSchema) }) @ApiResponse({ status: 200, schema: schema(schoolAccountInvitationReceiptSchema) })
     invite(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {

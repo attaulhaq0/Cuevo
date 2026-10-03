@@ -13,6 +13,7 @@ export * from './learner-state';
 export * from './improvement';
 export * from './outcome-display';
 export * from './school';
+export * from './school-selection';
 export * from './school-accounts';
 export * from './school-support';
 export * from './school-maintenance';

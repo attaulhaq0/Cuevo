@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError, requireCapability, type ActorContext } from '@cuevo/domain';
-import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationQuerySchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountEffectStatusSchema, schoolAccountRecoveryRequestSchema, schoolAccountRecoveryAuthorizationSchema, schoolAccountRecoveryCompletionSchema, schoolAccountRecoveryReceiptSchema, idempotencyKeySchema } from '@cuevo/contracts';
+import { schoolAccountAvailabilitySchema, schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationQuerySchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountEffectStatusSchema, schoolAccountRecoveryRequestSchema, schoolAccountRecoveryAuthorizationSchema, schoolAccountRecoveryCompletionSchema, schoolAccountRecoveryReceiptSchema, idempotencyKeySchema } from '@cuevo/contracts';
 import { parseVerifiedAccount, type VerifiedAccount } from '../../platform/identity/identity.service';
 import type { Database } from '../../platform/database/database';
 
@@ -19,6 +19,15 @@ function safe(error: unknown): DomainError {
 }
 export class SchoolAccountService {
   constructor(private readonly database: Database) {}
+  async availability(actor: ActorContext) {
+    requireCapability(actor, actor.schoolId, 'school.operations', ['admin']);
+    try { return await this.database.actorTransaction(actor.userId, actor.schoolId, async client => {
+      const output = (await client.query('select internal.read_school_account_availability() as status')).rows[0]?.status;
+      const result = schoolAccountAvailabilitySchema.safeParse(output);
+      if (!result.success) throw unknownOutcome();
+      return result.data;
+    }); } catch (error) { throw safe(error); }
+  }
   async requestRecovery(actor: ActorContext, userId: string, body: unknown, key: unknown, requestId: string) {
     requireCapability(actor, actor.schoolId, 'school.operations', ['admin']); const target = parse(z.uuid(), userId); const input = parse(schoolAccountRecoveryRequestSchema, body); const commandKey = parse(idempotencyKeySchema, key);
     try { return await this.database.actorTransaction(actor.userId, actor.schoolId, async client => {

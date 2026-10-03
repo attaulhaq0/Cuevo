@@ -89,11 +89,27 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('school account i
     ]);
   });
 
+  it('current administrator setup status is read-only and distinguishes disabled operator approval and delivery configuration', async () => {
+    const before = (await connection.query('select count(*)::integer count from internal.school_account_requests')).rows[0].count;
+    const response = await request('admin', '/v1/school/accounts/availability');
+    expect(response.statusCode).toBe(200); expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual({ state: 'SETUP_REQUIRED', reason: 'DELIVERY_UNAVAILABLE' });
+    for (const role of ['coordinator', 'teacher', 'student', 'parent'] as const) expect((await request(role, '/v1/school/accounts/availability')).statusCode).toBe(403);
+    await connection.query('SAVEPOINT availability_control');
+    try {
+      const revision = (await connection.query('select revision from internal.school_account_runtime_control where singleton')).rows[0].revision;
+      await connection.query('select internal.configure_local_school_account_runtime(false,(select oid from pg_catalog.pg_database where datname=current_database()),$1,$2,$3,$4,true)', ['LOCAL_CUEVO', actor(1), 'Rollback availability disabled test', revision]);
+      const disabled = await request('admin', '/v1/school/accounts/availability');
+      expect(disabled.statusCode).toBe(200); expect(disabled.json()).toEqual({ state: 'SETUP_REQUIRED', reason: 'OPERATOR_APPROVAL_REQUIRED' });
+      expect((await request('admin', '/v1/school/accounts/invitations?limit=25')).statusCode).toBe(403);
+    } finally { await connection.query('ROLLBACK TO SAVEPOINT availability_control'); await connection.query('RELEASE SAVEPOINT availability_control'); }
+    expect((await connection.query('select count(*)::integer count from internal.school_account_requests')).rows[0].count).toBe(before);
+  });
   it('admin creates one immutable source, reads it and replays its exact original key without provider or membership effects', async () => {
     const created = await request('admin', '/v1/school/accounts/invitations', invitation, inviteKey); expect(created.statusCode).toBe(200);
     const receipt = created.json(); invitationId = receipt.id; expect(receipt).toMatchObject({ schoolId: school, revision: 1, status: 'REQUESTED' }); expect(created.headers['cache-control']).toBe('no-store'); expect(created.body).not.toContain(recipient);
     const replay = await request('admin', '/v1/school/accounts/invitations', invitation, inviteKey); expect(replay.statusCode).toBe(200); expect(replay.json()).toEqual(receipt);
-    const page = await request('admin', '/v1/school/accounts/invitations?limit=25'); expect(page.statusCode).toBe(200); expect(page.json().items).toEqual([{ ...receipt, displayName: invitation.displayName, email: invitation.email, role: invitation.role, userId: null }]);
+    const page = await request('admin', '/v1/school/accounts/invitations?limit=25'); expect(page.statusCode).toBe(200); expect(page.json().items).toEqual([{ ...receipt, purpose: 'invite', displayName: invitation.displayName, email: invitation.email, role: invitation.role, userId: null }]);
     const source = (await connection.query('select provider_user_id,display_name,email,role,approving_member_revision,control_revision from internal.school_account_requests where school_id=$1 and id=$2', [school, invitationId])).rows[0]; providerId = source.provider_user_id;
     expect(source).toMatchObject({ display_name: invitation.displayName, email: recipient, role: 'student', approving_member_revision: 1 }); expect(providerId).toMatch(/^[a-f0-9-]{36}$/);
     expect((await connection.query('select count(*)::integer count from app.memberships where actor_id=$1', [providerId])).rows[0].count).toBe(0); expect((await connection.query('select count(*)::integer count from auth.users where id=$1', [providerId])).rows[0].count).toBe(0);

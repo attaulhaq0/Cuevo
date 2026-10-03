@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Button } from '@cuevo/ui';
-import { schoolAccountInvitationPageSchema, schoolAccountEffectStatusSchema, schoolAccountEffectReceiptSchema } from '@cuevo/contracts';
+import { schoolAccountInvitationPageSchema, schoolAccountEffectStatusSchema, schoolAccountEffectReceiptSchema, schoolAccountAvailabilitySchema } from '@cuevo/contracts';
 import { useApp } from '../../../shared/session/providers';
 import { useApi, useApiQuery } from '../../../shared/hooks/use-api';
 import { CommandForm } from '../../../shared/components/command-form';
@@ -11,7 +11,16 @@ import { SchoolAccountRecovery } from './account-recovery';
 
 const parsePage = (input: unknown) => schoolAccountInvitationPageSchema.parse(input);
 const parseStatus = (input: unknown) => schoolAccountEffectStatusSchema.parse(input);
+const parseAvailability=(value:unknown)=>{const parsed=schoolAccountAvailabilitySchema.safeParse(value);if(!parsed.success)throw new LearningApiError('invalid');return parsed.data;};
 export function SchoolAccounts() {
+  const {locale}=useApp();const [refresh,setRefresh]=useState(0);
+  const availability=useApiQuery('/v1/school/accounts/availability',parseAvailability,refresh);
+  if(availability.loading)return <p role="status">{locale==='ar'?'جارٍ التحقق من إعداد حسابات المدرسة…':'Checking school account setup…'}</p>;
+  if(availability.error)return <><LearningError error={availability.error}/><Button type="button" variant="quiet" onClick={()=>setRefresh(value=>value+1)}>{locale==='ar'?'إعادة التحقق من الإعداد':'Check setup again'}</Button></>;
+  if(availability.data?.state!=='AVAILABLE')return <section className="school-section" aria-label={locale==='ar'?'إعداد حسابات المدرسة مطلوب':'School account setup required'}><h2>{locale==='ar'?'إعداد حسابات المدرسة مطلوب':'School account setup required'}</h2><p>{availability.data?.reason==='DELIVERY_UNAVAILABLE'?locale==='ar'?'إرسال روابط الحسابات غير متاح. تواصل مع دعم مدرستك لتفعيل الإرسال ثم تحقق من الإعداد مجددًا.':'Account link delivery is unavailable. Contact your school support team to configure delivery, then check setup again.':locale==='ar'?'يحتاج مسؤول تشغيل كويفو إلى تأكيد إعداد الحسابات قبل الدعوات أو الاستعادة. تواصل مع دعم مدرستك ثم تحقق من الإعداد مجددًا.':'Cuevo operations must confirm account setup before invitations or recovery. Contact your school support team, then check setup again.'}</p><Button type="button" variant="quiet" onClick={()=>setRefresh(value=>value+1)}>{locale==='ar'?'إعادة التحقق من الإعداد':'Check setup again'}</Button></section>;
+  return <ActiveSchoolAccounts/>;
+}
+function ActiveSchoolAccounts() {
   const { locale, dictionary } = useApp(); const ar = locale === 'ar'; const { request } = useApi(); const [refresh, setRefresh] = useState(0); const [selected, setSelected] = useState(''); const [cursor, setCursor] = useState<string | null>(null); const [sending, setSending] = useState(false); const [error, setError] = useState<LearningApiError | null>(null);
   const page = useApiQuery(`/v1/school/accounts/invitations?limit=25${cursor ? `&cursor=${cursor}` : ''}`, parsePage, refresh);
   const delivery = useApiQuery(selected ? `/v1/school/accounts/invitations/${selected}/delivery` : null, parseStatus, refresh);

@@ -15,13 +15,14 @@ const receipt = { id: invitationId, schoolId, revision: 1, status: 'REQUESTED', 
 const member = { membership_id: invitationId, actor_id: userId, school_id: schoolId, school_name: 'Reviewed school', display_name: 'Administrator', role: 'admin', entitlement_codes: ['school.context', 'school.operations'] };
 let app: NestFastifyApplication;
 afterEach(async () => { await app?.close(); });
-async function runtime(role = 'admin', effects?: SchoolAccountEffectsService, effectStatus: unknown = { state: 'PENDING', receipt: null }) {
+async function runtime(role = 'admin', effects?: SchoolAccountEffectsService, effectStatus: unknown = { state: 'PENDING', receipt: null }, availability: unknown = { state: 'AVAILABLE', reason: null }) {
   let memberReads = 0; const writes: string[] = [];
   const identity = new IdentityService({ verifyUser: async () => ({ userId, sessionId }), isCurrentSession: async () => true, currentMemberships: async () => { memberReads++; return [{ ...member, role }]; } });
   const account = new AccountIdentityService({ verifyAccount: async () => ({ userId, sessionId, email: 'new@example.test', emailConfirmedAt: '2026-10-03T00:00:00Z' }), isCurrentSession: async () => true });
   const database = { actorTransaction: async (_user: string, _school: string | undefined, callback: (client: PoolClient) => Promise<unknown>) => callback({ query: async (sql: string) => {
     writes.push(sql); if (sql.includes('set_config')) return { rows: [] }; if (sql.includes('is_current_session')) return { rows: [{ active: true }] };
     if (sql.includes('read_school_account_effect')) return { rows: [{ status: effectStatus }] };
+    if (sql.includes('read_school_account_availability')) return { rows: [{ status: availability }] };
     if (sql.includes('claim_school')) return { rows: [{ receipt: { id: invitationId, schoolId, userId, role: 'student', status: 'CLAIMED', revision: 2 } }] };
     if (sql.includes('read_school')) return { rows: [{ page: { items: [], nextCursor: null } }] };
     return { rows: [{ receipt }] };
@@ -35,6 +36,24 @@ async function runtime(role = 'admin', effects?: SchoolAccountEffectsService, ef
 const headers = { authorization: 'Bearer verified-token', 'x-school-id': schoolId, 'idempotency-key': 'school-account-request-0001' };
 
 describe('school account HTTP authorization and receipt boundary', () => {
+  it('reports operator setup separately from a missing delivery executor without provider effects', async () => {
+    await runtime('admin', undefined, undefined, { state: 'SETUP_REQUIRED', reason: 'OPERATOR_APPROVAL_REQUIRED' });
+    let response = await app.inject({ method: 'GET', url: '/v1/school/accounts/availability', headers });
+    expect(response.statusCode).toBe(200); expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual({ state: 'SETUP_REQUIRED', reason: 'OPERATOR_APPROVAL_REQUIRED' });
+    await app.close(); await runtime();
+    response = await app.inject({ method: 'GET', url: '/v1/school/accounts/availability', headers });
+    expect(response.json()).toEqual({ state: 'SETUP_REQUIRED', reason: 'DELIVERY_UNAVAILABLE' });
+  });
+  it('available account setup requires the current runtime and an executor, and teachers cannot read it', async () => {
+    let called = false; const effects = { execute: async () => { called = true; return null; } } as unknown as SchoolAccountEffectsService;
+    await runtime('admin', effects);
+    const response = await app.inject({ method: 'GET', url: '/v1/school/accounts/availability', headers });
+    expect(response.statusCode).toBe(200); expect(response.json()).toEqual({ state: 'AVAILABLE', reason: null }); expect(called).toBe(false);
+    await app.close(); const state = await runtime('teacher', effects);
+    expect((await app.inject({ method: 'GET', url: '/v1/school/accounts/availability', headers })).statusCode).toBe(403);
+    expect(state.writes).toEqual([]); expect(called).toBe(false);
+  });
   it('requires deliberate confirmation and exact revision before any external delivery execution', async () => {
     const calls: string[] = []; const output = { id: invitationId, schoolId, eventId: sessionId, requestRevision: 1, status: 'AWAITING_CLAIM', providerState: 'CONFIRMED', deliveryState: 'ACCEPTED' };
     const effects = { execute: async (_actor: unknown, id: string) => { calls.push(id); return output; } } as unknown as SchoolAccountEffectsService;

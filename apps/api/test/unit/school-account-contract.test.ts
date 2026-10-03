@@ -7,6 +7,12 @@ const invitation = { displayName: 'New learner', email: 'new.learner@example.tes
 const receipt = { id, schoolId, revision: 1, status: 'REQUESTED', createdAt: '2026-10-03T00:00:00Z', expiresAt: '2026-10-10T00:00:00Z' };
 
 describe('school account boundary contracts', () => {
+  it('availability describes operator and delivery setup without granting account access', () => {
+    const schema = (contracts as unknown as Record<string, { safeParse(value: unknown): { success: boolean } }>).schoolAccountAvailabilitySchema;
+    expect(schema).toBeDefined();
+    for (const value of [{ state: 'AVAILABLE', reason: null }, { state: 'SETUP_REQUIRED', reason: 'OPERATOR_APPROVAL_REQUIRED' }, { state: 'SETUP_REQUIRED', reason: 'DELIVERY_UNAVAILABLE' }]) expect(schema.safeParse(value).success).toBe(true);
+    for (const value of [{ state: 'AVAILABLE', reason: 'OPERATOR_APPROVAL_REQUIRED' }, { state: 'SETUP_REQUIRED', reason: null }, { state: 'AVAILABLE', reason: null, token: 'private' }]) expect(schema.safeParse(value).success).toBe(false);
+  });
   it.each(['admin', 'coordinator', 'teacher', 'student', 'parent'])('permits a reviewed school invitation for the established %s role', role => {
     expect(contracts.schoolAccountInviteSchema?.safeParse({ ...invitation, role }).success).toBe(true);
   });

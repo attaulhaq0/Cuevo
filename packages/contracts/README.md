@@ -1,5 +1,7 @@
 # Boundary contracts
 
+`school-selection.ts` defines strict current School person/roster context and resource pages. READY requires complete current context or explicitly confirmed NONE; unavailable/overflow remains review-required. The extension contains registered class/year axes only, no private recipient or guardian fields. Page identities are unique and bounded100. These read shapes grant no selection or mutation authority; private School current context checks remain decisive. Existing School command/revision schemas are unchanged.
+
 School account delivery requires an exact revision-one approved request and explicit confirmation. Its strict effect receipt separates provider confirmation, capture acceptance and awaiting recipient claim; unknown/review outcomes never become claimed membership. Delivery schema validation supplies no executor authority or credential.
 
 `school-accounts.ts` defines strict confirmed administrator invitation/revoke inputs, a bounded25-row invitation page and a purpose-only recipient claim. Claims accept an exact request, a64-hex admission secret and deliberate acceptance, never desired school/role/entitlements. Minimized source receipts exclude email and credentials; the approved recipient email appears only on administrator-owned current pages. Schema validation grants no membership, recipient control or delivery authority. School API/offline contract tests consume these definitions; actual private SQL, Auth, SMTP and browser acceptance remain separate.

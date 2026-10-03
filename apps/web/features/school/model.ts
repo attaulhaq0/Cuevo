@@ -1,7 +1,8 @@
 import { LearningApiError } from '../../shared/api/client.ts';
+import { schoolPersonSelectionContextSchema, schoolPersonSelectionSchema, schoolAttendanceRosterSelectionSchema, type SchoolPersonSelectionContext } from '@cuevo/contracts';
 export type SchoolPolicy = { version: number; parentAttendanceVisible: boolean; parentUpcomingVisible: boolean; studentMessagingEnabled: false; recognitionEnabled: boolean; leaderboardEnabled: boolean; analyticsEnabled: boolean };
 export type SchoolContext = { school: { id: string; name: string; countryCode: string; languages: ('en' | 'ar')[] }; policy: SchoolPolicy; intelligence: { fixtureSchoolApproved: boolean; liveSchoolApproved: boolean; availability: 'SERVER_CONFIG_AND_APPROVED_POLICY_REQUIRED' } };
-export type SchoolRow = { id: string; [field: string]: string | number | boolean | null };
+export type SchoolRow = { id: string; [field: string]: string | number | boolean | null | SchoolPersonSelectionContext };
 export type Campus={id:string;name:string;location:string|null;retired:boolean};
 export type ClassCampus={id:string;revision:number;campusId:string|null;campusName:string|null};
 export type LearningSupport={id:string;learnerId:string;learnerName:string;courseId:string;courseTitle:string;assessmentId:string|null;assessmentTitle:string|null;title:string;instructions:string;effectiveFrom:string;effectiveTo:string;revision:1|2;state:'ACTIVE'|'UPCOMING'|'EXPIRED'|'REVOKED';approvalReason?:string};
@@ -24,7 +25,7 @@ export function schoolAccessSourceKey(action: 'person' | 'enrollment' | 'assignm
  const keys=action==='person'?[]:action==='enrollment'?['classId','studentId']:action==='assignment'?['classId','subjectId','teacherId']:['parentId','studentId'];
  return JSON.stringify([action,personId??null,...keys.map(key=>input[key])]);
 }
-export type SchoolPerson = SchoolRow & { displayName: string; role: 'admin' | 'coordinator' | 'teacher' | 'student' | 'parent'; status: 'active' | 'suspended' | 'revoked'; effectiveFrom: string; effectiveTo: string | null; synthetic: boolean };
+export type SchoolPerson = SchoolRow & { displayName: string; role: 'admin' | 'coordinator' | 'teacher' | 'student' | 'parent'; status: 'active' | 'suspended' | 'revoked'; effectiveFrom: string; effectiveTo: string | null; synthetic: boolean; selectionContext: SchoolPersonSelectionContext };
 export type AttendanceRow = SchoolRow & { classId: string; learnerId: string; occurredOn: string; revision: number; status: 'present' | 'absent' | 'late' | 'excused'; note: string | null; recordedAt: string };
 export type ScheduleRow = SchoolRow & { classId: string | null; startsAt: string; endsAt: string };
 export type SchoolAuditRow = { id: string; actorName: string | null; action: string; objectType: string; objectId: string; objectName: string | null; outcome: 'succeeded' | 'denied' | 'failed'; occurredAt: string; requestId: string };
@@ -46,8 +47,15 @@ export function parseTimetable(value: unknown): SchoolRow {
   return row;
 }
 export function parseSchoolPerson(value: unknown): SchoolPerson {
+  if(object(value)&&value.selectionContext!==undefined){const parsed=schoolPersonSelectionSchema.safeParse(value);if(!parsed.success)throw new LearningApiError('invalid');return {...parsed.data,displayName:parsed.data.displayName??''}as SchoolPerson;}
   if (!object(value) || !text(value.id) || !text(value.displayName) || !['admin', 'coordinator', 'teacher', 'student', 'parent'].includes(String(value.role)) || !['active', 'suspended', 'revoked'].includes(String(value.status)) || !date(value.effectiveFrom) || !(value.effectiveTo === null || date(value.effectiveTo) && Date.parse(String(value.effectiveTo)) > Date.parse(String(value.effectiveFrom))) || typeof value.synthetic !== 'boolean') throw new LearningApiError('invalid');
-  return value as SchoolPerson;
+  const selection = schoolPersonSelectionContextSchema.safeParse(value.selectionContext ?? { status: 'REQUIRES_REVIEW', enrollmentState: 'UNAVAILABLE', classes: [] });
+  if (!selection.success) throw new LearningApiError('invalid');
+  return { ...value, selectionContext: selection.data } as SchoolPerson;
+}
+export function parseSchoolRosterPerson(value: unknown): SchoolPerson {
+ const parsed=schoolAttendanceRosterSelectionSchema.safeParse(value);if(!parsed.success)throw new LearningApiError('invalid');
+ return {...parsed.data,displayName:parsed.data.displayName??'',role:'student',status:'active',effectiveFrom:'',effectiveTo:null,synthetic:false} as SchoolPerson;
 }
 export function parseAttendance(value: unknown): AttendanceRow {
   if (!object(value) || !text(value.id) || !text(value.classId) || !text(value.learnerId) || !date(value.occurredOn) || !Number.isInteger(value.revision) || Number(value.revision) < 1 || !['present', 'absent', 'late', 'excused'].includes(String(value.status)) || !(value.note === null || typeof value.note === 'string') || !date(value.recordedAt)) throw new LearningApiError('invalid');

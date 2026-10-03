@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { PoolClient } from 'pg';
 import type { Database } from '../../src/platform/database/database';
+import type { ActorContext } from '@cuevo/domain';
 import { SchoolAccountService } from '../../src/modules/school/account.service';
 
 const actor = { userId: '00000000-0000-4000-8000-000000000001', schoolId: '00000000-0000-4000-8000-000000000002', membershipId: '00000000-0000-4000-8000-000000000003', role: 'admin' as const, entitlements: ['school.operations'] };
@@ -29,6 +30,21 @@ function store(result: unknown = receipt, options: { session?: unknown; failure?
 }
 
 describe('school account protected SQL boundary', () => {
+  it('reads only administrator runtime availability and does not create an account effect', async () => {
+    const state = store({ state: 'SETUP_REQUIRED', reason: 'OPERATOR_APPROVAL_REQUIRED' });
+    const service = state.service as unknown as { availability(actor: ActorContext): Promise<unknown> };
+    expect(service.availability).toBeTypeOf('function');
+    expect(await service.availability(actor)).toEqual({ state: 'SETUP_REQUIRED', reason: 'OPERATOR_APPROVAL_REQUIRED' });
+    expect(state.queries).toEqual([{ sql: 'select internal.read_school_account_availability() as status', args: undefined }]);
+  });
+  it('availability denies nonadministrators before SQL and rejects untrusted status fields', async () => {
+    const state = store({ state: 'AVAILABLE', reason: null, secret: 'private' });
+    const service = state.service as unknown as { availability(actor: ActorContext): Promise<unknown> };
+    expect(service.availability).toBeTypeOf('function');
+    await expect(service.availability({ ...actor, role: 'teacher' })).rejects.toMatchObject({ status: 403 });
+    expect(state.queries).toEqual([]);
+    await expect(service.availability(actor)).rejects.toMatchObject({ status: 503 });
+  });
   it('reads exact current delivery status without another external effect or credential', async () => {
     const value = { state: 'PROCESSING', receipt: null }; const state = store(value);
     expect(await state.service.effectStatus(actor, invitationId)).toEqual(value);
