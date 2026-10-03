@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError, requireCapability, type ActorContext } from '@cuevo/domain';
-import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationQuerySchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, idempotencyKeySchema } from '@cuevo/contracts';
+import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationQuerySchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountEffectStatusSchema, idempotencyKeySchema } from '@cuevo/contracts';
 import { parseVerifiedAccount, type VerifiedAccount } from '../../platform/identity/identity.service';
 import type { Database } from '../../platform/database/database';
 
@@ -19,6 +19,15 @@ function safe(error: unknown): DomainError {
 }
 export class SchoolAccountService {
   constructor(private readonly database: Database) {}
+  async effectStatus(actor: ActorContext, id: string) {
+    requireCapability(actor, actor.schoolId, 'school.operations', ['admin']); const target = parse(z.uuid(), id);
+    try { return await this.database.actorTransaction(actor.userId, actor.schoolId, async client => {
+      const output = (await client.query('select internal.read_school_account_effect($1::uuid) as status', [target])).rows[0]?.status;
+      const result = schoolAccountEffectStatusSchema.safeParse(output);
+      if (!result.success || result.data.receipt && (result.data.receipt.id !== target || result.data.receipt.schoolId !== actor.schoolId)) throw new DomainError('REQUEST_UNAVAILABLE', 503, 'Current invitation delivery status could not be confirmed.');
+      return result.data;
+    }); } catch (error) { throw safe(error); }
+  }
   async invite(actor: ActorContext, body: unknown, key: unknown, requestId: string) {
     requireCapability(actor, actor.schoolId, 'school.operations', ['admin']);
     const input = parse(schoolAccountInviteSchema, body); const commandKey = parse(idempotencyKeySchema, key);

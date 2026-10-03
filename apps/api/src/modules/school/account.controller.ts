@@ -2,14 +2,15 @@ import { Controller, Get, Post, Req, Res, type Type } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiHeader, ApiResponse } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { DomainError } from '@cuevo/domain';
-import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema } from '@cuevo/contracts';
+import { DomainError, requireCapability } from '@cuevo/domain';
+import { schoolAccountInviteSchema, schoolAccountInvitationRevokeSchema, schoolAccountClaimSchema, schoolAccountInvitationReceiptSchema, schoolAccountInvitationPageSchema, schoolAccountClaimReceiptSchema, schoolAccountDeliveryRequestSchema, schoolAccountEffectReceiptSchema, schoolAccountEffectStatusSchema } from '@cuevo/contracts';
 import type { IdentityService, AccountIdentityService } from '../../platform/identity/identity.service';
 import type { Database } from '../../platform/database/database';
 import { SchoolAccountService } from './account.service';
+import type { SchoolAccountEffectsService } from './account-effects.service';
 
 const schema = (value: z.ZodType) => z.toJSONSchema(value, { target: 'openapi-3.0' }) as never;
-export function createSchoolAccountController(identity: IdentityService, accountIdentity: AccountIdentityService, database: Database): Type<unknown> {
+export function createSchoolAccountController(identity: IdentityService, accountIdentity: AccountIdentityService, database: Database, effects?: SchoolAccountEffectsService): Type<unknown> {
   const service = new SchoolAccountService(database);
   @Controller('/v1') @ApiBearerAuth()
   class SchoolAccountController {
@@ -43,6 +44,24 @@ export function createSchoolAccountController(identity: IdentityService, account
         if (request.headers['x-school-id'] !== undefined) throw new DomainError('INVALID_SCHOOL', 400, 'The approved invitation determines its school.');
         return service.claim(await accountIdentity.resolve(request.headers.authorization), request.body, request.headers['idempotency-key'], request.id);
       });
+    }
+    @Post('/school/accounts/invitations/:id/deliver') @ApiHeader({ name: 'X-School-Id', required: true }) @ApiBody({ required: true, schema: schema(schoolAccountDeliveryRequestSchema) }) @ApiResponse({ status: 200, schema: schema(schoolAccountEffectReceiptSchema) })
+    deliver(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {
+      return this.respond(request, reply, async () => {
+        const actor = await this.administrator(request); requireCapability(actor, actor.schoolId, 'school.operations', ['admin']);
+        const input = schoolAccountDeliveryRequestSchema.safeParse(request.body); const id = z.uuid().safeParse((request.params as { id: string }).id);
+        if (!input.success || !id.success) throw new DomainError('INVALID_INPUT', 400, 'Review the exact invitation before delivery.');
+        const status = await service.effectStatus(actor, id.data);
+        if (status.receipt && ['COMPLETED', 'FAILED'].includes(status.state)) return status.receipt;
+        if (!effects) throw new DomainError('ACCOUNT_DELIVERY_UNAVAILABLE', 503, 'Invitation delivery is unavailable.');
+        const result = schoolAccountEffectReceiptSchema.safeParse(await effects.execute(actor, id.data));
+        if (!result.success || result.data.id !== id.data || result.data.schoolId !== actor.schoolId) throw new DomainError('ACCOUNT_OUTCOME_UNKNOWN', 503, 'Invitation delivery could not be confirmed. Review the original invitation.');
+        return result.data;
+      });
+    }
+    @Get('/school/accounts/invitations/:id/delivery') @ApiHeader({ name: 'X-School-Id', required: true }) @ApiResponse({ status: 200, schema: schema(schoolAccountEffectStatusSchema) })
+    deliveryStatus(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {
+      return this.respond(request, reply, async () => service.effectStatus(await this.administrator(request), (request.params as { id: string }).id));
     }
   }
   return SchoolAccountController;

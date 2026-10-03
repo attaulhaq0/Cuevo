@@ -21,6 +21,7 @@ type AppContext = {
   signIn: (email: string, password: string) => Promise<'credentials' | 'unavailable' | null>;
   signOut: () => Promise<boolean>;
   refreshAccess: () => void;
+  holdMembershipVerification: () => () => void;
   online: boolean;
   accessToken: string | null;
   apiUrl: string;
@@ -49,6 +50,7 @@ export function Providers({ children, initialLocale, config }: { children: React
   const selectedSchool = useRef<string | undefined>(undefined);
   const activeUser = useRef<string | undefined>(undefined);
   const accessVerified = useRef(false);
+  const accountContinuations = useRef(0);
   const commandJournal = useRef(new CommandJournal());
   const formDrafts = useRef(new FormDrafts());
   const [notice, setNotice] = useState<string | null>(null);
@@ -65,6 +67,11 @@ export function Providers({ children, initialLocale, config }: { children: React
     document.cookie = `cuevo_locale=${nextLocale}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
   }, []);
   const refreshAccess = useCallback(() => setRefresh((value) => value + 1), []);
+  const holdMembershipVerification = useCallback(() => {
+    accountContinuations.current++; accessVerified.current = false; setMembership(null); setRefresh(value => value + 1);
+    let released = false;
+    return () => { if (released) return; released = true; accountContinuations.current = Math.max(0, accountContinuations.current - 1); if (accountContinuations.current === 0) setRefresh(value => value + 1); };
+  }, []);
 
   useEffect(() => {
     const onOnline = () => { setOnline(true); refreshAccess(); };
@@ -117,6 +124,7 @@ export function Providers({ children, initialLocale, config }: { children: React
   const reportDiagnostic = useBrowserDiagnostics({ apiUrl: config.apiUrl, userId: membership?.userId, schoolId: membership?.schoolId, accessToken: status === 'ready' ? accessToken : undefined, ready: status === 'ready', online, accessGeneration, locale });
   useEffect(() => {
     if (!accessToken || !online) return;
+    if (accountContinuations.current > 0) { setMembership(null); accessVerified.current = false; setStatus('verifying'); return; }
     const controller = new AbortController();
     if (!accessVerified.current) { setStatus('verifying'); setMembership(null); }
     setFailure(null);
@@ -165,7 +173,7 @@ export function Providers({ children, initialLocale, config }: { children: React
     } catch { return false; }
   }, [client]);
 
-  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, holdMembershipVerification, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
 }
 
 export function useApp() {

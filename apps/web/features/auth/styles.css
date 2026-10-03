@@ -1,0 +1,2 @@
+.admission-confirmation { display: flex; align-items: flex-start; gap: var(--space-3); min-block-size: 2.75rem; padding-block: var(--space-2); font-size: var(--type-sm); line-height: 1.6; cursor: pointer; }
+.admission-confirmation input { flex: 0 0 auto; inline-size: 1.25rem; block-size: 1.25rem; margin-block-start: var(--space-1); accent-color: var(--color-accent); }

@@ -1,5 +1,7 @@
 # Boundary contracts
 
+School account delivery requires an exact revision-one approved request and explicit confirmation. Its strict effect receipt separates provider confirmation, capture acceptance and awaiting recipient claim; unknown/review outcomes never become claimed membership. Delivery schema validation supplies no executor authority or credential.
+
 `school-accounts.ts` defines strict confirmed administrator invitation/revoke inputs, a bounded25-row invitation page and a purpose-only recipient claim. Claims accept an exact request, a64-hex admission secret and deliberate acceptance, never desired school/role/entitlements. Minimized source receipts exclude email and credentials; the approved recipient email appears only on administrator-owned current pages. Schema validation grants no membership, recipient control or delivery authority. School API/offline contract tests consume these definitions; actual private SQL, Auth, SMTP and browser acceptance remain separate.
 
 `outcome-display.ts` adds optional strict read-time context to numeric/rubric outcome responses. It requires exact learner identity, nullable registered names/source-task labels and dates, and explicit READY/REQUIRES_REVIEW. READY cannot claim missing or ambiguous context. Learner-state responses bind any supplied context to the selected learner. The existing native measurement schema, comparison rules, command/event values and legacy context-free snapshots stay compatible; this contract grants no source access and introduces no names into worker events.

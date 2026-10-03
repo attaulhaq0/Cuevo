@@ -8,8 +8,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { DomainError } from '@cuevo/domain';
 import { parseServerConfig, type ServerConfig } from '@cuevo/config';
 import { Database } from './platform/database/database';
-import { IdentityService, type MembershipRow } from './platform/identity/identity.service';
-import { createUserVerifier, isAuthReady } from './platform/identity/supabase-auth';
+import { IdentityService, AccountIdentityService, type MembershipRow } from './platform/identity/identity.service';
+import { createUserVerifier, createAccountVerifier, isAuthReady } from './platform/identity/supabase-auth';
+import { createAuthProvisioning } from './platform/identity/provisioning';
+import { createLocalAccountMail } from './platform/identity/local-account-mail';
 import { createSchoolLearningController } from './modules/school-learning/learning.controller';
 import { createLearningResourceController } from './modules/school-learning/resource.controller';
 import { createSubmissionAssetController } from './modules/school-learning/submission-asset.controller';
@@ -19,6 +21,8 @@ import { createLearnerStateController } from './modules/learner-state/learner-st
 import { createImprovementController } from './modules/improvement/improvement.controller';
 import { createIntelligenceService } from './modules/improvement/intelligence.service';
 import { createSchoolController } from './modules/school/school.controller';
+import { createSchoolAccountController } from './modules/school/account.controller';
+import { SchoolAccountEffectsService } from './modules/school/account-effects.service';
 import{createSchoolSupportController}from'./modules/school/support.controller';
 import{createLearnerProfileController}from'./modules/school/profile.controller';
 import{createRestrictedRecordsController}from'./modules/restricted-records/restricted-records.controller';
@@ -52,6 +56,9 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
     currentMemberships: userId => database.actorTransaction(userId, undefined, async client => (await client.query<MembershipRow>(syntheticOnly ? 'select membership.* from "authorization".current_memberships() membership where internal.synthetic_school_runtime_allowed(membership.school_id)' : 'select * from "authorization".current_memberships()')).rows),
     isCurrentSession: (userId, sessionId) => database.actorTransaction(userId, undefined, async client => Boolean((await client.query<{ active: boolean }>('select "authorization".is_current_session($1::uuid) as active', [sessionId])).rows[0]?.active)),
   });
+  const accountIdentity = new AccountIdentityService({ verifyAccount: createAccountVerifier(config), isCurrentSession: (userId, sessionId) => database.actorTransaction(userId, undefined, async client => (await client.query<{ active: boolean }>('select "authorization".is_current_session($1::uuid) as active', [sessionId])).rows[0]?.active === true) });
+  const provisioning = config.authProvisioning;
+  const accountEffects = provisioning?.mode === 'LOCAL_SYNTHETIC' ? new SchoolAccountEffectsService(database, createAuthProvisioning(provisioning), createLocalAccountMail({ mode: 'LOCAL_SYNTHETIC', webOrigin: provisioning.webOrigin }), { admissionUrl: provisioning.redirects.invite }) : undefined;
   @Controller()
   class FoundationController {
     @Get('/health/live') @ApiOperation({ summary: 'Process liveness' })
@@ -75,7 +82,7 @@ export async function createApp(config: ServerConfig = parseServerConfig(process
       }
     }
   }
-  @Module({ controllers: [FoundationController,createBrowserDiagnosticsController(identity,database),createAttentionController(identity,database),createPortfolioController(identity,database),createPortfolioOrganizationController(identity,database),createDevelopmentController(identity,database),createCommunityController(identity,database),createParentConversationController(identity,database),createCommunityMaintenanceController(identity,database),createCommunityMentionController(identity,database),createLearnerGoalController(identity,database),createLearningContentController(identity,database),createAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createLearningResourceController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createSubmissionAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createPortfolioArtifactController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createCurriculumController(identity,database), createSchoolController(identity,database),createSchoolSupportController(identity,database),createLearnerProfileController(identity,database),createRestrictedRecordsController(identity,database),createSchoolAutomationController(identity,database), createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database), createImprovementController(identity, database, createIntelligenceService(identity,database,config))] }) class FoundationModule {}
+  @Module({ controllers: [FoundationController,createSchoolAccountController(identity,accountIdentity,database,accountEffects),createBrowserDiagnosticsController(identity,database),createAttentionController(identity,database),createPortfolioController(identity,database),createPortfolioOrganizationController(identity,database),createDevelopmentController(identity,database),createCommunityController(identity,database),createParentConversationController(identity,database),createCommunityMaintenanceController(identity,database),createCommunityMentionController(identity,database),createLearnerGoalController(identity,database),createLearningContentController(identity,database),createAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createLearningResourceController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createSubmissionAssetController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createPortfolioArtifactController(identity,database,{url:config.supabaseUrl,secret:config.storageSecret}),createCurriculumController(identity,database), createSchoolController(identity,database),createSchoolSupportController(identity,database),createLearnerProfileController(identity,database),createRestrictedRecordsController(identity,database),createSchoolAutomationController(identity,database), createSchoolLearningController(identity, database), createAcademicController(identity, database), createLearnerStateController(identity, database), createImprovementController(identity, database, createIntelligenceService(identity,database,config))] }) class FoundationModule {}
   const adapter = new FastifyAdapter({ bodyLimit: 1024 * 1024, requestIdHeader: false, logger: false });
   const app = await NestFactory.create<NestFastifyApplication>(FoundationModule, adapter, { logger: ['error', 'warn'] });
   registerApiTelemetry(adapter.getInstance());

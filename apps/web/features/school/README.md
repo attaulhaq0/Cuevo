@@ -1,5 +1,7 @@
 # School operations feature
 
+`components/accounts.tsx` owns current administrator invitation creation, bounded human recipient pages, explicit delivery status/action and cancellation. Request creation, local capture and recipient school admission remain distinct confirmations. It uses shared command/retry/forms and strict `@cuevo/contracts`; no provider credential, selected claim role or raw admission token enters this feature. Exact delivery status comes from the private source/effect ledger. Administrator class/guardian relationships still use the existing People/access commands after claim.
+
 School daily filters, attendance class selection and related current class choices reuse schoolClassName with the authorized academic-year/year-group records already owned by this workspace. Labels match the setup context and explicitly show unavailable names when context is missing; no IDs or invented suffixes distinguish records. customer-navigation-context.spec.ts checks the actual daily filter and attendance selector against the full current class/year context.
 
 Owns current-school setup, verified people/access relationships, attendance, timetable/calendar and explicit school policy approval. Public interfaces: ui.tsx (SchoolWorkspace), model.ts (bounded response validation), copy.ts (schoolEn/schoolAr labels for shell composition). The API owner is modules/school and contracts are under @cuevo/contracts; source IDs 07/14/18/36/37/39/43/61/63/80 apply.

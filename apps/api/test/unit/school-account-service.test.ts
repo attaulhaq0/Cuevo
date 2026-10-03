@@ -22,13 +22,23 @@ function store(result: unknown = receipt, options: { session?: unknown; failure?
       if (sql.includes('is_current_session')) return { rows: [{ active: Object.hasOwn(options, 'session') ? options.session : true }] };
       if (sql.includes('set_config')) return { rows: [] };
       if (options.failure) throw options.failure;
-      return { rows: [{ receipt: result, page: result }] };
+      return { rows: [{ receipt: result, page: result, status: result }] };
     } } as unknown as PoolClient);
   } } as unknown as Database;
   return { service: new SchoolAccountService(database), transactions, queries };
 }
 
 describe('school account protected SQL boundary', () => {
+  it('reads exact current delivery status without another external effect or credential', async () => {
+    const value = { state: 'PROCESSING', receipt: null }; const state = store(value);
+    expect(await state.service.effectStatus(actor, invitationId)).toEqual(value);
+    expect(state.queries).toEqual([{ sql: 'select internal.read_school_account_effect($1::uuid) as status', args: [invitationId] }]);
+  });
+  it('refuses foreign or secret-bearing delivery status and nonadministrator reads', async () => {
+    const value = { state: 'COMPLETED', receipt: { id: invitationId, schoolId: account.userId, eventId: key, requestRevision: 1, status: 'AWAITING_CLAIM', providerState: 'CONFIRMED', deliveryState: 'ACCEPTED' } };
+    const state = store(value); await expect(state.service.effectStatus(actor, invitationId)).rejects.toMatchObject({ status: 503 });
+    await expect(state.service.effectStatus({ ...actor, role: 'teacher' }, invitationId)).rejects.toMatchObject({ status: 403 });
+  });
   it('saves only the reviewed admin invitation through its exact parameterized private function', async () => {
     const state = store();
     expect(await state.service.invite(actor, invite, key, 'request')).toEqual(receipt);

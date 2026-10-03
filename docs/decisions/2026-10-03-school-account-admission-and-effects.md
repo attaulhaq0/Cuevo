@@ -1,6 +1,6 @@
 # School account admission and external-effect ownership
 
-Status: implementation decision for the founder-authorized onboarding repair. The account contract/provider prerequisites exist; invitation SQL, delivery, operator admission and browser acceptance remain in progress. This decision does not certify a complete onboarding journey or activate a hosted recipient.
+Status: local invitation/effect/recipient claim implementation is verified through the normal API/provider and browser. Initial operator school admission, recovery, full new-role learning chain and final customer gates remain in progress. This decision does not certify complete first-school onboarding or activate a hosted recipient. [Current scoped evidence](../reports/2026-10-03-invitation-effects-and-claim-in-progress.md).
 
 Sources01/07/14/38/39/61/81/82/83 and the independent founder mission govern this repair. Follow the [implementation plan](../superpowers/plans/2026-10-03-school-account-onboarding.md), [event architecture](../architecture/scalable-event-processing.md) and repository layout. Existing memberships retain `active/suspended/revoked`; pending admission is private workflow state, never authority.
 

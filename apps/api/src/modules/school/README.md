@@ -1,5 +1,7 @@
 # Current-school operations
 
+`createApp` now composes the account controller and purpose-only account identity. Delivery uses an optional local-only reviewed executor, absent by default; the exact confirmed delivery route reauthorizes administrator scope and validates minimized receipt identity. Provider adapters are constructed only from dedicated explicit API configuration. Private source/effect/current runtime approval remains required at execution; route composition alone creates no membership or invitation delivery.
+
 Additive20261003054939 owns private disabled local runtime approval and immutable invitation source/revision history. API create/read/revoke commands commit sanitized audit/outbox/receipt without adding Auth or membership authority. Current creator/source/runtime checks precede replay; cancellation acknowledges only untouched pending Auth intent with explicit REQUEST_REVOKED and emits a known source-validated worker lifecycle event. SQL197 and real Auth/controller/private SQL4cases pass. Effect/token/claim SQL, sender, operator first-school admission and browser journeys remain incomplete. [Evidence](../../../../../docs/reports/2026-10-03-private-invitation-source-checkpoint.md).
 
 Public runtime surface: createSchoolController(identity,database) from school.controller.ts. SchoolService owns current-school context, bounded setup/operations queries and purpose-specific commands; no other app implementation is imported. Sources 07/14/18/38/39/44/61/64/81 and the Technical MVP decision apply.

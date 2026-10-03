@@ -1,5 +1,7 @@
 # Shared web infrastructure
 
+`holdMembershipVerification` is a browser-only continuation hold used while explicit account admission verifies its current account and claim. It suppresses premature ordinary membership requests, clears prior membership, and resumes fresh normal verification on release. It grants no access, supplies no role or session, and does not bypass any API/database authorization. The real new-user browser journey checks the console before claim and fresh workspace/sign-in afterward.
+
 Own only mechanisms reused across features: api/client.ts and pagination/responses, session/providers and membership/Auth, query hooks, common forms/feedback/branding, and global i18n. Shared may depend on packages/ui/contracts and other shared capabilities, never feature code. It has explicit server-free imports; tests live beside the capability in test. Feature-specific response models/copy remain under features.
 
 The shared oversized-content error gives file or record-set reduction and school-support guidance in English/Arabic. An HTTP 413 may describe an upload or a bounded read, so it does not tell every customer to divide a course. `i18n/test/content-error-render.test.ts` renders the real error component and preserves separate uncertain original-action retry and deliberate support-reference behavior. Request classification, authorization and response handling are unchanged.
