@@ -70,7 +70,11 @@ export type WorkspaceChromeContext = {
   brand: ReactNode;
   languageControl?: ReactNode;
   contextControl?: ReactNode;
+  appearanceControl?: ReactNode;
   accountAction?: WorkspaceChromeAction;
+  settingsAction?: WorkspaceChromeAction;
+  signOutAction?: WorkspaceChromeAction;
+  profileNotice?: ReactNode;
   searchAction?: WorkspaceChromeAction;
   notificationAction?: WorkspaceChromeAction;
   helpAction?: WorkspaceChromeAction;

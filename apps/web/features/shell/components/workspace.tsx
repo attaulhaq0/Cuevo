@@ -14,6 +14,7 @@ import { isWorkspaceHomeActivation, openWorkspaceDestination, workspaceNavigatio
 import { WorkspaceChrome } from './workspace-chrome';
 import { WorkspaceCommandNavigation } from './workspace-command-navigation';
 import { ThemeControl } from './workspace-theme';
+import { chromeAr, chromeEn } from '../messages';
 import type { WorkspaceTheme } from '../theme-model';
 import { LearningWorkspace } from '../../learning/ui';
 import { learningAr, learningEn } from '../../learning/copy';
@@ -97,8 +98,11 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     expression: membership.role === 'student' ? 'student' : membership.role === 'parent' ? 'parent' : 'staff',
     brand: <div onClickCapture={event => { if (isWorkspaceHomeActivation(event) && (event.target as Element).closest('a')) { event.preventDefault(); event.stopPropagation(); selectView('overview'); } }}><Brand compact /></div>,
     languageControl: <LanguageSwitch />,
-    contextControl: <ThemeControl value={theme} onChange={onThemeChange} locale={locale} />,
+    appearanceControl: <ThemeControl value={theme} onChange={onThemeChange} locale={locale} />,
     accountAction: { label: t.profile, onClick: () => selectView('account') },
+    settingsAction: navigation.some(item => item.id === 'access') ? { label: (locale === 'ar' ? chromeAr : chromeEn).settings, onClick: () => selectView('access') } : undefined,
+    signOutAction: { label: signingOut ? t.signingOut : t.signOut, onClick: () => void onSignOut(), pending: signingOut },
+    profileNotice: signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null,
     searchAction,
   }}>
       <img className="workspace-chrome__background" src={trailAssets.background} alt="" aria-hidden="true" />
@@ -109,7 +113,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
           <section className="detail-section" aria-labelledby="access-membership-heading"><h2 id="access-membership-heading">{t.activeMembership}</h2><dl className="detail-list"><div><dt>{t.school}</dt><dd><bdi>{membership.school.name}</bdi></dd></div><div><dt>{t.role}</dt><dd>{t.roles[membership.role]}</dd></div></dl><Button type="button" variant="secondary" onClick={refreshAccess}><CuevoIcon name="refresh" size={16} />{t.refresh}</Button></section>
           <section className="detail-section" aria-labelledby="capabilities-heading"><h2 id="capabilities-heading">{t.capabilityTitle}</h2><p>{t.capabilityBody}</p>{membership.entitlements.length > 0 ? <ul className="capability-list">{membership.entitlements.map((capability) => <li key={capability}><bdi>{capability}</bdi></li>)}</ul> : <div className="notice"><Status tone="warning">{t.notConfigured}</Status><p>{t.noCapabilities}</p></div>}</section>
         </> : <section className="detail-section"><dl className="detail-list"><div><dt>{t.profile}</dt><dd><bdi>{membership.displayName}</bdi></dd></div><div><dt>{t.school}</dt><dd><bdi>{membership.school.name}</bdi></dd></div><div><dt>{t.role}</dt><dd>{t.roles[membership.role]}</dd></div></dl>{membership.entitlements.includes('school.operations')?<LearnerProfile/>:null}<details><summary>{t.reference}</summary><p className="identifier"><bdi>{membership.userId}</bdi></p><p className="identifier"><bdi>{membership.membershipId}</bdi></p></details><p className="account-help">{t.accountHelp}</p><p className="session-note">{t.sessionNote}</p><Button type="button" variant="secondary" onClick={() => void onSignOut()} disabled={signingOut}><CuevoIcon name="logout" size={16} />{signingOut ? t.signingOut : t.signOut}</Button>{signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null}</section>}
-        <footer className="workspace-footer"><p>{t.foundationNote}</p><button type="button" className="text-action" onClick={() => void onSignOut()} disabled={signingOut}><CuevoIcon name="logout" size={14} />{signingOut ? t.signingOut : t.signOut}</button></footer>
+        <footer className="workspace-footer"><p>{t.foundationNote}</p></footer>
         {signOutFailed && view !== 'account' ? <p className="form-error" role="alert">{t.signOutError}</p> : null}
       </main>
       {commandDialog}

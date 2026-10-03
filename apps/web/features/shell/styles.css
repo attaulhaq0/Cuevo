@@ -10,9 +10,19 @@
 .workspace .workspace-chrome__school > svg { color: var(--color-accent); }
 .workspace .workspace-chrome__school > bdi { max-inline-size: 20rem; overflow-wrap: anywhere; font-weight: var(--font-weight-semibold); }
 .workspace .workspace-chrome__utilities { display: flex; align-items: center; gap: var(--space-2); margin-inline-start: auto; }
+.workspace .workspace-chrome__search { display: flex; align-items: center; justify-content: start; flex: 1 1 16rem; gap: var(--space-2); min-inline-size: 9rem; max-inline-size: 28rem; min-block-size: 2.75rem; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-control-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text-secondary); text-align: start; }
+.workspace .workspace-chrome__search > span { overflow-wrap: anywhere; }
+.workspace .workspace-chrome__search > svg { flex: none; }
+.workspace .workspace-chrome__search kbd { margin-inline-start: auto; font: inherit; font-size: var(--type-xs); white-space: nowrap; }
+.workspace .workspace-chrome__profile { position: fixed; inset: auto; inset-inline-end: var(--space-6); margin: 0; inline-size: min(20rem, calc(100vw - var(--space-6))); max-block-size: calc(100dvh - 5rem); overflow: auto; box-sizing: border-box; padding: var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-material-raised); color: var(--color-text); box-shadow: var(--elevation-floating); }
+.workspace .workspace-chrome__profile:popover-open { display: grid; gap: var(--space-1); }
+.workspace .workspace-chrome__profile-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-inline-start: var(--space-2); }
+.workspace .workspace-chrome__profile .button { justify-content: start; min-block-size: 2.75rem; }
+.workspace .workspace-chrome__profile-heading .button { min-inline-size: 2.75rem; justify-content: center; padding: var(--space-2); }
+.workspace .workspace-chrome__profile .workspace-chrome__signout { border-block-start: 1px solid var(--color-border); border-radius: 0; margin-block-start: var(--space-2); }
 .workspace .workspace-chrome__utility { padding: var(--space-2); min-inline-size: 2.75rem; min-block-size: 2.75rem; }
 .workspace .workspace-chrome__person { flex: none; }
-.workspace .workspace-chrome__person > :is(button, div) { display: flex; align-items: center; gap: var(--space-3); border: 0; border-radius: var(--radius-md); min-block-size: 3rem; padding: var(--space-1) var(--space-2); background: transparent; color: var(--color-text); font: inherit; text-align: start; }
+.workspace .workspace-chrome__person > :is(button, .workspace-chrome__identity) { display: flex; align-items: center; gap: var(--space-3); border: 0; border-radius: var(--radius-md); min-block-size: 3rem; padding: var(--space-1) var(--space-2); background: transparent; color: var(--color-text); font: inherit; text-align: start; }
 .workspace .workspace-chrome__person > button { cursor: pointer; }
 .workspace .workspace-chrome__person > button:hover { background: var(--color-surface-muted); }
 .workspace .workspace-chrome__person strong { display: block; font-size: var(--type-sm); font-weight: var(--font-weight-bold); max-inline-size: 14rem; overflow-wrap: anywhere; }
@@ -114,7 +124,7 @@
   .workspace .workspace-chrome__content { padding-block-end: calc(6rem + env(safe-area-inset-bottom)); }
   .workspace .workspace-chrome__rail-control { min-inline-size: 2.75rem; padding: var(--space-1); }
 }
-@media (max-width: 360px) { .workspace .workspace-chrome__header { padding-inline: var(--space-3); } .workspace .workspace-chrome__person strong { max-inline-size: 7rem; } }
+@media (max-width: 360px) { .workspace .workspace-chrome__header { padding-inline: var(--space-3); } .workspace .workspace-chrome__person strong { max-inline-size: 6rem; } }
 @media (forced-colors: active) { .workspace .workspace-chrome__rail button[aria-current="page"] { border-color: Highlight; background: Highlight; color: HighlightText; } .workspace .workspace-chrome__rail button[aria-current="page"] svg { color: HighlightText; } }
 
 /* The normal workspace dedicates height to the active task and records. */
@@ -140,12 +150,25 @@
   .workspace .workspace-chrome__header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2); }
   .workspace .workspace-chrome__brand { grid-column: 1; grid-row: 1; }
   .workspace .workspace-chrome__person { grid-column: 2; grid-row: 1; margin: 0; }
-  .workspace .workspace-chrome__school { grid-column: 1 / -1; grid-row: 2; order: 0; flex-wrap: nowrap; gap: var(--space-2); }
+  .workspace .workspace-chrome__school { grid-column: 1; grid-row: 2; order: 0; flex-wrap: nowrap; gap: var(--space-2); }
   .workspace .workspace-chrome__school > bdi { flex: 1; }
-  .workspace .workspace-chrome__utilities { grid-column: 1 / -1; grid-row: 3; order: 0; justify-content: end; }
+  .workspace .workspace-chrome__utilities { grid-column: 2; grid-row: 2; order: 0; justify-content: end; }
+  .workspace .workspace-chrome__search { grid-column: 1 / -1; grid-row: 3; inline-size: 100%; max-inline-size: none; min-inline-size: 0; font-size: var(--type-sm); }
+  .workspace .workspace-chrome__search kbd { display: none; }
+  .workspace .workspace-chrome__profile { inset-inline-end: var(--space-3); max-block-size: calc(100dvh - 5rem); }
+  .workspace .workspace-chrome__school { font-size: var(--type-xs); }
+  .workspace .workspace-chrome__utilities .language-switch { gap: var(--space-1); }
+  .workspace .workspace-chrome__utilities .language-switch > svg { display: none; }
   .workspace .workspace-chrome__person > button { gap: var(--space-2); padding-inline: var(--space-1); }
   .workspace .workspace-chrome__person strong { max-inline-size: 8rem; font-size: var(--type-xs); }
   .workspace .workspace-chrome__person .workspace-chrome__avatar { inline-size: 2rem; block-size: 2rem; }
   .workspace .workspace-chrome__rail button { min-block-size: 3.5rem; min-inline-size: 5.25rem; font-size: var(--type-xs); padding-block: var(--space-1); }
   .workspace .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }
+}
+@media (max-width: 360px) {
+  .workspace .workspace-chrome__header { grid-template-columns: minmax(7.2rem, 1fr) minmax(0, auto); }
+  .workspace .workspace-chrome__person { min-inline-size: 0; }
+  .workspace .workspace-chrome__person > button { min-inline-size: 0; max-inline-size: 100%; }
+  .workspace .workspace-chrome__person > button > span:not(.workspace-chrome__avatar) { min-inline-size: 0; }
+  .workspace .workspace-chrome__person strong { max-inline-size: min(6rem, 23vw); }
 }

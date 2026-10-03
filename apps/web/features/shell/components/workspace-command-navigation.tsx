@@ -65,7 +65,7 @@ export function WorkspaceCommandNavigation({ navigation, selectedId, locale, chi
     setQuery('');
     const previous = opener.current;
     opener.current = null;
-    if (previous?.isConnected) previous.focus({ preventScroll: true });
+    if (previous?.isConnected && previous.getClientRects().length) previous.focus({ preventScroll: true });
     else {
       // Access revalidation can remove the original feature input while open.
       // Return to this dialog's still-current header trigger in that case.

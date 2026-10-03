@@ -17,3 +17,26 @@ test('missing selected ID does not fabricate current navigation or human identit
 test('arrow navigation skips disabled choices and uses real RTL direction', () => { assert.equal(navigationFocusTarget(navigation, 'one', 'ArrowRight', false), 'three'); assert.equal(navigationFocusTarget(navigation, 'one', 'ArrowRight', true), 'three'); assert.equal(navigationFocusTarget(navigation, 'three', 'Home', false), 'one'); assert.equal(navigationFocusTarget(navigation, 'one', 'End', false), 'three'); assert.equal(navigationFocusTarget(navigation, 'one', 'Enter', false), null); });
 test('empty navigation yields localized recovery and deterministic first markup', () => { const value = context(); value.navigation = []; value.locale = 'ar'; value.theme = 'dark'; const first = render(value); assert.equal(first, render(value)); assert.match(first, /lang="ar" dir="rtl" data-theme="dark"/); assert.match(first, /لا تتاح مساحة عمل/); assert.doesNotMatch(first, /aria-current="page"/); });
 test('three enabled choices mirror the logical horizontal arrow target', () => { const items = navigation.map(item => ({ ...item, disabled: false })); assert.equal(navigationFocusTarget(items, 'two', 'ArrowRight', false), 'three'); assert.equal(navigationFocusTarget(items, 'two', 'ArrowRight', true), 'one'); assert.equal(navigationFocusTarget(items, 'one', 'ArrowLeft', false), 'three'); });
+
+test('shared header has one visible search launcher and one closed profile panel with supplied owner controls', () => {
+  const value = context(); let calls = 0;
+  value.searchAction = { label: 'Search workspaces', onClick() { calls++; }, controls: 'current-command', expanded: false, hasPopup: 'dialog', keyShortcuts: 'Control+K Meta+K' };
+  value.accountAction = { label: 'Account', onClick() { calls++; } };
+  value.settingsAction = { label: 'Access settings', onClick() { calls++; } };
+  value.signOutAction = { label: 'Signing out…', pending: true, onClick() { calls++; } };
+  value.appearanceControl = createElement('label', null, 'Appearance', createElement('select', { 'aria-label': 'Appearance', defaultValue: 'light' }, createElement('option', { value: 'light' }, 'Light')));
+  value.profileNotice = createElement('p', { role: 'alert' }, 'Sign-out could not be confirmed.');
+  const html = render(value);
+  assert.match(html, /workspace-chrome__search/);
+  assert.match(html, /aria-haspopup="dialog"/);
+  assert.match(html, />Search workspaces<\/span>/);
+  assert.match(html, /popover="auto"/);
+  assert.match(html, /popoverTarget=/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.equal((html.match(/aria-label="Appearance"/g) || []).length, 1);
+  assert.match(html, /Access settings/);
+  assert.match(html, /disabled="" aria-busy="true"[^>]*>.*Signing out/s);
+  assert.match(html, /role="alert"/);
+  assert.doesNotMatch(html, /role="menu"|role="menuitem"|type="search"/);
+  assert.equal(calls, 0);
+});
