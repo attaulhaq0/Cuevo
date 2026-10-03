@@ -9,6 +9,11 @@
 .parent-trail__child-context > svg { color: var(--color-accent); }
 .parent-trail__child-context p { margin: var(--space-1) 0; font-size: var(--type-sm); color: var(--color-text-secondary); }
 .parent-trail__child-context .field { margin-block-start: var(--space-2); }
+@media (min-width: 1101px) {
+  .parent-trail__child-context > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1) var(--space-4); align-items: center; }
+  .parent-trail__child-context > div > strong, .parent-trail__child-context > div > p { grid-column: 1; }
+  .parent-trail__child-context > div > label, .parent-trail__child-context > div > .field { grid-column: 2; grid-row: 1 / span 2; }
+}
 .parent-trail__grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 .parent-trail__left, .parent-trail__right { display: grid; gap: var(--space-5); min-inline-size: 0; align-items: start; }
 .parent-trail__panel { border-radius: var(--radius-lg); background: var(--color-material-reading); border: 1px solid var(--color-border); padding: var(--space-4) var(--space-5); min-inline-size: 0; }
