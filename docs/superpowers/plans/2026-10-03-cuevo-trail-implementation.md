@@ -30,10 +30,10 @@
 
 **Files:** update these specs/plan, `docs/README.md`, current design continuation; execution ledger external/ignored; backend-controlled current contracts and owner READMEs read-only until coherent handoff.
 
-- [ ] Record explicit plan approval and user clarification that the selected Trail design stays unchanged.
-- [ ] Verify linked worktree/clean source, approved auth paths/hashes and current backend branch/status through purpose-built chat status.
-- [ ] Send authorized backend coordination: preserve current tasks/source-frozen checks; build progression in Development and publish exact contracts/source commit.
-- [ ] Freeze reference/file inventories and new goal text without pretending the app's status-only goal tool can rewrite its objective.
+- [x] Record explicit plan approval and user clarification that the selected Trail design stays unchanged.
+- [x] Verify linked worktree/clean source, approved auth paths/hashes and current backend branch/status through purpose-built chat status.
+- [x] Send authorized backend coordination: preserve current tasks/source-frozen checks; build progression in Development and publish exact contracts/source commit.
+- [x] Freeze reference/file inventories and current goal text; the user-edited goal now reports ACTIVE, with earlier tool limitations retained as history only.
 - [ ] Reconcile the backend's stable commit into the isolated design branch using reviewed Git patches, not copied mutable trees. Resolve UI/docs overlaps preserving latest API/session contracts and approved auth. Re-run relevant baseline checks; report unavailable/failed evidence honestly.
 
 ## Task 2: Character and material asset production
@@ -41,7 +41,9 @@
 **Files:** external `C:/Users/hp/.codex/visualizations/2026/10/03/cuevo-trail-implementation/assets`; reviewed finals later in `apps/web/shared/characters/assets` with registry/README, decorative shared background under existing owner.
 
 **Consumes:** selected seated Foxi image, reviewed Trail/adult references, supplied fox/owl identity, existing Foundry config and Website Sora helper.
-**Produces:** isolated high-quality static poses/4shortmotionreferences with provenance/source/master/optimized/poster hashes and readable pack metadata; no pupil data.
+**Produces:** 409 individually generated native asset sources (209 icons/illustrations, 200 character poses), transparent PNG/WebP masters and right-size variants, reviewed utility vectors, four original Sora guidance clips and eight separate action clips, disclosed higher-resolution masters, provenance/QA and one browsable asset index; no pupil data.
+
+Current checkpoint: the separate 409-source generation is complete and structural source/master/size/hash checks pass. Independent full-batch visual acceptance is still being recorded. All five pure Home compositions are prepared and measured in Storybook, with current API binding and complete nested role workflow migration pending a coherent backend-source handoff. Authentication presentation regression passed six English/Arabic responsive/reflow/error cases and source hashes remain unchanged. A rendered Home or asset count is not role/MVP completion.
 
 - [ ] Prepare Foxi seated/ready, working and celebration core states; Owl reader/reflection alternatives; two further approved-style candidates with authored meanings and equivalent state semantics.
 - [ ] Generate separate PNG assets with exact references using the authorized bundled image CLI; inspect alpha/crop/pose/material consistency before integration. Never ship a UI screenshot as a character/background asset.
