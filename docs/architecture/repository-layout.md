@@ -89,6 +89,8 @@ Applied migration bytes remain immutable through Git filters as well as editing.
 
 ## Enforcement and verification
 
+Founder-supplied visual reference images are intentionally retained under `docs/design/references` as documented review evidence. Its manifest records exact original pixels and selection status; its static index is a documentation viewer, not a new app. Runtime features must not import whole-page references. The [archive decision](../decisions/2026-10-03-design-reference-archive.md) preserves this explicit evidence exception without permitting ordinary generated test output or duplicate source trees.
+
 `npm run check:architecture` checks canonical source roots, navigation files, relative/public-package imports, dependency direction, browser/server boundaries, unresolved local imports, feature surfaces and cycles. `npm run check:docs` checks root Markdown placement, the complete product registry, hashes and current documentation links. Both run in CI/aggregate checks with their fixture tests. They enforce structural rules, not authorization, browser, database or academic correctness.
 
 `npm run check:repository` checks physical authored directory ownership/emptiness, duplicate authored runtime sources and numbered specifications, and tracked generated/secret paths. `npm run test:repository` exercises positive/negative fixtures. It uses existing Git tracked/nonignored files and separately inspects nonignored directories. Build/dependency output and documented historical/forwarding surfaces are intentional exclusions. Content comparison detects exact or normalized copies, not semantic equivalence; domain ownership review remains required. The guard and fixtures run in CI and the aggregate check command.
