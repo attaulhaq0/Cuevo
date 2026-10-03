@@ -1,5 +1,6 @@
 export const progressEn = {
   refreshAttentionRecords: 'Refresh attention records',
+  learnerChoicesReview: 'Load all current learners before choosing. Matching or missing class context needs school record review.',
   attentionSourceLimits: 'Source and interpretation limits',
   myLearningStory: 'My learning story', sharedLearningStory: 'Shared learning progress', learningEvidence: 'Evidence for the next step', exploreProgress: 'Explore learning progress', resultPages: 'Result pages',
   assessmentNameUnavailable: 'Assessment name unavailable', objectiveNameUnavailable: 'Objective name unavailable',
@@ -32,6 +33,7 @@ export const progressEn = {
 };
 export const progressAr: typeof progressEn = {
   refreshAttentionRecords: 'تحديث سجلات الانتباه',
+  learnerChoicesReview: 'حمّل جميع الطلاب الحاليين قبل الاختيار. تحتاج الأسماء المتطابقة أو سياقات الصف المفقودة إلى مراجعة سجلات المدرسة.',
   attentionSourceLimits: 'حدود المصدر والتفسير',
   myLearningStory: 'قصة تعلّمي', sharedLearningStory: 'تقدّم التعلّم المشترك', learningEvidence: 'شواهد الخطوة التالية', exploreProgress: 'استكشف تقدّم التعلّم', resultPages: 'صفحات النتائج',
   assessmentNameUnavailable: 'اسم التقييم غير متاح', objectiveNameUnavailable: 'اسم الهدف غير متاح',

@@ -1,6 +1,7 @@
 import { commonEn, commonAr } from '../../shared/i18n/common';
 export const learningEn = { retiredCourseNote:'This curriculum source is retired. The task is read only; previous results and evidence remain available.',
   coursePreparation: 'Course preparation', coursePreparationBody: 'Choose one unit, lesson or activity to review its content and prepare the next change.',
+  courseContextReview: 'Course or class context needs school record review. Refresh the current choices before preparing this task.', courseChoicesLoading: 'Load complete current course, class and subject choices before preparing a task.', rubricChoicesReview: 'Matching or incomplete rubric names and versions need school record review before selection.',
   courseStructure: 'Course structure', reviewCourse: 'Review course', selectedContent: 'Selected content', choosePreparation: 'Choose content to prepare', preparationUnavailable: 'The selected content is not in the current page. Choose a current source or refresh the course.',
   staffAssessmentDirectory: 'Assessment directory', staffAssessmentDirectoryBody: 'Choose one assessment to review its private preparation, quiz, resources or availability.',
   chooseAssessment: 'Choose an assessment', staffSubmissions: 'Submitted work directory', chooseSubmission: 'Choose submitted work', openSubmission: 'Review submitted work', closeSubmission: 'Back to submitted work',
@@ -57,6 +58,7 @@ export const learningEn = { retiredCourseNote:'This curriculum source is retired
 };
 export const learningAr: typeof learningEn = {
   coursePreparation: 'إعداد المقرر', coursePreparationBody: 'اختر وحدة أو درسًا أو نشاطًا لمراجعة محتواه وإعداد التغيير التالي.',
+  courseContextReview: 'يحتاج سياق المقرر أو الصف إلى مراجعة سجلات المدرسة. حدّث الخيارات الحالية قبل إعداد هذه المهمة.', courseChoicesLoading: 'حمّل خيارات المقرر والصف والمادة الحالية كاملة قبل إعداد المهمة.', rubricChoicesReview: 'تحتاج أسماء سلالم التقدير وإصداراتها المتطابقة أو الناقصة إلى مراجعة سجلات المدرسة قبل الاختيار.',
   courseStructure: 'بنية المقرر', reviewCourse: 'مراجعة المقرر', selectedContent: 'المحتوى المحدد', choosePreparation: 'اختر محتوى لإعداده', preparationUnavailable: 'لا يظهر المحتوى المحدد في الصفحة الحالية. اختر مصدرًا حاليًا أو حدّث المقرر.',
   staffAssessmentDirectory: 'دليل التقييمات', staffAssessmentDirectoryBody: 'اختر تقييمًا لمراجعة إعداده الخاص أو اختباره أو موارده أو إتاحته.',
   chooseAssessment: 'اختر تقييمًا', staffSubmissions: 'دليل الأعمال المسلّمة', chooseSubmission: 'اختر عملًا مسلّمًا', openSubmission: 'مراجعة العمل المسلّم', closeSubmission: 'العودة إلى الأعمال المسلّمة',

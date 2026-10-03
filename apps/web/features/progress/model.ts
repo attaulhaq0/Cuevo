@@ -3,6 +3,9 @@ import { parseIntervention, parseOutcome, type Intervention, type Outcome } from
 import { parseNativeResult, type NativeResult } from '../academic/model.ts';
 import { learnerProjectionSchema } from '@cuevo/contracts';
 import type { z } from 'zod';
+import { currentLearnerChoices, type PersonChoice } from '../../shared/api/people.ts';
+
+export function progressLearnerChoices(people:PersonChoice[],unavailable:string,complete:boolean){return currentLearnerChoices(people,unavailable).map(choice=>({...choice,requiresReview:!complete||choice.requiresReview}));}
 
 export type AcademicStateRow = { resultId: string; referenceId: string; referenceVersion: string; nativeResult: NativeResult; evidenceId: string; observedAt: string; assessmentTitle?: string; referenceTitle?: string };
 export type LearnerState = { learnerId: string; status: 'READY' | 'UNKNOWN'; freshness?: 'CURRENT' | 'STALE' | 'APPROVED_PROJECTION'; generatedAt: string | null; version: number | null; academic: AcademicStateRow[]; development: { practice: { count: number | null; observationIds: string[] }; revision: { count: number | null; observationIds: string[] }; reflection: { count: number | null; observationIds: string[] }; windowStart: string | null; windowEnd: string | null; completeness?: 'RECORDED_ONLY' }; engagement: { completedActivityCount: number | null; lastCompletedAt: string | null }; support: { activeInterventionIds: string[]; items: Intervention[] }; impact: { status: 'unmeasured' | 'measured'; measurementIds: string[]; outcomes: Outcome[] }; sourceEventIds: string[]; projection?: z.infer<typeof learnerProjectionSchema> };

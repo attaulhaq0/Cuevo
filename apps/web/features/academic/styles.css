@@ -15,6 +15,8 @@
 .released-result__feedback h4 { display: flex; align-items: center; gap: var(--space-3); font-size: var(--type-lg); margin-block: 0 var(--space-4); }
 .released-result__feedback svg { color: var(--color-violet); flex: none; }
 .released-result summary { min-block-size: 2.75rem; cursor: pointer; align-content: center; }
+.released-result > .learning-actions { align-items: flex-start; }
+.released-result > .learning-actions > section { min-inline-size: 0; max-inline-size: 100%; }
 .academic-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-6); font-size: var(--type-sm); margin-block: var(--space-5); }
 .academic-facts dt { color: var(--color-text-secondary); margin-block-end: var(--space-1); }
 .academic-facts dd { margin: 0; overflow-wrap: anywhere; }

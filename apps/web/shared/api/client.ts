@@ -29,6 +29,8 @@ export class CommandJournal {
     return command;
   }
   get(slot: string): Command | undefined { return this.commands.get(slot); }
+  /** Feature recovery may inspect original commands without changing the journal. */
+  pending(): Command[] { return [...this.commands.values()].map(command => structuredClone(command)); }
   confirm(slot: string, expectedKey?: string): boolean {
     const command = this.commands.get(slot);
     if (!command || expectedKey !== undefined && command.key !== expectedKey) return false;

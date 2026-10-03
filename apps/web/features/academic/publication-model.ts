@@ -5,6 +5,11 @@ import { canOpenWorkspace } from '../../shared/session/capabilities.ts';
 export type PublicationReadContext = { apiUrl: string; membership: { userId: string; schoolId: string; role: string; entitlements: string[] } | null; accessToken: string | null; accessGeneration: number; online: boolean; status: string };
 export type ResultPublicationRecord = ReturnType<typeof resultPublicationResponseSchema.parse>;
 export type PublicationMutationBasis = { parentVisible: boolean; expectedPublicationRevision: number; expectedResultRevision: number };
+export function recoverPublicationBasis(command: Command | undefined, resultId: string): PublicationMutationBasis | null {
+  if (!command || command.path !== `/v1/results/${resultId}/publication`) return null;
+  const input = resultPublicationSchema.safeParse(command.body);
+  return input.success ? parsePublicationMutationBasis({ parentVisible: input.data.parentVisible, expectedPublicationRevision: input.data.expectedPublicationRevision, expectedResultRevision: input.data.expectedResultRevision }) : null;
+}
 export function parsePublicationMutationBasis(value: unknown): PublicationMutationBasis | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const basis = value as Record<string, unknown>;

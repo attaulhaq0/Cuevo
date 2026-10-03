@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resultPublicationScope, currentResultPublication, parseCurrentResultPublication, validateResultPublicationReceipt, publicationDecisionCurrent, parsePublicationMutationBasis } from '../publication-model.ts';
+import { resultPublicationScope, currentResultPublication, parseCurrentResultPublication, validateResultPublicationReceipt, publicationDecisionCurrent, parsePublicationMutationBasis, recoverPublicationBasis } from '../publication-model.ts';
 import { CommandJournal, confirmCommandReceipt, LearningApiError } from '../../../shared/api/client.ts';
 
 const resultId = '00000000-0000-4000-8000-000000000001';
@@ -52,4 +52,13 @@ test('working publication decision retains only bounded original input basis wit
   const basis = { parentVisible: true, expectedPublicationRevision: 0, expectedResultRevision: 1 };
   assert.deepEqual(parsePublicationMutationBasis(basis), basis);
   for (const value of [undefined, { ...basis, reason: 'Private reason belongs to form values' }, { ...basis, expectedResultRevision: 0 }, { ...basis, expectedPublicationRevision: -1 }, { ...basis, parentVisible: 'true' }]) assert.equal(parsePublicationMutationBasis(value), null);
+});
+
+test('publication recovery derives its decision from the exact original command after a denied read', () => {
+  const basis = { parentVisible: true, expectedPublicationRevision: 0, expectedResultRevision: 1 };
+  const command = { key: 'original', path: `/v1/results/${resultId}/publication`, body: { ...basis, reason: 'Reviewed the original result.', confirmPublication: true } };
+  assert.deepEqual(recoverPublicationBasis(command, resultId), basis);
+  assert.equal(recoverPublicationBasis(command, otherId), null);
+  assert.equal(recoverPublicationBasis({ ...command, body: { ...command.body, confirmPublication: false } }, resultId), null);
+  assert.equal(recoverPublicationBasis(undefined, resultId), null);
 });

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
-import { currentLearnerState, parseLearnerState, parseLearnerObservation, parseLearnerSignal, type LearnerState, type Observation, type Signal, type LearnerStateSource } from '../model';
+import { currentLearnerState, parseLearnerState, parseLearnerObservation, parseLearnerSignal, progressLearnerChoices, type LearnerState, type Observation, type Signal, type LearnerStateSource } from '../model';
 import { LearningApiError } from '../../../shared/api/client';
 import { parsePersonChoice } from '../../../shared/api/people';
 import { progressAr, progressEn } from '../messages';
@@ -39,32 +39,35 @@ function CurrentProgressWorkspace() {
   const parent = membership?.role === 'parent';
   const classReviewer = membership?.role === 'teacher' || membership?.role === 'coordinator' || membership?.role === 'admin';
   const [learnerId, setLearnerId] = useState<string | null>(own ? membership.userId : null);
-  const [detailSelection, setDetailSelection] = useState<{ id: string; label: string; request: number; context: string } | null>(null);
+  const [detailSelection, setDetailSelection] = useState<{ id: string; label: string; request: number; context: string; source: 'class' | 'directory' } | null>(null);
   const [classLearnerLabel, setClassLearnerLabel] = useState<{ id: string; label: string | null; context: string } | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [showCompanion, setShowCompanion] = useState(true);
   const childContext = useChildContext(refresh);
   const people = usePaginatedLearningQuery(own || parent ? null : '/v1/people?limit=100', parsePersonChoice, refresh);
-  const activeLearnerId = own ? membership?.userId ?? null : parent ? childContext.child?.id ?? null : learnerId;
+  const peopleCurrent = people.loaded && !people.loading && !people.loadingMore && !people.error && !people.moreError && !people.nextCursor;
+  const choices=progressLearnerChoices(people.data,t.learnerContextUnavailable,peopleCurrent);
+  const classSelected=learnerId&&detailSelection?.id===learnerId&&detailSelection.source==='class';
+  const activeLearnerId = own ? membership?.userId ?? null : parent ? childContext.child?.id ?? null : classSelected||choices.some(choice=>choice.value===learnerId&&!choice.requiresReview)?learnerId:null;
   const learners = people.data.filter((person) => person.role === 'student') ?? [];
   const selectedLearner = learners.find(learner => learner.userId === activeLearnerId);
   const labelContext = `${membership?.schoolId}:${membership?.userId}:${accessGeneration}:${refresh}`;
   const currentClassLabel = classLearnerLabel?.id === activeLearnerId && classLearnerLabel.context === labelContext ? classLearnerLabel.label : null;
-  const peopleCurrent = people.loaded && !people.loading && !people.error;
   const selectedLabel = own ? membership?.displayName ?? t.learnerContextUnavailable : parent ? childContext.child?.displayName ?? t.learnerContextUnavailable : currentClassLabel ?? (peopleCurrent && selectedLearner ? [selectedLearner.displayName, ...selectedLearner.classLabels].join(' · ') : detailSelection?.id === activeLearnerId && detailSelection.context === labelContext ? detailSelection.label : t.learnerContextUnavailable);
   const receiveClassLearnerLabel = useCallback((id: string, label: string | null, context: string) => {
     setClassLearnerLabel(previous => previous?.id === id && previous.label === label && previous.context === context ? previous : { id, label, context });
   }, []);
   const reviewLearner = (id: string, label?: string) => {
+    if(id&&!label&&!choices.some(choice=>choice.value===id&&!choice.requiresReview))return;
     setLearnerId(id || null);
     const learner = learners.find(learner => learner.userId === id);
-    if (id) setDetailSelection(previous => ({ id, label: label ?? (learner ? [learner.displayName, ...learner.classLabels].join(' · ') : t.learnerContextUnavailable), request: (previous?.request ?? 0) + 1, context: labelContext }));
+    if (id) setDetailSelection(previous => ({ id, label: label ?? (learner ? [learner.displayName, ...learner.classLabels].join(' · ') : t.learnerContextUnavailable), request: (previous?.request ?? 0) + 1, context: labelContext, source:label?'class':'directory' }));
   };
   return <section className="progress-workspace" data-role={membership?.role}>
     <div className="progress-intro"><div><p className="eyebrow">{own ? t.myLearningStory : parent ? t.sharedLearningStory : t.learningEvidence}</p><p>{t.progressGuide}</p></div>{own ? <div className="progress-companion"><CompanionView registry={companionPoses} character="foxi" state="read" visible={showCompanion} /><Button type="button" variant="quiet" onClick={() => setShowCompanion(value => !value)}>{showCompanion ? t.hideCompanion : t.showCompanion}</Button></div> : <CuevoIcon name="progress" variant="filled" size={48} />}</div>
     <ChildSelector context={childContext} />
     {classReviewer ? <ClassLearningSummaryPanel refresh={refresh} onReviewLearner={reviewLearner} selectedLearnerId={activeLearnerId} labelContext={labelContext} onLearnerContext={receiveClassLearnerLabel} /> : null}
-    <div className="progress-toolbar">{!own && !parent ? <div className="field"><label htmlFor="learner-selection">{t.learner}</label><select id="learner-selection" value={learnerId ?? ''} onChange={(event) => reviewLearner(event.target.value)}><option value="">{t.chooseLearner}</option>{learners.map((learner) => <option key={learner.userId} value={learner.userId}>{[learner.displayName, ...learner.classLabels].join(' · ')}</option>)}</select><LoadMore query={people} /></div> : null}<Button type="button" variant="secondary" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" size={16} />{t.refresh}</Button></div>
+    <div className="progress-toolbar">{!own && !parent ? <div className="field"><label htmlFor="learner-selection">{t.learner}</label><select id="learner-selection" value={choices.some(choice=>choice.value===learnerId&&!choice.requiresReview)?learnerId??'':''} disabled={!peopleCurrent} onChange={(event) => reviewLearner(event.target.value)}><option value="">{t.chooseLearner}</option>{choices.map(choice=><option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={people} />{!people.error&&!people.loading&&(people.nextCursor||choices.some(choice=>choice.requiresReview))?<p className="notice">{t.learnerChoicesReview}</p>:null}</div> : null}<Button type="button" variant="secondary" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" size={16} />{t.refresh}</Button></div>
     {people.error ? <LearningError error={people.error} /> : !own && !parent && people.loading ? <p role="status">{t.loading}</p> : !own && !parent && !learners.length ? <p className="learning-empty">{t.noLearners}</p> : null}
     {parent ? <p className="notice">{t.parentSafe}</p> : null}
     {activeLearnerId ? <LearnerDetail key={`${activeLearnerId}:${detailSelection?.id === activeLearnerId ? detailSelection.request : 0}`} learnerId={activeLearnerId} learnerLabel={selectedLabel} focusRequest={detailSelection?.id === activeLearnerId ? detailSelection.request : 0} refresh={refresh} parent={parent} /> : null}

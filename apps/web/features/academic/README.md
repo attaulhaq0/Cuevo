@@ -1,5 +1,9 @@
 # Academic feature
 
+An opened Parent-sharing decision that cannot read its current publication now offers a local refresh of that exact source. Pending original commands and their keys remain retained; failed/denied current publication withholds the decision until reauthorized. This retries a read only and does not change sharing or result authority.
+
+After that read is restored, an uncertain sharing command derives the displayed Share/Revoke intent from its strict original payload rather than the later publication state. Recovery remounts the existing CommandForm with the original reason, confirmation, source revisions and command key. A malformed retained payload cannot open a replacement decision. The current publication still leads the visible source status, and no retry is available during failed or denied readback.
+
 ## Approved Teacher workbench checkpoint — 3 October 2026
 
 The selected submitted work now leads the native marking decision in the existing `MarkingDetail`. `components/marking-workbench.tsx` supplies one local composition: compact current work choices, original text or the existing protected document reader, full approved objective description, every native rubric criterion/allowed descriptor and the original marking/release/correction forms. It adds no request, result engine or source identity. Parent sharing remains the existing explicit release/publication decision. Unknown course/unit/teacher/time context is not inferred from the reference images. Numeric draft input remains blank until entered; recorded zero and rubric levels retain their own native meaning.

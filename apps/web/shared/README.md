@@ -2,6 +2,8 @@
 
 Paged and bounded-list parsers call the item parser with only its source item. This reconciles canonical `fe04cab` and prevents array index/page contents from being misread as explicit context arguments. Owner parsers still validate selected learner/source scope; paging adds no authority.
 
+`api/client.ts` exposes `CommandJournal.pending()` as a read-only, deeply cloned list of original commands for feature-owned recovery. Features validate their own endpoint/payload before restoring intent; inspecting or changing a returned clone cannot replace a journal entry, settle a key, authorize a retry or expose another actor's state. Session scope changes retain the existing journal-clearing rules. The list is not a second task ledger or customer-facing source catalogue.
+
 `characters` owns the single public Trail decorative artwork registry and scoped authenticated font assets. It imports no feature/model/provider or learner data; feature owners supply already authorized state/actions. Read its README for task-pedestal placement, confirmed-action semantics, static/quiet/media/rights boundaries. No separate character behavior/XP engine is introduced.
 
 Own only mechanisms reused across features: api/client.ts and pagination/responses, session/providers and membership/Auth, query hooks, common forms/feedback/branding, and global i18n. Shared may depend on packages/ui/contracts and other shared capabilities, never feature code. It has explicit server-free imports; tests live beside the capability in test. Feature-specific response models/copy remain under features.

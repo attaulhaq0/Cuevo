@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FormDrafts } from '../../session/form-drafts.ts';
 import { CommandJournal, confirmCommandReceipt, LearningApiError } from '../client.ts';
 
 test('a late actor response cannot remove a replacement command at the same endpoint', () => {
@@ -86,4 +87,17 @@ test('cleared or replaced keys never invoke a prior validator or current UI call
   assert.equal(confirmCommandReceipt(journal, 'goal', prior.key, { id: 'prior' }, () => calls++, () => calls++), false);
   assert.equal(calls, 0);
   assert.equal(journal.get('goal'), current);
+});
+test('a pending-command snapshot survives working-draft loss without permitting mutation of the original request', () => {
+  const journal = new CommandJournal(), drafts = new FormDrafts();
+  const command = journal.prepare('/v1/curriculum/courses/source/plans', '/v1/curriculum/courses/source/plans', { periodId: 'period', expectedPeriodRevision: 2, reason: 'Reviewed original source' });
+  drafts.saveModel('school:actor:/v1/curriculum/courses/source/plans:intent', { kind: 'create' });
+  drafts.clearRead('school:actor:', '/v1/curriculum/courses/source/coverage');
+  assert.equal(drafts.model('school:actor:/v1/curriculum/courses/source/plans:intent'), undefined);
+  const snapshot = journal.pending();
+  assert.deepEqual(snapshot, [command]);
+  snapshot[0].body.expectedPeriodRevision = 9;
+  assert.equal(journal.get(command.path)?.body.expectedPeriodRevision, 2);
+  journal.clear();
+  assert.deepEqual(journal.pending(), []);
 });
