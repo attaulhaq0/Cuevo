@@ -1,5 +1,7 @@
 .coordinator-trail { position: relative; isolation: isolate; font-family: 'Cuevo Nunito Sans', var(--font-sans); color: var(--color-text); }
 .coordinator-trail[lang="ar"] { font-family: var(--font-arabic); }
+.coordinator-trail__native-value { direction: ltr; unicode-bidi: isolate; }
+.coordinator-trail .native-score { direction: ltr; unicode-bidi: isolate; justify-content: flex-start; }
 .coordinator-trail__background { position: absolute; z-index: -1; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; opacity: .3; pointer-events: none; filter: var(--trail-background-filter); }
 .coordinator-trail__content { max-inline-size: 100rem; margin-inline: auto; padding: var(--space-6) var(--space-8) var(--space-10); }
 .coordinator-trail__intro { display: flex; justify-content: space-between; align-items: start; gap: var(--space-5); margin-block: var(--space-2) var(--space-6); }
