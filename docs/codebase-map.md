@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+API platform `identity/local-account-mail.ts` owns fixed local synthetic invitation capture, fragment-only continuation validation, bounded response and one-attempt bilingual transport. Unit17/actual local capture1case pass with exact-message cleanup. [Evidence](reports/2026-10-03-local-invitation-capture.md). Delivery capture does not establish recipient claim or production SMTP; School owns request/effect authority.
+
 Private School invitation source functions/tables live in additive20261003054939 with disabled owner-approved local runtime control, immutable exact recipient/role intent, 168-hour expiry and sanitized source/audit/outbox/receipt. SQL19774assertions and actualAuth/controller/privateSQL4cases verify current create/read/revoke; generic worker only acknowledges exact revoked lifecycle source. `account-effects.service.ts` is an uncomposed invite-only executor with offline lease/callback/privacy checks; effect/token/claim SQL and SMTP remain missing. [Evidence](reports/2026-10-03-private-invitation-source-checkpoint.md).
 
 Improvement English/Arabic messages/presentation describe prepared outputs as Demonstration analysis and preserve exact FIXTURE/LIVE provider contracts, approval, uncertainty and deliberate source details. Shared413copy covers files/record sets rather than only courses. Real component9cases and production-browser loop/reasoning/policy3cases pass. [Evidence](reports/2026-10-03-intelligence-customer-language.md); expanded live quality and whole-app customer acceptance remain separate.
