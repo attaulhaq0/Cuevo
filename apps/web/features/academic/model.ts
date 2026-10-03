@@ -41,6 +41,10 @@ export function sameNativeResult(left: NativeResult, right: NativeResult): boole
 }
 
 export type AcademicReference = { id: string; title: string; description: string; code: string | null; version: string; status: 'DRAFT' | 'APPROVED'; sourceType: 'SCHOOL_AUTHORED'; createdBy: string; approvedBy: string | null;parentTitle?:string|null };
+export function currentMarkingReference(read: { data: { scope: string; value: AcademicReference | null } | null; loading: boolean; error: unknown }, scope: string, referenceId: string | null): AcademicReference | null {
+  if (read.loading || read.error || !referenceId || read.data?.scope !== scope || read.data.value?.id !== referenceId) return null;
+  return read.data.value;
+}
 export function academicReferenceChoice(reference:AcademicReference){return reference.parentTitle?`${reference.title} · ${reference.parentTitle} · ${reference.version}`:reference.title;}
 export type RubricLevel = { key: string; label: string; description: string };
 export type RubricCriterion = { key: string; title: string; levels: RubricLevel[] };

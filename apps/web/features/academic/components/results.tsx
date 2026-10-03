@@ -13,6 +13,7 @@ import{ResultPublication}from'./publication';
 import { LearningApiError } from '../../../shared/api/client';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
 import { LoadMore } from '../../../shared/components/load-more';
+import { EvidenceReading } from './evidence-reading';
 
 export function ExactReleasedResult({ source }: { source: ReturnType<typeof parseCurrentNativeSource> }) {
   const { locale, membership, apiUrl, accessToken, accessGeneration, online } = useApp();
@@ -44,5 +45,5 @@ export function EvidenceDetail({ evidenceId, learnerId }: { evidenceId: string; 
   if (query.error) return <LearningError error={query.error} />;
   if (!query.data || query.data.scope !== scope) return <p>{t.evidenceMissing}</p>;
   const evidence = query.data.value;
-  return <dl className="academic-facts evidence-provenance"><div><dt>{t.sourceType}</dt><dd>{t.submissionSource}</dd></div><div><dt>{t.sourceObject}</dt><dd><bdi>{evidence.sourceObjectId}</bdi></dd></div><div><dt>{t.recordedBy}</dt><dd><bdi>{evidence.actorId}</bdi></dd></div><div><dt>{t.recordedAt}</dt><dd><bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(evidence.createdAt))}</bdi></dd></div><div><dt>{t.evidenceQuality}</dt><dd>{t.teacherEntered}</dd></div><div><dt>{t.referenceVersion}</dt><dd><bdi>{evidence.referenceVersion}</bdi></dd></div><div><dt>{t.policy}</dt><dd>{evidence.policyVersion}</dd></div><div><dt>{t.revision}</dt><dd>{evidence.revision}</dd></div><div><dt>{t.visibility}</dt><dd>{evidence.visibility === 'PARENT_APPROVED' ? t.parentApproved : t.learnerPrivate}</dd></div><div><dt>{t.reviewStatus}</dt><dd>{t.approved}</dd></div></dl>;
+  return <EvidenceReading evidence={evidence} />;
 }

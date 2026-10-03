@@ -28,6 +28,8 @@ type AppContext = {
   commandJournal: CommandJournal;
   formDrafts: FormDrafts;
   notice: string | null;
+  noticeLocation: string | null;
+  clearNotice: () => void;
   announce: (message: string) => void;
   selectedChildId: string;
   selectChild: (id: string) => void;
@@ -51,9 +53,15 @@ export function Providers({ children, initialLocale, config }: { children: React
   const accessVerified = useRef(false);
   const commandJournal = useRef(new CommandJournal());
   const formDrafts = useRef(new FormDrafts());
-  const [notice, setNotice] = useState<string | null>(null);
-  const announce = useCallback((message: string) => setNotice(message), []);
+  const [notice, setNotice] = useState<{ message: string; location: string } | null>(null);
+  const announce = useCallback((message: string) => setNotice({ message, location: `${window.location.pathname}?${new URLSearchParams(window.location.search).toString()}` }), []);
+  const clearNotice = useCallback(() => setNotice(null), []);
   const [selectedChildId, selectChild] = useState('');
+  const noticeScope = useRef(`${accessGeneration}:${selectedChildId}`);
+  useEffect(() => {
+    const scope = `${accessGeneration}:${selectedChildId}`;
+    if (noticeScope.current !== scope) { noticeScope.current = scope; setNotice(null); }
+  }, [accessGeneration, selectedChildId]);
 
   const setLocale = useCallback((nextLocale: Locale) => {
     updateLocale(nextLocale);
@@ -165,7 +173,7 @@ export function Providers({ children, initialLocale, config }: { children: React
     } catch { return false; }
   }, [client]);
 
-  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice: notice?.message ?? null, noticeLocation: notice?.location ?? null, clearNotice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
 }
 
 export function useApp() {

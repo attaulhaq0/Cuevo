@@ -78,3 +78,50 @@ test('attention queue has a section heading before learner item headings', () =>
   const learnerHeading = html.indexOf('<h3><bdi>Samira');
   assert.ok(attentionHeading >= 0 && attentionHeading < learnerHeading);
 });
+
+test('current school updates are visible beside the review work with one heading and source recovery', () => {
+  const value = { ...context(), updates: { status: 'partial' as const, items: [{ key: 'update-source', title: 'School reading review', body: 'Bring the current reading material on Monday.', dateLabel: '3 October', action: { label: 'Open school updates', onClick() {} } }], continuation: createElement('button', null, 'Load more school updates') } };
+  const html = render(value);
+  assert.match(html, /<h2[^>]*>.*School updates<\/h2>/);
+  assert.match(html, /<h3[^>]*>.*School reading review<\/h3>/);
+  assert.match(html, /Bring the current reading material on Monday\./);
+  assert.match(html, /3 October/);
+  assert.match(html, /Load more school updates/);
+  assert.match(html, /More school updates may be available/);
+  assert.equal((html.match(/<h1 /g) || []).length, 1);
+  assert.doesNotMatch(html, /<details|update-source/);
+});
+
+test('unavailable school updates hide stale content and distinguish failed reads from empty pages', () => {
+  const value = { ...context(), updates: { status: 'unavailable' as const, items: [{ key: 'old', title: 'Stale school update', body: 'Private old context', dateLabel: null }], continuation: createElement('button', null, 'Refresh school updates') } };
+  const html = render(value);
+  assert.match(html, /School updates could not be loaded/);
+  assert.match(html, /Refresh school updates/);
+  assert.doesNotMatch(html, /Stale school update|Private old context|No school updates are available/);
+  for (const availability of ['denied', 'offline'] as const) {
+    assert.doesNotMatch(render({ ...value, availability }), /Stale school update|Private old context|Refresh school updates/);
+  }
+});
+
+test('school update empty and loading states are source-specific and localized', () => {
+  const ready = { ...context(), updates: { status: 'ready' as const, items: [] } };
+  assert.match(render(ready), /No school updates are available in these loaded records/);
+  const loading = { ...ready, updates: { status: 'loading' as const, items: [] } };
+  assert.match(render(loading), /Loading school updates/);
+  assert.doesNotMatch(render(loading), /No school updates are available/);
+  assert.match(render(ready, 'ar'), /تحديثات المدرسة/);
+});
+
+test('a failed proposal read is unavailable rather than a confirmed absent proposal', () => {
+  const value = { ...context(), insightStatus: 'unavailable' as const };
+  const html = render(value);
+  assert.match(html, /Current proposals could not be loaded/);
+  assert.doesNotMatch(html, /No current proposal is available/);
+});
+
+test('an incomplete proposal page never becomes a confirmed absent proposal', () => {
+  const value = { ...context(), insightStatus: 'partial' as const };
+  const html = render(value);
+  assert.match(html, /Some records are not available/);
+  assert.doesNotMatch(html, /No current proposal is available/);
+});

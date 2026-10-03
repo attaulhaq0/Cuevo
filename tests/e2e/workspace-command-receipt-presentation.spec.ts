@@ -61,6 +61,25 @@ async function revalidate(page: Page) {
   expect((await response).ok()).toBe(true);
 }
 
+test('a confirmed collection notice stays on Portfolio and is not shown as access feedback after navigation', async ({page}) => {
+  const path='/v1/portfolio/collections';
+  const fixture=await fictionalWorkspace(page,'portfolio',async(route,url)=>url.pathname===path&&route.request().method()==='POST'?{id:'f9000000-0000-4000-8000-000000000001'}:undefined);
+  await page.getByRole('button',{name:'Create named collection',exact:true}).click();
+  const form=page.getByRole('region',{name:'Create named collection',exact:true});
+  await form.getByLabel('Collection name',{exact:true}).fill('My recorded explanations');
+  await form.getByRole('button',{name:'Save',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Create named collection: Saved.'})).toBeVisible();
+  await page.locator('main h1').scrollIntoViewIfNeeded();
+  await page.getByRole('button',{name:'Profile and settings',exact:true}).click();
+  await page.getByRole('button',{name:'Access settings',exact:true}).click();
+  await expect(page.locator('.workspace-access')).toBeVisible();
+  await expect(page.getByText('Create named collection: Saved.',{exact:false})).toHaveCount(0);
+  await page.goBack();
+  await expect(page.getByText('Create named collection: Saved.',{exact:false})).toHaveCount(0);
+  expect(fixture.commands.filter(command=>command.path===path)).toHaveLength(1);
+  expect(fixture.errors).toEqual([]);expect(fixture.remoteOrigins).toEqual([]);
+});
+
 test('a malformed goal receipt after an unmounted read refresh keeps its original revision payload and retry key', async ({ page }) => {
   const held = deferred(), started = deferred();
   const reviewPath = `/v1/development/goals/${goalId}/review`;

@@ -5,7 +5,7 @@ import type { NavigationIntent } from '../../shared/session/navigation-intent.ts
 import type { TeacherTrailQueueState } from './teacher-trail-model.ts';
 
 export type TeacherHomeWork = {
-  key: string; kind: 'marking' | 'reassessment' | 'portfolio'; title: string;
+  key: string; kind: 'marking' | 'support' | 'reassessment' | 'portfolio'; title: string;
   learnerName: string | null; classLabel: string | null; state: TeacherTrailQueueState;
   nativeKind?: 'numeric' | 'rubric'; destination: NavigationIntent | 'portfolio';
   currentText?: string; date?: string | null;
@@ -26,9 +26,9 @@ export function teacherHomeWork(marking: MarkingItem[], tasks: Intervention[], p
       nativeKind: row.model, destination: { view: 'academic', source: 'marking', id: row.id },
       ...(row.responseKind !== 'FILE' ? { currentText: row.content } : {}),
     })),
-    ...tasks.filter(row => row.status === 'COMPLETED' && !row.requiresReview).map((row): TeacherHomeWork => ({
-      key: `practice:${row.id}`, kind: 'reassessment', title: row.title,
-      learnerName: null, classLabel: null, state: 'needs-review', date: row.completedAt,
+    ...tasks.filter(row => ['ASSIGNED', 'COMPLETED'].includes(row.status) && !row.requiresReview).map((row): TeacherHomeWork => ({
+      key: `practice:${row.id}`, kind: row.status === 'COMPLETED' ? 'reassessment' : 'support', title: row.title,
+      learnerName: null, classLabel: null, state: row.status === 'COMPLETED' ? 'needs-review' : 'waiting', date: row.completedAt ?? row.createdAt,
       destination: { view: 'improvement', source: 'intervention', id: row.id },
     })),
     ...portfolio.filter(row => row.approvalState === 'AWAITING_REVIEW').map((row): TeacherHomeWork => ({
@@ -38,4 +38,9 @@ export function teacherHomeWork(marking: MarkingItem[], tasks: Intervention[], p
       state: 'needs-review', date: row.createdAt, destination: 'portfolio',
     })),
   ];
+}
+
+/** A short reading summary of current source rows, never a queue total. */
+export function teacherHomeNextWork(work: TeacherHomeWork[]): TeacherHomeWork[] {
+  return [...work.filter(row => row.state !== 'waiting'), ...work.filter(row => row.state === 'waiting')].slice(0, 3);
 }

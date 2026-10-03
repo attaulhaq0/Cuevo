@@ -1,5 +1,5 @@
 export const teacherHomeEn = {
-  reload: 'Refresh teaching records', work: 'Review current work', followUp: 'Review follow-up', portfolio: 'Review selected work',
+  reload: 'Refresh teaching records', work: 'Review current work', followUp: 'Review follow-up', portfolio: 'Review selected work', waitingPractice: 'Practice awaiting completion', reviewPractice: 'Open approved practice',
   currentPages: 'These are the current records loaded for this workspace. More records may be available.',
   noSource: 'Current source context is unavailable. Open the owning workspace to check.',
   marking: 'Assessment and feedback', markingBody: 'Review submitted work using your school’s marking scale.',
@@ -12,7 +12,7 @@ export const teacherHomeEn = {
   submissions: 'Submitted work', practiceRecords: 'Follow-up records', portfolioRecords: 'Selected work awaiting review', proposals: 'Current proposals', updates: 'School updates', allWork: 'Open all assessment work',
 };
 export const teacherHomeAr: typeof teacherHomeEn = {
-  reload: 'تحديث سجلات التدريس', work: 'مراجعة العمل الحالي', followUp: 'مراجعة المتابعة', portfolio: 'مراجعة العمل المختار',
+  reload: 'تحديث سجلات التدريس', work: 'مراجعة العمل الحالي', followUp: 'مراجعة المتابعة', portfolio: 'مراجعة العمل المختار', waitingPractice: 'تدريب بانتظار الإكمال', reviewPractice: 'فتح التدريب المعتمد',
   currentPages: 'هذه السجلات الحالية المحمّلة لمساحة العمل. قد تتوافر سجلات إضافية.',
   noSource: 'السياق المصدري الحالي غير متاح. افتح مساحة العمل ذات الصلة للتحقق.',
   marking: 'التقييم والملاحظات', markingBody: 'راجع الأعمال المسلّمة وفق مقياس التقييم المدرسي.',

@@ -53,3 +53,20 @@ test('navigation refuses forbidden targets before history and preserves exact so
     { data: null, title: '', url: '/school' },
   ]);
 });
+
+test('profile destinations retain deep-link authority while the main rail contains only product workspaces', () => {
+  const permitted = navigation.workspaceNavigation(member('parent'), labels);
+  const rail = navigation.workspaceRailNavigation(permitted);
+  assert.deepEqual(rail.map(item => item.id), ['overview', 'school', 'community', 'portfolio', 'learning', 'academic', 'progress']);
+  assert.equal(navigation.workspaceView(permitted, 'account'), 'account');
+  assert.equal(navigation.workspaceView(permitted, 'access'), 'access');
+  assert.equal(rail[0], permitted[0]);
+});
+
+test('a confirmed command notice remains on its originating location and cannot become access-page feedback', () => {
+  const message = 'Create named collection: Saved';
+  assert.equal(navigation.currentWorkspaceNotice(message, '/?view=portfolio', '/?view=portfolio'), message);
+  assert.equal(navigation.currentWorkspaceNotice(message, '/?view=portfolio', '/?view=access'), null);
+  assert.equal(navigation.currentWorkspaceNotice(message, '/?view=academic&source=result&id=one', '/?view=academic&source=result&id=two'), null);
+  assert.equal(navigation.currentWorkspaceNotice(null, null, '/?'), null);
+});

@@ -39,6 +39,14 @@ export type TeacherTrailContext = {
     limitation: string | null;
     reviewAction?: TeacherTrailAction;
   } | null;
+  insightStatus?: 'ready' | 'loading' | 'partial' | 'unavailable';
   nextActions: { key: string; title: string; icon: CuevoIconName; action: TeacherTrailAction }[];
   calendar?: { status: 'ready' | 'loading' | 'partial' | 'unavailable'; items: { key: string; title: string; dateLabel: string | null; contextLabel: string | null; action?: TeacherTrailAction }[]; action?: TeacherTrailAction };
+  updates?: {
+    status: 'ready' | 'loading' | 'partial' | 'unavailable';
+    items: { key: string; title: string; body: string; dateLabel: string | null; action?: TeacherTrailAction }[];
+    action?: TeacherTrailAction;
+    /** Existing query owner supplies its pagination/error controls once. */
+    continuation?: ReactNode;
+  };
 };

@@ -29,6 +29,15 @@ export function workspaceNavigation(membership: Pick<Membership, 'role' | 'entit
     .map(item => ({ ...item, label: labels[item.id] }));
 }
 
+/** Profile destinations remain in the authorized route/search catalogue. */
+export function workspaceRailNavigation<T extends { id: string }>(navigation: readonly T[]): T[] {
+  return navigation.filter(item => item.id !== 'account' && item.id !== 'access');
+}
+
+export function currentWorkspaceNotice(notice: string | null, sourceLocation: string | null, location: string): string | null {
+  return sourceLocation === location ? notice : null;
+}
+
 export function workspaceView(navigation: readonly WorkspaceDestination[], requested: string | null): WorkspaceTarget {
   return navigation.find(item => item.id === requested)?.id ?? 'overview';
 }

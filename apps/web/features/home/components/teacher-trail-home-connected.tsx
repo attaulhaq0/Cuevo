@@ -13,7 +13,7 @@ import { parsePortfolioItem } from '../../portfolio/model';
 import { parseSchedule } from '../../school/model';
 import { parseAnnouncement } from '../../community/model';
 import type { HomeDestination, HomeTarget } from '../model';
-import { currentTeacherHomeRows, teacherHomeWork } from '../teacher-home-binding-model';
+import { currentTeacherHomeRows, teacherHomeNextWork, teacherHomeWork } from '../teacher-home-binding-model';
 import { teacherHomeAr, teacherHomeEn } from '../teacher-home-binding-messages';
 import type { TeacherTrailContext } from '../teacher-trail-model';
 import { TeacherTrailHomeView } from './teacher-trail-home';
@@ -52,6 +52,10 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
   const proposal = proposals.error || proposals.loading ? null : currentTeacherHomeRows(proposals.data, scope).find(row => row.status === 'AWAITING_HUMAN') ?? null;
   const date = (value: string | null | undefined) => value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : null;
   const action = (label: string, target: HomeDestination) => ({ label, onClick: () => onNavigate(target) });
+  const workActionLabel = (kind: typeof work[number]['kind']) => kind === 'marking' ? t.work : kind === 'reassessment' ? t.followUp : kind === 'support' ? t.reviewPractice : t.portfolio;
+  const nextWork = teacherHomeNextWork(work);
+  const sourceNextActions = nextWork.map(row => ({ key: row.key, title: row.learnerName ? `${row.title} · ${row.learnerName}` : row.title, icon: row.kind === 'portfolio' ? 'portfolio' as const : row.kind === 'marking' ? 'assessment' as const : 'help' as const, action: action(workActionLabel(row.kind), row.destination) }));
+  if (proposal) sourceNextActions.push({ key: `proposal:${proposal.id}`, title: proposal.activityTitle, icon: 'help', action: action(t.support, 'improvement') });
   const areas = [
     { target: 'academic', title: t.marking, description: t.markingBody, icon: 'assessment' },
     { target: 'learning', title: t.learning, description: t.learningBody, icon: 'learning' },
@@ -70,9 +74,9 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
       status: failed || noWorkAccess ? 'unavailable' : pending ? 'loading' : partial ? 'partial' : 'ready',
       items: work.map(row => ({
         key: row.key, kind: row.kind, title: row.title, learnerName: row.learnerName, classLabel: row.classLabel,
-        state: row.state, statusLabel: row.kind === 'marking' ? row.state === 'in-progress' ? (locale === 'ar' ? 'مراجعة محفوظة' : 'Review saved') : t.work : row.kind === 'reassessment' ? t.followUp : t.portfolio,
+        state: row.state, statusLabel: row.kind === 'marking' ? row.state === 'in-progress' ? (locale === 'ar' ? 'مراجعة محفوظة' : 'Review saved') : t.work : row.kind === 'reassessment' ? t.followUp : row.kind === 'support' ? t.waitingPractice : t.portfolio,
         nativeKind: row.nativeKind, dateLabel: date(row.date),
-        action: { ...action(row.kind === 'marking' ? t.work : row.kind === 'reassessment' ? t.followUp : t.portfolio, row.destination), accessibleLabel: `${row.kind === 'marking' ? t.work : row.kind === 'reassessment' ? t.followUp : t.portfolio}: ${row.title}${row.learnerName ? ` · ${row.learnerName}` : ''}` },
+        action: { ...action(workActionLabel(row.kind), row.destination), accessibleLabel: `${workActionLabel(row.kind)}: ${row.title}${row.learnerName ? ` · ${row.learnerName}` : ''}` },
         ...(row.currentText ? { currentSubmission: { text: row.currentText, dateLabel: null, action: action(`${t.work}: ${row.title}`, row.destination) } } : {}),
       })),
       ...(can('academic') ? { viewAll: action(t.allWork, 'academic') } : {}),
@@ -84,12 +88,19 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
       interpretation: proposal.interpretation, limitation: proposal.uncertainty,
       sourceAction: action(t.support, 'improvement'), reviewAction: action(t.support, 'improvement'),
     } : null,
-    nextActions: areas.filter(area => ['school', 'community'].includes(area.target) && can(area.target)).map(area => ({ key: area.target, title: area.title, icon: area.icon, action: action(area.title, area.target) })),
+    insightStatus: proposals.error ? 'unavailable' : proposals.loading ? 'loading' : proposals.nextCursor || proposals.moreError ? 'partial' : 'ready',
+    nextActions: sourceNextActions.length ? sourceNextActions : areas.filter(area => ['school', 'community'].includes(area.target) && can(area.target)).map(area => ({ key: area.target, title: area.title, icon: area.icon, action: action(area.title, area.target) })),
     calendar: {
       status: calendar.error ? 'unavailable' : calendar.loading ? 'loading' : calendar.nextCursor ? 'partial' : 'ready',
       items: calendar.error || now === null ? [] : currentTeacherHomeRows(calendar.data, scope).filter(row => Date.parse(row.endsAt) >= now).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).slice(0, 3).map(row => ({ key: row.id, title: typeof row.title === 'string' && row.title.trim() ? row.title : t.noSource, dateLabel: date(row.startsAt), contextLabel: null, action: action(t.school, 'school') })),
       ...(can('school') ? { action: action(t.school, 'school') } : {}),
     },
+    ...(can('community') ? { updates: {
+      status: announcements.error ? 'unavailable' as const : announcements.loading ? 'loading' as const : announcements.nextCursor || announcements.moreError ? 'partial' as const : 'ready' as const,
+      items: announcements.error || announcements.loading ? [] : currentTeacherHomeRows(announcements.data, scope).map(row => ({ key: row.id, title: row.title, body: row.body, dateLabel: date(row.createdAt) })),
+      action: action(t.community, 'community'),
+      continuation: <>{announcements.error ? <LearningError error={announcements.error} /> : null}<LoadMore query={announcements} label={t.updates} /></>,
+    } } : {}),
   };
-  return <div className="teacher-home-connected"><TeacherTrailHomeView context={context} locale={locale} headingRef={headingRef} /><div className="teacher-home-records"><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.reload}</Button>{[{ query: marking, label: t.submissions }, { query: practices, label: t.practiceRecords }, { query: portfolio, label: t.portfolioRecords }, { query: proposals, label: t.proposals }, { query: calendar, label: t.school }].map(({ query, label }) => query.error || query.moreError || query.nextCursor ? <section key={label} aria-label={label}><p>{label}</p>{query.error ? <LearningError error={query.error} /> : null}<LoadMore query={query} label={label} /></section> : null)}{can('community') ? <details><summary>{t.updates}</summary>{announcements.loading ? <p role="status">{t.currentPages}</p> : announcements.error ? <LearningError error={announcements.error} /> : currentTeacherHomeRows(announcements.data, scope).map(row => <article key={row.id}><h2>{row.title}</h2><p>{row.body}</p></article>)}<LoadMore query={announcements} label={t.updates} /></details> : null}</div></div>;
+  return <div className="teacher-home-connected"><TeacherTrailHomeView context={context} locale={locale} headingRef={headingRef} /><div className="teacher-home-records"><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.reload}</Button>{[{ query: marking, label: t.submissions }, { query: practices, label: t.practiceRecords }, { query: portfolio, label: t.portfolioRecords }, { query: proposals, label: t.proposals }, { query: calendar, label: t.school }].map(({ query, label }) => query.error || query.moreError || query.nextCursor ? <section key={label} aria-label={label}><p>{label}</p>{query.error ? <LearningError error={query.error} /> : null}<LoadMore query={query} label={label} /></section> : null)}</div></div>;
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { currentTeacherHomeRows, teacherHomeWork } from '../teacher-home-binding-model.ts';
+import * as binding from '../teacher-home-binding-model.ts';
 import { parseMarkingItem } from '../../academic/model.ts';
 import { parseIntervention } from '../../improvement/model.ts';
 
@@ -30,8 +31,34 @@ test('teacher follow-up attention retains every completed current source and exc
   assert.equal(work[0].learnerName, null);
 });
 
+test('assigned practice remains waiting work with its exact source action and never becomes completed follow-up', () => {
+  const task = { id: 'practice-waiting', recommendationId: 'proposal-1', learnerId: 'learner-1', referenceId: 'reference-1', baselineResultId: 'result-1', title: 'Compare one explanation', instructions: 'Explain the checking step', status: 'ASSIGNED', createdAt: '2026-10-03T10:00:00Z', completedAt: null, followUpAssessmentId: null };
+  const tasks = [parseIntervention(task), parseIntervention({ ...task, id: 'changed', requiresReview: true, reviewReason: 'ACADEMIC_SOURCE_CHANGED' }), parseIntervention({ ...task, id: 'measured', status: 'MEASURED', completedAt: '2026-10-03T11:00:00Z', followUpAssessmentId: 'follow-up' })];
+  const work = teacherHomeWork([], tasks, []);
+  assert.equal(work.length, 1);
+  assert.equal(work[0].kind, 'support');
+  assert.equal(work[0].state, 'waiting');
+  assert.equal(work[0].title, 'Compare one explanation');
+  assert.equal(work[0].learnerName, null);
+  assert.equal(work[0].date, '2026-10-03T10:00:00Z');
+  assert.deepEqual(work[0].destination, { view: 'improvement', source: 'intervention', id: 'practice-waiting' });
+});
+
 test('teacher pages cannot retain source rows from a previous token, access generation or refresh', () => {
   const row = { ...parseMarkingItem(marking), sourceScope: 'current' };
   assert.equal(currentTeacherHomeRows([row], 'current').length, 1);
   assert.deepEqual(currentTeacherHomeRows([row], 'next-token'), []);
+});
+
+test('compact next work places current review before waiting practice and retains the exact source callbacks', () => {
+  assert.equal(typeof binding.teacherHomeNextWork, 'function');
+  const teacherHomeNextWork = binding.teacherHomeNextWork;
+  const waiting = { key: 'waiting', kind: 'support' as const, title: 'Waiting practice', learnerName: null, classLabel: null, state: 'waiting' as const, destination: { view: 'improvement' as const, source: 'intervention' as const, id: 'practice' } };
+  const review = { ...waiting, key: 'review', kind: 'marking' as const, title: 'Current review', state: 'needs-review' as const, destination: { view: 'academic' as const, source: 'marking' as const, id: 'submission' } };
+  const inProgress = { ...review, key: 'saved-review', state: 'in-progress' as const };
+  const fourth = { ...review, key: 'fourth' };
+  const rows = [waiting, review, inProgress, fourth];
+  assert.deepEqual(teacherHomeNextWork(rows).map(row => row.key), ['review', 'saved-review', 'fourth']);
+  assert.deepEqual(rows.map(row => row.key), ['waiting', 'review', 'saved-review', 'fourth']);
+  assert.deepEqual(teacherHomeNextWork([waiting])[0].destination, { view: 'improvement', source: 'intervention', id: 'practice' });
 });

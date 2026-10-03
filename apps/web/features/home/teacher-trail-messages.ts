@@ -13,7 +13,11 @@ export const teacherTrailEn = {
   source: 'Source', sourceUnknown: 'Source information is not available', interpretation: 'Possible interpretation', interpretationUnknown: 'An interpretation is not available.',
   limitation: 'Important limitation', limitationUnknown: 'Limitations must be checked before a decision.', finalDecision: 'You make the final decision.',
   insightUnknown: 'No current proposal is available in this context. Open your review workspace to check sources.',
+  insightUnavailable: 'Current proposals could not be loaded. Refresh teaching records or open your review workspace.',
+  insightLoading: 'Loading current proposals…',
   nextActions: 'Next actions', nextUnknown: 'Your current next actions are not available.', calendar: 'School day', calendarUnknown: 'Current school-day records are not available.',
+  updates: 'School updates', updatesEmpty: 'No school updates are available in these loaded records.', updatesLoading: 'Loading school updates…',
+  updatesUnavailable: 'School updates could not be loaded. Refresh to check the current records.', updatesPartial: 'More school updates may be available. Continue through the current source records.',
   availableContext: 'Current authorized records', sourceDetails: 'Review source details',
 };
 export const teacherTrailAr: typeof teacherTrailEn = {
@@ -31,6 +35,10 @@ export const teacherTrailAr: typeof teacherTrailEn = {
   source: 'المصدر', sourceUnknown: 'معلومات المصدر غير متاحة', interpretation: 'تفسير محتمل', interpretationUnknown: 'لا يتاح تفسير بعد.',
   limitation: 'حد مهم', limitationUnknown: 'يجب مراجعة الحدود قبل اتخاذ قرار.', finalDecision: 'القرار النهائي لك.',
   insightUnknown: 'لا يتاح مقترح حالي في هذا السياق. افتح مساحة المراجعة للتحقّق من المصادر.',
+  insightUnavailable: 'تعذّر تحميل المقترحات الحالية. حدّث سجلات التدريس أو افتح مساحة المراجعة.',
+  insightLoading: 'جارٍ تحميل المقترحات الحالية…',
   nextActions: 'الخطوات التالية', nextUnknown: 'خطواتك التالية الحالية غير متاحة.', calendar: 'اليوم المدرسي', calendarUnknown: 'سجلات اليوم المدرسي الحالية غير متاحة.',
+  updates: 'تحديثات المدرسة', updatesEmpty: 'لا تتوافر تحديثات مدرسية ضمن هذه السجلات المحمّلة.', updatesLoading: 'جارٍ تحميل تحديثات المدرسة…',
+  updatesUnavailable: 'تعذّر تحميل تحديثات المدرسة. حدّث للتحقّق من السجلات الحالية.', updatesPartial: 'قد تتوافر تحديثات مدرسية إضافية. تابع صفحات السجلات الحالية.',
   availableContext: 'السجلات الحالية ضمن الصلاحيات', sourceDetails: 'مراجعة تفاصيل المصدر',
 };

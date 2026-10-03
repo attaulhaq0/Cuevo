@@ -39,6 +39,8 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    if (element.firstElementChild) observer.observe(element.firstElementChild);
+    void document.fonts.ready.then(measure);
     return () => observer.disconnect();
   }, [context.navigation]);
   useEffect(() => {
