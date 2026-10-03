@@ -69,6 +69,14 @@
 .coordinator-trail__notice, .coordinator-trail__recovery { padding: var(--space-5); border-radius: var(--radius-md); background: var(--color-material-reading); margin-block-end: var(--space-4); }
 .coordinator-trail__recovery h1 { margin: 0; font-size: var(--type-title); }
 .coordinator-trail__recovery p { margin-block: var(--space-3); }
+@media (min-width: 1201px) {
+  .coordinator-trail__intro { column-gap: var(--space-4); row-gap: var(--space-2); }
+  .coordinator-trail__intro > div:first-child { grid-column: 1; grid-row: 1; }
+  .coordinator-trail__intro-actions { display: contents; }
+  .coordinator-trail__intro-actions > .button { grid-column: 1; grid-row: 2; }
+  .coordinator-trail__selection { grid-column: 2; grid-row: 1 / span 3; align-self: start; }
+  .coordinator-trail__date { grid-column: 1; grid-row: 3; justify-self: start; max-inline-size: 100%; padding: 0; border: 0; background: transparent; }
+}
 @media (max-width: 1200px) { .coordinator-trail__intro { grid-template-columns: minmax(0, 1fr); } .coordinator-trail__intro-actions { inline-size: 100%; } .coordinator-trail__programmes { grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); } }
 @media (max-width: 800px) { .coordinator-trail__content { padding: var(--space-2) 0 var(--space-3); } .coordinator-trail__intro h1 { font-size: 1.75rem; } .coordinator-trail__intro > div > p { font-size: var(--type-sm); } .coordinator-trail__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); } .coordinator-trail__evidence { grid-row: auto; } .coordinator-trail__programmes { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); } .coordinator-trail__selection { inline-size: 100%; } .coordinator-trail__intro-actions { grid-template-columns: minmax(0, 1fr); } .coordinator-trail__date { grid-column: 1; grid-row: 3; justify-self: start; max-inline-size: 100%; } .coordinator-trail__panel-heading h2 { font-size: var(--type-body); } .coordinator-trail__panel-heading .status { margin-inline-start: 0; } }
 @media (max-width: 480px) { .coordinator-trail__selection > div { grid-template-columns: minmax(0, 1fr); } .coordinator-trail__selection > svg { display: none; } .coordinator-trail__programmes article > .button { grid-column: 1 / -1; } .coordinator-trail__comparison { gap: var(--space-2); padding: var(--space-3); } .coordinator-trail__review-footer { gap: var(--space-3); } .coordinator-trail__review dl { gap: var(--space-5); } .coordinator-trail__intro-actions > .button { inline-size: 100%; } }
