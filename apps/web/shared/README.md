@@ -20,6 +20,8 @@ Shared authorization-error side effects also verify the request hook is mounted 
 
 Each CommandForm field describes its sanitized form-level error through aria-describedby. The API does not currently provide trusted per-field error detail, so the UI does not assert that every field is invalid. Native required/range validation and sign-in credential associations remain specific to their fields.
 
+The current CommandForm markup consumes one authenticated form/field/pressed-group anatomy in `packages/ui`; Learning's superseded generic declarations are removed. Presentation ownership does not move command journals, draft snapshots, current actor guards or receipt validators. Authentication retains its frozen global/component field styling outside the workspace boundary.
+
 Session-owned form-drafts retains only typed working values and explicit expected-version fields. It never caches protected read responses. Scope is current school, actor and form endpoint; offline, sign-out, current access denial and owner read failure clear the relevant drafts. Save and submit can share a working-input key while keeping distinct command journals; stale version fields are sent only when present in the current payload. Confirmed mutations announce a sanitized persistent status, and source/support IDs are available through deliberate disclosures.
 
 Changing language clears the transient saved-action notice from the prior language. It preserves the domain receipt, private working values and retry ownership; it does not re-execute the action. The rendered regression lives in `tests/e2e/customer-navigation-context.spec.ts`.

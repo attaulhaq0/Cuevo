@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+export { workspaceTheme } from './theme-model';
 import type { CuevoIconName } from '@cuevo/ui';
 import { canOpenWorkspace, type WorkspaceTarget } from '../../shared/session/capabilities';
 import type { Membership } from '../../shared/session/membership';
@@ -42,10 +43,18 @@ export function openWorkspaceDestination(destination: WorkspaceTarget | Navigati
   return true;
 }
 
-export type WorkspaceChromeAction = { label: string; onClick: () => void; disabled?: boolean; pending?: boolean };
+export type WorkspaceChromeAction = { label: string; onClick: () => void; disabled?: boolean; pending?: boolean; controls?: string; expanded?: boolean; hasPopup?: 'dialog'; keyShortcuts?: string };
 /** Owner already filtered these destinations through current capabilities.
  * Internal IDs are selection/routing handles, never visible customer labels. */
 export type WorkspaceNavigationItem = { id: string; label: string; icon: CuevoIconName; onSelect: () => void; disabled?: boolean; pending?: boolean };
+
+/** Local destination search is only a projection of the current permitted
+ * catalogue. IDs, records and inferred aliases never enter the match index. */
+export function matchWorkspaceNavigation(items: readonly WorkspaceNavigationItem[], query: string): WorkspaceNavigationItem[] {
+  const normalize = (value: string) => value.normalize('NFC').replace(/[\u064B-\u065F\u0670]/gu, '').trim().replace(/\s+/gu, ' ').toLowerCase();
+  const search = normalize(query);
+  return items.filter(item => !search || normalize(item.label).includes(search));
+}
 export type WorkspaceChromeContext = {
   navigation: WorkspaceNavigationItem[];
   selectedId: string;

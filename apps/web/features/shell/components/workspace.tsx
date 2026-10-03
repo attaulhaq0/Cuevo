@@ -11,6 +11,9 @@ import type { WorkspaceTarget } from '../../../shared/session/capabilities';
 import{parseNavigationIntent,type NavigationIntent}from'../../../shared/session/navigation-intent';
 import { isWorkspaceHomeActivation, openWorkspaceDestination, workspaceNavigation, workspaceView } from '../model';
 import { WorkspaceChrome } from './workspace-chrome';
+import { WorkspaceCommandNavigation } from './workspace-command-navigation';
+import { ThemeControl } from './workspace-theme';
+import type { WorkspaceTheme } from '../theme-model';
 import { LearningWorkspace } from '../../learning/ui';
 import { learningAr, learningEn } from '../../learning/copy';
 import { AcademicWorkspace } from '../../academic/ui';
@@ -35,7 +38,7 @@ import{restrictedAr,restrictedEn}from'../../restricted-records/copy';
 
 type View = WorkspaceTarget;
 
-export function Workspace({ membership }: { membership: Membership }) {
+export function Workspace({ membership, theme, onThemeChange }: { membership: Membership; theme: WorkspaceTheme; onThemeChange: (theme: WorkspaceTheme) => void }) {
   const { dictionary: t, signOut, refreshAccess, locale, notice } = useApp();
   const search = useSearchParams();
   const learning = locale === 'ar' ? learningAr : learningEn;
@@ -68,6 +71,7 @@ export function Workspace({ membership }: { membership: Membership }) {
     if (!openWorkspaceDestination(destination, navigation, location.pathname, window.history)) return;
     requestAnimationFrame(() => heading.current?.focus());
   }
+  const navigationItems = navigation.map(item => ({ ...item, onSelect: () => selectView(item.id) }));
   async function onSignOut() {
     setSigningOut(true);
     const success = await signOut();
@@ -76,15 +80,17 @@ export function Workspace({ membership }: { membership: Membership }) {
   }
   const title = view==='restricted'?restricted.title:view === 'portfolio' ? portfolio.portfolio : view === 'development' ? development.development : view === 'curriculum' ? curriculum.curriculum : view === 'community' ? community.community : view === 'school' ? school.school : view === 'improvement' ? improvement.improvement : view === 'progress' ? progress.progress : view === 'academic' ? academic.academic : view === 'learning' ? learning.learning : view === 'overview' ? t.roleTitles[membership.role] : view === 'access' ? t.accessTitle : t.accountTitle;
   const body = view==='restricted'?restricted.notice:view === 'portfolio' ? portfolio.body : view === 'development' ? development.body : view === 'curriculum' ? curriculum.body : view === 'community' ? community.body : view === 'school' ? school.body : view === 'improvement' ? improvement.body : view === 'progress' ? progress.body : view === 'academic' ? academic.body : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
-  return <WorkspaceChrome context={{
-    navigation: navigation.map(item => ({ ...item, onSelect: () => selectView(item.id) })),
+  return <WorkspaceCommandNavigation navigation={navigationItems} selectedId={view} locale={locale}>{(searchAction, commandDialog) => <WorkspaceChrome context={{
+    navigation: navigationItems,
     selectedId: view, navigationLabel: t.mainNavigation,
     schoolName: membership.school.name, personName: membership.displayName,
-    roleLabel: t.roles[membership.role], locale, theme: 'light',
+    roleLabel: t.roles[membership.role], locale, theme,
     expression: membership.role === 'student' ? 'student' : membership.role === 'parent' ? 'parent' : 'staff',
     brand: <div onClickCapture={event => { if (isWorkspaceHomeActivation(event) && (event.target as Element).closest('a')) { event.preventDefault(); event.stopPropagation(); selectView('overview'); } }}><Brand compact /></div>,
     languageControl: <LanguageSwitch />,
+    contextControl: <ThemeControl value={theme} onChange={onThemeChange} locale={locale} />,
     accountAction: { label: t.profile, onClick: () => selectView('account') },
+    searchAction,
   }}>
       <main id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}`} tabIndex={-1}>
         {studentHome ? null : <div className="workspace-intro"><div><p className="eyebrow">{t.greeting} <bdi>{membership.displayName}</bdi></p><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{body}</p></div><Status tone="positive">{t.sessionVerified}</Status></div>}
@@ -96,5 +102,6 @@ export function Workspace({ membership }: { membership: Membership }) {
         <footer className="workspace-footer"><p>{t.foundationNote}</p><button type="button" className="text-action" onClick={() => void onSignOut()} disabled={signingOut}><CuevoIcon name="logout" size={14} />{signingOut ? t.signingOut : t.signOut}</button></footer>
         {signOutFailed && view !== 'account' ? <p className="form-error" role="alert">{t.signOutError}</p> : null}
       </main>
-  </WorkspaceChrome>;
+      {commandDialog}
+  </WorkspaceChrome>}</WorkspaceCommandNavigation>;
 }

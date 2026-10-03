@@ -6,7 +6,7 @@ import { navigationFocusTarget, type WorkspaceChromeAction, type WorkspaceChrome
 import { chromeAr, chromeEn } from '../messages';
 
 function Utility({ action, icon }: { action: WorkspaceChromeAction; icon: 'search' | 'notification' | 'help' }) {
-  return <Button type="button" variant="quiet" className="workspace-chrome__utility" onClick={action.onClick} disabled={action.disabled || action.pending} aria-busy={action.pending || undefined} aria-label={action.label}><CuevoIcon name={icon} size={22} /></Button>;
+  return <Button type="button" variant="quiet" className="workspace-chrome__utility" onClick={action.onClick} disabled={action.disabled || action.pending} aria-busy={action.pending || undefined} aria-label={action.label} aria-controls={action.controls} aria-expanded={action.expanded} aria-haspopup={action.hasPopup} aria-keyshortcuts={action.keyShortcuts}><CuevoIcon name={icon} size={22} /></Button>;
 }
 
 /** One navigation DOM for desktop rail/mobile dock. The current owner retains
