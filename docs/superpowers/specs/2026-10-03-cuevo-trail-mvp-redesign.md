@@ -18,6 +18,8 @@ Latest authentication placement refinement: use the full viewport for the logica
 
 Latest founder clarification: the approved mobile authentication version is already good. Preserve its single Foxi, pale ribbon background, native form and mobile spacing. Remaining authentication refinements apply only at web widths from768px upward. Verify mobile against the approved baseline after every shared or desktop change; this refinement does not authorize another mobile redesign.
 
+Latest delivery authorization: finish and verify the Teacher workflows, then continue Parent, Coordinator and Admin using the recorded reference strengths and current supported contracts. The founder will review all roles at the end. This supersedes the earlier per-adult-selection pause while preserving continuous progress updates, one existing implementation, MVP scope, source authority and backend connections. Do not add pictured future functionality or treat presentation verification as backend/MVP acceptance.
+
 ## Decision and scope
 
 The founder and team selected the Trail approach. Preserve its dimensional filled icons, cyan/navy palette, pearl-blue ribbon background, section hierarchy, buttons, spacing and welcoming learner presentation. The additional student reference places Foxi beside the current task. This supersedes the earlier small character-preview-only placement for the student home. Authentication follows the latest approved static Learning Studio refinement, preserving sign-in/session authority.
