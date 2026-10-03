@@ -1,6 +1,6 @@
 .parent-trail { position: relative; isolation: isolate; font-family: 'Cuevo Nunito Sans', var(--font-sans); color: var(--color-text); }
 .parent-trail[lang="ar"] { font-family: var(--font-arabic); }
-.parent-trail__background { position: absolute; z-index: -1; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; opacity: .55; pointer-events: none; }
+.parent-trail__background { position: absolute; z-index: -1; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; opacity: .55; pointer-events: none; filter: var(--trail-background-filter); }
 .parent-trail__content { max-inline-size: 100rem; margin-inline: auto; padding: var(--space-6) var(--space-10) var(--space-10); }
 .parent-trail__intro { display: flex; gap: var(--space-6); align-items: start; justify-content: space-between; margin-block: var(--space-2) var(--space-5); }
 .parent-trail__intro h1 { font-size: clamp(2.125rem, 3.5vw, 3.375rem); line-height: 1.2; font-weight: var(--font-weight-bold); letter-spacing: var(--tracking-heading); margin: 0; }
@@ -9,14 +9,14 @@
 .parent-trail__child-context > svg { color: var(--color-accent); }
 .parent-trail__child-context p { margin: var(--space-1) 0; font-size: var(--type-sm); color: var(--color-text-secondary); }
 .parent-trail__child-context .field { margin-block-start: var(--space-2); }
-.parent-trail__grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: var(--space-5); align-items: stretch; }
+.parent-trail__grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 .parent-trail__panel { border-radius: var(--radius-lg); background: var(--color-material-reading); border: 1px solid var(--color-border); padding: var(--space-4) var(--space-5); min-inline-size: 0; }
 .parent-trail__panel-heading { display: flex; gap: var(--space-3); align-items: center; padding-block-end: var(--space-3); flex-wrap: wrap; }
 .parent-trail__panel-heading > span:first-child { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; background: var(--color-learning-surface); color: var(--color-learning-symbol); border-radius: var(--radius-md); flex: none; }
 .parent-trail__panel-heading h2 { font-size: var(--type-lead); font-weight: var(--font-weight-bold); line-height: 1.35; margin: 0; }
 .parent-trail__panel-heading .status { margin-inline-start: auto; }
 .parent-trail__date { margin: 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
-.parent-trail__feedback { grid-row: span 2; }
+.parent-trail__feedback { grid-row: span 2; align-self: start; }
 .parent-trail__feedback-body { background: var(--color-surface-muted); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); }
 .parent-trail__teacher { display: flex; align-items: center; gap: var(--space-4); }
 .parent-trail__teacher > span { inline-size: 3.75rem; block-size: 3.75rem; display: grid; place-items: center; background: var(--color-learning-surface); border-radius: var(--radius-pill); color: var(--color-accent); }
