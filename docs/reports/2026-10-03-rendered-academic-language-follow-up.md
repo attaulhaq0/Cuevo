@@ -1,6 +1,8 @@
 # Rendered academic language follow-up
 
-Date: 3 October 2026. This records customer-facing defects found in actual production Chromium evidence. The numeric ratio repair has its own verified disposition below; remaining source-language findings stay open. E Deviser is the company; Cuevo is the product.
+Date: 3 October 2026. This records customer-facing defects found in actual production Chromium evidence. Later numeric ratio and human evidence/source-label repairs have scoped verification below; other context and ambiguity findings stay open. E Deviser is the company; Cuevo is the product.
+
+Later human-source repair: raw versions moved to explicit source disclosures across ordinary result/Progress/Portfolio/report/reference/rubric views; authorized evidence now supplies task/class/year/actual recorder context with review-required unknown names. Actual objective creation/approval dates are available for labels. API/native/retained-parent,8productionbrowsercases and finalclean2cases pass;927unit/166web/1306SQLpass. [Detailed evidence](2026-10-03-human-evidence-and-auth-provisioning.md) records limits. Same-minute objective ambiguity, missing human outcome identity, some school selectors and AI wording remain incomplete; this is not full customer readiness.
 
 The visible UI loop passed33.4seconds, but its Arabic mobile screenshot shows raw curriculum version tokens in ordinary academic rows and numeric ratio presentation that can read as maximum/score. Passing functional assertions did not establish readable customer presentation. Source identity must remain exact without turning internal tokens into guessed human versions or grades.
 
