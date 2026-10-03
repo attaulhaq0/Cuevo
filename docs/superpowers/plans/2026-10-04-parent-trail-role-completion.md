@@ -12,7 +12,7 @@
 
 ## Execution boundary and source facts
 
-This plan was prepared read-only against design worktree `C:/Users/hp/.codex/worktrees/cuevo-design-system/Cuevo`, with root completing the Teacher checkpoint. Do not start Parent edits until root freezes Teacher and delegates the owner task. Do not modify `G:/Cuevo`, Auth, frozen Teacher work or the unaccepted Curriculum candidate. Root alone builds/starts/stops the isolated preview and arranges real API/DB/relationship/publication checks. Intercepted presentation evidence never becomes live acceptance.
+This plan was prepared read-only against design worktree `C:/Users/hp/.codex/worktrees/cuevo-design-system/Cuevo`. Root froze the scoped Teacher checkpoints through `c6c7e18` on 4 October and delegated Parent Home and Portfolio. Their focused source, browser and isolated API evidence does not establish Gate 5 or full customer acceptance. Preserve `G:/Cuevo`, Auth and the saved Teacher work. Root alone builds/starts/stops the isolated preview and arranges real API/DB/relationship/publication checks. Intercepted presentation evidence never becomes live acceptance.
 
 Read root/web instructions, `docs/product/context-map.md`, `docs/codebase-map.md`, owner READMEs, sources14/18/19/36/37/39/43/63/80, exact tests and locked synthetic curriculum artifacts. Sources17/04/16 apply to Academic/Portfolio work. Missing teacher/unit/approval-time/coverage facts remain unavailable; use no invented values or live curriculum lookups.
 
