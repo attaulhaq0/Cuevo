@@ -38,4 +38,7 @@ test('coordinator outcome selects only its exact source-linked current task with
  assert.equal(binding.coordinatorHomeOutcome([outcome],[task])?.task.title,'Checking follow-up');
  assert.equal(binding.coordinatorHomeOutcome([{...outcome,baselineResultId:other}],[task]),null);
  assert.equal(binding.coordinatorHomeOutcome([outcome],[{...task,requiresReview:true,reviewReason:'ACADEMIC_SOURCE_CHANGED'}]),null);
+ const context={status:'READY',labelBasis:'CURRENT_REGISTERED_NAMES_AND_IMMUTABLE_TASK',learnerId:id,identityRequiresReview:false,learnerName:'Lina Hassan',className:'Cedar',yearGroupName:'Year 1',academicYearName:'2026–2027',courseTitle:'School checking',practiceTitle:'Checking follow-up',baselineAssessmentTitle:'First checking task',followUpAssessmentTitle:'Later checking task',baselineSubmittedAt:'2026-10-01T10:00:00Z',followUpSubmittedAt:'2026-10-02T10:00:00Z'};
+ assert.equal(binding.coordinatorHomeOutcome([{...outcome,context}],[task])?.outcome.context?.learnerId,id);
+ assert.equal(binding.coordinatorHomeOutcome([{...outcome,context:{...context,learnerId:other}}],[task]),null);
 });

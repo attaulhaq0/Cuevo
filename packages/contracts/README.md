@@ -1,5 +1,7 @@
 # Boundary contracts
 
+`outcome-display.ts` reconciles canonical `da45359`: optional strict authorized read-time learner/practice/task names and dates extend native outcome values. READY requires complete unambiguous context; review/legacy absence never creates inferred facts. The base measurement/event schema stays separate, and learner-state context must match its learner. This contract does not authorize access.
+
 Portable analytics contracts also describe strict intelligence metadata: fixed source event names, output/review/cost-basis enums, nullable source counts/usage, HMAC-ready run/context references and linked outcome comparability. The worker validates the constructed private projection; these types grant no retrieval or academic authority. No prompt/output/PII/free-text field is part of this analytics contract.
 
 Public API: @cuevo/contracts through src/index.ts. Files group identity, school-learning, academic, learner-state and improvement schemas. These browser-safe schemas describe data boundaries; they never fetch data or grant authorization. Import the public package instead of relative src paths. API unit/contract tests and actual integration exercise consumers; new schemas should have owner tests here when useful.

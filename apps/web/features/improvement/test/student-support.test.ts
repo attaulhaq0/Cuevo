@@ -50,4 +50,6 @@ test('student outcomes require an exact authorized own task and its immutable ba
  assert.throws(()=>support.currentStudentOutcome({...outcome,baselineResultId:other},[taskSource],id),LearningApiError);
  assert.throws(()=>support.currentStudentOutcome(outcome,[],id),LearningApiError);
  assert.throws(()=>support.currentStudentOutcome(outcome,[{...taskSource,learnerId:other}],id),LearningApiError);
+ const context={status:'READY',labelBasis:'CURRENT_REGISTERED_NAMES_AND_IMMUTABLE_TASK',learnerId:other,identityRequiresReview:false,learnerName:'Another learner',className:'Cedar',yearGroupName:'Year 1',academicYearName:'2026–2027',courseTitle:'School checking',practiceTitle:'A checking step',baselineAssessmentTitle:'First checking task',followUpAssessmentTitle:'Later checking task',baselineSubmittedAt:'2026-10-01T10:00:00Z',followUpSubmittedAt:'2026-10-02T10:00:00Z'};
+ assert.throws(()=>support.currentStudentOutcome({...outcome,context},[taskSource],id),LearningApiError);
 });

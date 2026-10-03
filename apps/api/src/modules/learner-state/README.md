@@ -1,5 +1,7 @@
 # Learner state domain
 
+Canonical `da45359` optional measured-outcome display context is reconciled through the shared learner-state contract. Context labels remain read-time metadata after current source authorization, bound to the exact learner; stored native outcome values, worker events and academic authority stay unchanged. Current design-source API/SQL acceptance remains separate from historical canonical evidence.
+
 Entry: learner-state.controller.ts; public interface createLearnerStateController(identity,database). Private state processing lives in worker jobs and database source functions. Product source IDs 04, 08, 09, 11, 38, 39 and 81 apply.
 
 Keep academic, recorded development, engagement, support and impact separate. Missing/stale counts remain unknown; parent receives only approved projection. No composite intelligence/character score. Tests: API unit/learner-state-contract.test.ts, integration/learner-state-api.test.ts, worker tests and SQL 050. Shared boundary schema: @cuevo/contracts. Source-linked evidence does not imply official curriculum readiness.

@@ -10,6 +10,12 @@ export function currentGroupCandidateRoom(previous: GroupCandidateRoom | null, i
   return { scope: input.scope, classId: input.classId, id };
 }
 export type Post = { id: string; roomId: string; actorId: string; authorName: string; body: string | null; replyToId: string | null; createdAt: string; status: 'VISIBLE' | 'HIDDEN'; reactions: { reaction: 'THANKS' | 'HELPFUL' | 'ENCOURAGE'; count: number; mine: boolean }[] };
+export type ReportSourceContext={state:'NOT_LOADED'}|{state:'VISIBLE'|'HIDDEN';post:Post};
+/** Presentation uses the current exact room page; absence never means hidden. */
+export function reportSourceContext(postId:string,roomId:string,posts:Post[],current:boolean):ReportSourceContext {
+ const post=current?posts.find(post=>post.id===postId&&post.roomId===roomId):undefined;
+ return post?{state:post.status,post}:{state:'NOT_LOADED'};
+}
 export function replyParentContext(parentId: string, posts: Post[]): { state: 'VISIBLE'; authorName: string } | { state: 'HIDDEN' | 'NOT_LOADED' } {
   const parent = posts.find(post => post.id === parentId);
   return !parent ? { state: 'NOT_LOADED' } : parent.status === 'HIDDEN' ? { state: 'HIDDEN' } : { state: 'VISIBLE', authorName: parent.authorName };

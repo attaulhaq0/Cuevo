@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nativeInterventionOutcomeSchema } from './improvement';
+import { outcomeDisplaySchema } from './outcome-display';
 
 export const learnerStateQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.uuid().optional(), learnerId: z.uuid().optional() }).strict();
 export const classLearningSummaryQuerySchema=z.object({limit:z.coerce.number().int().min(1).max(100).default(25),cursor:z.uuid().optional()}).strict();
@@ -12,15 +12,7 @@ export const learnerSupportItemSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }), completedAt: z.iso.datetime({ offset: true }).nullable(), followUpAssessmentId: z.uuid().nullable(),
   requiresReview:z.boolean().optional(),reviewReason:z.literal('ACADEMIC_SOURCE_CHANGED').nullable().optional(),
 }).strict();
-const numericLearnerOutcomeSchema = z.object({
-  id: z.uuid(), interventionId: z.uuid(), baselineResultId: z.uuid(), followUpResultId: z.uuid(),
-  status: z.enum(['improved', 'no_meaningful_change', 'inconclusive']), difference: z.number(), minimumChange: z.number().positive().max(100000),
-  baseline: z.object({ score: z.number().min(0), maxScore: z.number().positive().max(100000) }).strict(),
-  followUp: z.object({ score: z.number().min(0), maxScore: z.number().positive().max(100000) }).strict(),
-  reason: z.enum(['OBSERVED_RAW_SCORE_CHANGE', 'FOLLOW_UP_LOWER']), limitation: z.literal('OBSERVED_CHANGE_NOT_CAUSAL_PROOF'), measuredAt: z.iso.datetime({ offset: true }),
-  requiresReview:z.boolean().optional(),reviewReason:z.literal('ACADEMIC_SOURCE_CHANGED').nullable().optional(),
-}).strict();
-export const learnerOutcomeSchema=z.union([numericLearnerOutcomeSchema,nativeInterventionOutcomeSchema]);
+export const learnerOutcomeSchema=outcomeDisplaySchema;
 const boundedCountSchema=z.object({totalCount:z.number().int().nonnegative().nullable(),returnedCount:z.number().int().nonnegative(),truncated:z.boolean()}).strict().superRefine((value,ctx)=>{if(value.totalCount===null&&(value.returnedCount!==0||value.truncated)||value.totalCount!==null&&(value.returnedCount>value.totalCount||value.truncated!==(value.returnedCount<value.totalCount)))ctx.addIssue({code:'custom',message:'Bounded source coverage must preserve its denominator.'});});
 export const learnerProjectionSchema=z.object({scope:z.literal('CURRENT_AUTHORIZED_SOURCES'),academic:boundedCountSchema.safeExtend({nextCursor:z.uuid().nullable()}),observations:z.object({practice:boundedCountSchema,revision:boundedCountSchema,reflection:boundedCountSchema}).strict(),sourceEvents:boundedCountSchema,support:boundedCountSchema.optional(),outcomes:boundedCountSchema.optional()}).strict();
 export const learnerStateSchema = z.object({
@@ -52,6 +44,7 @@ export const learnerStateSchema = z.object({
     if (item.status === 'MEASURED' && !value.impact.outcomes.some(outcome => outcome.interventionId === item.id)) fail('Measured support needs outcome source');
   }
   for (const outcome of value.impact.outcomes) {
+    if (outcome.context && outcome.context.learnerId !== value.learnerId) fail('Outcome display context must match the selected learner.');
     const support = value.support.items.find(item => item.id === outcome.interventionId);
     if (!support || support.status !== 'MEASURED' || support.baselineResultId !== outcome.baselineResultId || support.completedAt === null || Date.parse(outcome.measuredAt) < Date.parse(support.completedAt)) fail('Outcome must trace to completed support and baseline');
     if(!('difference'in outcome))continue;

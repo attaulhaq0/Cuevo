@@ -1,5 +1,7 @@
 # Role action home
 
+Outcome context reconciliation uses the canonical optional read metadata while retaining exact Coordinator task linkage. The Home parser passes only each outcome item and checks any context learner against its matching measured intervention. Its nested comparison uses the supplied heading level; it adds no period attribution or authority.
+
 ## Daily-use responsive refinement — 3 October 2026
 
 The founder approved distinct desktop/mobile compositions within the existing feature owners and shared tokens/actions. Student Home follows the selected desktop composition with current task and task-edge artwork in the centre, feedback to one side, upcoming work to the other, large separately rendered journey objects and source-backed recognition below. Its responsive CSS grid keeps records in natural flow; mobile prioritizes the current task in one column. Mobile prioritizes one current action, with natural-flow sections and complete supporting source controls. Adult owner styles reduce duplicated introductory spacing and oversized illustrations. Parent's single approved-report action sits beside its source title before full feedback; child selection, exact source/status/date/native values and unavailable records remain visible. Admin source collections use labeled native disclosures with all rows, pagination, errors and recovery preserved. These presentation changes do not change API, authorization, native grading or command/receipt owners; actual full backend acceptance remains a separate gate.

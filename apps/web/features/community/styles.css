@@ -53,6 +53,10 @@
 .conversation-thread-layout { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(15rem, 1fr); gap: var(--space-5); align-items: start; }
 .conversation-timeline { min-inline-size: 0; padding: var(--space-4); background: var(--color-material-reading); border: 1px solid var(--color-border); border-radius: var(--radius-xl); }
 .conversation-message { margin-block: var(--space-3); padding: var(--space-4); border-inline-start: 3px solid var(--color-border); background: var(--color-surface-muted); border-radius: var(--radius-md); }
+.community-report-source { margin-block:var(--space-3); padding:var(--space-3); background:var(--color-surface-muted); border-radius:var(--radius-md); }
+.community-report-source > h3 { font-size:var(--type-body); margin:0 0 var(--space-2); }
+.community-report-source > p { overflow-wrap:anywhere; }
+.community-report-source time { font-size:var(--type-sm); color:var(--color-text-secondary); }
 .conversation-message--own { border-inline-start-color: var(--color-accent); background: var(--color-surface-accent); }
 .conversation-message > header { display: flex; justify-content: space-between; align-items: start; gap: var(--space-3); }
 .conversation-message h3 { margin: 0; font-size: var(--type-body); }

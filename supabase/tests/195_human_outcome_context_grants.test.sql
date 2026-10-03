@@ -1,0 +1,7 @@
+begin;create extension if not exists pgtap with schema extensions;set local search_path=extensions,pg_catalog;select plan(5);
+select ok(has_function_privilege('cuevo_api','internal.read_outcome_display(uuid)','EXECUTE'),'API reads the current authorized outcome display');
+select ok(not exists(select 1 from pg_roles role where role.rolname in('anon','authenticated','service_role','cuevo_api','cuevo_worker')and has_function_privilege(role.oid,'internal.outcome_display_context(uuid,uuid)'::regprocedure,'EXECUTE')),'No runtime caller can bypass outcome wrapper authority');
+select ok(not exists(select 1 from pg_roles role where role.rolname in('anon','authenticated','service_role','cuevo_worker')and has_function_privilege(role.oid,'internal.read_outcome_display(uuid)'::regprocedure,'EXECUTE')),'Data API and worker cannot retrieve named outcome context');
+select ok(position('outcome_display_context'in pg_get_functiondef('internal.native_outcome_value(uuid,uuid)'::regprocedure))=0,'Stored event and worker outcome values do not retrieve human display context');
+select ok(not exists(select 1 from pg_roles role where role.rolname in('anon','authenticated','service_role','cuevo_api','cuevo_worker')and has_function_privilege(role.oid,'internal.projected_outcome_context(uuid,uuid)'::regprocedure,'EXECUTE')),'Pure context projection is available only behind the authorizing owner wrappers');
+select*from finish();rollback;

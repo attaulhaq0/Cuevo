@@ -20,6 +20,6 @@ export function coordinatorHomePeriod(value:unknown) {
  const row=parseSchoolRow(value);if(typeof row.name!=='string'||!row.name.trim()||typeof row.startsOn!=='string'||typeof row.endsOn!=='string'||!Number.isInteger(row.revision)||Number(row.revision)<1)throw new LearningApiError('invalid');return {...row,name:row.name,startsOn:row.startsOn,endsOn:row.endsOn,revision:Number(row.revision)};
 }
 export function coordinatorHomeOutcome(outcomeValues:unknown[],taskValues:unknown[]):{outcome:Outcome;task:Intervention}|null {
- const tasks=taskValues.map(parseIntervention),outcomes=outcomeValues.map(parseOutcome).sort((a,b)=>Date.parse(b.measuredAt)-Date.parse(a.measuredAt));
- for(const outcome of outcomes){const task=tasks.find(task=>task.id===outcome.interventionId&&task.status==='MEASURED'&&!task.requiresReview&&task.baselineResultId===outcome.baselineResultId);if(task&&!outcome.requiresReview)return {outcome,task};}return null;
+ const tasks=taskValues.map(parseIntervention),outcomes=outcomeValues.map(value=>parseOutcome(value)).sort((a,b)=>Date.parse(b.measuredAt)-Date.parse(a.measuredAt));
+ for(const outcome of outcomes){const task=tasks.find(task=>task.id===outcome.interventionId&&task.status==='MEASURED'&&!task.requiresReview&&task.baselineResultId===outcome.baselineResultId&&(!outcome.context||outcome.context.learnerId===task.learnerId));if(task&&!outcome.requiresReview)return {outcome,task};}return null;
 }

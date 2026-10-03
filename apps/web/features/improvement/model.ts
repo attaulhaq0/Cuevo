@@ -2,10 +2,10 @@ type IntelligenceMetadata={selectedActivityId?:string|null;analysis?:Intelligenc
 export type Recommendation = IntelligenceMetadata & { id: string; learnerId: string; referenceId: string; baselineResultId: string; origin: 'TEACHER_AUTHORED' | 'AI_GENERATED'; generationMode: 'HUMAN' | 'FIXTURE' | 'LIVE'; intelligenceRunId: string | null; observation: string; evidenceIds: string[]; interpretation: string; recommendation: string; rationale: string; uncertainty: string; activityTitle: string; instructions: string; status: 'AWAITING_HUMAN' | 'APPROVED' | 'REJECTED'; createdAt: string };
 type SourceReview = { requiresReview?: boolean; reviewReason?: 'ACADEMIC_SOURCE_CHANGED' | null };
 export type Intervention = SourceReview & IntelligenceMetadata & { id: string; recommendationId: string; learnerId: string; referenceId: string; baselineResultId: string; title: string; instructions: string; status: 'ASSIGNED' | 'COMPLETED' | 'MEASURED'; createdAt: string; completedAt: string | null; followUpAssessmentId: string | null };
-export type NumericOutcome = SourceReview & { id: string; interventionId: string; baselineResultId: string; followUpResultId: string; status: 'improved' | 'no_meaningful_change' | 'inconclusive'; difference: number; minimumChange: number; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; reason: string; limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF'; measuredAt: string };
-export type Outcome=NumericOutcome|z.infer<typeof nativeInterventionOutcomeSchema>;
+export type NumericOutcome = SourceReview & { id: string; interventionId: string; baselineResultId: string; followUpResultId: string; status: 'improved' | 'no_meaningful_change' | 'inconclusive'; difference: number; minimumChange: number; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; reason: string; limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF'; measuredAt: string; context?: OutcomeDisplayContext };
+export type Outcome=NumericOutcome|z.infer<typeof nativeOutcomeDisplaySchema>;
 import { LearningApiError } from '../../shared/api/client.ts';
-import { insightContextSchema,intelligenceAnalysisSchema,nativeInterventionOutcomeSchema,interventionHelpStatusSchema,interventionChoiceStatusSchema,interventionChoiceInputSchema,interventionHelpInputSchema,interventionHelpReplyInputSchema,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
+import { insightContextSchema,intelligenceAnalysisSchema,nativeOutcomeDisplaySchema,outcomeDisplayContextSchema,interventionHelpStatusSchema,interventionChoiceStatusSchema,interventionChoiceInputSchema,interventionHelpInputSchema,interventionHelpReplyInputSchema,type OutcomeDisplayContext,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
 import { z } from 'zod';
 const insightEnvelopeSchema = z.object({ runId: z.uuid(), context: insightContextSchema.nullable() }).strict();
 export type InsightContextEnvelope = { runId: string; context: InsightContext | null };
@@ -38,8 +38,13 @@ export function parseIntervention(value: unknown): Intervention {
   if(!validIntelligence(value))throw new LearningApiError('invalid');
   return value as Intervention;
 }
-export function parseOutcome(value: unknown): Outcome {
-  if(object(value)&&value.model==='rubric'){const parsed=nativeInterventionOutcomeSchema.safeParse(value);if(!parsed.success||!validReview(value))throw new LearningApiError('invalid');return parsed.data;}
+export function parseOutcome(value: unknown, expectedLearnerId?: string): Outcome {
+  if (object(value) && value.context !== undefined) {
+    const context = outcomeDisplayContextSchema.safeParse(value.context);
+    if (!context.success || expectedLearnerId !== undefined && context.data.learnerId !== expectedLearnerId
+      || value.learnerId !== undefined && context.data.learnerId !== value.learnerId) throw new LearningApiError('invalid');
+  }
+  if(object(value)&&value.model==='rubric'){const parsed=nativeOutcomeDisplaySchema.safeParse(value);if(!parsed.success||!validReview(value))throw new LearningApiError('invalid');return parsed.data;}
   if (!object(value) || !strings(value, ['id', 'interventionId', 'baselineResultId', 'followUpResultId', 'reason']) || !['improved', 'no_meaningful_change', 'inconclusive'].includes(String(value.status)) || typeof value.difference !== 'number' || !Number.isFinite(value.difference) || typeof value.minimumChange !== 'number' || !Number.isFinite(value.minimumChange) || value.minimumChange <= 0 || !native(value.baseline) || !native(value.followUp) || value.baseline.maxScore !== value.followUp.maxScore || value.limitation !== 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF' || !date(value.measuredAt)) throw new LearningApiError('invalid');
   const difference = value.followUp.score - value.baseline.score;
   const expectedStatus = value.difference >= value.minimumChange ? 'improved' : Math.abs(value.difference) < value.minimumChange ? 'no_meaningful_change' : 'inconclusive';
@@ -78,6 +83,6 @@ export function validateInterventionChoiceReceipt(value:unknown,interventionId:s
  try{const status=parseCurrentInterventionChoices(value,interventionId),sent=interventionChoiceInputSchema.parse(body);if(status.choice?.activityId!==sent.activityId)throw new LearningApiError('invalid');}catch{throw new LearningApiError('invalid',true);}
 }
 export function currentStudentOutcome(value:unknown,tasks:Intervention[],learnerId:string):Outcome {
- const outcome=parseOutcome(value);const task=tasks.find(task=>task.id===outcome.interventionId&&task.learnerId===learnerId);
+ const outcome=parseOutcome(value,learnerId);const task=tasks.find(task=>task.id===outcome.interventionId&&task.learnerId===learnerId);
  if(!task||outcome.baselineResultId!==task.baselineResultId)throw new LearningApiError('invalid');return outcome;
 }

@@ -61,7 +61,7 @@ export function parseLearnerState(value: unknown): LearnerState {
   }
   if (!date(value.development.windowStart, true) || !date(value.development.windowEnd, true) || !count(value.engagement.completedActivityCount) || !date(value.engagement.lastCompletedAt, true) || !ids(value.support.activeInterventionIds) || !Array.isArray(value.support.items) || value.support.items.length > 100 || !['unmeasured', 'measured'].includes(String(value.impact.status)) || !ids(value.impact.measurementIds) || !Array.isArray(value.impact.outcomes) || value.impact.outcomes.length > 100) throw new LearningApiError('invalid');
   const interventions = value.support.items.map(parseIntervention);
-  const outcomes = value.impact.outcomes.map(parseOutcome);
+  const outcomes = value.impact.outcomes.map(item => parseOutcome(item, String(value.learnerId)));
   if (new Set(interventions.map((item) => item.id)).size !== interventions.length || interventions.some((item) => item.learnerId !== value.learnerId) || !sameIds(value.support.activeInterventionIds, interventions.filter((item) => item.status !== 'MEASURED').map((item) => item.id)) || !sameIds(value.impact.measurementIds, outcomes.map((item) => item.id)) || (value.impact.status === 'measured') !== (outcomes.length > 0)) throw new LearningApiError('invalid');
   if (interventions.some((item) => item.status === 'MEASURED' && !outcomes.some((outcome) => outcome.interventionId === item.id))) throw new LearningApiError('invalid');
   for (const outcome of outcomes) {
