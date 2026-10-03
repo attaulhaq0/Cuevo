@@ -1,5 +1,7 @@
 # Cuevo implementation status
 
+Current owned checkpoint includes named outcome context and the repaired100-rowread: clean replayAPI1/10/100728/832/2281ms, frozenoriginalnumeric/rubric/current/retained/role parity, unchangedmeasurementreceipts/snapshots and actualbrowserloop/Home pass.952unit/172web/104SQLfiles1311assertions/build/lint/type/guards pass. Full firstschool/onboarding/executor/claim/recovery, progression, remainingselector/AIcopy, finalfrozen/security/hosted/customer gates remain incomplete. [Exact outcome evidence](reports/2026-10-03-human-outcome-context-in-progress.md).
+
 Latest outcome volume repair: exact intervention baseline candidates preserve old read predicates and normal100named outcomes now pass under5s (1906ms at100, with priorfailed5050ms/503retained). Frozenoriginalhistorynumeric/rubric/current/revoked checks and source/snapshot/receipt regressions pass;952unit/172web/build/lint/type/guards pass. Cleanreplay/finalfrozen and othercustomer/onboarding/progression/hostedgates remain incomplete. [Outcome evidence](reports/2026-10-03-human-outcome-context-in-progress.md).
 
 Outcome human-context work is in progress: exact learner/practice/task names now appear in small API/browser journeys while measurement receipts/snapshots remain unchanged. A realistic100measured-practice page returnedHTTP503 under5seconds, so completion is unproven. Diagnostic profiling continues without reducing page/population or relaxing authorization/budgets. [Current outcome evidence](reports/2026-10-03-human-outcome-context-in-progress.md).

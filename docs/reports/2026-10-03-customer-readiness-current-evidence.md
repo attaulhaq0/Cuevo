@@ -2,6 +2,8 @@
 
 Date: 3 October 2026 (Asia/Riyadh). E Deviser is the company; Cuevo is the product. This report records current evidence and does not approve a school deployment.
 
+Currentcommitted outcomeincrement: clean original/additivemigration replay andnormal100source3cases97.07spass, pages1/10/100728/832/2281ms withnames/currentpermission/nativefacts/unchangedsnapshots/receipts. Browserfullsource/improvement/fiverolehome3casespass;952unit/172web/1311SQLassertions/type/lint/build/guards pass. This scopedcurrentrepair doesnot establish fullMVP/customerrelease; onboarding/operator/executor/claim/recovery,progression,remainingselector/wording,finalfrozen/security/hostedgates remain open.
+
 Latest named-outcome repair: exact intervention baseline candidate materialization preserves the original historical predicate, and normal100measuredpractices pass without probes (1007/767/1906ms pages1/10/100). Frozenoriginalnumeric/rubric/role/current/retained checks and source/snapshot/replay regression pass; latestbrowser3pass1.1min. Earlier503 failures remainfailed. CompleteSQLrerun/cleanreplay/finalcustomer gates remain separate. [Outcome evidence](2026-10-03-human-outcome-context-in-progress.md).
 
 Current outcome context: exact learner/practice/task names are implemented on protected GET/state reads and pass small numeric/native/source/replay/snapshot/browser cases. A realistic100genuine measuredpracticepage returnsHTTP503 under5seconds; new diagnostic50974isongoing. The source increment is not accepted or complete atvolume. [Open outcome evidence](2026-10-03-human-outcome-context-in-progress.md). No timeout/page/population/authorization relaxation is authorized.
