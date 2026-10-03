@@ -9,6 +9,7 @@ import { CommandForm } from '../../../shared/components/command-form';
 import { currentPortfolioRead, parsePortfolioCommandReceipt, parsePortfolioSourceWork, portfolioArtifactReviewKey, portfolioReadScope, portfolioSourceMatchesItem, type PortfolioItem, type PortfolioRead } from '../model';
 import { portfolioAr, portfolioEn } from '../messages';
 import { PortfolioArtifactDownload } from './artifact-download';
+import { portfolioReviewFocus } from '../presentation-model';
 
 export function PortfolioSourceWork({ item, reviewing = false, focusOnLoad = true, onLoaded, onSaved, onCancel }: { item: PortfolioItem; reviewing?: boolean; focusOnLoad?: boolean; onLoaded?: () => void; onSaved: () => void; onCancel: () => void }) {
   const app = useApp(); const { locale } = app; const t = locale === 'ar' ? portfolioAr : portfolioEn;
@@ -20,14 +21,19 @@ export function PortfolioSourceWork({ item, reviewing = false, focusOnLoad = tru
   const reviewedArtifacts = currentPortfolioRead(artifactReceipt, scope) ?? [];
   const matches = portfolioSourceMatchesItem(work, item);
   const loading = query.loading || !!scope && !!query.data && !work;
-  const detail = useRef<HTMLElement | null>(null); const focused = useRef(false);
+  const detail = useRef<HTMLElement | null>(null); const focused = useRef(false);const reviewedFocus=useRef(false);
   useEffect(() => {
-    if (!loading && !focused.current && (work || query.error)) {
-      if (focusOnLoad && (document.activeElement === document.body || document.activeElement?.getAttribute('data-portfolio-focus') === item.id)) detail.current?.focus({ preventScroll: true });
+    if(!reviewing)reviewedFocus.current=false;
+    const alreadyFocused=reviewing?reviewedFocus.current:focused.current;
+    if (!loading && !alreadyFocused && (work || query.error)) {
+      const intent=document.activeElement===document.body||document.activeElement?.getAttribute('data-portfolio-focus')===item.id;
+      const move=portfolioReviewFocus({reviewing:reviewing&&app.membership?.role==='teacher',focusOnLoad,alreadyFocused,loading,settled:!!work||!!query.error,activeIntent:intent});
+      if(move!=='none'){detail.current?.focus({preventScroll:true});if(move==='scroll')detail.current?.scrollIntoView({block:'start',behavior:'instant'});}
       focused.current = true;
+      if(reviewing)reviewedFocus.current=true;
       onLoaded?.();
     }
-  }, [loading, work, query.error, item.id, focusOnLoad, onLoaded]);
+  }, [loading, work, query.error, item.id, focusOnLoad, onLoaded, reviewing, app.membership?.role]);
   const documentsNeedReview = work?.source.artifacts?.some(asset => !reviewedArtifacts.includes(portfolioArtifactReviewKey(asset)) || asset.state !== 'AVAILABLE');
   return <section ref={detail} tabIndex={-1} aria-label={t.sourceWork} className={`portfolio-source-work${reviewing ? ' portfolio-source-work--reviewing' : ''}`}>
     {loading ? <p role="status">{t.loadingWork}</p> : query.error ? <><LearningError error={query.error} /><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.retryWork}</Button></> : !matches ? <LearningError error={new LearningApiError('invalid')} /> : <div className="portfolio-source-review-layout">

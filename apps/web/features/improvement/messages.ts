@@ -1,4 +1,5 @@
 export const improvementEn = {
+  followUpChoicesIncomplete:'Load the current baseline and assessment pages before reviewing a follow-up. Missing choices are not proof that no eligible work exists.',
   outcomeTitleUnavailable: 'Practice name unavailable',
   outcomeContextUnavailable: 'Practice context is unavailable. Refresh this view or ask the teacher to review the source.',
   outcomeContextReview: 'Some current names or task details need school review. The measured result remains unchanged.',
@@ -23,6 +24,7 @@ export const improvementEn = {
   humanNotice: 'Teacher proposals are human-authored interpretations of cited evidence. They are not AI analysis or authoritative academic records.',
 };
 export const improvementAr: typeof improvementEn = {
+  followUpChoicesIncomplete:'حمّل صفحات النتائج الأساسية والتقييمات الحالية قبل مراجعة المتابعة. غياب الخيارات لا يثبت عدم وجود عمل مناسب.',
   outcomeTitleUnavailable: 'اسم التدريب غير متاح',
   outcomeContextUnavailable: 'سياق التدريب غير متاح. حدّث العرض أو اطلب من المعلّم مراجعة المصدر.',
   outcomeContextReview: 'تحتاج بعض الأسماء الحالية أو تفاصيل المهمة إلى مراجعة المدرسة. تبقى النتيجة المقاسة دون تغيير.',

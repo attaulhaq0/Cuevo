@@ -29,6 +29,7 @@ export function parseLearnerAttentionSignal(value: unknown, learnerId: string): 
   if (row.learnerId !== learnerId) throw new LearningApiError('invalid');
   return row;
 }
+export function currentAttentionPolicy<T>(read:{scope:string;value:{policy:T|null}}|null,scope:string,loading:boolean,failed:boolean):T|null{return !loading&&!failed&&read?.scope===scope?read.value.policy:null;}
 type AttentionBase = { id: string; learnerId: string; ruleVersion: number; generatedAt: string; sourceEventIds: string[] };
 export type AttentionSignal = AttentionBase & ({ type: 'native_result_decline'; referenceId: string; referenceVersion: string; baselineResultId: string; followUpResultId: string; evidenceIds: string[]; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; difference: number; minimumDecline: number; uncertainty: 'OBSERVED_CHANGE_NOT_CAUSE' } | { type: 'missing_due_work'; count: number; missingAssessments: { id: string; title: string; dueAt: string }[]; uncertainty: 'MISSING_SUBMISSION_NOT_ZERO' });
 export function parseAttentionSignal(value: unknown): AttentionSignal {

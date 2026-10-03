@@ -1,4 +1,6 @@
 export const progressEn = {
+  refreshAttentionRecords: 'Refresh attention records',
+  attentionSourceLimits: 'Source and interpretation limits',
   myLearningStory: 'My learning story', sharedLearningStory: 'Shared learning progress', learningEvidence: 'Evidence for the next step', exploreProgress: 'Explore learning progress', resultPages: 'Result pages',
   assessmentNameUnavailable: 'Assessment name unavailable', objectiveNameUnavailable: 'Objective name unavailable',
   offline: 'You’re offline. Reconnect, then refresh to check current progress and access.',
@@ -29,6 +31,8 @@ export const progressEn = {
   stale: 'Snapshot awaiting refresh', staleBody: 'Academic evidence remains traceable. Recent activity counts are not available until a current snapshot is produced.', snapshotAsOf: 'Snapshot as of', recordedOnly: 'Recorded observations only', recordedOnlyBody: 'Counts include persisted observations in this window. They do not prove that all learning activity was recorded.', current: 'Current snapshot',
 };
 export const progressAr: typeof progressEn = {
+  refreshAttentionRecords: 'تحديث سجلات الانتباه',
+  attentionSourceLimits: 'حدود المصدر والتفسير',
   myLearningStory: 'قصة تعلّمي', sharedLearningStory: 'تقدّم التعلّم المشترك', learningEvidence: 'شواهد الخطوة التالية', exploreProgress: 'استكشف تقدّم التعلّم', resultPages: 'صفحات النتائج',
   assessmentNameUnavailable: 'اسم التقييم غير متاح', objectiveNameUnavailable: 'اسم الهدف غير متاح',
   offline: 'أنت غير متصل. اتصل بالإنترنت ثم حدّث الصفحة للتحقق من التقدّم والصلاحيات الحالية.',

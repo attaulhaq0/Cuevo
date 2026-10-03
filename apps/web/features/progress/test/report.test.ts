@@ -15,3 +15,10 @@ test('current report presents authorized human school and learner identity befor
   assert.ok(!html.includes('<script>name</script>'));
 });
 test('period report export states the exact school period and source date basis',()=>{const parsed=parseAcademicReport({...report,scope:'CURRENT_RELEASED_PERIOD_PAGE',period:{id:'10000000-0000-4000-8000-000000000009',name:'School source period',revision:2,startsOn:'2026-10-01',endsOn:'2026-10-31',basis:'SOURCE_SUBMITTED_DATE_UTC'}});const html=renderAcademicReport(parsed,'ar');assert.ok(html.includes('School source period'));assert.ok(html.includes('CURRENT_RELEASED_PERIOD_PAGE'));assert.ok(html.includes('UTC'));assert.throws(()=>parseAcademicReport({...report,scope:'CURRENT_RELEASED_PERIOD_PAGE'}),LearningApiError);});
+
+test('standalone report labels the recorded source date truthfully and keeps native values in LTR UTC context',()=>{
+ const source=parseAcademicReport(report);const html=renderAcademicReport(source,'en');const ar=renderAcademicReport(source,'ar');
+ assert.ok(html.includes('Source record date (UTC)'));assert.ok(ar.includes('تاريخ السجل المصدر (UTC)'));
+ assert.doesNotMatch(html,/Result released at/);assert.doesNotMatch(ar,/وقت إصدار النتيجة/);
+ assert.match(html,/<p class="native" dir="ltr">0 \/ 10<\/p>/);assert.ok(html.includes('12:00 AM'));
+});
