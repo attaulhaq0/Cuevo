@@ -6,6 +6,7 @@
 .teacher-trail__background { position: absolute; z-index: -1; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; opacity: .2; pointer-events: none; filter: var(--trail-background-filter); }
 .teacher-trail__layout { display: grid; grid-template-columns: minmax(0, 1fr) 24.5rem; gap: var(--space-6); max-inline-size: 100rem; margin-inline: auto; padding: var(--space-6) var(--space-6) var(--space-10); }
 .teacher-trail__main, .teacher-trail__aside { min-inline-size: 0; }
+.teacher-trail__aside { align-items: start; }
 .teacher-trail__intro { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); padding-inline: var(--space-3); margin-block-end: var(--space-4); }
 .teacher-trail__intro h1 { margin: 0; font-size: clamp(2.125rem, 3.2vw, 3.125rem); font-weight: var(--font-weight-bold); line-height: 1.2; letter-spacing: var(--tracking-heading); }
 .teacher-trail__intro p { margin-block: var(--space-1) 0; color: var(--color-text-secondary); font-size: var(--type-body); }

@@ -10,13 +10,14 @@
 .parent-trail__child-context p { margin: var(--space-1) 0; font-size: var(--type-sm); color: var(--color-text-secondary); }
 .parent-trail__child-context .field { margin-block-start: var(--space-2); }
 .parent-trail__grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.parent-trail__left, .parent-trail__right { display: grid; gap: var(--space-5); min-inline-size: 0; align-items: start; }
 .parent-trail__panel { border-radius: var(--radius-lg); background: var(--color-material-reading); border: 1px solid var(--color-border); padding: var(--space-4) var(--space-5); min-inline-size: 0; }
 .parent-trail__panel-heading { display: flex; gap: var(--space-3); align-items: center; padding-block-end: var(--space-3); flex-wrap: wrap; }
 .parent-trail__panel-heading > span:first-child { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; background: var(--color-learning-surface); color: var(--color-learning-symbol); border-radius: var(--radius-md); flex: none; }
 .parent-trail__panel-heading h2 { font-size: var(--type-lead); font-weight: var(--font-weight-bold); line-height: 1.35; margin: 0; }
 .parent-trail__panel-heading .status { margin-inline-start: auto; }
 .parent-trail__date { margin: 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
-.parent-trail__feedback { grid-row: span 2; align-self: start; }
+.parent-trail__feedback { align-self: start; }
 .parent-trail__feedback-body { background: var(--color-surface-muted); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); }
 .parent-trail__teacher { display: flex; align-items: center; gap: var(--space-4); }
 .parent-trail__teacher > span { inline-size: 3.75rem; block-size: 3.75rem; display: grid; place-items: center; background: var(--color-learning-surface); border-radius: var(--radius-pill); color: var(--color-accent); }
