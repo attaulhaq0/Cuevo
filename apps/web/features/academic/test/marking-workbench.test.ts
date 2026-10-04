@@ -5,6 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Providers } from '../../../shared/session/providers.tsx';
 import { currentMarkingReference, type AcademicReference, type MarkingItem } from '../model.ts';
 import { MarkingWorkbench, MarkingChoices } from '../components/marking-workbench.tsx';
+import { createRequire } from 'node:module';
+type RenderedElement = { textContent: string; querySelector(selector: string): RenderedElement | null; querySelectorAll(selector: string): RenderedElement[] };
+const { parse } = createRequire(import.meta.url)('next/dist/compiled/node-html-parser') as { parse(html: string): RenderedElement };
 
 const id = '10000000-0000-4000-8000-000000000001';
 const item: MarkingItem = { id, assessmentId: id, learnerId: id, assessmentTitle: 'Explain a checking step', learnerName: 'Alex Reed', content: 'I checked the method against a second example.', policyVersion: 2, referenceId: id, submissionRevision: 1, submissionStatus: 'SUBMITTED', currentResult: null, model: 'numeric', maxScore: 4, rubric: null };
@@ -26,7 +29,10 @@ test('the selected workbench keeps original work and objective description befor
 test('rubric review shows every native criterion and allowed descriptor without a numeric substitute', () => {
   const rubric: MarkingItem = { ...item, model: 'rubric', rubric: { id, title: 'School explanation rubric', version: 'school-v1', criteria: [{ key: 'explanation', title: 'Explanation', levels: [{ key: 'developing', label: 'Developing', description: 'Explain a relevant step.' }, { key: 'secure', label: 'Secure', description: 'Explain connected steps.' }] }, { key: 'checking', title: 'Checking', levels: [{ key: 'shown', label: 'Shown', description: 'Show a relevant check.' }] }] } };
   const html = render(createElement(MarkingWorkbench, { item: rubric, reference, work: createElement('p', null, item.content), decision: createElement('button', null, 'Save criterion draft') }));
-  for (const text of ['Explanation', 'Developing', 'Explain a relevant step.', 'Secure', 'Explain connected steps.', 'Checking', 'Shown', 'Show a relevant check.']) assert.match(html, new RegExp(text.replace(/[.]/g, '\\.')));
+  const document = parse(html); const criteria = document.querySelectorAll('.marking-rubric-source section');
+  assert.deepEqual(criteria.map(criterion => criterion.querySelector('h4')?.textContent), ['Explanation', 'Checking']);
+  assert.deepEqual(criteria.map(criterion => criterion.querySelectorAll('dt').map(level => level.textContent)), [['Developing', 'Secure'], ['Shown']]);
+  assert.deepEqual(criteria.map(criterion => criterion.querySelectorAll('dd').map(level => level.textContent)), [['Explain a relevant step.', 'Explain connected steps.'], ['Show a relevant check.']]);
   assert.doesNotMatch(html, /Maximum score|0 \/ 4|normalized score/);
 });
 test('unselected or missing queue source offers an explicit selection without copying another response', () => {

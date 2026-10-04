@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -37,6 +37,22 @@ test('intentional public forwarding surfaces and Next route boilerplate are not 
     file('apps/web/app/page.tsx', "export default function Page() { return null; }\n"),
     file('apps/web/app/layout.tsx', "export default function Page() { return null; }\n"),
   ]), []);
+});
+
+test('forwarding syntax retains adjacent and typed exports while rejecting incomplete statements', () => {
+  for (const body of ["export * from './model'; export type { Source } from './source'", "export {\n Workspace,\n Source as CurrentSource\n} from './model'\nexport * from './copy';"]) {
+    assert.deepEqual(inspect([file('packages/domain/src/first.ts', body), file('packages/contracts/src/second.ts', body)]), []);
+  }
+  for (const body of ["export * from './model' trailing", "export { Source from './source'", "export * from './model\"", "export type from './model'"]) {
+    assert.ok(inspect([file('packages/domain/src/first.ts', body), file('packages/contracts/src/second.ts', body)]).some(issue => issue.rule === 'duplicate-source'));
+  }
+});
+
+test('an adversarial incomplete forwarding sequence cannot stall the repository guard', () => {
+  const source = `import { checkRepository } from ${JSON.stringify(new URL('./rules.ts', import.meta.url).href)}; const body = "export * from '!' ".repeat(64) + "!"; const issues = checkRepository({files:[{path:'packages/domain/src/first.ts',content:body},{path:'packages/contracts/src/second.ts',content:body}],directories:[],trackedPaths:[]}); if (!issues.some(issue=>issue.rule==='duplicate-source')) process.exit(1);`;
+  const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], { timeout: 3000, encoding: 'utf8' });
+  assert.equal(result.error, undefined, 'The forwarding guard must finish instead of backtracking until timeout.');
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('exact duplicate handwritten runtime files are reported with both source paths', () => {

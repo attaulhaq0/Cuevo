@@ -88,7 +88,10 @@ describe('hosted API Node HTTP boundary', () => {
       reply.code(206).headers({ 'content-type': 'application/pdf', 'cache-control': 'private, no-store', 'content-disposition': 'attachment; filename="synthetic.pdf"', 'content-range': 'bytes 0-6/7', 'set-cookie': ['first=one; HttpOnly', 'second=two; HttpOnly'] });
       return bytes;
     });
-    fastify.post('/transport/json', async request => request.body);
+    fastify.post('/transport/json', async (request, reply) => {
+      reply.header('content-type', 'application/json; charset=utf-8');
+      return JSON.stringify(request.body);
+    });
     await fastify.ready(); cleanup.push(() => fastify.close());
     const url = await expose(createServerlessHandler(async () => ({ app: { getHttpServer: () => fastify.server } })));
     const response = await fetch(`${url}/transport/file?name=a%2Fb&name=c`, { method: 'POST', headers: { authorization: 'Bearer synthetic', 'idempotency-key': 'exact-command-key', 'content-type': 'application/octet-stream' }, body: bytes });
@@ -98,6 +101,9 @@ describe('hosted API Node HTTP boundary', () => {
     expect(response.headers.getSetCookie()).toEqual(['first=one; HttpOnly', 'second=two; HttpOnly']);
     const json = await fetch(`${url}/transport/json`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"value":"سياق"}' });
     expect(await json.json()).toEqual({ value: 'سياق' });
+    const hostile = await fetch(`${url}/transport/json`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify('<script>window.fixtureExecuted=true</script>') });
+    expect(hostile.headers.get('content-type')).toMatch(/^application\/json(?:;|$)/);
+    expect(await hostile.json()).toBe('<script>window.fixtureExecuted=true</script>');
     const malformed = await fetch(`${url}/transport/json`, { method: 'POST', headers: { 'content-type': 'application/json', connection: 'close' }, body: '{invalid' });
     expect(malformed.status).toBe(400); await malformed.arrayBuffer();
     const oversized = await fetch(`${url}/transport/json`, { method: 'POST', headers: { 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify({ value: 'x'.repeat(1024 * 1024) }) });

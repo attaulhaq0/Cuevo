@@ -9,11 +9,11 @@ dotenv({ path: '.env.local', quiet: true });
 const sourceHashes = [
   {
     "path": "supabase/migrations/20261001124250_teacher_insight_learning_context.sql",
-    "sha256": "c7669b2b8470dd7819c1184f71eabf9a17a4a97445739a15c0266b376e05527c"
+    "sha256": "ae41ddc4471445a928f46a6a04c392e32b76fdebaeb1df77ab8d0d00a1247eba"
   },
   {
     "path": "supabase/migrations/20261001125823_insight_current_source_scope.sql",
-    "sha256": "3105db649e401c8a168fcf7e7deefce8088036dc4761fce87969824e11febd17"
+    "sha256": "b997e601b59c8160535c55d737911ba5c8891cbfb2fc49ab871ce50865f092b8"
   },
   {
     "path": "supabase/migrations/20261001205816_actionable_insight_saved_source_authority.sql",
@@ -28,6 +28,10 @@ const sourceHashes = [
     "sha256": "12f84578136dc5aa594d367ec932e8229750bfcbf42a2e1816c1b5a8aed367e1"
   }
 ];
+// These lock the unchanged published Git blobs. The first two earlier hashes
+// (c7669b2b... / 3105db64...) recorded mixed-CRLF primary checkout bytes;
+// normalizing only CRLF to LF yields the canonical hashes above. Both parent
+// branches and the pre-integration ancestor contain these exact canonical blobs.
 describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('teacher insight exact context selection parity', () => {
   let context: CustomerContext;
   beforeAll(async () => {

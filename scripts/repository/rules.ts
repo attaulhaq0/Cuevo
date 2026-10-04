@@ -59,7 +59,38 @@ function forwardingSurface(content: string): boolean {
   const body = content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').trim();
   if (!body || /^export\s*\{\s*\}\s*;?$/.test(body)) return true;
   // Only pure re-exports are exempt; an implementation inside model/ui/index is still checked.
-  return /^(?:export\s+(?:type\s+)?(?:\*|\{[^}]*\})\s+from\s+['"][^'"\n]+['"]\s*;?\s*)+$/.test(body);
+  let cursor = 0;
+  const whitespace = () => { while (cursor < body.length && /\s/.test(body[cursor])) cursor++; };
+  const token = (value: string, spaced = false) => {
+    if (!body.startsWith(value, cursor)) return false;
+    cursor += value.length;
+    if (spaced && !/\s/.test(body[cursor] ?? '')) return false;
+    whitespace(); return true;
+  };
+  while (cursor < body.length) {
+    if (!token('export', true)) return false;
+    if (body.startsWith('type', cursor) && !token('type', true)) return false;
+    if (body[cursor] === '*') cursor++;
+    else if (body[cursor] === '{') {
+      const close = body.indexOf('}', cursor + 1);
+      if (close < 0) return false;
+      cursor = close + 1;
+    } else return false;
+    if (!/\s/.test(body[cursor] ?? '')) return false;
+    whitespace();
+    if (!token('from', true)) return false;
+    const quote = body[cursor++];
+    if (quote !== "'" && quote !== '"') return false;
+    const start = cursor;
+    while (cursor < body.length && body[cursor] !== quote) {
+      if (body[cursor] === '\n' || body[cursor] === '\r' || body[cursor] === "'" || body[cursor] === '"') return false;
+      cursor++;
+    }
+    if (cursor === start || cursor === body.length) return false;
+    cursor++; whitespace();
+    if (body[cursor] === ';') { cursor++; whitespace(); }
+  }
+  return true;
 }
 
 function frameworkBoilerplate(value: string, content: string): boolean {

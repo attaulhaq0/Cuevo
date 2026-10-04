@@ -5,6 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { auditPresentation } from '../audit-presentation.ts';
 import { SchoolAuditReading } from '../components/audit-reading.tsx';
 import type { SchoolAuditRow } from '../model.ts';
+import { createRequire } from 'node:module';
+type RenderedElement = { textContent: string; querySelector(selector: string): RenderedElement | null; querySelectorAll(selector: string): RenderedElement[]; hasAttribute(name: string): boolean };
+const { parse } = createRequire(import.meta.url)('next/dist/compiled/node-html-parser') as { parse(html: string): RenderedElement };
 
 const row: SchoolAuditRow = { id: 'private-row-id', actorName: 'Mariam Al-Nuaimi', action: 'school.guardian.configure', objectType: 'school_operation', objectId: 'private-object-id', objectName: null, outcome: 'succeeded', occurredAt: '2026-10-04T10:24:37Z', requestId: 'private-request-id' };
 function render(rows = [row], locale: 'en' | 'ar' = 'en') {
@@ -33,12 +36,18 @@ test('unknown actions, actors and source types stay unavailable without identifi
   }
 });
 test('all technical values are inside the closed source disclosure and supplied text is escaped', () => {
-  const html = render([{ ...row, actorName: '<script>person</script>', objectName: '<img src=x onerror=alert(1)>' }]);
-  const primary = html.replace(/<details[\s\S]*?<\/details>/g, '');
-  for (const secret of [row.id, row.objectId, row.requestId, row.action, row.objectType]) assert.equal(primary.includes(secret), false);
-  assert.match(html, /<details class="school-audit-technical"><summary>Technical details<\/summary>/);
-  assert.doesNotMatch(html, /<details[^>]*\sopen/); assert.doesNotMatch(html, /<script>|<img src=x/);
-  assert.match(html, /&lt;script&gt;person/); assert.match(html, /&lt;img src=x/);
+  for (const [actorName, objectName] of [['<script>person</script>', '<img src=x onerror=alert(1)>'], ['<SCRIPT>person</SCRIPT>', '<IMG src=x onerror=alert(1)>']]) {
+    const document = parse(render([{ ...row, actorName, objectName }]));
+    const record = document.querySelector('.school-audit-row')!;
+    const primary = ['header', '.school-audit-source', '.school-audit-context'].map(selector => record.querySelector(selector)?.textContent).join(' ');
+    for (const secret of [row.id, row.objectId, row.requestId, row.action, row.objectType]) assert.equal(primary.includes(secret), false);
+    const details = record.querySelector('details.school-audit-technical')!;
+    assert.equal(details.querySelector('summary')?.textContent, 'Technical details'); assert.equal(details.hasAttribute('open'), false);
+    for (const source of [row.action, row.objectType, row.objectId, row.requestId]) assert.ok(details.textContent.includes(source));
+    assert.equal(record.querySelector('.school-audit-context dd bdi')?.textContent, actorName);
+    assert.equal(record.querySelector('.school-audit-source bdi')?.textContent, objectName);
+    assert.equal(record.querySelectorAll('script').length, 0); assert.equal(record.querySelectorAll('img').length, 0);
+  }
 });
 test('duplicate human actions retain supplied row order and separate recorded dates without opaque suffixes', () => {
   const first = { ...row, id: 'first-in-source', requestId: 'first-request', occurredAt: '2026-10-04T12:00:00Z' };
@@ -52,5 +61,7 @@ test('Arabic reading uses localized action, unknown and status with semantic LTR
   const html = render([{ ...row, actorName: null, objectName: null, outcome: 'failed' }], 'ar');
   assert.match(html, /تغيير صلاحيات الأسرة/); assert.match(html, /الشخص غير متاح/); assert.match(html, /سياق المصدر غير متاح/); assert.match(html, /فشل/);
   assert.match(html, /<time dateTime="2026-10-04T10:24:37Z">/); assert.match(html, /<bdi>school.guardian.configure<\/bdi>/);
-  assert.doesNotMatch(html.replace(/<details[\s\S]*?<\/details>/g, ''), /Family access change|school_operation/);
+  const record = parse(html).querySelector('.school-audit-row')!;
+  assert.equal(record.querySelector('header h3')?.textContent, 'تغيير صلاحيات الأسرة');
+  assert.equal(record.querySelector('.school-audit-source')?.textContent.includes('school_operation'), false);
 });
