@@ -1,5 +1,7 @@
 # Parent Trail role completion implementation plan
 
+4 October checkpoint: current connected Conversation (including exclusive Guardian revoke/restore), TEXT Portfolio and School calendar/support acceptance passed on build `Q16SrJaNlucpdZ-bPv9j1`. Parent support first-control overflow was reproduced and fixed through the shared header. The isolated review environment was restored and12 Student/Parent browser states checked. See [connected acceptance report](../../reports/2026-10-04-parent-connected-acceptance.md) for exact scope, failed harness attempts, evidence and remaining gates; unchecked whole-role tasks below do not become complete from these scoped cases.
+
 > **For agentic workers:** Use the existing owner boundaries and implement one task at a time with independent source review. `superpowers:subagent-driven-development` or `superpowers:executing-plans` may organize execution; the root owns runtime, build and final acceptance. Steps use checkboxes to record actual completion.
 
 **Goal:** Complete the selected Parent journey with clear approved feedback, school dates/support, approved portfolio work and current school conversations using the existing application and APIs.

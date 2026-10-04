@@ -30,8 +30,10 @@ export function ParentLearningSupport({ learnerId, learnerName, refresh }: { lea
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
   if (!permitted) return null;
   return <section className="school-section school-day-panel" aria-label={t.parentSupport}>
-    <div className="school-day-heading"><CuevoIcon name="help" size={28} /><h2>{t.parentSupport}</h2></div><p><bdi>{learnerName}</bdi></p><p className="notice">{t.parentSupportNote}</p>
-    <Button type="button" variant="quiet" onClick={() => setRetry(value => value + 1)}>{t.refreshParentSupport}</Button>
+    <header className="cuevo-section-header parent-support-heading">
+      <div className="cuevo-section-header__context"><div className="school-day-heading"><CuevoIcon name="help" size={28} /><h2>{t.parentSupport}</h2></div><p><bdi>{learnerName}</bdi> · {t.parentSupportNote}</p></div>
+      <div className="learning-actions"><Button type="button" variant="quiet" onClick={() => setRetry(value => value + 1)}><CuevoIcon name="refresh" />{t.refreshParentSupport}</Button></div>
+    </header>
     {profile.loading ? <p role="status">{t.loadingParentSupport}</p> : profile.error ? <LearningError error={profile.error} /> : !currentProfile ? <LearningError error={new LearningApiError('invalid')} /> : !choices.length ? <p>{t.noParentSupportCourses}</p> : <>
       <div className="field"><label htmlFor="parent-support-course">{t.parentSupportCourse}</label><select id="parent-support-course" value={path ? courseId : ''} onChange={event => setCourseId(event.target.value)}><option value="">{t.chooseParentSupportCourse}</option>{choices.map(choice => <option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select></div>
       {choices.some(choice => choice.requiresReview) ? <p className="notice">{t.parentSupportAmbiguous}</p> : null}
