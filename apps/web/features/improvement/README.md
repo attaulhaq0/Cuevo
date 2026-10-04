@@ -1,5 +1,7 @@
 # Improvement feature
 
+Outcome reading keeps named practice/baseline/follow-up context, native results, thresholds, dates and comparison limits visible. Its raw intervention/result identifiers stay in a closed bilingual Technical details disclosure; no source query, measurement or decision authority changes.
+
 Owns proposal review, approval, support completion and non-causal outcome comparison. Public interfaces: model.ts, ui.tsx (ImprovementWorkspace and the read-only OutcomeList shared with progress), copy.ts. Consume academic/learning public models and academic/ui evidence; use shared session/forms/retry/pagination. API owner: modules/improvement. Product source IDs 10, 12, 21 and 63.
 
 The stable canonical `da45359` outcome display extension is reconciled through the existing model and two-plane `OutcomeReadingView`. Authorized current learner/class/year names, immutable approved practice, named baseline/follow-up tasks and submitted dates precede unchanged native values. Missing or ambiguous context offers school review rather than an identifier label; legacy omission stays explicit. Student still opens one exact owned intervention before rendering the comparison, with a nested heading level and context-learner binding. Shared single-item parser fixes from `fe04cab` prevent array position from becoming an expected learner. Exact API/private SQL and whole-role acceptance remain separate from local parser/render tests; no browser measurement calculation or new source endpoint is introduced.

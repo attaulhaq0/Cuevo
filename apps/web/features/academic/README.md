@@ -1,5 +1,7 @@
 # Academic feature
 
+Evidence reading presents source meaning, recorded date, visibility, approval and explicit unavailable recorder names before a closed bilingual Technical details disclosure. Technical source/actor identifiers and native version/revision provenance remain available there; current evidence scope and authorization checks are unchanged.
+
 A fresh Parent result deep link keeps the current ChildSelector and its read refresh visible until a guardian-authorized child is resolved. The exact result request remains disabled during that selection; the route does not infer a child from the result identifier. Existing native source/history/publication guards then admit only the selected child's result.
 
 An opened Parent-sharing decision that cannot read its current publication now offers a local refresh of that exact source. Pending original commands and their keys remain retained; failed/denied current publication withholds the decision until reauthorized. This retries a read only and does not change sharing or result authority.

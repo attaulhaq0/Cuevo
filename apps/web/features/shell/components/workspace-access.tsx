@@ -32,7 +32,7 @@ export function WorkspaceAccessView({ membership, onRefresh, locale, dictionary:
       <header><CuevoIcon name="shield" size={28}/><h2 id="capabilities-heading">{t.capabilityTitle}</h2></header>
       <p>{t.capabilityBody}</p>
       {membership.entitlements.length ? <ul>{membership.entitlements.map(code => <li key={code}><CuevoIcon name={capabilities[code]?.icon ?? 'help'} size={26}/><span>{capabilityLabel(code, locale)}</span></li>)}</ul> : <div className="notice"><Status tone="warning">{t.notConfigured}</Status><p>{t.noCapabilities}</p></div>}
-      <details><summary>{t.reference}</summary><ul className="workspace-access__source-codes">{membership.entitlements.map(code => <li key={code}><bdi>{code}</bdi></li>)}</ul></details>
+      {membership.role==='admin'&&membership.entitlements.length?<details><summary>{t.technicalDetails}</summary><ul className="workspace-access__source-codes">{membership.entitlements.map(code => <li key={code}><bdi>{code}</bdi></li>)}</ul></details>:null}
     </section>
   </div>;
 }

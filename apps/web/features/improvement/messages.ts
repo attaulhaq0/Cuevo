@@ -1,4 +1,4 @@
-export const improvementEn = {
+export const improvementEn = { technicalDetails: 'Technical details',
   followUpChoicesIncomplete:'Load the current baseline and assessment pages before reviewing a follow-up. Missing choices are not proof that no eligible work exists.',
   outcomeTitleUnavailable: 'Practice name unavailable',
   outcomeContextUnavailable: 'Practice context is unavailable. Refresh this view or ask the teacher to review the source.',
@@ -23,7 +23,7 @@ export const improvementEn = {
   measuredAt: 'Measured at', interventionSource: 'Approved practice source', parentRestricted: 'Internal proposals and practice decisions are available only through permitted school roles.',
   humanNotice: 'Teacher proposals are human-authored interpretations of cited evidence. They are not AI analysis or authoritative academic records.',
 };
-export const improvementAr: typeof improvementEn = {
+export const improvementAr: typeof improvementEn = { technicalDetails: 'تفاصيل تقنية',
   followUpChoicesIncomplete:'حمّل صفحات النتائج الأساسية والتقييمات الحالية قبل مراجعة المتابعة. غياب الخيارات لا يثبت عدم وجود عمل مناسب.',
   outcomeTitleUnavailable: 'اسم التدريب غير متاح',
   outcomeContextUnavailable: 'سياق التدريب غير متاح. حدّث العرض أو اطلب من المعلّم مراجعة المصدر.',

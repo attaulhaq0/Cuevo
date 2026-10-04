@@ -1,4 +1,5 @@
 export const progressEn = {
+  technicalDetails: 'Technical details',
   coordinatorClassGuide:'Choose a current class, then open one learner’s evidence. Native records, recorded observations, support and outcomes remain separate.', classContextUnavailable:'Class information unavailable', classChoicesReview:'Load all current classes before choosing. Matching or unavailable class information needs school record review.',
   refreshAttentionRecords: 'Refresh attention records',
   learnerChoicesReview: 'Load all current learners before choosing. Matching or missing class context needs school record review.',
@@ -33,6 +34,7 @@ export const progressEn = {
   stale: 'Snapshot awaiting refresh', staleBody: 'Academic evidence remains traceable. Recent activity counts are not available until a current snapshot is produced.', snapshotAsOf: 'Snapshot as of', recordedOnly: 'Recorded observations only', recordedOnlyBody: 'Counts include persisted observations in this window. They do not prove that all learning activity was recorded.', current: 'Current snapshot',
 };
 export const progressAr: typeof progressEn = {
+  technicalDetails: 'تفاصيل تقنية',
   coordinatorClassGuide:'اختر صفًا حاليًا، ثم افتح شواهد طالب واحد. تبقى النتائج الأصلية والملاحظات المسجّلة والدعم والنتائج اللاحقة منفصلة.', classContextUnavailable:'معلومات الصف غير متاحة', classChoicesReview:'حمّل جميع الصفوف الحالية قبل الاختيار. تحتاج معلومات الصف المتشابهة أو غير المتاحة إلى مراجعة سجلات المدرسة.',
   refreshAttentionRecords: 'تحديث سجلات الانتباه',
   learnerChoicesReview: 'حمّل جميع الطلاب الحاليين قبل الاختيار. تحتاج الأسماء المتطابقة أو سياقات الصف المفقودة إلى مراجعة سجلات المدرسة.',

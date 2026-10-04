@@ -20,3 +20,6 @@ test('source evidence identifies its recorded meaning and keeps identifiers insi
 test('Arabic evidence keeps the same approved scope without inventing recorder identity', () => {
   const html = render('ar'); assert.match(html, /أدخله المعلّم/); assert.match(html, /غير متاح/); assert.doesNotMatch(html.split('<details>')[0], new RegExp(id));
 });
+test('evidence technical identifiers stay behind a closed bilingual technical disclosure',()=>{
+ for(const locale of ['en','ar'] as const){const html=render(locale);assert.match(html,locale==='en'?/<summary>Technical details<\/summary>/:/<summary>تفاصيل تقنية<\/summary>/);assert.doesNotMatch(html,/<details[^>]* open/);assert.match(html.split('<details>')[0],/UTC/);assert.match(html,new RegExp(id));}
+});

@@ -8,6 +8,8 @@ const labels: Record<string, readonly [string, string]> = {
   'learner.state': ['Learning progress', 'تقدّم التعلّم'],
   improvement: ['Next steps', 'الخطوات التالية'],
   'school.operations': ['School operations', 'إدارة المدرسة'],
+  'school.context': ['School information', 'معلومات المدرسة'],
+  development: ['Learning goals and recognition', 'أهداف التعلّم وتقدير الإنجاز'],
   community: ['School community', 'المجتمع المدرسي'],
   portfolio: ['Learning portfolio', 'ملف التعلّم'],
   'restricted.records': ['Restricted school notes', 'الملاحظات المدرسية المقيّدة'],
