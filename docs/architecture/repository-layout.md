@@ -89,6 +89,8 @@ Applied migration bytes remain immutable through Git filters as well as editing.
 
 ## Enforcement and verification
 
+The [local review quick-login decision](../decisions/2026-10-04-local-review-quick-login.md) permits one exact server-only Auth owner: `features/auth/api.ts` forwards to `features/auth/server/quick-login.ts`, composed only by `app/api/testing/quick-login/route.ts`. This does not create a general web-server folder or permit browser dependencies on server configuration/database. The architecture guard rejects browser imports into the owner and permits only its exact filesystem/path/URL dependencies; all other hierarchy and app/domain ownership rules remain.
+
 Founder-supplied visual reference images are intentionally retained under `docs/design/references` as documented review evidence. Its manifest records exact original pixels and selection status; its static index is a documentation viewer, not a new app. Runtime features must not import whole-page references. The [archive decision](../decisions/2026-10-03-design-reference-archive.md) preserves this explicit evidence exception without permitting ordinary generated test output or duplicate source trees.
 
 `npm run check:architecture` checks canonical source roots, navigation files, relative/public-package imports, dependency direction, browser/server boundaries, unresolved local imports, feature surfaces and cycles. `npm run check:docs` checks root Markdown placement, the complete product registry, hashes and current documentation links. Both run in CI/aggregate checks with their fixture tests. They enforce structural rules, not authorization, browser, database or academic correctness.

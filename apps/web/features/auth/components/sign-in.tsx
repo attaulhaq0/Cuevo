@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Button, CuevoIcon } from '@cuevo/ui';
 import { LanguageSwitch } from '../../../shared/components/language-switch';
 import { useApp } from '../../../shared/session/providers';
@@ -10,18 +10,34 @@ import { LearningLoop } from './learning-loop';
 import background from '../assets/studio-background.webp';
 import mobileBackground from '../assets/learning-background.webp';
 import { studioSceneProperties } from '../studio-scene';
+import { TestingQuickLogin } from './quick-login';
+import { quickLoginSession, type QuickLoginRole } from '../quick-login-model';
 
 export function SignIn() {
-  const { dictionary: t, signIn, status, locale } = useApp();
+  const { dictionary: t, signIn, restoreSession, status, locale } = useApp();
   const copy = locale === 'ar' ? authAr : authEn;
   const [tab, setTab] = useState<'sign-in' | 'help'>('sign-in');
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<'credentials' | 'unavailable' | null>(null);
+  const [quickError, setQuickError] = useState(false);
+  const quickRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { quickRequest.current?.abort(); quickRequest.current = null; }, []);
+  async function quickSignIn(role: QuickLoginRole) {
+    if (pending) return; setPending(true); setQuickError(false); setError(null);
+    const controller = new AbortController(); quickRequest.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const current = () => quickRequest.current === controller && !controller.signal.aborted;
+    try {
+      const response = await fetch('/api/testing/quick-login', { method: 'POST', cache: 'no-store', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) });
+      const session = response.ok ? quickLoginSession(await response.json(), role) : null;
+      if (current() && (!session || !await restoreSession(session)) && current()) setQuickError(true);
+    } catch { if (quickRequest.current === controller) setQuickError(true); } finally { clearTimeout(timeout); if (quickRequest.current === controller) { quickRequest.current = null; setPending(false); } }
+  }
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (pending) return;
     const form = event.currentTarget; const values = new FormData(form);
-    setError(null); setPending(true);
+    setError(null); setQuickError(false); setPending(true);
     const result = await signIn(String(values.get('email') ?? '').trim(), String(values.get('password') ?? ''));
     const password = form.elements.namedItem('password'); if (password instanceof HTMLInputElement) password.value = '';
     setPending(false); setError(result);
@@ -60,5 +76,6 @@ export function SignIn() {
         </section>
       </div>
     </main>
+    <TestingQuickLogin locale={locale} pending={pending} onLogin={quickSignIn} error={quickError ? t.authUnavailable : null} />
   </div>;
 }

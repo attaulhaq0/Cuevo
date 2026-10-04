@@ -12,7 +12,7 @@ const commands: Record<RuntimeService, string[]> = {
   worker: [resolve('node_modules/tsx/dist/cli.mjs'), 'watch', 'src/main.ts'],
 };
 const children = (['web', 'api', 'worker'] as RuntimeService[]).map(service => spawnOwnedProcess(process.execPath,
-  commands[service], { cwd: resolve(`apps/${service}`), env: runtimeEnvironment(service, developmentEnvironment), stdio: 'inherit' }));
+  commands[service], { cwd: resolve(`apps/${service}`), env: runtimeEnvironment(service, service === 'web' ? { ...developmentEnvironment, HOSTNAME: '127.0.0.1', PORT: '3000' } : developmentEnvironment), stdio: 'inherit' }));
 let ending = false;
 const stop = () => { if (ending) return; ending = true; void stopOwnedProcesses(children).catch(() => { console.error('Owned runtime shutdown requires review.'); process.exitCode = 1; }); };
 process.on('SIGTERM', stop); process.on('SIGINT', stop);

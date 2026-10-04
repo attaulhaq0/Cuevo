@@ -79,3 +79,12 @@ test('disabled or absent local provisioning mode never forwards the dedicated ke
     assert.equal(child.CUEVO_AUTH_PROVISIONING_KEY, undefined);
   }
 });
+
+test('testing quick-login flag and private account path reach only an explicitly enabled local web child', () => {
+  const local = { ...input, HOSTNAME: '127.0.0.1', CUEVO_TEST_QUICK_LOGIN: '1', CUEVO_TEST_LOGIN_ACCOUNTS_FILE: 'private-local-file', NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:57421' };
+  assert.equal(runtimeEnvironment('web', local).CUEVO_TEST_LOGIN_ACCOUNTS_FILE, 'private-local-file');
+  for (const service of ['api', 'worker'] as const) assert.equal(runtimeEnvironment(service, local).CUEVO_TEST_QUICK_LOGIN, undefined);
+  for (const patch of [{ HOSTNAME: '0.0.0.0' }, { HOSTNAME: undefined }, { VERCEL: '1' }, { VERCEL_ENV: 'preview' }, { CUEVO_DEPLOYMENT_ENVIRONMENT: 'production' }, { CUEVO_TEST_QUICK_LOGIN: 'false' }, { NEXT_PUBLIC_SUPABASE_URL: 'https://project.supabase.co' }]) {
+    const child = runtimeEnvironment('web', { ...local, ...patch }); assert.equal(child.CUEVO_TEST_QUICK_LOGIN, undefined); assert.equal(child.CUEVO_TEST_LOGIN_ACCOUNTS_FILE, undefined);
+  }
+});

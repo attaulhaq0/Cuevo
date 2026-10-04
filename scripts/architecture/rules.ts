@@ -13,6 +13,9 @@ const webFeature = (file: string) => file.match(/^apps\/web\/features\/([^/]+)\/
 const apiModule = (file: string) => file.match(/^apps\/api\/src\/modules\/([^/]+)\//)?.[1];
 const testFile = (file: string) => file.includes('/test/') || file.includes('/tests/') || file.endsWith('.test.ts');
 const webRuntime = (file: string) => file.startsWith('apps/web/app/') || file.startsWith('apps/web/features/') || file.startsWith('apps/web/shared/');
+const localLoginServerFiles = new Set(['apps/web/features/auth/api.ts', 'apps/web/features/auth/server/quick-login.ts', 'apps/web/app/api/testing/quick-login/route.ts']);
+const localLoginServer = (file: string) => localLoginServerFiles.has(file);
+const localLoginNodeImports = new Set(['node:fs/promises', 'node:path', 'node:url']);
 
 function imports(file: ArchitectureFile) {
   const ast = ts.createSourceFile(file.path, file.content, ts.ScriptTarget.Latest, true, file.path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -52,6 +55,7 @@ export function checkArchitecture(input: ArchitectureFile[], options: { navigati
     const from = file.path;
     const app = application(from); const pkg = workspacePackage(from); const feature = webFeature(from);
     const runtime = (from.startsWith('apps/api/src/') || from.startsWith('apps/worker/src/') || from.startsWith('apps/web/app/') || from.startsWith('apps/web/features/') || from.startsWith('apps/web/shared/') || from.startsWith('packages/') && !testFile(from));
+    if (from === 'apps/web/features/auth/api.ts' && !imports(file).includes('server-only')) fail(from, 'server-marker', 'Local test login public server entry must retain the server-only marker.');
     if (app === 'web' && !testFile(from) && !webRuntime(from) && !from.startsWith('apps/web/.storybook/') && !['apps/web/next.config.ts', 'apps/web/instrumentation.ts', 'apps/web/proxy.ts'].includes(from)) fail(from, 'layout', 'Web runtime source must belong to app, features or shared.');
     if (from.startsWith('apps/web/components/') || from.startsWith('apps/web/lib/') || from.startsWith('apps/web/messages/')) fail(from, 'layout', 'Web source must have feature or shared ownership.');
     if (from.startsWith('apps/api/src/') && !['apps/api/src/app.ts', 'apps/api/src/main.ts', 'apps/api/src/serverless.ts'].includes(from) && !from.startsWith('apps/api/src/modules/') && !from.startsWith('apps/api/src/platform/')) fail(from, 'layout', 'API source belongs to a domain module or platform capability.');
@@ -84,10 +88,12 @@ export function checkArchitecture(input: ArchitectureFile[], options: { navigati
           if (!publicFeatureFiles.has(path.posix.basename(target)) || path.posix.dirname(target) !== `apps/web/features/${targetFeature}`) fail(from, 'feature-api', `Import the ${targetFeature} feature through its documented public surface.`);
         }
         if (runtime && app === 'web' && targetPkg === 'config') fail(from, 'browser-server', 'Server configuration must not enter web imports.');
+        if (app === 'web' && runtime && !testFile(from) && localLoginServer(target) && !localLoginServer(from)) fail(from, 'browser-server', 'Local test login server owner cannot enter browser imports.');
         if (['domain', 'contracts'].includes(pkg ?? '') && ['config', 'ui'].includes(targetPkg ?? '')) fail(from, 'pure-package', 'Pure domain/contracts cannot depend on server config or UI.');
         if (pkg === 'ui' && targetPkg && targetPkg !== 'ui' && targetPkg !== 'contracts') fail(from, 'ui-direction', 'Design primitives cannot depend on server or domain implementation.');
       }
-      if (!testFile(from) && (app === 'web' && runtime || ['domain', 'contracts', 'ui'].includes(pkg ?? '')) && (isBuiltin(specifier) || serverPackages.some(name => name.endsWith('/') ? specifier.startsWith(name) : specifier === name || specifier.startsWith(name + '/')))) fail(from, 'browser-server', `Server-only dependency ${specifier} is forbidden here.`);
+      const allowedLoginImport = from === 'apps/web/features/auth/server/quick-login.ts' && localLoginNodeImports.has(specifier);
+      if (!testFile(from) && !allowedLoginImport && (app === 'web' && runtime || ['domain', 'contracts', 'ui'].includes(pkg ?? '')) && (isBuiltin(specifier) || serverPackages.some(name => name.endsWith('/') ? specifier.startsWith(name) : specifier === name || specifier.startsWith(name + '/')))) fail(from, 'browser-server', `Server-only dependency ${specifier} is forbidden here.`);
     }
   }
   const visited = new Set<string>(); const active: string[] = []; const emitted = new Set<string>();

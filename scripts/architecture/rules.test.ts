@@ -60,3 +60,23 @@ test('only the documented portable analytics contract subpath crosses browser an
   assert.deepEqual(rules(accepted), []);
   assert.ok(rules([file('apps/web/shared/diagnostics/client.ts', "import data from '@cuevo/contracts/private';"), file('packages/contracts/src/private.ts')]).includes('unresolved-import'));
 });
+
+test('local test login has one exact server owner and cannot enter any browser surface', () => {
+  const owner = file('apps/web/features/auth/server/quick-login.ts', "import { readFile } from 'node:fs/promises'; import { resolve } from 'node:path';");
+  const api = file('apps/web/features/auth/api.ts', "import 'server-only'; export { quickLogin } from './server/quick-login';");
+  const route = file('apps/web/app/api/testing/quick-login/route.ts', "import { quickLogin } from '../../../../features/auth/api';");
+  assert.deepEqual(rules([owner, api, route]), []);
+  for (const browser of ['apps/web/features/auth/components/sign-in.tsx', 'apps/web/features/auth/ui.tsx', 'apps/web/shared/session/providers.tsx', 'apps/web/app/page.tsx', 'apps/web/features/learning/api.ts']) {
+    const reference = pathRelative(browser, owner.path);
+    assert.ok(rules([file(browser, `const hidden = import('${reference}');`), owner]).includes('browser-server'));
+  }
+  assert.ok(rules([file('apps/web/features/auth/server/unreviewed.ts', "import { Pool } from 'pg';")]).includes('browser-server'));
+  assert.ok(rules([file('apps/web/features/auth/server/quick-login.ts', "import { Pool } from 'pg';")]).includes('browser-server'));
+  assert.ok(rules([file('apps/web/app/api/testing/unreviewed/route.ts', "import { readFile } from 'node:fs/promises';")]).includes('browser-server'));
+  assert.ok(rules([file('apps/web/features/auth/api.ts', "export { quickLogin } from './server/quick-login';"), owner]).includes('server-marker'));
+});
+function pathRelative(from: string, to: string) {
+  const fromParts = from.split('/'); fromParts.pop(); const toParts = to.split('/');
+  while (fromParts[0] && fromParts[0] === toParts[0]) { fromParts.shift(); toParts.shift(); }
+  return (fromParts.length ? '../'.repeat(fromParts.length) : './') + toParts.join('/');
+}

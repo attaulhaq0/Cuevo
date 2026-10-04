@@ -19,6 +19,7 @@ type AppContext = {
   membership: Membership | null;
   failure: MembershipError | null;
   signIn: (email: string, password: string) => Promise<'credentials' | 'unavailable' | null>;
+  restoreSession: (session: { access_token: string; refresh_token: string }) => Promise<boolean>;
   signOut: () => Promise<boolean>;
   refreshAccess: () => void;
   holdMembershipVerification: () => () => void;
@@ -181,7 +182,12 @@ export function Providers({ children, initialLocale, config }: { children: React
     } catch { return false; }
   }, [client]);
 
-  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, signOut, refreshAccess, holdMembershipVerification, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice: notice?.message ?? null, noticeLocation: notice?.location ?? null, clearNotice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
+  const restoreSession = useCallback(async (session: { access_token: string; refresh_token: string }): Promise<boolean> => {
+    if (!client || !session.access_token || !session.refresh_token) return false;
+    try { const { error } = await client.auth.setSession(session); return !error; } catch { return false; }
+  }, [client]);
+
+  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, restoreSession, signOut, refreshAccess, holdMembershipVerification, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice: notice?.message ?? null, noticeLocation: notice?.location ?? null, clearNotice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
 }
 
 export function useApp() {

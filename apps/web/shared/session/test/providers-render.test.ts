@@ -12,6 +12,7 @@ function InitialContext() {
   const app = useApp();
   assert.equal(typeof app.holdMembershipVerification, 'function');
   assert.equal(typeof app.clearNotice, 'function');
+  assert.equal(typeof app.restoreSession, 'function');
   assert.equal(app.notice, null);
   assert.equal(app.noticeLocation, null);
   assert.equal(app.membership, null);

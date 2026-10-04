@@ -1,5 +1,7 @@
 # Shared web infrastructure
 
+Providers exposes a general `restoreSession` helper for an actual provider access/refresh pair. It delegates only to the existing memory-only Auth client setSession; normal Auth events clear prior scopes and fetch current membership. It accepts no role, school or membership projection and imports no feature/server owner. Auth’s local synthetic TryCuevo flow consumes it after server verification; this helper itself grants no access or testing exception.
+
 The integrated Providers keeps the current account admission continuation hold and route/child-scoped notices. A hold suppresses premature membership verification, clears prior membership, and resumes normal authorized verification only after balanced release. It supplies no role, session or access and does not bypass API/database checks.
 
 CommandForm captures a deep clone of the original command and its binary receipt validator before awaiting either a new send or original-key retry. The public validator receives receipt and originalCommand; remount, newer draft, actor/key replacement and validation failure cannot substitute a body or settle another key. Validation may run after unmount; callbacks, working-input removal and announcements remain mounted/current-scope effects. Any validator exception retains the original key as an uncertain receipt.
