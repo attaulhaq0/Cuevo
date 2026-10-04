@@ -1,4 +1,41 @@
 .school-workspace { margin-block-start: var(--space-6); min-inline-size: 0; }
+.school-automation-review > .cuevo-section-header { margin-block-end:var(--space-3); }
+.school-automation-help { font-size:var(--type-sm);margin-block-start:var(--space-1); }
+.school-automation-help p { max-inline-size:75ch; }
+.school-automation-layout { display:grid;grid-template-columns:minmax(15rem,.55fr) minmax(0,1.45fr);gap:var(--space-3);align-items:start; }
+.school-automation-directory,.school-automation-policy,.school-automation-execution { min-inline-size:0;padding:var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-xl);background:var(--color-material-reading); }
+.school-automation-directory .field { margin:0; }
+.school-automation-directory select { inline-size:100%;min-inline-size:0; }
+.school-automation-directory__states { display:grid;gap:var(--space-3);font-size:var(--type-sm);margin-block-end:0; }
+.school-automation-directory__states dd { margin:0;margin-block-start:var(--space-1); }
+.school-automation-policy h3,.school-automation-execution h3 { margin:0;font-size:var(--type-lg); }
+.school-automation-policy .cuevo-section-header { margin-block-end:var(--space-3); }
+.school-automation-policy__facts { font-size:var(--type-sm);gap:var(--space-2); }
+.school-automation-rule { display:grid;gap:var(--space-3);margin-block:var(--space-3);font-size:var(--type-sm); }
+.school-automation-rule > div { display:grid;grid-template-columns:minmax(8rem,.3fr) minmax(0,1fr);gap:var(--space-2); }
+.school-automation-rule dt { font-weight:var(--font-weight-semibold); }
+.school-automation-rule dd { margin:0; }
+.school-automation-policy__conditions { font-size:var(--type-sm);padding-inline-start:var(--space-5); }
+.school-automation-policy__conditions:empty { display:none; }
+.school-automation-execution { margin-block-start:var(--space-3); }
+.school-automation-execution .cuevo-section-header p,.school-automation-limit { font-size:var(--type-sm);margin-block:var(--space-1); }
+.school-automation-runs { margin-block-start:var(--space-3); }
+.school-automation-runs > summary { cursor:pointer;min-block-size:var(--control-min-size);font-weight:var(--font-weight-semibold); }
+.school-automation-runs__items { max-block-size:28rem;overflow:auto;overscroll-behavior-block:contain;display:grid;gap:var(--space-2); }
+.school-automation-runs__items > article { padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--type-sm); }
+.school-automation-runs__items header { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-2); }
+.school-automation-runs__items h4,.school-automation-runs__items p { margin-block:var(--space-1); }
+@media(max-width:767px){.school-automation-layout{grid-template-columns:minmax(0,1fr)}.school-automation-directory__states{display:none}.school-automation-directory,.school-automation-policy,.school-automation-execution{padding:var(--space-3)}.school-automation-policy .cuevo-section-header{gap:var(--space-2)}.school-automation-policy .cuevo-section-header>.button{inline-size:100%;font-size:var(--type-sm)}.school-automation-rule>div{grid-template-columns:minmax(0,1fr);gap:var(--space-1)}.school-automation-policy__facts{grid-template-columns:minmax(0,1fr)}.school-automation-review>.cuevo-section-header{align-items:start;gap:var(--space-2)}.school-automation-review>.cuevo-section-header>.button{font-size:var(--type-xs);padding-inline:var(--space-2)}.school-automation-runs__items{max-block-size:22rem}}
+@media(max-width:360px){
+ .school-automation-review > .cuevo-section-header { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-2); }
+ .school-automation-review > .cuevo-section-header > .cuevo-section-header__context { grid-column:1; }
+ .school-automation-review > .cuevo-section-header > .button { grid-column:2;inline-size:2.75rem;min-inline-size:2.75rem;block-size:2.75rem;padding:var(--space-2); }
+ .school-automation-refresh-label { display:none; }
+ .school-automation-directory { padding:var(--space-2); }
+ .school-automation-directory .field { display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--space-2);align-items:center; }
+ .school-automation-directory .field > label { margin:0; }
+ .school-automation-review > .cuevo-section-header { margin-block-end:var(--space-1); }
+}
 .school-workspace > * { min-inline-size: 0; }
 .school-workspace { margin-block-start:var(--space-3); }
 .school-workspace > .learning-toolbar { margin-block:var(--space-3);gap:var(--space-2); }
@@ -18,6 +55,7 @@
 .school-workspace .school-table-scroll { margin-block-start:var(--space-3); }
 .school-daily-context-layout { display:grid;grid-template-columns:minmax(0,1fr) minmax(15rem,.7fr);gap:var(--space-3);align-items:start;min-inline-size:0; }
 .school-daily-context-layout > div { min-inline-size:0; }
+.school-daily-context-layout input { min-inline-size:0;inline-size:100%;box-sizing:border-box; }
 .school-daily-context-layout .school-day-filter { padding:0;background:transparent; }
 .school-daily-context-layout .school-day-filter .field { flex:1; }
 .school-daily-context-layout .school-daily-choice-continuation:empty { display:none; }
@@ -147,6 +185,7 @@
   .school-staff-day .school-attendance-list > li > div { inline-size:100%; }
   .school-staff-day .school-attendance-list > li > .button { inline-size:100%; min-inline-size:0; }
 }
+@media(max-width:360px){.school-daily-context-layout{grid-template-columns:minmax(0,1fr)} }
 .parent-school-dates { min-inline-size:0; }
 .school-workspace--parent { margin-block-start:var(--space-3); gap:var(--space-3); }
 .school-workspace--parent > .home-context-section { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-3); margin:0; padding:var(--space-3); border-radius:var(--radius-lg); background:var(--color-material-reading); }

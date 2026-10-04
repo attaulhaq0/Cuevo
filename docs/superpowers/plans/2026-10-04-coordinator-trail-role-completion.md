@@ -1,5 +1,7 @@
 # Coordinator Trail role completion plan
 
+4 October checkpoint: existing C1/C2/C3/C4 implementations were inspected before new work. Class directory density, Coordinator proposal/practice names and read recovery were refined through their existing owners; exact native/evidence/report reading and source approval/retry/assignment journeys passed locally. See [Coordinator/Admin acceptance report](../../reports/2026-10-04-coordinator-admin-connected-acceptance.md) for current evidence, stale checklist findings and remaining gates. Unchecked broad tasks below do not become complete from scoped tests.
+
 > **For agentic workers:** Implement one owner task at a time with independent source review. Root owns source freeze, builds, isolated runtime and role acceptance; use the existing owner surfaces and current protected contracts.
 
 **Goal:** Complete the Coordinator's current programme/evidence/outcome/report review journey without inventing full CQI, official curriculum or new approval authority.

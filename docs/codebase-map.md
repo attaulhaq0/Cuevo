@@ -121,6 +121,8 @@ Teacher learning documents use school-learning/resource.controller/service and l
 
 ## Tests and operations
 
+School's current Automation review keeps its query/refresh authority in `components/automation.tsx` and the selected fixed policy plus bounded processing receipts in `components/automation-reading.tsx`. It stores only a permitted policy ID, adds no worker or policy command, and preserves existing review-control destinations.
+
 Current PostHog delivery belongs to worker jobs/analytics and platform/posthog, with a portable @cuevo/contracts/analytics names/types boundary. API platform/telemetry and web shared/diagnostics own fixed current-session observations; they never expose raw content or secrets. Private destination activation/receipts in append-only migrations separate remote delivery from fixture files and enforce environment/source/policy/lease scope. Interactive local setup is scripts/runtime/posthog-local.ts; CI/integration/browser default launchers skip its ignored overlay. Read [PostHog operations](operations/posthog.md) and [ADR](decisions/2026-10-02-posthog-current-repository.md). Actual Edge UI27-mutation loop and55 indexed unique synthetic events pass; broader frozen regression remains required for this increment.
 
 - API unit/contract cases: apps/api/test/unit. Real Auth/API/Postgres journeys: apps/api/test/integration.

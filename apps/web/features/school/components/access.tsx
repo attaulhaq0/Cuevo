@@ -1,5 +1,5 @@
 'use client';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { schoolAccessRevision, schoolAccessBasis, schoolAccessSourceKey, type SchoolPerson, type SchoolRow } from '../model';
 import { useApp } from '../../../shared/session/providers';
@@ -24,6 +24,8 @@ export function SchoolAccess({ people, enrollments, assignments, guardians, clas
   });
   const [directoryKind, setDirectoryKind] = useState<AccessDirectoryKind>(retainedAction ?? 'person');
   const [query, setQuery] = useState(''); const [selectedId, setSelectedId] = useState<string | null>(retainedPerson?.id ?? relationship?.id ?? null);
+  const selectedHeading = useRef<HTMLHeadingElement>(null), focusSelected = useRef(false);
+  const [selectionRequest, setSelectionRequest] = useState(0);
   const [locked, setLocked] = useState(false);
   const [reviewedPerson, setReviewedPerson] = useState<SchoolPerson | null>(retainedAction === 'person' ? retainedPerson ?? null : null);
   const pending = commandJournal.pending().some(command => /^\/v1\/school\/(people\/|enrollments$|teacher-assignments$|guardian-relationships$)/.test(command.path));
@@ -58,12 +60,21 @@ export function SchoolAccess({ people, enrollments, assignments, guardians, clas
   const currentRows = accessRows[directoryKind];
   const recordRows = accessDirectoryRows(directoryKind, currentRows, names, dictionary.roles, t.nameUnavailable);
   const selected = currentAccessDirectoryRow(recordRows, selectedId);
+  useEffect(() => {
+    if (focusSelected.current && selected && selectedHeading.current) {
+      focusSelected.current = false;
+      selectedHeading.current.focus({ preventScroll: true });
+      selectedHeading.current.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
+  }, [selected, selectionRequest]);
   const editingCurrent = action !== 'person' && relationship ? accessRows[action ?? 'enrollment'].filter(row => row.id === relationship.id) : [];
   const personBasis = action === 'person' ? formDrafts.get(`${membership?.schoolId}:${membership?.userId}:${paths.person}`)?.basis.expectedRevision : undefined;
   const sourceCurrent = action === 'person' ? !!currentPerson && currentPerson.revision === person?.revision && (personBasis === undefined || personBasis === currentPerson.revision) : !relationship || editingCurrent.length === 1 && editingCurrent[0].revision === relationship.revision;
   function chooseKind(kind: AccessDirectoryKind) { if (selectionLocked) return; setDirectoryKind(kind); setSelectedId(null); setQuery(''); setAction(null); setRelationship(null); }
   function chooseRecord(row: AccessDirectoryRow) {
     if (selectionLocked) return;
+    focusSelected.current = true;
+    setSelectionRequest(value => value + 1);
     setSelectedId(row.id); setAction(null);
     if (directoryKind === 'person') { setPersonId(row.id); setRelationship(null); } else setRelationship(row.source);
   }
@@ -74,7 +85,7 @@ export function SchoolAccess({ people, enrollments, assignments, guardians, clas
     <div className="school-access-layout">
       <AccessDirectory locale={locale} kind={directoryKind} rows={filterAccessDirectory(recordRows, query, locale)} selectedId={selectedId} query={query} locked={selectionLocked} statusLabel={statusLabel} onKind={chooseKind} onQuery={setQuery} onSelect={chooseRecord}/>
       <section className="school-access-selected" aria-label={copy.selected}>
-        {selected ? <><header className="cuevo-section-header"><div className="cuevo-section-header__context"><h2><CuevoIcon name="person" size={28}/><bdi>{selected.title}</bdi></h2><p><bdi>{selected.context}</bdi></p></div><Status tone={selected.status === 'active' ? 'positive' : 'neutral'}>{statusLabel(selected.status)}</Status></header><dl className="school-access-facts"><div><dt>{copy.from}</dt><dd><bdi>{dateLabel(selected.source.effectiveFrom)}</bdi></dd></div><div><dt>{copy.to}</dt><dd><bdi>{selected.source.effectiveTo === null ? copy.ongoing : dateLabel(selected.source.effectiveTo)}</bdi></dd></div></dl>{canManage && !action ? <Button type="button" variant="secondary" disabled={selectionLocked} onClick={editSelected}>{copy.edit}</Button> : null}</> : action ? null : <><h2>{copy.choose}</h2><p>{selectedId ? copy.sourceUnavailable : copy.chooseBody}</p></>}
+        {selected ? <><header className="cuevo-section-header"><div className="cuevo-section-header__context"><h2 ref={selectedHeading} tabIndex={-1}><CuevoIcon name="person" size={28}/><bdi>{selected.title}</bdi></h2><p><bdi>{selected.context}</bdi></p></div><Status tone={selected.status === 'active' ? 'positive' : 'neutral'}>{statusLabel(selected.status)}</Status></header><dl className="school-access-facts"><div><dt>{copy.from}</dt><dd><bdi>{dateLabel(selected.source.effectiveFrom)}</bdi></dd></div><div><dt>{copy.to}</dt><dd><bdi>{selected.source.effectiveTo === null ? copy.ongoing : dateLabel(selected.source.effectiveTo)}</bdi></dd></div></dl>{canManage && !action ? <Button type="button" variant="secondary" disabled={selectionLocked} onClick={editSelected}>{copy.edit}</Button> : null}</> : action ? null : <><h2>{copy.choose}</h2><p>{selectedId ? copy.sourceUnavailable : copy.chooseBody}</p></>}
         {canManage && directoryKind !== 'person' && !action ? <Button type="button" variant="secondary" disabled={selectionLocked} onClick={createRelationship}>{copy.create}</Button> : null}
         {canManage && action && (action !== 'person' || person) && (sourceCurrent || !!commandJournal.get(paths[action])) ? <CommandForm key={`${action}:${relationship?.id ?? personId}`} title={titles[action]} path={paths[action]} fields={fields[action]} body={accessBody} onValuesChange={values => { if (!action) return; const input = Object.fromEntries(values.entries()); const slot=`${membership?.schoolId}:${membership?.userId}:${paths[action]}`; const saved=formDrafts.get(slot); const revision=schoolAccessBasis(action,input,accessRows[action],saved,personId); if(saved&&revision!==undefined)formDrafts.save(slot,saved.values,{...saved.basis,expectedRevision:revision,accessSourceKey:schoolAccessSourceKey(action,input,personId)}); }} onLockedChange={setLocked} onSaved={() => { setAction(null); onChanged(); }} onCancel={() => setAction(null)} note={t.accessNote} /> : action && !sourceCurrent ? <p role="status">{copy.sourceUnavailable}</p> : null}
       </section>

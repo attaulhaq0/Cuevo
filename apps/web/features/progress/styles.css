@@ -73,6 +73,16 @@
 .progress-review-reading { min-inline-size:0; }
 .class-learning-summary[data-coordinator="true"] .coordinator-class-context { margin-block:var(--space-3); }
 .coordinator-class-row { padding-block:var(--space-4); }
+.coordinator-class-chooser { min-inline-size:0; }
+.coordinator-class-chooser > summary { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); min-block-size:2.75rem; cursor:pointer; font-size:var(--type-sm); color:var(--color-link); }
+.coordinator-class-chooser > summary bdi { font-weight:var(--font-weight-semibold); overflow-wrap:anywhere; }
+.coordinator-class-chooser__records { max-block-size: min(34rem,60dvh); overflow-y:auto; overscroll-behavior:contain; padding:var(--space-1); scroll-padding-block:var(--space-2); }
+.coordinator-class-chooser .coordinator-class-row { padding-block:var(--space-2); }
+.coordinator-class-chooser .coordinator-class-row > .learning-section-heading { margin-block:0 var(--space-1); }
+.coordinator-class-chooser .coordinator-record-counts { display:flex; flex-wrap:wrap; gap:var(--space-2) var(--space-4); margin-block:var(--space-1); }
+.coordinator-class-chooser .coordinator-record-counts > div { display:flex; gap:var(--space-2); align-items:baseline; }
+.coordinator-class-chooser .coordinator-record-counts dt { font-size:var(--type-xs); }
+.coordinator-class-chooser .coordinator-record-counts dd { margin:0; }
 .coordinator-class-row .learning-section-heading { align-items:start;gap:var(--space-2); }
 .coordinator-class-row h3 { font-size:var(--type-body); }
 .coordinator-class-row .button { min-block-size:2.75rem; }

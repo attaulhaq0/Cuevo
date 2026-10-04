@@ -180,4 +180,11 @@
   .workspace .workspace-chrome__person > button { min-inline-size: 0; max-inline-size: 100%; }
   .workspace .workspace-chrome__person > button > span:not(.workspace-chrome__avatar) { min-inline-size: 0; }
   .workspace .workspace-chrome__person strong { max-inline-size: min(6rem, 23vw); }
+  .workspace .workspace-chrome__school { grid-column:1 / -1; }
+  .workspace .workspace-chrome__utilities { grid-column:2;grid-row:3; }
+  .workspace .workspace-chrome__search { grid-column:1;grid-row:3;inline-size:2.75rem;min-inline-size:2.75rem;padding:var(--space-2);justify-content:center; }
+  .workspace .workspace-chrome__search > span { display:none; }
+  .workspace .workspace-chrome__person strong { max-inline-size:8.5rem; }
+  .workspace .workspace-chrome__person small { max-inline-size:8.5rem; }
+  .workspace .workspace-main:has(> .school-workspace) > .workspace-intro > div > p:last-child { display:none; }
 }
