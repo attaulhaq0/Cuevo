@@ -13,6 +13,7 @@ export const authEn = {
   recoveryHelp: 'Forgot your password? Ask your school administrator to approve an account recovery link for your current account.',
   sharedDevice: 'On a shared device, sign out when you finish.',
   privacyTitle: 'Privacy & device information', privacyBody: 'This browser remembers your language choice. Sign-in sessions stay in memory and are not saved in browser storage.',
+  privacyClose: 'Close privacy information',
   privacyEnvironment: 'This preview uses a synthetic school environment. Official curriculum and live intelligence readiness require separate review.',
   welcomeArt: 'Foxi welcomes you to Cuevo',
 };
@@ -29,5 +30,6 @@ export const authAr: typeof authEn = {
   helpTitle: 'تحتاج إلى حساب أو مساعدة في كلمة المرور؟', helpBody: 'اطلب من مسؤول مدرستك حسابك أو المساعدة في تسجيل الدخول.', schoolAccount: 'مدرستك توفّر حسابك وتحدّد مساحات العمل التي يمكنك الوصول إليها.', sharedDevice: 'سجّل الخروج بعد الانتهاء من استخدام جهاز مشترك.',
   recoveryHelp: 'نسيت كلمة المرور؟ اطلب من مسؤول المدرسة الموافقة على رابط استعادة لحسابك الحالي.',
   privacyTitle: 'الخصوصية ومعلومات الجهاز', privacyBody: 'يتذكّر هذا المتصفح اللغة التي تختارها. تبقى جلسات تسجيل الدخول في الذاكرة ولا تُحفظ في تخزين المتصفح.', privacyEnvironment: 'تستخدم هذه المعاينة بيئة مدرسية اصطناعية. اعتماد المناهج الرسمية والذكاء المباشر يحتاج إلى مراجعة مستقلة.',
+  privacyClose: 'إغلاق معلومات الخصوصية',
   welcomeArt: 'يرحّب بك فوكسي في Cuevo',
 };

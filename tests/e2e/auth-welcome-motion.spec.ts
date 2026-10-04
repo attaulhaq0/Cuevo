@@ -34,7 +34,7 @@ for (const locale of ['en', 'ar'] as const) {
       await page.setViewportSize(viewport);
       await expect(art).toBeVisible();
       await expect.poll(() => art.evaluate(image => (image as HTMLImageElement).currentSrc)).toMatch(viewport.width < 768 ? /welcome-fox\./ : /studio-companions\./);
-      const backdrop = await page.locator('.auth-page').evaluate(element => ({ page: getComputedStyle(element, '::before').backgroundImage, scene: getComputedStyle(element.querySelector('.auth-studio-scene')!, '::before').backgroundImage }));
+      const backdrop = await page.locator('.auth-page').evaluate(element => ({ page: getComputedStyle(element, '::before').backgroundImage, scene: getComputedStyle(element.querySelector(innerWidth > 1100 ? '.auth-visual' : '.auth-studio-scene')!, '::before').backgroundImage }));
       if (viewport.width < 768) { expect(backdrop.page).toMatch(/learning-background\./); expect(backdrop.scene).toBe('none'); }
       else { expect(backdrop.page).toBe('none'); expect(backdrop.scene).toMatch(/studio-background\./); }
       await expect(page.locator('.auth-form')).toHaveCount(1);

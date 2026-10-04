@@ -39,7 +39,7 @@ async function geometry(page: Page) {
         Object.keys(sectionSelectors).filter(other => name !== other
           && document.querySelector(sectionSelectors[name as keyof typeof sectionSelectors])!.contains(document.querySelector(sectionSelectors[other as keyof typeof sectionSelectors])!))
           .map(other => `${name}/${other}`)),
-      controls: named('.auth-header button, .auth-panel button, .auth-panel input, .auth-privacy summary'),
+      controls: named('.auth-header button, .auth-panel button:not(dialog button), .auth-panel input'),
       fields: named('.auth-form > .field, .auth-device-note, .auth-form [role="alert"], .auth-submit, .auth-help-link'),
       panel: rect(document.querySelector('.auth-panel')!),
       inputContents: [...document.querySelectorAll('.auth-input')].map(element => ({
@@ -345,13 +345,12 @@ for (const locale of locales) {
       }
       await page.locator('.auth-panel__tabs button').first().click();
       const closed = await geometry(page);
-      await page.locator('.auth-privacy summary').click();
+      await page.locator('.auth-privacy-trigger').click();
       const privacy = await geometry(page); measurements.push({ width, privacy });
       assertLayout(privacy, `${locale}/${width}: privacy expanded`);
       for (const section of ['header', 'story', 'intro', 'visual', 'panel'] as const) {
         if (section === 'visual' && width >= 768 && width <= 1100) {
-          // The tablet scene follows the form. An expanded disclosure must push
-          // it down by the same amount, while preceding content stays anchored.
+          // Optional privacy uses a dialog and leaves the following scene fixed.
           const movement = privacy.sections.visual.y - closed.sections.visual.y;
           expect.soft(movement, `${locale}/${width}: expanded privacy cannot lift the following scene`).toBeGreaterThanOrEqual(-tolerance);
           expect.soft(Math.abs(movement - (privacy.sections.panel.bottom - closed.sections.panel.bottom)),
@@ -361,7 +360,7 @@ for (const locale of locales) {
         expect.soft(Math.abs(privacy.sections[section].y - closed.sections[section].y),
           `${locale}/${width}: opening footer privacy must not lift preceding ${section}`).toBeLessThanOrEqual(tolerance);
       }
-      await page.locator('.auth-privacy summary').click();
+      await page.keyboard.press('Escape');
     }
     await evidence(info, 'normal-flow-measurements', measurements);
   });

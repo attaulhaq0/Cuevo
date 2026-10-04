@@ -228,13 +228,14 @@ for (const locale of ['en', 'ar'] as const) {
     await keyboardActivate(page, page.getByRole('button', { name: t.returnSignIn, exact: true }));
     const privacy = page.locator('.auth-privacy');
     await expect(privacy).not.toHaveAttribute('open', '');
-    await keyboardActivate(page, privacy.locator('summary'));
+    await keyboardActivate(page, page.locator('.auth-privacy-trigger'));
     await expect(privacy).toHaveAttribute('open', '');
-    await expect(privacy.locator('summary')).toHaveText(t.privacyTitle);
+    await expect(privacy.getByRole('heading')).toHaveText(t.privacyTitle);
     await expect(privacy.getByText(t.privacyBody, { exact: true })).toBeVisible();
     await expect(privacy.getByText(t.privacyEnvironment, { exact: true })).toBeVisible();
-    await semanticSmoke(page);
-    await keyboardActivate(page, privacy.locator('summary'));
+    expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.auth-privacy-trigger')).toBeFocused();
     await expect(privacy).not.toHaveAttribute('open', '');
     await expect(page.getByRole('button', { name: /^(register|create account|magic link|remember me|accept cookies|تسجيل حساب|إنشاء حساب|تذكرني|قبول ملفات الارتباط)$/i })).toHaveCount(0);
     await expect(page.getByRole('checkbox')).toHaveCount(0);

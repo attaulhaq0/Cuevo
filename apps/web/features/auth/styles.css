@@ -61,11 +61,18 @@ html[dir="rtl"] .auth-input:not(.auth-input--password) input { padding-inline: v
 .auth-submit:hover:not(:disabled) { background: var(--color-primary-hover); }
 .auth-device-note,.auth-help-link { display: none; }
 .auth-footer { margin-block-start: var(--space-5); border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-3); }
-.auth-privacy summary { display: flex; gap: var(--space-3); align-items: center; min-block-size: 2.75rem; cursor: pointer; font-size: var(--type-sm); line-height: 1.6; }
-.auth-privacy summary>span { flex: 1; min-inline-size: 0; }
-.auth-privacy__chevron { margin-inline-start: auto; }
-.auth-privacy[open] .auth-privacy__chevron { transform: rotate(180deg); }
-.auth-privacy p { font-size: var(--type-sm); line-height: 1.6; margin-block-start: var(--space-3); }
+.auth-privacy-trigger { display:flex; gap:var(--space-3); align-items:center; min-block-size:2.75rem; inline-size:100%; padding:0; border:0; background:transparent; color:inherit; cursor:pointer; font:inherit; font-size:var(--type-sm); line-height:1.6; text-align:start; }
+.auth-privacy-trigger>span { flex:1; min-inline-size:0; }
+.auth-privacy { margin:auto; inline-size:min(32rem,calc(100% - 2 * var(--space-4))); max-inline-size:none; max-block-size:calc(100dvh - 2 * var(--space-4)); padding:var(--space-6); border:1px solid var(--color-auth-border); border-radius:var(--radius-xl); background:var(--color-surface); color:var(--color-auth-text); box-shadow:var(--elevation-floating); overflow:hidden; }
+.auth-privacy[open] { display:flex; flex-direction:column; }
+.auth-privacy::backdrop { background:rgb(12 32 68 / 32%); }
+.auth-privacy__header { display:flex; align-items:center; gap:var(--space-3); flex:0 0 auto; padding-block-end:var(--space-4); border-block-end:1px solid var(--color-border); }
+.auth-privacy__header>svg { flex:0 0 auto; }
+.auth-privacy__header h2 { flex:1; min-inline-size:0; font-size:var(--type-lg); line-height:1.4; overflow-wrap:anywhere; }
+.auth-privacy__close { display:grid; place-items:center; flex:0 0 auto; inline-size:2.75rem; block-size:2.75rem; padding:0; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-muted); color:inherit; cursor:pointer; }
+.auth-privacy__body { min-block-size:0; overflow:auto; overscroll-behavior:contain; margin-block-start:var(--space-4); padding:var(--space-1); }
+.auth-privacy__body p { font-size:var(--type-body); line-height:1.6; }
+.auth-privacy__body p+p { margin-block-start:var(--space-4); }
 .auth-account-help { display: grid; gap: var(--space-4); padding-block: var(--space-3); font-size: var(--type-body); line-height: 1.6; }
 @media(min-width:1101px) { .auth-panel .auth-language { margin-block-end:var(--space-5); } .auth-panel__intro { margin-block-end:var(--space-4); } .auth-panel__tabs { margin-block-end:var(--space-4); } .auth-form { gap:var(--space-4); } .auth-footer { margin-block-start:var(--space-4); } }
 @media(min-width:1101px) and (max-height:850px) { .auth-panel { padding:var(--space-6); } .auth-header .brand__mark { inline-size:3.75rem; } .auth-header .brand__name { font-size:2.5rem; } .auth-story__intro h1 { font-size:clamp(2.75rem,3.7vw,3.25rem); } .auth-panel__intro h2 { font-size:2rem; } .auth-panel .auth-language { margin-block-end:var(--space-4); } .auth-form { gap:var(--space-3); } .auth-footer { margin-block-start:var(--space-3); } }
@@ -111,9 +118,9 @@ html[dir="rtl"] .auth-input:not(.auth-input--password) input { padding-inline: v
   .auth-password-help { font-size:var(--type-body); }
   .auth-submit { min-block-size:3.5rem; font-size:var(--type-lead); }
   .auth-device-note { font-size:var(--type-sm); padding-block:var(--space-2); gap:var(--space-3); }
-  .auth-device-note > svg,.auth-privacy summary > svg:first-child { inline-size:1.25rem; block-size:1.25rem; }
+  .auth-device-note > svg,.auth-privacy-trigger > svg:first-child { inline-size:1.25rem; block-size:1.25rem; }
   .auth-help-link { padding-block:var(--space-4); font-size:var(--type-body); }
-  .auth-privacy summary { font-size:var(--type-sm); }
+  .auth-privacy-trigger { font-size:var(--type-sm); }
 }
 @media(max-width:767px) {
 .auth-header { grid-column: 1; grid-row: 1; }
@@ -197,6 +204,10 @@ html[dir="rtl"] .auth-side { padding-inline:0; }
 /* Desktop keeps its paired scene at short window heights. Size the camera and
    native content together; expanded text/disclosures retain normal page scroll. */
 @media(min-width:1101px) {
+  /* Paint only the illustrated column; foreground objects retain one camera. */
+  .auth-studio-scene::before { display:none; }
+  .auth-visual::before { content:''; position:absolute; inset-inline-start:calc(-1 * (var(--space-6) + var(--space-2))); inset-block-start:calc(var(--auth-scene-width) * -343 / 1536); inline-size:min(var(--auth-scene-width),calc(100% + var(--space-6) + var(--space-2))); block-size:calc(var(--auth-scene-width) * 2 / 3); background:var(--auth-background-image,none) top left / var(--auth-scene-width) auto no-repeat; z-index:-1; pointer-events:none; }
+  html[dir="rtl"] .auth-visual::before { transform:scaleX(-1); }
   .auth-header .brand__mark { inline-size:3.25rem; }
   .auth-header .brand__name { font-size:2.25rem; }
   .auth-story__intro h1 { font-size:clamp(2.25rem,3vw,2.75rem); }
@@ -231,6 +242,7 @@ html[dir="rtl"] .auth-side { padding-inline:0; }
 }
 @media(forced-colors:active) { .auth-page::before { display:none; } .auth-panel { border:1px solid CanvasText; } }
 @media(min-width:768px) and (forced-colors:active) { .auth-studio-scene::before { display:none; } }
+@media(min-width:1101px) and (forced-colors:active) { .auth-visual::before { display:none; } }
 .auth-testing-login { position:fixed; inset-inline-start:var(--space-3); inset-block-end:var(--space-3); z-index:10; }
 .auth-testing-login > .button { min-block-size:var(--control-min-size); font-size:var(--type-sm); }
 .auth-testing-login__panel { position:fixed; inset:auto; inset-inline-start:var(--space-3); inset-block-end:4.5rem; margin:0; width:min(20rem,calc(100vw - 1.5rem)); max-height:calc(100dvh - 6rem); overflow:auto; padding:var(--space-4); border:1px solid var(--color-border-strong); border-radius:var(--radius-lg); background:var(--color-surface); color:var(--color-text); box-shadow:var(--elevation-floating); }

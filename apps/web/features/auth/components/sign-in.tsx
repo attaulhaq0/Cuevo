@@ -11,6 +11,7 @@ import background from '../assets/studio-background.webp';
 import mobileBackground from '../assets/learning-background.webp';
 import { studioSceneProperties } from '../studio-scene';
 import { TestingQuickLogin } from './quick-login';
+import { AuthPrivacy } from './privacy';
 import { quickLoginSession, type QuickLoginRole } from '../quick-login-model';
 
 export function SignIn() {
@@ -72,7 +73,7 @@ export function SignIn() {
           <button type="button" className="auth-help-link" onClick={() => setTab('help')} disabled={pending} aria-label={`${t.helpTitle} ${copy.contactSchool}`}><span>{t.helpTitle}</span> {copy.contactSchool}</button>
         </form> : <div className="notice notice--warning" role="status"><h3>{t.configurationTitle}</h3><p>{t.configurationBody}</p></div>}
         </div>
-        <footer className="auth-footer"><details className="auth-privacy"><summary><CuevoIcon name="shield" size={19} /><span>{copy.privacyTitle}</span><CuevoIcon name="chevron" size={20} className="auth-privacy__chevron" /></summary><p>{copy.privacyBody}</p><p>{copy.privacyEnvironment}</p></details></footer>
+        <footer className="auth-footer"><AuthPrivacy copy={copy} /></footer>
         </section>
       </div>
     </main>
