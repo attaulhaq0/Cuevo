@@ -1,5 +1,7 @@
 # Boundary contracts
 
+`learner-observation-policy.ts` defines explicit administrator-selected1–365day approval, minimized current policy/legacy unknown status and a distinct approval receipt with pending refresh. Missing policy has no default. These schemas grant no source processing, historical regrading, XP or AI authority; existing Learner State private commands and actual outbox sources remain decisive.
+
 `school-selection.ts` defines strict current School person/roster context and resource pages. READY requires complete current context or explicitly confirmed NONE; unavailable/overflow remains review-required. The extension contains registered class/year axes only, no private recipient or guardian fields. Page identities are unique and bounded100. These read shapes grant no selection or mutation authority; private School current context checks remain decisive. Existing School command/revision schemas are unchanged.
 
 School account delivery requires an exact revision-one approved request and explicit confirmation. Its strict effect receipt separates provider confirmation, capture acceptance and awaiting recipient claim; unknown/review outcomes never become claimed membership. Delivery schema validation supplies no executor authority or credential.

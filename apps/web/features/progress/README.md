@@ -1,5 +1,7 @@
 # Progress feature
 
+`observation-policy-model.ts`, `observation-policy-copy.ts` and `components/observation-policy.tsx` own the standalone learning observation-window control. The same public `LearningObservationPolicyPanel` appears before administrator learner selection and in School's authorized setup tab. Explicit blank days, bounded reason and unchecked confirmation use the shared original-key form; current unconfigured/legacy unknown/review states stay truthful. Approval and current policy are separate receipts; pending historical refresh is shown only for a matching confirmed approval, never inferred from an empty queue or missing capture. Other academic, attention, recognition and intelligence controls remain separate. Pure model/render and offline API tests precede root-owned real cold-school/worker/browser verification.
+
 Primary academic rows/report previews retain authorized objective/task/native facts. Exact objective/rubric version identifiers remain in explicit source disclosures, including standalone exports. Missing objective context gives localized refresh/teacher-review guidance rather than a fabricated label. No reporting scale, evidence coverage or source identity changes.
 
 Standalone academic exports isolate each numeric score/maximum ratio with explicit LTR bidi direction while retaining the report's Arabic RTL structure. A report test checks nonzero native facts and exact rendered order; missing/zero and rubric/native rules remain separate.

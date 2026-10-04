@@ -1,6 +1,6 @@
 import type { WorkerQueryPort, WorkerRow } from '../../platform/query-port';
 import type{DeliveryMetric}from'../../platform/telemetry';
-export type BoundedProcessSummary = { processed: number; attempted: number; reviewRequired: boolean; failureReceiptUnknown: boolean; deadlineReached: boolean; executionUnavailable: boolean };
+export type BoundedProcessSummary = { processed: number; attempted: number; deferred: number; reviewRequired: boolean; failureReceiptUnknown: boolean; deadlineReached: boolean; executionUnavailable: boolean };
 export class OutboxProcessor{
  private running=false;
  constructor(private readonly pool:WorkerQueryPort,private readonly metric?:(value:DeliveryMetric)=>void){}
@@ -10,14 +10,14 @@ export class OutboxProcessor{
    const events=(await this.pool.query('select id,lease_token from internal.claim_outbox($1,$2)',[10,30])).rows;
    for(const event of events){
     const start=performance.now();let outcome:DeliveryMetric['outcome']='COMPLETED';
-    try{await this.pool.query('select internal.process_learner_event($1,$2)',[event.id,event.lease_token]);}
+    try{const result=await this.pool.query('select internal.process_learner_event($1,$2)',[event.id,event.lease_token]);const receipt=result.rows[0]?.process_learner_event;if(receipt&&typeof receipt==='object'&&'status'in receipt){if(receipt.status==='WAITING')outcome='WAITING';else if(receipt.status==='REQUIRES_REVIEW')outcome='REQUIRES_REVIEW';}}
     catch{outcome='REQUIRES_REVIEW';try{const result=await this.pool.query('select internal.fail_outbox($1,$2,$3,$4)as acknowledged',[event.id,event.lease_token,'PROCESSING_REQUIRES_REVIEW',30]);if(result.rows[0]?.acknowledged!==true)outcome='FAILURE_RECEIPT_UNKNOWN';}catch{outcome='FAILURE_RECEIPT_UNKNOWN';}}
     try{this.metric?.({outcome,durationMs:performance.now()-start});}catch{/* Metrics do not change lease/source authority. */}
    }
   }finally{this.running=false;}
  }
  async process({ maxEvents, deadline, now = Date.now }: { maxEvents: number; deadline: number; now?: () => number }) {
-  const summary: BoundedProcessSummary = { processed: 0, attempted: 0, reviewRequired: false, failureReceiptUnknown: false, deadlineReached: false, executionUnavailable: false };
+  const summary: BoundedProcessSummary = { processed: 0, attempted: 0, deferred:0, reviewRequired: false, failureReceiptUnknown: false, deadlineReached: false, executionUnavailable: false };
   if (!Number.isInteger(maxEvents) || maxEvents < 1 || maxEvents > 10 || !Number.isFinite(deadline)) throw new Error('Bounded worker execution limits required.');
   if (this.running) return { ...summary, reviewRequired: true };
   this.running = true;
@@ -34,7 +34,7 @@ export class OutboxProcessor{
     if (typeof event.id !== 'string' || !event.id || typeof event.lease_token !== 'string' || !event.lease_token) { summary.executionUnavailable = true; summary.reviewRequired = true; break; }
     summary.attempted++;
     const started = now(); let outcome: DeliveryMetric['outcome'] = 'COMPLETED';
-    try { await this.pool.query('select internal.process_learner_event($1,$2)', [event.id, event.lease_token]); summary.processed++; }
+    try { const result=await this.pool.query('select internal.process_learner_event($1,$2)', [event.id, event.lease_token]);const receipt=result.rows[0]?.process_learner_event;if(receipt&&typeof receipt==='object'&&'status'in receipt&&receipt.status==='WAITING'){outcome='WAITING';summary.deferred++;}else if(receipt&&typeof receipt==='object'&&'status'in receipt&&receipt.status==='REQUIRES_REVIEW'){outcome='REQUIRES_REVIEW';summary.reviewRequired=true;}else summary.processed++; }
     catch {
      summary.reviewRequired = true; outcome = 'REQUIRES_REVIEW';
      try {

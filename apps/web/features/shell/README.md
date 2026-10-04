@@ -1,5 +1,7 @@
 # Application shell
 
+Shell composes Progress's public LearningObservationPolicyPanel into the authorized School observation-window tab through a React node prop. School never imports Progress implementation or its mixed workspace surface; the existing dependency direction and role/capability gates remain. The same owner panel is available before administrator learner selection in Progress.
+
 Owns Application and Workspace composition, with public ui.tsx consumed by app/page.tsx. Shell may compose other features only through their ui/copy public surfaces. Common session/context, branding and locale live under shared. No other feature may import shell internals.
 
 Account access lists resolve existing entitlement codes through the shared English/Arabic capability-label helper. Primary list text uses human feature names; unknown codes show an unavailable label. The original entitlement values still determine presentation eligibility and remain server-authorized independently.

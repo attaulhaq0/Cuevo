@@ -10,6 +10,7 @@ export type ApiErrorResponse = z.infer<typeof apiErrorSchema>;
 export * from './school-learning';
 export * from './academic';
 export * from './learner-state';
+export * from './learner-observation-policy';
 export * from './improvement';
 export * from './outcome-display';
 export * from './school';

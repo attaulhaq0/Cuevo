@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { Button } from '@cuevo/ui';
-import { confirmCommandReceipt, LearningApiError } from '../api/client';
+import { captureCommandReceiptValidator, confirmCommandReceipt, LearningApiError, type CommandReceiptValidator } from '../api/client';
 import { useApi } from '../hooks/use-api';
 import { LearningError } from './feedback';
 import { useApp } from '../session/providers';
@@ -10,7 +10,7 @@ import type { FormValues } from '../session/form-drafts';
 
 export type FormField = { name: string; label: string; type?: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'datetime-local' | 'select' | 'checkbox'; required?: boolean; options?: { value: string; label: string }[]; defaultValue?: string | number; defaultChecked?: boolean; maxLength?: number; min?: number; max?: number; step?: number | 'any' };
 
-export function CommandForm({ title, regionLabel, asRegion=true, path, fields, body, onSaved, onCancel, note, actionLabel, draftKey, onValuesChange, onLockedChange }: { title: string; regionLabel?:string; asRegion?:boolean; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; onSaved: (result: unknown) => void; onCancel?: () => void; note?: string; actionLabel?: string; draftKey?: string; onValuesChange?: (values: FormData) => void; onLockedChange?: (locked: boolean) => void }) {
+export function CommandForm({ title, regionLabel, asRegion=true, path, fields, body, onSaved, validateReceipt, onCancel, note, actionLabel, draftKey, onValuesChange, onLockedChange }: { title: string; regionLabel?:string; asRegion?:boolean; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; onSaved: (result: unknown) => void; validateReceipt?: CommandReceiptValidator; onCancel?: () => void; note?: string; actionLabel?: string; draftKey?: string; onValuesChange?: (values: FormData) => void; onLockedChange?: (locked: boolean) => void }) {
   const { request, journal, t } = useApi();
   const journalRevision = useSyncExternalStore(journal.subscribe, journal.getSnapshot, journal.getSnapshot);
   const { membership, formDrafts, announce, accessToken, online } = useApp();
@@ -44,9 +44,10 @@ export function CommandForm({ title, regionLabel, asRegion=true, path, fields, b
       if (!command) throw new LearningApiError('invalid');
       commandKey = command.key;
       recoveryKey.current = command.key;
+      const validateOriginalReceipt = captureCommandReceiptValidator(command, validateReceipt);
       const submittedDraft = formDrafts.get(workingSlot);
       const result = await request(path, { command });
-      if (!confirmCommandReceipt(journal, slot, command.key, result, ownsCommand() ? onSaved : undefined)) return;
+      if (!confirmCommandReceipt(journal, slot, command.key, result, ownsCommand() ? onSaved : undefined, validateOriginalReceipt)) return;
       if (!mounted.current || currentScope.current !== expectedScope) return;
       if (formDrafts.consume(workingSlot, submittedDraft)) { setInputRevision(value => value + 1); setFormRevision(value => value + 1); }
       announce(`${title}: ${t.saved}`);
