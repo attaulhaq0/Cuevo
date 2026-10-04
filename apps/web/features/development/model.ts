@@ -2,6 +2,10 @@ import { LearningApiError, type Command } from '../../shared/api/client.ts';
 import { learnerGoalSchema } from '@cuevo/contracts';
 export type LearnerGoal = ReturnType<typeof learnerGoalSchema.parse>;
 export function parseLearnerGoal(value: unknown): LearnerGoal { const result = learnerGoalSchema.safeParse(value); if (!result.success) throw new LearningApiError('invalid'); return result.data; }
+export type LearnerGoalEditorIntent={scope:string;kind:'create'|'review';goalId:string|null};
+export function learnerGoalEditorFocus(intent:LearnerGoalEditorIntent|null,current:{scope:string;kind:'create'|'review'|null;goalId:string|null;permitted:boolean;failed:boolean;activeOrigin:boolean}):boolean{
+ return !!intent&&current.permitted&&!current.failed&&current.activeOrigin&&intent.scope===current.scope&&intent.kind===current.kind&&intent.goalId===current.goalId;
+}
 export {currentLearnerChoices as developmentLearnerChoices} from '../../shared/api/people.ts';
 export type RecordedDayStreak = { status: 'PERIOD_REQUIRED' | 'DISABLED' | 'UNOBSERVED' | 'RECORDED' | 'REQUIRES_REVIEW'; basis: 'VERIFIED_RECOGNIZED_ACTION_DAYS'; timezone: 'UTC'; days: number | null; endingOn: string | null; recordedDays: number | null; sourceCount: number | null };
 export type Summary = { learnerId: string; status: 'DISABLED' | 'RECORDED_ONLY'; totalPoints: number | null; periodId: string | null; leaderboardEnabled: boolean; streak: RecordedDayStreak };

@@ -61,20 +61,6 @@
 .workspace-access__source-codes { overflow-wrap:anywhere; }
 @media (max-width:800px) { .workspace-access { grid-template-columns:minmax(0,1fr); gap:var(--space-3); } .workspace-access > section { padding:var(--space-4); } }
 .workspace .workspace-chrome__background { position: absolute; inset: 0; z-index: -1; inline-size: 100%; block-size: 100%; object-fit: cover; object-position: center top; filter: var(--trail-background-filter); pointer-events: none; }
-.workspace .workspace-main--student-learning { padding-block-start: var(--space-6); }
-.workspace .workspace-main--student-learning .workspace-intro { margin-block-end: var(--space-5); }
-.workspace .workspace-main--student-learning .workspace-intro h1 { font-size: var(--type-xl); margin-block-start: var(--space-1); }
-.workspace .workspace-main--student-learning .workspace-intro > div > p:last-child { margin-block-start: var(--space-2); font-size: var(--type-sm); }
-.workspace .workspace-main--community { padding-block-start: var(--space-5); }
-.workspace .workspace-main--community .workspace-intro { margin-block-end: var(--space-5); }
-.workspace .workspace-main--community .workspace-intro h1 { font-size: var(--type-xl); }
-.workspace .workspace-main--community .workspace-intro > div > p:last-child { margin-block-start: var(--space-2); font-size: var(--type-sm); }
-.workspace .workspace-main--community .workspace-intro .eyebrow { display: none; }
-.workspace .workspace-main--academic { padding-block-start: var(--space-5); }
-.workspace .workspace-main--academic .workspace-intro { margin-block-end: var(--space-5); }
-.workspace .workspace-main--academic .workspace-intro h1 { font-size: var(--type-xl); }
-.workspace .workspace-main--academic .workspace-intro > div > p:last-child { margin-block-start: var(--space-2); font-size: var(--type-sm); }
-.workspace .workspace-main--academic .workspace-intro .eyebrow { display: none; }
 @media (max-width: 800px) {
   .workspace .workspace-main--student-learning { padding-block-start: var(--space-3); }
   .workspace .workspace-main--student-learning .workspace-intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; margin-block-end: var(--space-3); }
@@ -144,9 +130,12 @@
 @media (forced-colors: active) { .workspace .workspace-chrome__rail button[aria-current="page"] { border-color: Highlight; background: Highlight; color: HighlightText; } .workspace .workspace-chrome__rail button[aria-current="page"] svg { color: HighlightText; } }
 
 /* The normal workspace dedicates height to the active task and records. */
-.workspace .workspace-main { inline-size:100%; max-inline-size:var(--content-width); padding:var(--space-5) var(--space-5) var(--space-6); }
+.workspace .workspace-main { inline-size:100%; max-inline-size:var(--content-width); padding:var(--space-3) var(--space-4) var(--space-5); }
 .workspace .workspace-main:has(> .role-home) { padding:0; }
-.workspace .workspace-intro { margin-block-end: var(--space-4); gap: var(--space-4); align-items: center; }
+.workspace .workspace-main > .detail-section { padding-block:var(--space-3); }
+.workspace .workspace-main > .detail-section > .detail-list { margin-block:var(--space-2) var(--space-3); }
+.workspace .workspace-main > .detail-section > .detail-list > div { padding-block:var(--space-2); }
+.workspace .workspace-intro { margin-block-end:var(--space-2); gap:var(--space-3); align-items:center; flex-direction:row; }
 .workspace .workspace-intro .eyebrow { display: none; }
 .workspace .workspace-intro h1 { font-size: var(--type-xl); margin-block-start: 0; }
 .workspace .workspace-intro > div > p:last-child { margin-block-start: var(--space-1); font-size: var(--type-sm); }
@@ -161,8 +150,8 @@
   .workspace .workspace-chrome__rail ul { justify-content: start; }
 }
 @media (max-width: 800px) {
-  .workspace .workspace-main { padding-block-start: var(--space-4); }
-  .workspace .workspace-intro { gap: var(--space-2); }
+  .workspace .workspace-main { padding-block-start:var(--space-3); }
+  .workspace .workspace-intro { gap:var(--space-2); flex-wrap:wrap; }
   .workspace .workspace-chrome__header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2); }
   .workspace .workspace-chrome__brand { grid-column: 1; grid-row: 1; }
   .workspace .workspace-chrome__person { grid-column: 2; grid-row: 1; margin: 0; }

@@ -9,10 +9,11 @@
 .teacher-trail__main, .teacher-trail__aside { min-inline-size: 0; }
 .teacher-trail__aside { align-items: start; }
 .teacher-trail__intro { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); padding-inline: var(--space-3); margin-block-end: var(--space-4); }
-.teacher-trail__intro h1 { margin: 0; font-size: var(--type-title); font-weight: var(--font-weight-bold); line-height: 1.2; letter-spacing: var(--tracking-heading); }
+.teacher-trail__intro h1 { margin:0; font-size:var(--type-xl); font-weight:var(--font-weight-bold); line-height:1.25; letter-spacing:var(--tracking-heading); }
 .teacher-trail__intro p { margin-block: var(--space-1) 0; color: var(--color-text-secondary); font-size: var(--type-body); }
 .teacher-trail__intro .teacher-trail__date { flex: none; margin-inline-start: auto; font-size: var(--type-sm); }
 .teacher-trail__attention { background: var(--color-material-reading); border-radius: var(--radius-lg); padding: var(--space-3); }
+.teacher-trail__attention > .teacher-trail__empty { padding-block:var(--space-2); }
 .workspace .teacher-trail .teacher-trail__filters[role="group"] { display: flex; gap: var(--space-2); flex-wrap: nowrap; overflow-x: auto; max-inline-size: 100%; padding: var(--space-1) var(--space-1) var(--space-3); }
 .teacher-trail__filters button { flex: none; white-space: nowrap; }
 .teacher-trail__queue { list-style: none; margin: 0; padding: 0; }
@@ -48,7 +49,7 @@
 .teacher-trail__source-context svg { color: var(--color-accent); }
 .teacher-trail__source-text { margin: 0; padding: var(--space-3) var(--space-4); background: var(--color-surface-muted); border-radius: var(--radius-md); line-height: 1.5; font-size: var(--type-body); white-space: pre-wrap; overflow-wrap: anywhere; }
 .teacher-trail__source-attribution { margin: var(--space-1) 0 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
-.teacher-trail__workspaces, .teacher-trail__calendar { background: var(--color-material-reading); border-radius: var(--radius-lg); padding: var(--space-5); margin-block-start: var(--space-5); }
+.teacher-trail__workspaces, .teacher-trail__calendar { background:var(--color-material-reading); border-radius:var(--radius-lg); padding:var(--space-4); margin-block-start:var(--space-3); }
 .teacher-trail__section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-3); }
 .teacher-trail__section-heading h2 { font-size: var(--type-lead); margin: 0; }
 .teacher-trail__section-heading .button { padding-inline: var(--space-2); }

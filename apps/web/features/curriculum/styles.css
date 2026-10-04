@@ -51,6 +51,18 @@
 .curriculum-planning__layout { display: grid; gap: var(--space-4); }
 .curriculum-planning__facts { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: 0; }
 .curriculum-planning__facts dd { margin: 0; font-size: var(--type-lg); font-weight: 700; }
+.curriculum-workspace { gap:var(--space-2); }
+.curriculum-workspace__limit { padding:var(--space-2) var(--space-3); }
+.curriculum-workspace__navigation .button,.curriculum-workspace__navigation .learning-tabs button { font-size:var(--type-sm);padding-block:var(--space-2); }
+.curriculum-workspace__actions { flex-wrap:nowrap;overflow-x:auto;padding-block:var(--space-1) var(--space-2); }
+.curriculum-workspace__actions .button { flex:0 0 auto; }
+.curriculum-workspace__editor { padding:var(--space-3);gap:var(--space-2); }
+.curriculum-workspace__editor h2,.curriculum-workspace__records>h2 { font-size:var(--type-lg); }
+.curriculum-record { padding-block:var(--space-3);gap:var(--space-1); }
+.curriculum-course-review,.curriculum-programme-learners,.curriculum-planning { gap:var(--space-3);margin-block:var(--space-2); }
+.curriculum-course-review__context,.curriculum-programme-learners__context,.curriculum-planning__context { padding:var(--space-2) var(--space-3);font-size:var(--type-sm); }
+.curriculum-source-review__content { gap:var(--space-2);padding:var(--space-3); }
+.curriculum-source-review__heading h3,.curriculum-course-review__heading h3,.curriculum-planning__heading h3 { font-size:var(--type-body); }
 @media(max-width:800px) {
  .curriculum-workspace__navigation { flex-wrap: wrap; }
  .curriculum-workspace__navigation>.button { margin-inline-start: auto; }

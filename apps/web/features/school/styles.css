@@ -1,5 +1,41 @@
 .school-workspace { margin-block-start: var(--space-6); min-inline-size: 0; }
 .school-workspace > * { min-inline-size: 0; }
+.school-workspace { margin-block-start:var(--space-3); }
+.school-workspace > .learning-toolbar { margin-block:var(--space-3);gap:var(--space-2); }
+.workspace .school-workspace > .learning-toolbar .learning-tabs { display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;max-inline-size:100%;min-inline-size:0; }
+.school-workspace > .learning-toolbar { flex-wrap:nowrap;align-items:center; }
+.school-workspace > .learning-toolbar .learning-tabs { flex:1; }
+.school-workspace > .learning-toolbar > .button { flex:none; }
+.school-workspace > .learning-toolbar .learning-tabs button { flex:0 0 auto;white-space:nowrap;min-block-size:2.75rem; }
+.school-workspace .learning-actions { margin-block:var(--space-3);gap:var(--space-2); }
+.school-workspace .school-section { margin-block-start:var(--space-3);padding:var(--space-4); }
+.school-workspace .school-day-panel { padding:var(--space-4); }
+.school-workspace .school-day-heading h2,.school-workspace .school-day-intro h2 { font-size:var(--type-lg); }
+.school-workspace .school-day-heading p,.school-workspace .school-day-intro p { font-size:var(--type-sm);margin-block:var(--space-1); }
+.school-workspace .school-day-filter { padding:var(--space-3);gap:var(--space-3); }
+.school-workspace .school-day-records,.school-workspace .school-staff-day { gap:var(--space-3); }
+.school-workspace .school-table-scroll { margin-block-start:var(--space-3); }
+.school-daily-context-layout { display:grid;grid-template-columns:minmax(0,1fr) minmax(15rem,.7fr);gap:var(--space-3);align-items:start;min-inline-size:0; }
+.school-daily-context-layout > div { min-inline-size:0; }
+.school-daily-context-layout .school-day-filter { padding:0;background:transparent; }
+.school-daily-context-layout .school-day-filter .field { flex:1; }
+.school-daily-context-layout .school-daily-choice-continuation:empty { display:none; }
+.school-staff-day > .learning-actions { margin:0; }
+.school-staff-day > .school-day-heading > div > p { max-inline-size:70ch; }
+.school-workspace .school-staff-day .school-attendance-list > li { padding-block:var(--space-3); }
+.school-daily-context-layout .school-day-filter > p { font-size:var(--type-xs);line-height:1.4; }
+.school-staff-day > .school-day-heading { gap:var(--space-2); }
+.school-staff-day > .school-day-heading > div { min-inline-size:0; }
+.school-workspace .school-staff-day { gap:var(--space-2); }
+.school-workspace .school-staff-day > .learning-actions { flex-wrap:nowrap;overflow-x:auto;min-inline-size:0; }
+.school-workspace .school-staff-day > .learning-actions > .button { flex:0 0 auto; }
+.school-workspace .school-staff-day .school-attendance-list { margin-block:var(--space-2); }
+.school-workspace .school-staff-day .school-attendance-list > li { padding-block:var(--space-2); }
+.school-workspace .school-staff-day .school-attendance-list p { margin-block:var(--space-1); }
+.school-workspace .school-staff-day .school-day-panel { padding:var(--space-3); }
+@media(max-width:767px){.school-workspace>.learning-toolbar>.button{font-size:var(--type-xs);padding-inline:var(--space-2)}.workspace .school-workspace>.learning-toolbar .learning-tabs{display:flex;flex-direction:row;flex-wrap:nowrap}.school-staff-day>.school-day-heading p{font-size:var(--type-xs);line-height:1.4}.school-daily-context-layout .school-daily-time-context{grid-column:1/-1;font-size:var(--type-xs)}.school-daily-context-layout .field{margin:0}}
+@media(max-width:767px){.school-workspace .school-staff-day .school-attendance-list > li{grid-template-columns:minmax(0,1fr) minmax(7rem,.8fr);align-items:start;gap:var(--space-2)}.school-workspace .school-staff-day .school-attendance-list > li > .button{inline-size:100%;font-size:var(--type-sm);padding-inline:var(--space-2)}.school-workspace .school-staff-day .school-attendance-list details{grid-column:1/-1}}
+@media(max-width:767px){.school-daily-context-layout{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}.school-daily-context-layout .field label{font-size:var(--type-sm)}.school-daily-context-layout select,.school-daily-context-layout input{min-inline-size:0;inline-size:100%}.school-daily-context-layout .school-day-filter>p{font-size:var(--type-xs)}.school-daily-context-layout .school-daily-choice-continuation{grid-column:1/-1;font-size:var(--type-sm)}}
 .school-section { min-inline-size: 0; margin-block-start: var(--space-6); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-material-reading); box-shadow: var(--elevation-subtle); }
 .school-section h2 { margin: 0; font-size: var(--type-lg); line-height: var(--line-height-tight); }
 .school-section > .learning-empty { margin-block-end: 0; padding-block: var(--space-4) 0; }

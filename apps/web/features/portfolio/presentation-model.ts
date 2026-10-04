@@ -1,6 +1,6 @@
 import type { ReleasedResult } from '../academic/model.ts';
 
-export function portfolioReviewFocus(input:{reviewing:boolean;focusOnLoad:boolean;alreadyFocused:boolean;loading:boolean;settled:boolean;activeIntent:boolean}):'none'|'focus'|'scroll'{if(!input.focusOnLoad||input.alreadyFocused||input.loading||!input.settled||!input.activeIntent)return'none';return input.reviewing?'scroll':'focus';}
+export function portfolioReviewFocus(input:{reviewing:boolean;focusOnLoad:boolean;alreadyFocused:boolean;loading:boolean;settled:boolean;activeIntent:boolean}):'none'|'focus'|'scroll'{if(!input.focusOnLoad||input.alreadyFocused||input.loading||!input.settled||!input.activeIntent)return'none';return'scroll';}
 
 type ChoiceLabels = { sourceTitleUnavailable: string; releasedOn: string; resultRevision: string };
 export function portfolioReleasedWorkChoices(results: ReleasedResult[], locale: 'en' | 'ar', labels: ChoiceLabels): { value: string; label: string; ambiguous: boolean }[] {

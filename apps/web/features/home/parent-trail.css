@@ -19,21 +19,22 @@
 .parent-trail__grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .parent-trail__left, .parent-trail__right { display: grid; gap: var(--space-4); min-inline-size: 0; align-items: start; }
 .parent-trail__panel { border-radius: var(--radius-lg); background: var(--color-material-reading); border: 1px solid var(--color-border); padding: var(--space-4); min-inline-size: 0; }
-.parent-trail__panel-heading { display: flex; gap: var(--space-3); align-items: center; padding-block-end: var(--space-3); flex-wrap: wrap; }
+.parent-trail__panel-heading { display:flex; gap:var(--space-2); align-items:center; padding-block-end:var(--space-2); flex-wrap:wrap; }
 .parent-trail__panel-heading > span:first-child { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; background: var(--color-learning-surface); color: var(--color-learning-symbol); border-radius: var(--radius-md); flex: none; }
 .parent-trail__panel-heading h2 { font-size: var(--type-lead); font-weight: var(--font-weight-bold); line-height: 1.35; margin: 0; }
 .parent-trail__panel-heading .status { margin-inline-start: auto; }
+.parent-trail__panel-heading h2 { flex:1; }
 .parent-trail__date { margin: 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
 .parent-trail__feedback { align-self: start; }
 .parent-trail__feedback-body { background: var(--color-surface-muted); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
 .parent-trail__feedback-body > .parent-trail__action { margin-block-end: var(--space-1); }
 .parent-trail__teacher { display: flex; align-items: center; gap: var(--space-4); }
-.parent-trail__teacher > span { inline-size: 3.75rem; block-size: 3.75rem; display: grid; place-items: center; background: var(--color-learning-surface); border-radius: var(--radius-pill); color: var(--color-accent); }
+.parent-trail__teacher > span { inline-size:2.5rem; block-size:2.5rem; display:grid; place-items:center; background:var(--color-learning-surface); border-radius:var(--radius-pill); color:var(--color-accent); flex:none; }
 .parent-trail__teacher h3 { margin: 0; font-size: var(--type-body); }
 .parent-trail__teacher p { margin: 0; color: var(--color-text-secondary); font-size: var(--type-sm); }
-.parent-trail__feedback blockquote { display: flex; gap: var(--space-2); align-items: baseline; margin: var(--space-3) 0; }
+.parent-trail__feedback blockquote { display:flex; gap:var(--space-2); align-items:baseline; margin:var(--space-2) 0; }
 .parent-trail__feedback blockquote > span { color: var(--color-learning-symbol); font-family: Georgia, serif; font-size: 3rem; line-height: 1; }
-.parent-trail__feedback blockquote p { margin: 0; font-size: var(--type-lead); font-weight: var(--font-weight-bold); line-height: 1.5; overflow-wrap: anywhere; }
+.parent-trail__feedback blockquote p { margin:0; font-size:var(--type-body); font-weight:var(--font-weight-bold); line-height:1.5; overflow-wrap:anywhere; }
 .parent-trail__feedback-about { border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-2); }
 .parent-trail__feedback-about h3 { margin: 0; font-size: var(--type-body); }
 .parent-trail__feedback-about p { margin: var(--space-1) 0 var(--space-3); font-size: var(--type-body); line-height: 1.55; color: var(--color-text-secondary); }
@@ -78,7 +79,7 @@
 .parent-trail__support-body { min-block-size: 0; position: relative; padding-inline-end: 6rem; }
 .parent-trail__support-body p { margin: var(--space-1) 0; color: var(--color-text-secondary); font-size: var(--type-sm); line-height: 1.55; }
 .parent-trail__support-symbol { position: absolute; inset-inline-end: 0; inset-block-end: 0; color: var(--color-learning-symbol); opacity: .45; pointer-events: none; }
-.parent-trail__empty { margin: 0; padding: var(--space-4) 0; color: var(--color-text-secondary); font-size: var(--type-body); }
+.parent-trail__empty { margin:0; padding:var(--space-2) 0; color:var(--color-text-secondary); font-size:var(--type-sm); }
 .parent-trail__notice, .parent-trail__recovery { background: var(--color-material-reading); border-radius: var(--radius-md); padding: var(--space-4); margin-block-end: var(--space-4); }
 .parent-trail__recovery h1 { font-size: var(--type-title); margin: 0; }
 .parent-trail__recovery p { margin-block: var(--space-3); }
@@ -108,7 +109,7 @@
   .parent-trail__panel-heading > span:first-child { inline-size: 2.25rem; block-size: 2.25rem; }
   .parent-trail__panel-heading h2 { font-size: var(--type-body); }
   .parent-trail__panel-heading .status { margin-inline-start: 0; }
-  .parent-trail__feedback blockquote { margin-block: var(--space-4); }
+  .parent-trail__feedback blockquote { margin-block:var(--space-2); }
   .parent-trail__feedback blockquote p { font-size: var(--type-body); line-height: var(--line-height-body); }
   .parent-trail__native-context { flex-wrap: wrap; }
   .parent-trail__native-context > p { flex-basis: 100%; border: 0; max-inline-size: none; padding-inline-start: 0; }
