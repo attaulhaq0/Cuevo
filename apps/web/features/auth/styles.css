@@ -30,7 +30,7 @@ html[lang="ar"] .auth-story__intro h1 { line-height: 1.1; }
 .learning-loop__stages li:nth-child(3) { grid-column: 4; }
 .learning-loop__stages li>span { overflow-wrap: anywhere; }
 .auth-stage-art { inline-size:10.5cqi; block-size:10.5cqi; object-fit: contain; }
-.learning-loop__roles { position: absolute; padding:1.2cqi 2cqi; border:1px solid var(--color-auth-border); border-radius:var(--radius-pill); background:var(--color-surface); box-shadow:var(--elevation-subtle); }
+.learning-loop__roles { position: absolute; padding:1.2cqi 2cqi; border:1px solid transparent; border-radius:var(--radius-pill); background:transparent; box-shadow:none; }
 .learning-loop__roles>strong { display: none; }
 .learning-loop__roles>div { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: var(--space-3); }
 .learning-loop__roles>div>span { display: flex; align-items: center; flex-direction: column; gap: var(--space-1); min-inline-size: 0; font-size: clamp(.75rem,1.4cqi,.875rem); line-height: 1.4; text-align: center; }
@@ -167,7 +167,6 @@ html[dir="rtl"] .auth-side { padding-inline:0; }
   .learning-loop__stage--progress { grid-column:8; }
   .auth-stage-art { inline-size:9.440104cqi; block-size:9.440104cqi; }
   .learning-loop__roles { position:relative; inset:auto; margin-inline-start:var(--studio-roles-x); inline-size:var(--studio-roles-width); padding:1.1cqi 1.7cqi; }
-  .learning-loop__roles { background:var(--color-surface-muted); }
   .learning-loop__roles > div { grid-template-columns:repeat(auto-fit,minmax(min(100%,5.5em),1fr)); gap:1cqi; font-size:clamp(.75rem,1cqi,1rem); }
   .learning-loop__roles > div > span > span { max-inline-size:100%; overflow-wrap:normal; word-break:normal; }
   .learning-loop__roles > div > span { font-size:clamp(.75rem,1cqi,1rem); }

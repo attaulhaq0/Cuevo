@@ -242,14 +242,14 @@ for (const locale of locales) {
       const bounds = await page.evaluate(() => {
         const box = (selector: string) => { const r = document.querySelector(selector)!.getBoundingClientRect(); return { x: r.x, right:r.right, bottom:r.bottom, width:r.width }; };
         return { brand:box('.auth-header .brand'), panel:box('.auth-panel'), roles:box('.learning-loop__roles'),
-          height:document.documentElement.scrollHeight, trayBackground:getComputedStyle(document.querySelector('.learning-loop__roles')!).backgroundColor };
+          height:document.documentElement.scrollHeight, trayStyle:(() => { const style=getComputedStyle(document.querySelector('.learning-loop__roles')!); return {background:style.backgroundColor,border:style.borderTopColor,shadow:style.boxShadow}; })() };
       });
       expect(locale === 'en' ? bounds.brand.x : viewport.width-bounds.brand.right).toBeLessThanOrEqual(48);
       expect(locale === 'en' ? viewport.width-bounds.panel.right : bounds.panel.x).toBeLessThanOrEqual(40);
       expect(bounds.panel.width).toBeGreaterThanOrEqual(420);
       expect(bounds.height, `${locale}/${viewport.width}x${viewport.height}: default desktop must fit without vertical scrolling`).toBeLessThanOrEqual(viewport.height+1);
       expect(bounds.roles.bottom).toBeLessThanOrEqual(viewport.height+1);
-      expect(bounds.trayBackground, 'Transparent role art sits on the shared muted gray pill').toBe('rgb(237, 243, 250)');
+      expect(bounds.trayStyle, 'Role icons and labels sit directly on the illustrated desk pill without a second surface').toEqual({background:'rgba(0, 0, 0, 0)',border:'rgba(0, 0, 0, 0)',shadow:'none'});
       const artwork = await page.locator('.auth-role-art').evaluateAll(async images => {
         await Promise.all(images.map(image => (image as HTMLImageElement).decode()));
         return images.map(element => {
