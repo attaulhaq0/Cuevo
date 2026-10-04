@@ -1,16 +1,16 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type Ref } from 'react';
 import { CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import type { AcademicReference, MarkingItem } from '../model';
 import { academicAr, academicEn } from '../messages';
 
 /** Presentation only: the marking owner supplies its current reads and original commands. */
-export function MarkingWorkbench({ item, reference, work, decision, context }: { item: MarkingItem; reference: AcademicReference | null; work: ReactNode; decision: ReactNode; context?: ReactNode }) {
+export function MarkingWorkbench({ item, reference, work, decision, context, headingRef }: { item: MarkingItem; reference: AcademicReference | null; work: ReactNode; decision: ReactNode; context?: ReactNode; headingRef?: Ref<HTMLHeadingElement> }) {
   const { locale } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
   return <section className="marking-detail" aria-label={`${item.assessmentTitle} · ${item.learnerName}`}>
-    <header className="marking-detail__heading"><span className="marking-detail__symbol"><CuevoIcon name="assessment" variant="filled" size={30} /></span><div><h2>{item.assessmentTitle}</h2><p className="academic-learner"><bdi>{item.learnerName}</bdi></p></div><Status>{item.currentResult?.status === 'RELEASED' ? t.published : item.currentResult ? t.review : t.response}</Status></header>
+    <header className="marking-detail__heading"><span className="marking-detail__symbol"><CuevoIcon name="assessment" variant="filled" size={30} /></span><div><h2 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{item.assessmentTitle}</h2><p className="academic-learner"><bdi>{item.learnerName}</bdi></p></div><Status>{item.currentResult?.status === 'RELEASED' ? t.published : item.currentResult ? t.review : t.response}</Status></header>
     <div className="marking-workbench">
       <section className="marking-workbench__source" aria-label={t.response}><h3><CuevoIcon name="portfolio" size={24} />{t.response}</h3>{work}</section>
       <div className="marking-workbench__review"><section className="marking-workbench__context" aria-label={t.markingContext}>
@@ -24,7 +24,12 @@ export function MarkingWorkbench({ item, reference, work, decision, context }: {
   </section>;
 }
 
-export function MarkingChoices({ items, selected, onSelected }: { items: MarkingItem[]; selected: string | null; onSelected: (id: string) => void }) {
+export function MarkingChoices({ items, selected, onSelected, disabled = false }: { items: MarkingItem[]; selected: string | null; onSelected: (id: string, opener?: HTMLElement) => void; disabled?: boolean }) {
   const { locale } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
-  return <section className="marking-queue" aria-label={t.marking}><header><h2>{t.marking}</h2><p>{t.chooseSubmission}</p></header>{items.length ? items.map(item => <button type="button" className={`marking-queue__item ${item.id === selected ? 'marking-queue__item--active' : ''}`} aria-pressed={item.id === selected} key={item.id} onClick={() => onSelected(item.id)}><strong>{item.assessmentTitle}</strong><span><bdi>{item.learnerName}</bdi></span><span>{item.currentResult?.status === 'RELEASED' ? t.published : item.currentResult ? t.review : t.openMarking}</span></button>) : <p className="learning-empty">{t.emptyMarking}</p>}</section>;
+  const selectedItem = items.find(item => item.id === selected);
+  const [expanded, setExpanded] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => { const query = window.matchMedia('(max-width:767px)'); const update = () => setMobile(query.matches); update(); query.addEventListener('change', update); return () => query.removeEventListener('change', update); }, []);
+  const change = locale === 'ar' ? 'اختيار تسليم آخر' : 'Choose another submission';
+  return <section className="marking-queue" aria-label={t.marking} data-selected={!!selectedItem} data-expanded={expanded}><header><h2>{t.marking}</h2>{!selectedItem ? <p>{t.chooseSubmission}</p> : null}</header><details className="marking-queue__disclosure" open={!mobile || !selectedItem || expanded}><summary aria-disabled={disabled} onClick={event => { event.preventDefault(); if (!disabled) setExpanded(value => !value); }}>{selectedItem ? <><strong>{change}</strong><span><bdi>{selectedItem.assessmentTitle} · {selectedItem.learnerName}</bdi></span></> : t.chooseSubmission}</summary><div className="marking-queue__items">{items.length ? items.map(item => <button type="button" disabled={disabled} className={`marking-queue__item ${item.id === selected ? 'marking-queue__item--active' : ''}`} aria-pressed={item.id === selected} key={item.id} onClick={event => { setExpanded(false); onSelected(item.id, event.currentTarget); }}><strong>{item.assessmentTitle}</strong><span><bdi>{item.learnerName}</bdi></span><span>{item.currentResult?.status === 'RELEASED' ? t.published : item.currentResult ? t.review : t.openMarking}</span></button>) : <p className="learning-empty">{t.emptyMarking}</p>}</div></details></section>;
 }

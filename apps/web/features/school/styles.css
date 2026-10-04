@@ -47,6 +47,31 @@
 .school-table-scroll bdi { overflow-wrap: anywhere; }
 @media (max-width: 767px) { .school-section { margin-block-start: var(--space-4); padding: var(--space-4); border-radius: var(--radius-lg); } .school-table-scroll { margin-block-start: var(--space-3); } .school-table-scroll th, .school-table-scroll td { padding: var(--space-3) var(--space-2); } }
 .school-workspace .learning-actions { flex-wrap: wrap; }
+.school-access-layout { display:grid; grid-template-columns:minmax(19rem,1fr) minmax(0,1.2fr); gap:var(--space-4); align-items:start; }
+.school-access-directory,.school-access-selected { min-inline-size:0; padding:var(--space-4); border:1px solid var(--color-border); border-radius:var(--radius-xl); background:var(--color-material-reading); }
+.school-access-workspace > .cuevo-section-header { margin-block:var(--space-3); }
+.school-access-workspace h2 { font-size:var(--type-subheading); }
+.school-access-selected h2 { display:flex; gap:var(--space-2); align-items:center; overflow-wrap:anywhere; }
+.school-access-workspace p { margin-block:var(--space-2); font-size:var(--type-sm); }
+.school-access-help { font-size:var(--type-sm); max-inline-size:40rem; }
+.school-access-help summary { cursor:pointer; min-block-size:var(--control-min-size); align-content:center; color:var(--color-link); }
+.school-access-directory__groups { display:flex; flex-wrap:wrap; gap:var(--space-1); margin-block-end:var(--space-3); }
+.school-access-directory__rows { max-block-size:clamp(18rem,calc(100dvh - 26rem),34rem); overflow:auto; padding-inline-end:var(--space-1); }
+.school-access-directory__rows ul { list-style:none; margin:0; padding:0; }
+.school-access-directory__rows li { border-block-start:1px solid var(--color-border); }
+.school-access-directory__rows button { display:flex; inline-size:100%; align-items:center; gap:var(--space-2); text-align:start; color:var(--color-text); background:transparent; border:1px solid transparent; border-radius:var(--radius-md); font:inherit; padding:var(--space-3); cursor:pointer; min-block-size:4rem; }
+.school-access-directory__rows button:disabled { color:var(--color-disabled-text); background:var(--color-disabled-surface); cursor:not-allowed; }
+.school-access-directory__rows button[aria-current="true"] { border-color:var(--color-selection-border); background:var(--color-selection-surface); }
+.school-access-directory__rows button > span { flex:1; min-inline-size:0; }
+.school-access-directory__rows button > .status { flex:0 0 auto; }
+.school-access-directory__change { display:none; }
+.school-access-directory__rows strong,.school-access-directory__rows small { display:block; overflow-wrap:anywhere; }
+.school-access-directory__rows small { color:var(--color-text-secondary); margin-block-start:var(--space-1); }
+.school-access-directory__rows svg { flex:none; }
+.school-access-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-3); padding:var(--space-3); margin-block:var(--space-3); background:var(--color-surface-muted); border-radius:var(--radius-md); }
+.school-access-facts dt { font-size:var(--type-sm); color:var(--color-text-secondary); }
+.school-access-facts dd { margin:var(--space-1) 0 0; overflow-wrap:anywhere; }
+@media(max-width:850px){ .school-access-layout {grid-template-columns:minmax(0,1fr)} .school-access-directory__rows {max-block-size:18rem} .school-access-directory__rows button {padding:var(--space-2)} .school-access-directory__rows .cuevo-status {font-size:var(--type-xs)} .school-access-directory[data-selected="true"] .school-access-directory__change {display:inline-flex} .school-access-directory[data-selected="true"][data-expanded="false"] .school-access-directory__search,.school-access-directory[data-selected="true"][data-expanded="false"] > .learning-form__note,.school-access-directory[data-selected="true"][data-expanded="false"] .school-access-directory__rows {display:none} }
 .school-workspace--learner { display: grid; gap: var(--space-5); }
 .school-day-intro { display: flex; align-items: center; gap: var(--space-4); }
 .school-day-intro > svg { flex-shrink: 0; color: var(--color-accent); }

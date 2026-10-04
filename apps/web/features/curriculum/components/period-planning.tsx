@@ -15,6 +15,7 @@ import { periodPlanningReadScope, currentPeriodPlanningRead, parseCurrentPeriodC
 import { curriculumAr, curriculumEn } from '../messages';
 import { periodPlanningRecovery } from '../period-planning-model';
 import { useCurriculumSourceDenial } from '../source-recovery';
+import { curriculumPageControlsVisible } from '../presentation-model';
 
 function usePlanningPage<T extends { id: string }>(path: string | null, parse: (value: unknown) => T, refresh: number) {
   const app = useApp(), scope = periodPlanningReadScope(app, path ?? '', refresh);
@@ -60,7 +61,7 @@ function CurrentPeriodPlanning({ onLockedChange }: { onLockedChange?: (locked: b
     </div>
     {error ? <LearningError error={(error.error ?? error.moreError)!} /> : loading ? <p role="status">{t.loading}</p> : null}
     {courseChoices.some(choice => choice.requiresReview) || periodChoices.some(choice => choice.requiresReview) ? <p className="notice">{t.planningChoiceReview}</p> : null}
-    <fieldset className="curriculum-planning__pagination" disabled={locked}>{queries.map((query, index) => query.nextCursor || query.moreError ? <LoadMore key={index} query={query} label={[t.course, t.reportPeriod, t.class, t.subject][index]} /> : null)}</fieldset>
+    {queries.some(curriculumPageControlsVisible) ? <fieldset className="curriculum-planning__pagination" disabled={locked}>{queries.map((query, index) => curriculumPageControlsVisible(query) ? <LoadMore key={index} query={query} label={[t.course, t.reportPeriod, t.class, t.subject][index]} /> : null)}</fieldset> : null}
     {sameSelection && !denied ? <PlanningCourse key={`${courseId}:${periodId}`} courseId={courseId} periodId={periodId} periodRevision={sameSelection.revision} choicesReady={!!selectedCourse && !!selectedPeriod && ready} selectionRefresh={refresh} onLockedChange={onLocked} /> : <p role="status">{courseId || periodId ? t.planningContextUnavailable : t.planningChooseContext}</p>}
   </section>;
 }

@@ -1,5 +1,7 @@
 # Improvement feature
 
+`source-page-model.ts` admits loaded proposal/follow-up choices only while their current page or continuation retains authorization. A 401/403 continuation clears previously admitted private rows from the displayed owner; a temporary unavailable continuation retains bounded current facts with the existing partial/retry state. Proposal people choices use the same owner-local denial barrier. No request, command journal, recommendation decision or backend entitlement changes are introduced; source-page unit and browser transport checks cover presentation separately from server denial authority.
+
 Outcome reading keeps named practice/baseline/follow-up context, native results, thresholds, dates and comparison limits visible. Its raw intervention/result identifiers stay in a closed bilingual Technical details disclosure; no source query, measurement or decision authority changes.
 
 Owns proposal review, approval, support completion and non-causal outcome comparison. Public interfaces: model.ts, ui.tsx (ImprovementWorkspace and the read-only OutcomeList shared with progress), copy.ts. Consume academic/learning public models and academic/ui evidence; use shared session/forms/retry/pagination. API owner: modules/improvement. Product source IDs 10, 12, 21 and 63.

@@ -42,3 +42,14 @@ test('Arabic source context keeps full descriptors and the same original work', 
   const html = render(createElement(MarkingWorkbench, { item, reference: null, work: createElement('p', null, item.content), decision: null }), 'ar');
   assert.match(html, /العمل المسلّم/); assert.match(html, /Alex Reed/); assert.match(html, /I checked the method/); assert.doesNotMatch(html, /Checking reasons|school-v1/);
 });
+test('selected marking retains all named choices inside one keyboard disclosure without copying source work', () => {
+  const second = { ...item, id: '10000000-0000-4000-8000-000000000002', assessmentTitle: 'Explain another check', learnerName: 'Sam Reed' };
+  const html = render(createElement(MarkingChoices, { items: [item, second], selected: item.id, onSelected() {} }));
+  assert.match(html, /<details/); assert.match(html, /Choose another submission/);
+  assert.match(html, /Explain a checking step/); assert.match(html, /Explain another check/); assert.match(html, /Sam Reed/);
+  assert.doesNotMatch(html, /I checked the method against/);
+});
+test('pending original marking reconciliation disables replacement source choice without removing it', () => {
+  const html = render(createElement(MarkingChoices, { items: [item], selected: item.id, disabled: true, onSelected() {} }));
+  assert.match(html, /<button[^>]*disabled/); assert.match(html, /Alex Reed/);
+});

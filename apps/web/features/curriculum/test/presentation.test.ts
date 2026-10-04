@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { curriculumVersionLabel, curriculumPageControlsVisible } from '../presentation-model.ts';
+test('workflow status markers are localized while actual curriculum versions remain exact',()=>{const en={unknown:'Not confirmed',requiresReview:'Awaiting source review',restricted:'Restricted source'},ar={unknown:'غير مؤكد',requiresReview:'يتطلب مراجعة',restricted:'المصدر مقيّد'};assert.equal(curriculumVersionLabel('REQUIRES_REVIEW',en),'Awaiting source review');assert.equal(curriculumVersionLabel('REQUIRES_REVIEW',ar),'يتطلب مراجعة');for(const version of ['0580','2026–2027','synthetic-1','v2.1'])assert.equal(curriculumVersionLabel(version,en),version);});
+test('paging controls retain loading and recovery but reserve no group for a completed empty page',()=>{assert.equal(curriculumPageControlsVisible({loading:false,nextCursor:null,error:null,moreError:null}),false);for(const query of [{loading:true},{loadingMore:true},{error:{kind:'denied'}},{moreError:{kind:'unavailable'}},{nextCursor:'next'}])assert.equal(curriculumPageControlsVisible(query),true);});

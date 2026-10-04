@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Ref } from 'react';
 import { Button, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { canMarkSubmission, currentMarkingReference, type MarkingItem } from '../model';
@@ -20,12 +20,24 @@ import { MarkingChoices, MarkingWorkbench } from './marking-workbench';
 import { MarkingDraftForm } from './marking-draft';
 
 export function MarkingQueue({ items, onChanged, selected, onSelected, exact = false }: { items: MarkingItem[]; onChanged: () => void; selected: string | null; onSelected: (id: string) => void; exact?: boolean }) {
-  const { locale } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
+  const { locale, commandJournal, membership, accessToken, accessGeneration } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
+  useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
+  const locked = commandJournal.pending().some(command => /^\/v1\/(?:submissions\/[^/]+\/results|results\/[^/]+\/release)$/.test(command.path));
+  const heading = useRef<HTMLHeadingElement>(null), intent = useRef<{ id: string; opener: HTMLElement; scope: string } | null>(null);
+  const scope = `${membership?.schoolId}:${membership?.userId}:${accessToken}:${accessGeneration}`;
   const item = items.find((value) => value.id === selected);
-  return <div className={`marking-workspace${exact ? ' marking-workspace--exact' : item ? ' marking-workspace--selected' : ''}`}>{!exact ? <MarkingChoices items={items} selected={selected} onSelected={onSelected} /> : null}{item ? <MarkingDetail key={`${item.id}-${item.policyVersion}-${item.currentResult?.revision ?? 0}-${item.currentResult?.status ?? 'none'}`} item={item} onChanged={onChanged} /> : exact ? <p className="learning-empty">{t.chooseSubmission}</p> : null}</div>;
+  useEffect(() => {
+    const pending = intent.current;
+    if (!pending) return;
+    if (pending.scope !== scope || pending.id !== item?.id) { intent.current = null; return; }
+    const active = document.activeElement;
+    if (heading.current && (active === pending.opener || active === document.body || active === document.documentElement)) { intent.current = null; heading.current.focus({ preventScroll: true }); heading.current.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+    else intent.current = null;
+  }, [item?.id, scope]);
+  return <div className={`marking-workspace${exact ? ' marking-workspace--exact' : item ? ' marking-workspace--selected' : ''}`}>{!exact ? <MarkingChoices items={items} selected={selected} disabled={locked} onSelected={(id, opener) => { if (locked) return; intent.current = opener ? { id, opener, scope } : null; onSelected(id); }} /> : null}{item ? <MarkingDetail key={`${item.id}-${item.policyVersion}-${item.currentResult?.revision ?? 0}-${item.currentResult?.status ?? 'none'}`} headingRef={heading} item={item} onChanged={onChanged} /> : exact ? <p className="learning-empty">{t.chooseSubmission}</p> : null}</div>;
 }
 
-export function MarkingDetail({ item, onChanged }: { item: MarkingItem; onChanged: () => void }) {
+export function MarkingDetail({ item, onChanged, headingRef }: { item: MarkingItem; onChanged: () => void; headingRef?: Ref<HTMLHeadingElement> }) {
   const { locale, membership, formDrafts, apiUrl, accessToken, accessGeneration, online } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
   const prefix = `${membership?.schoolId}:${membership?.userId}:`;
   const [editing, setEditing] = useState(!item.currentResult || !!formDrafts.get(`${prefix}/v1/submissions/${item.id}/results`));
@@ -43,7 +55,7 @@ export function MarkingDetail({ item, onChanged }: { item: MarkingItem; onChange
   const current = item.currentResult;
   const canMark = canMarkSubmission(item.referenceId, reference?[reference]:[]) && ['SUBMITTED', 'RESUBMITTED'].includes(item.submissionStatus);
   const rubric = item.model === 'rubric' ? item.rubric : null;
-  return <MarkingWorkbench item={item} reference={reference} context={<>
+  return <MarkingWorkbench item={item} reference={reference} headingRef={headingRef} context={<>
     {!item.referenceId && !current ? choices.loading?<p role="status">{t.loading}</p>:choices.error?<LearningError error={choices.error}/>:approved.length ? <CommandForm title={t.link} path={`/v1/assessments/${item.assessmentId}/reference`} fields={[{ name: 'referenceId', label: t.reference, type: 'select', required: true, options: approved.map((value) => ({ value: value.id, label: academicReferenceChoice(value) })) }]} body={(values) => ({ referenceId: String(values.get('referenceId')), expectedPolicyVersion: item.policyVersion })} onSaved={onChanged} note={t.linkNote} actionLabel={t.link} /> : <p className="notice" role="status">{t.noApproved}</p> : null}
     {!item.referenceId?<LoadMore query={choices}/>:null}
     {currentReference.loading?<p role="status">{t.loading}</p>:currentReference.error?<LearningError error={currentReference.error}/>:null}

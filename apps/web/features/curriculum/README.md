@@ -1,5 +1,7 @@
 # Curriculum context workspace
 
+The bounded Coordinator nested-workflow repair localizes workflow status markers used in source-version display without changing actual curriculum version strings or stored scope. `presentation-model.ts` owns that display mapping and the current paging-control visibility check. Finished empty pages reserve no fieldset strip, while loading, errors and continuations remain actionable. Planning retains its current source/context heading and outer close action with one visible title. Source selection, lifecycle/objective/native-behavior authority, original revisions/keys, confirmations and technical provenance are unchanged; pure tests cover exact version preservation and unavailable/continued paging states.
+
 Programme and overlay pack identifiers use closed bilingual Technical details disclosures. Actual source-version location/path/checksum keeps its source-location/provenance label; programme/version/class/subject context, source/rights limits and review actions remain visible and unchanged.
 
 Owns staff-visible immutable curriculum/version/source/rights context, reference hierarchy, programme instances and independent jurisdiction/quality overlays. Public model.ts/ui.tsx/copy.ts. Sources05/06/07/26/69/76/83/85 govern authority; API owner modules/curriculum. School Custom synthetic configuration is explicit, official metadata remains REQUIRES_REVIEW/UNKNOWN/SOURCE_RESTRICTED and never customer-ready. No official curriculum facts or grading rules are generated.
