@@ -51,9 +51,14 @@ export async function openTrailWorkspace(page: Page, label: string): Promise<voi
 }
 export async function signOutTrailWorkspace(page: Page): Promise<void> {
   const trigger = page.locator('.workspace-chrome__person > button');
+  await trigger.scrollIntoViewIfNeeded();
+  // The native profile closes on document scrolling. Let scrolling caused by
+  // reaching an offscreen trigger finish before opening its visible popover.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(trigger).toBeVisible();
   if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
   const locale = await page.locator('.workspace-chrome').getAttribute('lang');
+  await expect(page.locator('.workspace-chrome__profile')).toBeVisible();
   await page.locator('.workspace-chrome__profile').getByRole('button', { name: locale === 'ar' ? 'تسجيل الخروج' : 'Sign out', exact: true }).click();
   await expect(page.locator('.auth-form')).toBeVisible();
   await expect(page.getByRole('button', { name: locale === 'ar' ? 'تسجيل الدخول' : 'Sign in', exact: true })).toBeVisible();

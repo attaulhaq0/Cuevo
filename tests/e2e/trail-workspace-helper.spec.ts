@@ -19,3 +19,20 @@ test('Trail browser readiness refuses missing identity and an unexpected role', 
   await page.locator('.workspace-chrome__school bdi').evaluate(element => { element.textContent = ''; });
   await expect(expectTrailWorkspace(page)).rejects.toThrow();
 });
+
+test('sign-out reaches an offscreen native profile after its document scroll has settled', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setContent(`<style>body{margin:0}main{min-height:1800px}.workspace-chrome__profile{position:fixed;inset:60px 12px auto auto;margin:0}</style>${fixture}`);
+  await page.evaluate(() => {
+    const profile = document.querySelector<HTMLDivElement>('#profile')!;
+    document.addEventListener('scroll', event => { if (profile.matches(':popover-open') && !(event.target instanceof Node && profile.contains(event.target))) profile.hidePopover(); }, true);
+    window.scrollTo(0, 900);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(900);
+  const trigger = page.locator('.workspace-chrome__person > button');
+  const bounds = (await trigger.boundingBox())!;
+  expect(bounds.y + bounds.height).toBeLessThan(0);
+  await signOutTrailWorkspace(page);
+  await expect(page.getByLabel('School email', { exact: true })).toBeVisible();
+  await expect(page.locator('.workspace-chrome')).toHaveCount(0);
+});
