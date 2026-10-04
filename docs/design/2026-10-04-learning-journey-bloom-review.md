@@ -1,6 +1,6 @@
 # Learning journey and Bloom review
 
-Status: founder-requested audit and visual proposal, 4 October 2026. Bloom implementation and these new Student compositions have not been approved. This document records findings and a proposed boundary; it does not replace numbered product specifications or authorize a new adaptive engine.
+Status: historical audit and visual proposal, 4 October 2026. The founder later authorized the [reviewed thinking-focus integration](../superpowers/specs/2026-10-04-reviewed-thinking-focus-bloom.md). The absence findings below describe the inspected pre-implementation source; current implementation and actual acceptance are tracked in that plan/report. The original visual compositions are reference evidence and do not authorize a new adaptive engine or mastery claims.
 
 ## Current verdict
 

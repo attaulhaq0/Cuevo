@@ -161,6 +161,7 @@ export async function buildRuntimeArtifact(target: RuntimeTarget) {
     define: {
       CUEVO_LOCKED_PACK_ROOT_URL: JSON.stringify(target === 'api-vercel' ? '../supabase/seed/curriculum/' : './supabase/seed/curriculum/'),
       CUEVO_ANALYTICS_DIRECTORY_URL: JSON.stringify('./.local/analytics/'),
+      CUEVO_PEDAGOGY_CATALOGUE_URL: JSON.stringify(target === 'api-vercel' ? '../pedagogy/revised-bloom-v1.json' : './pedagogy/revised-bloom-v1.json'),
     },
     alias: { '@cuevo/contracts/analytics': join(root, 'packages/contracts/src/analytics.ts'), '@cuevo/domain': join(root, 'packages/domain/src/index.ts'), '@cuevo/contracts': join(root, 'packages/contracts/src/index.ts'), '@cuevo/config/synthetic-runtime': join(root, 'packages/config/src/synthetic-runtime.ts'), '@cuevo/config': join(root, 'packages/config/src/index.ts') },
   });
@@ -175,13 +176,23 @@ export async function buildRuntimeArtifact(target: RuntimeTarget) {
   await writeFile(join(output, 'package.json'), `${JSON.stringify(dependency.manifest, null, 2)}\n`);
   await writeFile(join(output, 'package-lock.json'), `${JSON.stringify(dependency.lock, null, 2)}\n`);
   const packFiles = service === 'api' ? await copyLockedPacks(output) : [];
+  if (service === 'api') {
+    const pedagogyRoot = join(root, 'apps/api/src/modules/curriculum/pedagogy');
+    const manifestBytes = await readFile(join(pedagogyRoot, 'manifest.json'));
+    const manifest = json<{files:Record<string,string>}>(manifestBytes.toString());
+    const catalogueBytes = await readFile(join(pedagogyRoot, 'revised-bloom-v1.json'));
+    if (catalogueBytes.length > 500000 || manifest.files['revised-bloom-v1.json'] !== digest(catalogueBytes)) throw new Error('Reviewed pedagogy catalogue bytes changed.');
+    await mkdir(join(output, 'pedagogy'), {recursive:true});
+    await writeFile(join(output, 'pedagogy/revised-bloom-v1.json'), catalogueBytes);
+    packFiles.push({path:'pedagogy/revised-bloom-v1.json',sha256:digest(catalogueBytes),byteSize:catalogueBytes.length});
+  }
   if (target === 'api-vercel') {
     // An explicit empty static root prevents pack/provenance files becoming public assets.
     await mkdir(join(output, 'public'));
     const configuration = {
       $schema: 'https://openapi.vercel.sh/vercel.json', framework: null, buildCommand: '', outputDirectory: 'public',
       installCommand: 'npm ci --omit=dev --ignore-scripts --no-audit --no-fund',
-      functions: { 'api/index.mjs': { maxDuration: 60, includeFiles: 'supabase/seed/curriculum/**' } },
+      functions: { 'api/index.mjs': { maxDuration: 60, includeFiles: ['supabase/seed/curriculum/**','pedagogy/**'] } },
       rewrites: [{ source: '/:path*', destination: '/api/index' }],
     };
     await writeFile(join(output, 'vercel.json'), `${JSON.stringify(configuration, null, 2)}\n`);

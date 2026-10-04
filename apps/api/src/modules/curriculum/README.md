@@ -1,5 +1,7 @@
 # Versioned curriculum contexts
 
+The private [pedagogy catalogue](pedagogy/README.md) provides source-pinned original English/Arabic reviewed thinking-focus vocabulary through `getThinkingFocusCatalogue` and `validateThinkingFocus` on `public.ts`. It describes task demand and grants no curriculum approval, learner level, mastery, XP or prerequisite authority. School Learning owns exact source classifications/reviews/snapshots. Knowledge dimensions and AI classification are deferred. Contract and catalogue tests are scoped evidence; compiled delivery and actual API/SQL/browser acceptance remain separate.
+
 Runtime pack reads use `loadRuntimeLockedPack` in packs.ts. Source execution anchors to the repository pack directory independently of API workspace cwd. Compiled process/Vercel artifacts inject an exact build-time relative URL to copied private packs; it is not caller input or a mutable environment override. Runtime still checks real-path containment, bounded bytes and immutable manifest/source/rights hashes. The lower-level explicit-root loader remains for guarded import/test workflows. Workspace and compiled artifact path checks prevent root-cwd tests from hiding broken ordinary development startup.
 
 Public surface: createCurriculumController(identity,database). Sources 05/06/07/26/34/50/55/66/69/76/81/83/85 govern the /v1/curriculum boundary.

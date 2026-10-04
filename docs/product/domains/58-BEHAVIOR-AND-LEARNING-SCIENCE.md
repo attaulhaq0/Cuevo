@@ -115,3 +115,11 @@ These models must not be used to:
 - label motivation as a fixed characteristic
 - rank children as “good/bad learners”
 - replace teacher judgment
+
+## Founder-authorized reviewed Bloom task focus
+
+The 4 October extension uses the revised cognitive-process categories as reviewed metadata about a specific activity or assessment criterion. Read the [approved integration specification](../../superpowers/specs/2026-10-04-reviewed-thinking-focus-bloom.md), [implementation plan](../../superpowers/plans/2026-10-04-reviewed-thinking-focus-bloom.md) and [private versioned vocabulary](../../../apps/api/src/modules/curriculum/pedagogy/README.md). Current implementation and acceptance status must be checked separately.
+
+Remember, Understand, Apply, Analyze, Evaluate and Create describe task demand; they do not define six mandatory learner levels. A teacher may record a primary and additional processes after reading the actual materials; a different current authorized Coordinator/Admin reviews the exact source. Classification never follows a verb alone, activity kind, completion receipt, score, XP or inferred ability. Missing mapping stays unclassified, and source edits require current review while historical task snapshots remain immutable.
+
+No knowledge-dimension scoring, learner diagnosis, mastery percentage, category-based reward or automatic prerequisite lock is introduced. Official curriculum alignment and academic grade rules remain independently source-locked. Student wording describes the current action, with bilingual Cuevo-authored explanations and optional source provenance.

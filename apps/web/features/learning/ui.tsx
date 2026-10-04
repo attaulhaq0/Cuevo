@@ -4,3 +4,4 @@ export { LearningResources } from './components/resources';
 export { SubmissionDocuments, SubmittedDocumentWork } from './components/submission-documents';
 
 export { LearningSourceContext } from './components/source-context';
+export { ThinkingFocusSummary, ThinkingFocusEditor, CourseThinkingFocusReview, ThinkingFocusSnapshot } from './components/thinking-focus';
