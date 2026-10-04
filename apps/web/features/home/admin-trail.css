@@ -24,8 +24,13 @@
 @media(max-width:550px) { .admin-trail__intro { display:grid; grid-template-columns:minmax(0,1fr); } .admin-trail__school { padding:var(--space-2); background:transparent; } .admin-trail__areas button { min-block-size:5.5rem; } }
 .admin-trail__left, .admin-trail__right { display: grid; gap: var(--space-4); min-inline-size: 0; }
 .admin-trail__right { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; }
-.admin-trail__policies { grid-column: 1; grid-row: 1 / span 3; }
-.admin-trail__governance, .admin-trail__execution, .admin-trail__audit { grid-column: 2; }
+.admin-trail__policy-column,.admin-trail__status-column { min-inline-size:0; display:grid; gap:var(--space-4); align-content:start; }
+.admin-trail__policy-column { grid-column:1; }
+.admin-trail__status-column { grid-column:2; }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) { grid-template-columns:minmax(0,1fr); }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__policy-column { grid-column:1; }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__status-column { grid-column:1; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__audit { grid-column:1 / -1; }
 .admin-trail__panel { padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-material-reading); min-inline-size: 0; }
 .admin-trail__panel h2 { margin: 0 0 var(--space-3); font-size: var(--type-lg); line-height: 1.35; }
 .admin-trail__heading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
@@ -77,6 +82,9 @@
 .admin-home-records ul { margin: 0; padding-inline-start: var(--space-5); }
 .admin-home-records li { padding-block: var(--space-2); overflow-wrap: anywhere; }
 .admin-home-records li h3, .admin-home-records li p { margin: 0; font-size: var(--type-sm); line-height: 1.5; }
+.admin-trail__people .button, .admin-trail__heading > .button { flex:none; }
+.admin-trail__policies[open] > .admin-trail__heading { margin-block-start:var(--space-2); }
+@media(max-width:850px) { .admin-trail__right { grid-template-columns:minmax(0,1fr); } .admin-trail__policy-column,.admin-trail__status-column { grid-column:1; } .admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__status-column { grid-template-columns:minmax(0,1fr); } }
 .admin-home-records dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-2) var(--space-4); margin: var(--space-3) 0 0; }
 .admin-home-records dt { font-size: var(--type-sm); color: var(--color-text-secondary); }
 .admin-home-records dd { margin: var(--space-1) 0 0; font-weight: var(--font-weight-semibold); }

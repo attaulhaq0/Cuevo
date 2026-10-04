@@ -1,5 +1,7 @@
 # School operations feature
 
+`SchoolSourceContinuation` omits exhausted/disabled continuation rows instead of reserving empty grid gaps, while actual source errors and named LoadMore callbacks stay with the shared readers. Student daily records no longer reserve eight empty continuation rows at the end. The account learner-context header uses a two-column mobile title/icon row with its current read-only refresh below, so Arabic context prose retains a readable lane. Identity/enrollment/course sources and authority are unchanged. Focused render tests cover absent, active and failed continuation states; fresh Student account/daily desktop/mobile evidence verifies layout separately from authorization.
+
 School Audit uses the shared `cuevo-section-header` modifier for its existing title, scope note and single read-only Refresh control. Audit queries, current source projection, pagination and provenance remain with the same owner; the header wraps responsively without shrinking control targets.
 
 School daily filters, attendance class selection and related current class choices reuse schoolClassName with the authorized academic-year/year-group records already owned by this workspace. Labels match the setup context and explicitly show unavailable names when context is missing; no IDs or invented suffixes distinguish records. customer-navigation-context.spec.ts checks the actual daily filter and attendance selector against the full current class/year context.

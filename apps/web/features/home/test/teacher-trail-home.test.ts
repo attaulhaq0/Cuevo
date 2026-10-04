@@ -89,7 +89,7 @@ test('current school updates are visible beside the review work with one heading
   assert.match(html, /Load more school updates/);
   assert.match(html, /More school updates may be available/);
   assert.equal((html.match(/<h1 /g) || []).length, 1);
-  assert.doesNotMatch(html, /<details|update-source/);
+  assert.doesNotMatch(html.slice(html.indexOf('teacher-trail__updates-wrap')), /<details|update-source/);
 });
 
 test('unavailable school updates hide stale content and distinguish failed reads from empty pages', () => {

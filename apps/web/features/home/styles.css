@@ -2,7 +2,8 @@
 @import './parent-trail.css';
 @import './coordinator-trail.css';
 @import './admin-trail.css';
-.teacher-home-records { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.teacher-home-records { padding: var(--space-2) var(--space-3) var(--space-4); display: grid; gap: var(--space-3); }
+.teacher-home-records > .button { justify-self: start; }
 .teacher-home-records summary { min-block-size: 2.75rem; cursor: pointer; align-content: center; }
 .teacher-home-records article { padding-block: var(--space-4); }
 .teacher-home-records article h2 { font-size: var(--type-lg); }
@@ -14,12 +15,22 @@
 .home-action-list li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-5); padding-block: var(--space-5); border-block-end: 1px solid var(--color-border); }
 .home-action-list h3, .home-context-section h3 { font-size: var(--type-lg); }
 .home-context-section article { padding-block: var(--space-4); }
-.student-home__records { padding: var(--space-5) var(--space-7); display: grid; gap: var(--space-6); }
+.student-home__records { padding: var(--space-3) var(--space-4) var(--space-4); display: grid; gap: var(--space-2); }
 .student-home__section { border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-5); min-inline-size: 0; }
 .student-home__section article { padding-block: var(--space-4); overflow-wrap: anywhere; }
 .student-home__section .field { max-inline-size: 36rem; margin-block: var(--space-4); }
 .student-home__section h3 { font-size: var(--type-lg); }
 .student-home__section > summary { cursor: pointer; font-weight: 700; font-size: var(--type-lg); min-block-size: 2.75rem; }
+.student-home__section:where(details) { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-material-reading); padding:0 var(--space-4); }
+.student-home__section:where(details)[open] { padding-block-end:var(--space-3); }
+.student-home__section:where(details) > summary { display:list-item; align-content:center; font-size:var(--type-body); }
+.home-secondary-disclosure > summary { cursor:pointer; min-block-size:2.75rem; align-content:center; font-size:var(--type-body); font-weight:var(--font-weight-semibold); }
+.home-secondary-disclosure > summary h2 { display:inline; margin:0; padding:0; font-size:inherit; font-weight:inherit; line-height:inherit; }
+.home-secondary-disclosure > summary:focus-visible { outline:var(--focus-width) solid var(--color-focus); outline-offset:var(--focus-offset); }
+.home-secondary-disclosure:not([open]) { padding-block:var(--space-2); }
+.home-secondary-disclosure[open] > summary { margin-block-end:var(--space-3); }
+.home-secondary-disclosure[open] > :is(h2,.teacher-trail__section-heading,.parent-trail__panel-heading) { display:none; }
+.home-secondary-disclosure .button { margin-block-start:var(--space-2); }
 .student-home__section > summary:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
 .student-home__presentation { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .student-home__native { margin-block: var(--space-3); }
@@ -125,8 +136,8 @@
 .student-trail__practice-icon { display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; color: var(--color-accent); background: var(--color-learning-surface); border-radius: var(--radius-md); flex: none; }
 .student-trail__practice-icon svg { inline-size: 1.75rem; block-size: 1.75rem; }
 .student-trail__empty { padding-block: var(--space-3); font-size: var(--type-sm); line-height: 1.5; color: var(--color-text-secondary); }
-.student-trail__bottom-row { grid-column: 1 / -1; grid-row: 4; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
-.student-trail__bottom-row:has(> :only-child) { grid-template-columns: minmax(0, 1fr); max-inline-size: calc((100% - 2 * var(--space-5)) / 3); }
+.student-trail__bottom-row { grid-column: 1 / -1; grid-row: 4; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%,18rem), 1fr)); gap: var(--space-3); align-items: stretch; }
+.student-trail__bottom-row:has(> :only-child) { grid-template-columns: minmax(0, 1fr); max-inline-size: none; }
 .student-trail__recognition { display: flex; gap: var(--space-3); background: var(--color-progress-surface); }
 .student-trail__treasure { inline-size: clamp(4rem, 6vw, 6.5rem); block-size: clamp(4rem, 7vw, 7.5rem); align-self: center; flex: none; }
 .student-trail__recognition-copy { flex: 1; min-inline-size: 0; }

@@ -1,5 +1,9 @@
 # Role action home
 
+## Overview bottom rhythm — 4 October 2026
+
+Home's existing role owners keep records and action callbacks while secondary empty context uses `components/home-disclosure.tsx`. Meaningful source records remain in their reading sections; empty calendar, insight, portfolio, updates and next-action context is progressively opened with honest unavailable text and existing recovery/actions. Loaded Parent/Student record disclosures are compact and omit empty duplicate collections; access errors stay beside their owner. Student recognition occupies the available row width, its period remains an explicit source selection, and detailed ledger/milestone records are progressively opened. Coordinator's independent native outcome uses natural grid rows rather than spanning a short evidence panel over its full height. Adult workspace tiles align within their row; duplicate Admin actions with the same callback stay at the owning section heading. No source query, authorization, submission, reward or grading behavior changes.
+
 ## Coordinator Home source review — 4 October 2026
 
 The 034/035/038 reading composition now puts current declared-plan evidence before programme metadata, with the selected course/class/school period/programme/year/source version beside it. Direct course selection requires complete current course and programme choices and one exact class/subject programme context; periods require complete current choices. Missing/duplicate labels and ambiguous programme joins are refused without opaque suffixes. Current scope/error/loading and current period revision still govern each coverage read.

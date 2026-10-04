@@ -89,7 +89,7 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
       sourceAction: action(t.support, 'improvement'), reviewAction: action(t.support, 'improvement'),
     } : null,
     insightStatus: proposals.error ? 'unavailable' : proposals.loading ? 'loading' : proposals.nextCursor || proposals.moreError ? 'partial' : 'ready',
-    nextActions: sourceNextActions.length ? sourceNextActions : areas.filter(area => ['school', 'community'].includes(area.target) && can(area.target)).map(area => ({ key: area.target, title: area.title, icon: area.icon, action: action(area.title, area.target) })),
+    nextActions: sourceNextActions,
     calendar: {
       status: calendar.error ? 'unavailable' : calendar.loading ? 'loading' : calendar.nextCursor ? 'partial' : 'ready',
       items: calendar.error || now === null ? [] : currentTeacherHomeRows(calendar.data, scope).filter(row => Date.parse(row.endsAt) >= now).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).slice(0, 3).map(row => ({ key: row.id, title: typeof row.title === 'string' && row.title.trim() ? row.title : t.noSource, dateLabel: date(row.startsAt), contextLabel: null, action: action(t.school, 'school') })),

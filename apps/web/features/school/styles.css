@@ -96,6 +96,11 @@
 @media (max-width: 1023px) { .school-day-layout { grid-template-columns: minmax(0, 1fr); } .school-day-side { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767px) { .school-day-panel { padding: var(--space-4); border-radius: var(--radius-lg); } .school-day-side, .school-profile-layout { grid-template-columns: minmax(0, 1fr); } .school-day-heading { flex-wrap: wrap; } .school-profile > .school-day-heading { padding: var(--space-4); } .school-day-timeline > li { grid-template-columns: minmax(5rem, .4fr) minmax(0, 1fr); gap: var(--space-3); } .school-day-filter > p { flex-basis: 100%; } }
 @media (max-width: 359px) { .school-day-timeline > li { grid-template-columns: minmax(0, 1fr); } .school-day-time { border-inline-end: 0; border-block-end: 2px solid var(--color-brand); padding-block-end: var(--space-2); } }
+@media (max-width: 767px) {
+  .school-profile > .school-day-heading { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; }
+  .school-profile > .school-day-heading > .button { grid-column:2; justify-self:start; }
+  .school-profile > .school-day-heading > div { min-inline-size:0; }
+}
 .school-staff-day { display:grid; gap:var(--space-4); min-inline-size:0; }
 .school-staff-day-layout { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(18rem,1fr); gap:var(--space-5); align-items:start; }
 .school-staff-day .school-day-panel { padding:var(--space-5); }
