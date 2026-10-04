@@ -3,8 +3,6 @@
 .learning-path-heading .eyebrow { color: var(--color-link); font-size: var(--type-body); font-weight: 700; }
 .learning-path-heading__body { margin-block-start: var(--space-1); font-size: var(--type-sm); line-height: var(--line-height-body); max-inline-size: 60ch; }
 .learning-path-heading img { inline-size: 3.5rem; block-size: 3.5rem; object-fit: contain; flex: none; }
-.synthetic-notice { border-inline-start: 3px solid var(--color-warning); background: var(--color-warning-surface); color: var(--color-warning); padding: var(--space-4) var(--space-5); font-size: var(--type-sm); }
-.synthetic-notice p { margin-block-start: var(--space-1); }
 .learning-directory { background: var(--color-material-reading); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: var(--space-6); box-shadow: var(--elevation-subtle); }
 .learning-directory__heading { padding-inline: var(--space-2); }
 .learning-directory__heading h2 { font-size: var(--type-xl); }
@@ -96,7 +94,6 @@
 .course-view--reading .unit-section > .learning-section-heading { margin-block-end: var(--space-2); }
 .course-view--reading .unit-section > .learning-section-heading .eyebrow { display: inline; margin-inline-end: var(--space-2); }
 .course-view--reading .unit-section > .learning-section-heading h3 { display: inline; }
-.learning-workspace .synthetic-notice { padding:var(--space-2) var(--space-3); }
 .learning-workspace .learning-toolbar,.course-view .learning-actions { margin-block:var(--space-3);gap:var(--space-2); }
 .learning-directory { padding:var(--space-4); }
 .learning-directory__heading h2 { font-size:var(--type-lg); }

@@ -84,7 +84,6 @@ export const en = {
   supportBody: 'Evidence-backed proposals, teacher approval and measured follow-up.',
   privacyTitle: 'A school-scoped space',
   privacyBody: 'Your workspace follows your current school membership. Protected information is shown only after access is verified.',
-  foundationNote: 'Synthetic school data. Official curriculum and production readiness require separate review.',
   sessionNote: 'On this pilot, refreshing the browser asks you to sign in again. Save your work first.',
   accountHelp: 'To change your account or school role, contact your school administrator.',
   errorTitle: 'This page could not be loaded',

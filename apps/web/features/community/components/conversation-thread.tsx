@@ -11,8 +11,9 @@ import { LearningApiError, type Command } from '../../../shared/api/client';
 import { conversationReadScope, currentConversationRead, parseCurrentConversation, parseCurrentConversationMessage, parseCurrentConversationReport, validateConversationReceipt, type ParentConversation, type ConversationMessage } from '../conversation-model';
 import { conversationEn, conversationAr } from '../conversation-messages';
 import { parseConversationAction, recoverConversationAction, type ConversationIntent, type ConversationAction as Action } from '../conversation-state-model';
+import { conversationReadingKey,type ConversationReadingState } from '../conversation-reading-focus';
 
-export function ConversationThread({ intent, onBack }: { intent: ConversationIntent; onBack: () => void }) {
+export function ConversationThread({ intent, onBack,onReadingState }: { intent: ConversationIntent; onBack: () => void;onReadingState?:(state:ConversationReadingState)=>void }) {
   const app = useApp(); const { membership, locale } = app; const t = locale === 'ar' ? conversationAr : conversationEn;
   const [refresh, setRefresh] = useState(0);
   const path = `/v1/community/conversations/${intent.id}`, scope = conversationReadScope(app, path, refresh);
@@ -22,7 +23,9 @@ export function ConversationThread({ intent, onBack }: { intent: ConversationInt
     return { scope, value: thread };
   }, [scope, intent, membership?.role, membership?.userId]);
   const query = useApiQuery(scope ? path : null, parser, refresh), thread = currentConversationRead(query.data, scope);
-  return thread && !query.loading && !query.error ? <ConversationContent thread={thread} onBack={onBack} onStateChanged={() => setRefresh(value => value + 1)} /> : <section className="conversation-thread-recovery"><Button type="button" variant="quiet" onClick={onBack}><CuevoIcon name="arrow" />{t.back}</Button>{query.error ? <LearningError error={query.error} /> : <p role="status">{t.loading}</p>}<Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button></section>;
+  const readingKey=conversationReadingKey(intent);
+  useEffect(()=>{if(!thread||query.loading||query.error)onReadingState?.({threadKey:readingKey,readingScope:null,state:query.error?'error':'loading'});},[thread,query.loading,query.error,readingKey,onReadingState]);
+  return thread && !query.loading && !query.error ? <ConversationContent thread={thread} sourceScope={scope} onReadingState={onReadingState} onBack={onBack} onStateChanged={() => setRefresh(value => value + 1)} /> : <section className="conversation-thread-recovery"><Button type="button" variant="quiet" onClick={onBack}><CuevoIcon name="arrow" />{t.back}</Button>{query.error ? <LearningError error={query.error} /> : <p role="status">{t.loading}</p>}<Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button></section>;
 }
 function ConversationRead({message,thread,locked,lock,onSaved}:{message:ConversationMessage;thread:ParentConversation;locked:boolean;lock:(key:string,value:boolean)=>void;onSaved:()=>void}) {
   const {locale,membership,commandJournal}=useApp(); const t=locale==='ar'?conversationAr:conversationEn;
@@ -31,7 +34,7 @@ function ConversationRead({message,thread,locked,lock,onSaved}:{message:Conversa
   const onLockedChange=useCallback((value:boolean)=>{setOwnsLock(value);lock(key,value);},[lock,key]);
   return <fieldset disabled={locked&&!ownsLock&&!commandJournal.get(path)}><CommandForm title={t.markRead} path={path} fields={[]} body={()=>({})} validateReceipt={(receipt,original)=>validateConversationReceipt(receipt,original,membership!.userId,membership!.role,thread,message)} onSaved={onSaved} onLockedChange={onLockedChange} actionLabel={t.markRead}/></fieldset>;
 }
-function ConversationContent({ thread, onBack, onStateChanged }: { thread: ParentConversation; onBack: () => void; onStateChanged: () => void }) {
+function ConversationContent({ thread,sourceScope,onReadingState,onBack,onStateChanged }: { thread:ParentConversation;sourceScope:string|null;onReadingState?:(state:ConversationReadingState)=>void;onBack:()=>void;onStateChanged:()=>void }) {
   const app = useApp(); const { membership, locale, formDrafts, commandJournal } = app; const t = locale === 'ar' ? conversationAr : conversationEn;
   const actor = membership!.userId, role = membership!.role, prefix = `${membership!.schoolId}:${actor}:`;
   const path = `/v1/community/conversations/${thread.id}`, actionSlot = `${prefix}${path}:action`;
@@ -39,8 +42,6 @@ function ConversationContent({ thread, onBack, onStateChanged }: { thread: Paren
   const [locks, setLocks] = useState<Record<string, boolean>>({});
   useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
   const heading = useRef<HTMLHeadingElement | null>(null), actionHeading = useRef<HTMLElement | null>(null);
-  const hasWorkingInput = formDrafts.first(`${prefix}${path}`) !== undefined;
-  useEffect(() => { const timer = window.setTimeout(() => { if (!hasWorkingInput && document.activeElement === document.body) heading.current?.focus({ preventScroll: true }); }, 0); return () => window.clearTimeout(timer); }, []);
   useEffect(() => { actionHeading.current?.focus({ preventScroll: true }); }, [action?.id, action?.kind]);
   const participant = role === 'parent' && actor === thread.parentId || role === 'teacher' && actor === thread.teacherId;
   const messagePath = `${path}/messages?limit=100`, messageScope = conversationReadScope(app, messagePath, refresh);
@@ -53,6 +54,10 @@ function ConversationContent({ thread, onBack, onStateChanged }: { thread: Paren
   const visibleRows = role === 'admin' ? reports.loaded && !reports.loading && !reports.error && !reports.moreError ? rows.filter(message => reportRows.some(report => report.messageId === message.id)) : [] : rows;
   const ready = messages.loaded && !messages.loading && !messages.error && !messages.moreError;
   const authority = ready && (role !== 'admin' || reports.loaded && !reports.loading && !reports.error && !reports.moreError);
+  const readingKey=conversationReadingKey(thread),readingScope=JSON.stringify([sourceScope,messageScope,thread.canModerate?reportScope:null]);
+  const readingFailed=!!messages.error||!!messages.moreError||thread.canModerate&&(!!reports.error||!!reports.moreError);
+  const readingReady=authority&&(!thread.canModerate||reports.loaded&&!reports.loading);
+  useEffect(()=>{onReadingState?.({threadKey:readingKey,readingScope,state:readingFailed?'error':readingReady?'ready':'loading'});},[onReadingState,readingKey,readingScope,readingFailed,readingReady]);
   useEffect(()=>{if(action||!authority)return;const recovered=recoverConversationAction(commandJournal.pending(),thread.id,rows);if(recovered){setAction(recovered);formDrafts.saveModel(actionSlot,recovered);}},[action,authority,commandJournal,thread.id,rows,formDrafts,actionSlot]);
   const actionPath = action ? action.kind === 'state' ? `${path}/state` : `/v1/community/conversations/messages/${action.id}/${action.kind === 'report' ? 'report' : 'moderate'}` : null;
   const sendPath = `${path}/messages`;
@@ -71,7 +76,7 @@ function ConversationContent({ thread, onBack, onStateChanged }: { thread: Paren
   const validAction = action && (action.kind === 'state' ? thread.canModerate : !!currentActionMessage && (action.kind === 'report' ? participant : thread.canModerate && (role !== 'admin' || reportRows.some(report => report.messageId === action.id))));
   return <section className="conversation-thread" aria-label={thread.title}>
     <div className="conversation-thread-navigation"><Button type="button" variant="quiet" disabled={locked&&!otherPending} onClick={onBack}><CuevoIcon name="arrow" />{t.back}</Button><Button type="button" variant="quiet" onClick={() => { changed(); onStateChanged(); }}><CuevoIcon name="refresh" />{t.refresh}</Button></div>
-    <header className="conversation-thread-heading"><div className="conversation-thread-symbol"><CuevoIcon name="feedback" variant="filled" size={30} /></div><div><h2 ref={heading} tabIndex={-1}><bdi>{thread.title}</bdi></h2><p><bdi>{thread.learnerName} · {thread.className} · {thread.academicYearName} · {thread.subjectName}</bdi></p><p><bdi>{thread.parentName}</bdi><span aria-hidden="true"> · </span><bdi>{thread.teacherName}</bdi></p></div><Status tone={thread.state === 'PAUSED' ? 'warning' : 'neutral'}>{thread.state === 'PAUSED' ? t.pausedShort : t.openState}</Status></header>
+    <header className="conversation-thread-heading"><div className="conversation-thread-symbol"><CuevoIcon name="feedback" variant="filled" size={30} /></div><div><h2 ref={heading} tabIndex={-1} data-conversation-reading-heading><bdi>{thread.title}</bdi></h2><p><bdi>{thread.learnerName} · {thread.className} · {thread.academicYearName} · {thread.subjectName}</bdi></p><p><bdi>{thread.parentName}</bdi><span aria-hidden="true"> · </span><bdi>{thread.teacherName}</bdi></p></div><Status tone={thread.state === 'PAUSED' ? 'warning' : 'neutral'}>{thread.state === 'PAUSED' ? t.pausedShort : t.openState}</Status></header>
     <p className="conversation-safety"><CuevoIcon name="shield" />{role === 'admin' ? t.adminScope : t.safety}</p>{thread.state === 'PAUSED' ? <p className="notice">{t.paused}</p> : null}
     <div className="conversation-thread-layout"><div className="conversation-timeline">
       {messages.loading || role === 'admin' && (!reports.loaded || reports.loading) && !reports.error && !reports.moreError ? <p role="status">{t.loading}</p> : messages.error || messages.moreError ? <LearningError error={messages.error ?? messages.moreError!} /> : role === 'admin' && (reports.error || reports.moreError) ? <p className="notice">{t.reviewUnavailable}</p> : visibleRows.length ? visibleRows.map(message => {

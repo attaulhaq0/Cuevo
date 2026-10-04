@@ -68,7 +68,10 @@
   .workspace .workspace-main--student-learning .workspace-intro > div > p:last-child { display: none; }
 }
 .workspace .workspace-main--student-home { max-inline-size: none; padding: 0; }
-.workspace .workspace-main--student-home > :is(.notice, .workspace-footer, .form-error) { margin-inline: var(--space-6); }
+.workspace .workspace-main--student-home > :is(.notice, .form-error) { margin-inline: var(--space-6); }
+.workspace-environment-details { margin-block:var(--space-2); font-size:var(--type-sm); }
+.workspace-environment-details > summary { cursor:pointer; min-block-size:var(--control-min-size); align-content:center; }
+.workspace-environment-details > p { margin-block:var(--space-2); color:var(--color-text-secondary); max-inline-size:65ch; }
 .workspace .workspace-chrome__empty { margin: 0; padding: var(--space-4); font-size: var(--type-sm); color: var(--color-text-secondary); }
 .workspace[data-expression="student"] .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }
 

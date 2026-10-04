@@ -82,9 +82,6 @@ html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 .privacy-note > svg { margin-block-start: .1rem; color: var(--color-accent); }
 .privacy-note h2 { font-size: var(--type-sm); color: var(--color-text); }
 .privacy-note p { font-size: var(--type-sm); margin-block-start: var(--space-2); }
-.workspace-footer { margin-block-start: var(--space-12); padding-block-start: var(--space-6); border-block-start: 1px solid var(--color-border); display: flex; align-items: center; gap: var(--space-6); justify-content: space-between; }
-.workspace-footer p { font-size: var(--type-xs); color: var(--color-text-muted); max-inline-size: 42rem; }
-.workspace-footer .text-action { flex: none; font-size: var(--type-xs); }
 .detail-section { padding-block: var(--space-8); border-block-start: 1px solid var(--color-border); }
 .detail-section > h2 { font-size: var(--type-xl); }
 .detail-section > p { color: var(--color-text-secondary); margin-block-start: var(--space-3); font-size: var(--type-sm); }
@@ -125,7 +122,6 @@ html[dir="rtl"] .directional-icon { transform: rotate(180deg); }
   .upcoming-list > li > .status { margin-inline-start: 2rem; }
   .upcoming-list h3 { font-size: var(--type-sm); gap: var(--space-2); }
   .privacy-note { margin-block-start: var(--space-8); }
-  .workspace-footer { margin-block-start: var(--space-8); align-items: flex-start; }
   .detail-list > div { grid-template-columns: 1fr; gap: var(--space-2); }
   .access-state { padding: var(--space-12) var(--space-6); }
 }

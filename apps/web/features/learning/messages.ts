@@ -33,7 +33,6 @@ export const learningEn = { retiredCourseNote:'This curriculum source is retired
   correctAnswer: 'Correct answer',
   ...commonEn,
   learning: 'Learning', learningBody: 'Your school courses, lessons and submitted work.',
-  demoTitle: 'Synthetic school learning', demoBody: 'This development environment uses school-authored synthetic content. It does not represent an official curriculum or grading standard.',
   courses: 'Courses', assessments: 'Assessments', submissions: 'Submissions', refresh: 'Refresh', loading: 'Loading learning…',
 
   submissionUnknown: 'Load the remaining submitted work to confirm this task’s current status before editing.',
@@ -91,7 +90,6 @@ export const learningAr: typeof learningEn = {
   correctAnswer: 'الإجابة الصحيحة',
   ...commonAr,
   learning: 'التعلّم', learningBody: 'مقررات مدرستك ودروسها والأعمال المسلّمة.',
-  demoTitle: 'تعلّم مدرسي ببيانات اصطناعية', demoBody: 'تستخدم بيئة التطوير هذه محتوى اصطناعيًا من إعداد المدرسة. لا يمثّل منهجًا رسميًا أو معيارًا رسميًا للدرجات.',
   courses: 'المقررات', assessments: 'التقييمات', submissions: 'التسليمات', refresh: 'تحديث', loading: 'جارٍ تحميل التعلّم…',
 
   submissionUnknown: 'حمّل بقية الأعمال المسلّمة لتأكيد الحالة الحالية لهذا التقييم قبل تحريره.',

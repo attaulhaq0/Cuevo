@@ -17,6 +17,7 @@ import { WorkspaceChrome } from './workspace-chrome';
 import { WorkspaceCommandNavigation } from './workspace-command-navigation';
 import { ThemeControl } from './workspace-theme';
 import { WorkspaceAccess } from './workspace-access';
+import { EnvironmentDetails } from './environment-details';
 import { chromeAr, chromeEn } from '../messages';
 import type { WorkspaceTheme } from '../theme-model';
 import { LearningWorkspace } from '../../learning/ui';
@@ -117,7 +118,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
         {composedHome ? null : <div className="workspace-intro"><div><p className="eyebrow">{t.greeting} <bdi>{membership.displayName}</bdi></p><h1 ref={heading} tabIndex={-1}>{title}</h1><p>{body}</p></div><Status tone="positive">{t.sessionVerified}</Status></div>}
         {visibleNotice ? <p className="notice" role="status">{visibleNotice}</p> : null}
         {view==='restricted'?<RestrictedRecordsWorkspace/>:view === 'portfolio' ? <PortfolioWorkspace /> : view === 'development' ? <DevelopmentWorkspace /> : view === 'curriculum' ? <CurriculumWorkspace /> : view === 'community' ? <CommunityWorkspace /> : view === 'school' ? <SchoolWorkspace onAutomationControl={selectView}/> : view === 'improvement' ? <ImprovementWorkspace intent={intent?.view==='improvement'?intent:null} /> : view === 'progress' ? <ProgressWorkspace /> : view === 'academic' ? <AcademicWorkspace intent={intent?.view==='academic'?intent:null} /> : view === 'learning' ? <LearningWorkspace intent={intent?.view==='learning'?intent:null} /> : view === 'overview' ? <RoleHome onNavigate={selectView} headingRef={composedHome ? heading : undefined} /> : view === 'access' ? <WorkspaceAccess membership={membership} onRefresh={refreshAccess}/> : <section className="detail-section"><dl className="detail-list"><div><dt>{t.profile}</dt><dd><bdi>{membership.displayName}</bdi></dd></div><div><dt>{t.school}</dt><dd><bdi>{membership.school.name}</bdi></dd></div><div><dt>{t.role}</dt><dd>{t.roles[membership.role]}</dd></div></dl>{membership.entitlements.includes('school.operations')?<LearnerProfile/>:null}<details><summary>{t.reference}</summary><p className="identifier"><bdi>{membership.userId}</bdi></p><p className="identifier"><bdi>{membership.membershipId}</bdi></p></details><p className="account-help">{t.accountHelp}</p><p className="session-note">{t.sessionNote}</p><Button type="button" variant="secondary" onClick={() => void onSignOut()} disabled={signingOut}><CuevoIcon name="logout" size={16} />{signingOut ? t.signingOut : t.signOut}</Button>{signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null}</section>}
-        <footer className="workspace-footer"><p>{t.foundationNote}</p></footer>
+        {view==='account'?<EnvironmentDetails locale={locale}/>:null}
         {signOutFailed && view !== 'account' ? <p className="form-error" role="alert">{t.signOutError}</p> : null}
       </main>
       {commandDialog}
