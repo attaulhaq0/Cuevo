@@ -87,6 +87,8 @@
 .school-workspace .school-staff-day .school-attendance-list p { margin-block:var(--space-1); }
 .school-workspace .school-staff-day .school-day-panel { padding:var(--space-3); }
 @media(max-width:767px){.school-workspace>.learning-toolbar>.button{font-size:var(--type-xs);padding-inline:var(--space-2)}.workspace .school-workspace>.learning-toolbar .learning-tabs{display:flex;flex-direction:row;flex-wrap:nowrap}.school-staff-day>.school-day-heading p{font-size:var(--type-xs);line-height:1.4}.school-daily-context-layout .school-daily-time-context{grid-column:1/-1;font-size:var(--type-xs)}.school-daily-context-layout .field{margin:0}}
+@media(max-width:767px){.school-workspace>.learning-toolbar{flex-wrap:wrap}.school-workspace>.learning-toolbar>.learning-tabs{flex:1 1 16rem}.school-workspace>.learning-toolbar>.button{max-inline-size:100%;min-inline-size:0;white-space:normal}}
+@media(max-width:360px){.school-workspace>.learning-toolbar>.learning-tabs{flex-basis:0}.school-workspace-refresh-label{display:none}.school-workspace>.learning-toolbar>.button{min-inline-size:2.75rem;inline-size:2.75rem;padding:var(--space-2)}}
 @media(max-width:767px){.school-workspace .school-staff-day .school-attendance-list > li{grid-template-columns:minmax(0,1fr) minmax(7rem,.8fr);align-items:start;gap:var(--space-2)}.school-workspace .school-staff-day .school-attendance-list > li > .button{inline-size:100%;font-size:var(--type-sm);padding-inline:var(--space-2)}.school-workspace .school-staff-day .school-attendance-list details{grid-column:1/-1}}
 @media(max-width:767px){.school-daily-context-layout{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}.school-daily-context-layout .field label{font-size:var(--type-sm)}.school-daily-context-layout select,.school-daily-context-layout input{min-inline-size:0;inline-size:100%}.school-daily-context-layout .school-day-filter>p{font-size:var(--type-xs)}.school-daily-context-layout .school-daily-choice-continuation{grid-column:1/-1;font-size:var(--type-sm)}}
 .school-section { min-inline-size: 0; margin-block-start: var(--space-6); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-material-reading); box-shadow: var(--elevation-subtle); }
@@ -132,8 +134,13 @@
 .school-day-intro p { margin-block: var(--space-2) 0; color: var(--color-text-secondary); font-size: var(--type-lead); }
 .school-day-records { display: grid; gap: var(--space-5); }
 .school-day-filter { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: end; padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.school-day-filter { min-inline-size:0;max-inline-size:100%;inline-size:100%;box-sizing:border-box; }
 .school-day-filter .field { flex: 0 1 18rem; }
+.school-day-filter .field { min-inline-size:0;max-inline-size:100%; }
+.school-day-filter input { min-inline-size:0;inline-size:100%;box-sizing:border-box; }
 .school-day-filter > p { flex: 1; font-size: var(--type-sm); color: var(--color-text-muted); }
+.school-day-filter > p { min-inline-size:0;overflow-wrap:anywhere; }
+@media(max-width:767px){.school-day-filter .field{flex:1 1 100%}.school-day-filter > p{flex:1 1 100%}}
 .school-day-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr); gap: var(--space-5); align-items: start; }
 .school-day-panel { min-width: 0; padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-material-reading); box-shadow: var(--elevation-subtle); }
 .school-day-panel h2, .school-day-panel h3, .school-day-panel h4, .school-profile h2, .school-profile h3, .school-profile h4 { margin: 0; line-height: 1.35; }

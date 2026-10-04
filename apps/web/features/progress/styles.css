@@ -100,6 +100,10 @@
 @media(max-width:767px){
  .progress-workspace .progress-intro { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; }
  .progress-workspace .progress-intro__actions { max-inline-size:11rem; }
+ .progress-workspace .progress-intro__actions { min-inline-size:0; }
+ .progress-workspace .progress-intro__actions > .button { max-inline-size:100%;min-inline-size:0;white-space:normal; }
+ .progress-workspace .progress-intro__actions { grid-column:1 / -1;max-inline-size:none;inline-size:100%; }
+ .progress-workspace .progress-companion { min-inline-size:0;max-inline-size:100%;flex-wrap:wrap; }
  .progress-workspace .progress-toolbar > .field { display:grid; grid-template-columns:auto minmax(0,1fr); column-gap:var(--space-2); align-items:center; }
  .progress-workspace .progress-toolbar > .field > label { margin:0; }
  .progress-workspace .progress-toolbar > .field > select { min-block-size:var(--control-min-size); }

@@ -187,4 +187,5 @@
   .workspace .workspace-chrome__person strong { max-inline-size:8.5rem; }
   .workspace .workspace-chrome__person small { max-inline-size:8.5rem; }
   .workspace .workspace-main:has(> .school-workspace) > .workspace-intro > div > p:last-child { display:none; }
+  .workspace .workspace-main--student-learning .workspace-intro { grid-template-columns:minmax(0,1fr);align-items:start; }
 }
