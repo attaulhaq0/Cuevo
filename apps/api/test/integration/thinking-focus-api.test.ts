@@ -8,7 +8,6 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseServerConfig } from '@cuevo/config';
 import { thinkingFocusResponseSchema, thinkingFocusSnapshotSchema } from '@cuevo/contracts';
 import type { Database } from '../../src/platform/database/database';
 import { IdentityService, type MembershipRow } from '../../src/platform/identity/identity.service';
@@ -18,26 +17,28 @@ import { createLearningContentController } from '../../src/modules/school-learni
 import { createThinkingFocusController } from '../../src/modules/school-learning/thinking-focus.controller';
 import { createAcademicController } from '../../src/modules/academic/academic.controller';
 import { createLearningResourceController } from '../../src/modules/school-learning/resource.controller';
+import { isolatedThinkingFocusRuntime, standardThinkingFocusRuntime, thinkingFocusTestMode, readThinkingFocusJson } from './thinking-focus-test-runtime';
+import { withFixtureCleanup } from './fixture-cleanup';
 
-const enabled=process.env.CUEVO_REQUIRE_THINKING_FOCUS_INTEGRATION==='1';
+const runtimeMode=thinkingFocusTestMode(process.env);
+const enabled=runtimeMode!==null;
 const actors={admin:1,coordinator:2,teacher:4,wrongTeacher:5,student:12,parent:72} as const;
 type Role=keyof typeof actors;
 type Row=Record<string,unknown>&{id:string};
 const actorId=(role:Role)=>`20000000-0000-4000-8000-${String(actors[role]).padStart(12,'0')}`;
 const focus={taxonomyVersion:'revised-bloom-2001-cuevo-v1',primaryProcess:'APPLY',additionalProcesses:['UNDERSTAND']};
 
-describe.skipIf(!enabled)('reviewed thinking focus — isolated real Auth/controllers/Postgres',()=>{
+describe.skipIf(!enabled)('reviewed thinking focus — real Auth/controllers/Postgres',()=>{
   let owner:Pool;let client:PoolClient;let app:NestFastifyApplication;const school=randomUUID(),classId=randomUUID(),subject=randomUUID(),year=randomUUID(),group=randomUUID();let referenceId:string;let beforeReviewDownload:(()=>Promise<void>)|null=null;
   const tokens:Partial<Record<Role,string>>={};
   beforeAll(async()=>{
+    const actorIds=Object.fromEntries((Object.keys(actors)as Role[]).map(role=>[role,actorId(role)]));
     const path=process.env.CUEVO_THINKING_FOCUS_TEST_RUNTIME;
-    if(!path||!isAbsolute(path))throw Error('Explicit absolute isolated thinking-focus runtime file required.');
-    const runtime=JSON.parse(await readFile(path,'utf8'))as{config:Record<string,string>;accounts:{actorId:string;email:string;password:string}[]};
-    const databaseUrl=new URL(runtime.config.DATABASE_URL),authUrl=new URL(runtime.config.SUPABASE_URL);
-    if(!['127.0.0.1','localhost'].includes(databaseUrl.hostname)||databaseUrl.port!=='57422'||!['127.0.0.1','localhost'].includes(authUrl.hostname)||authUrl.port!=='57421')throw Error('Thinking-focus fixtures require the explicit isolated Bloom runtime.');
-    const config=parseServerConfig({...runtime.config,NODE_ENV:'test',AI_GENERATION_MODE:'DISABLED',AI_FIXTURE_ENABLED:'false'});
-    databaseUrl.username='postgres';databaseUrl.password='postgres';owner=new Pool({connectionString:databaseUrl.toString(),max:1});client=await owner.connect();
-    for(const role of Object.keys(actors)as Role[]){const account=runtime.accounts.find(row=>row.actorId===actorId(role));if(!account)throw Error('Isolated synthetic identity missing.');const auth=createClient(config.supabaseUrl!,config.supabasePublishableKey!,{auth:{persistSession:false,autoRefreshToken:false}});const login=await auth.auth.signInWithPassword({email:account.email,password:account.password});if(!login.data.session)throw Error('Isolated synthetic sign-in failed.');tokens[role]=login.data.session.access_token;}
+    if(runtimeMode==='ISOLATED'&&(!path||!isAbsolute(path)))throw Error('Explicit absolute isolated thinking-focus runtime file required.');
+    const runtime=runtimeMode==='ISOLATED'?isolatedThinkingFocusRuntime(path,await readThinkingFocusJson(()=>readFile(path??'','utf8')),actorIds):standardThinkingFocusRuntime(process.env,await readThinkingFocusJson(()=>readFile('supabase/seed/identities.json','utf8')),await readThinkingFocusJson(()=>readFile('.local/runtime-secrets.json','utf8')),actorIds);
+    const config=runtime.config;
+    owner=new Pool({connectionString:runtime.ownerDatabaseUrl,max:1});client=await owner.connect();
+    for(const role of Object.keys(actors)as Role[]){const account=runtime.accounts.find(row=>row.actorId===actorId(role));if(!account)throw Error('Verified synthetic identity missing.');const auth=createClient(config.supabaseUrl!,config.supabasePublishableKey!,{auth:{persistSession:false,autoRefreshToken:false}});const login=await auth.auth.signInWithPassword({email:account.email,password:account.password});if(!login.data.session||login.data.user?.id!==actorId(role))throw Error('Verified synthetic sign-in failed.');tokens[role]=login.data.session.access_token;}
     await client.query('BEGIN');
     await client.query("insert into app.schools(id,name,country_code)values($1,'Thinking focus integration rollback school','QA')",[school]);
     for(const role of Object.keys(actors)as Role[]){await client.query("insert into app.memberships(school_id,actor_id,role,effective_from)values($1,$2,$3,now()-interval '1 day')",[school,actorId(role),role==='wrongTeacher'?'teacher':role]);await client.query('insert into app.people(school_id,actor_id,display_name,synthetic)values($1,$2,$3,true)',[school,actorId(role),`Reviewed ${role}`]);}
@@ -56,7 +57,7 @@ describe.skipIf(!enabled)('reviewed thinking focus — isolated real Auth/contro
     app=await NestFactory.create<NestFastifyApplication>(ThinkingTestModule,new FastifyAdapter({logger:false}),{logger:false});await app.init();await app.getHttpAdapter().getInstance().ready();
     const reference=await command('teacher','/v1/academic-references',{version:'school-review-v1',title:'Reviewed procedure objective',description:'School-authored synthetic objective.'});referenceId=reference.id;await command('coordinator',`/v1/academic-references/${referenceId}/approve`,{});
   },60000);
-  afterAll(async()=>{if(app)await app.close();if(client){await client.query('ROLLBACK');client.release();}if(owner)await owner.end();});
+  afterAll(async()=>withFixtureCleanup(async()=>{},[async()=>{if(app)await app.close();},async()=>{if(client)await client.query('ROLLBACK');},()=>{if(client)client.release();},async()=>{if(owner)await owner.end();}]));
   async function request(role:Role,path:string,body?:Record<string,unknown>,key:string=randomUUID()){return app.inject({method:body===undefined?'GET':'POST',url:path,headers:{authorization:`Bearer ${tokens[role]}`,'x-school-id':school,'idempotency-key':key},payload:body});}
   async function command(role:Role,path:string,body:Record<string,unknown>,key?:string):Promise<Row>{const response=await request(role,path,body,key);expect(response.statusCode,`HTTP ${response.statusCode} ${path}`).toBe(200);return response.json()as Row;}
   async function read(role:Role,path:string){const response=await request(role,path);expect(response.statusCode,`HTTP ${response.statusCode} ${path}`).toBe(200);return thinkingFocusResponseSchema.parse(response.json());}

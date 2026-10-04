@@ -3,11 +3,17 @@ export const auditActions = {
   'activity.create': ['Activity creation', 'إنشاء نشاط'],
   'activity.complete': ['Activity completion', 'إكمال نشاط'],
   'assessment.preparation': ['Assessment preparation', 'إعداد تقييم'],
+  'assessment.create': ['Assessment creation', 'إنشاء تقييم'],
   'assessment.publish': ['Assessment publication', 'نشر تقييم'],
   'course.create': ['Course creation', 'إنشاء مقرر'],
   'course.publish': ['Course publication', 'نشر مقرر'],
   'unit.create': ['Learning unit creation', 'إنشاء وحدة تعلّم'],
   'lesson.create': ['Lesson creation', 'إنشاء درس'],
+  'learning.content.draft': ['Learning content draft', 'مسودة محتوى تعلّم'],
+  'learning.content.publish': ['Learning content publication', 'نشر محتوى تعلّم'],
+  'marking.create': ['Assessment marking record', 'سجل تصحيح تقييم'],
+  'submission.create': ['Work submission record', 'سجل تسليم عمل'],
+  'learner.observation_policy.approved': ['Learning observation policy approval', 'اعتماد سياسة رصد التعلّم'],
   'result.release': ['Academic result release', 'إصدار نتيجة أكاديمية'],
   'result.publication': ['Parent result sharing change', 'تغيير مشاركة النتائج مع وليّ الأمر'],
   'recommendation.created': ['Support proposal creation', 'إنشاء مقترح دعم'],
@@ -63,6 +69,7 @@ export const auditFixtureActions = {
   'reference.submission': ['Reference-school submission record', 'سجل تسليم المدرسة المرجعية'],
 } as const;
 export const auditSourceTypes = {
+  learner_observation_policy: ['Learning observation policy', 'سياسة رصد التعلّم'], learning_content: ['Learning content', 'محتوى تعلّم'], marking: ['Assessment marking', 'تصحيح تقييم'], submission: ['Submitted work', 'عمل مسلّم'],
   activity: ['Activity', 'نشاط'], assessment: ['Assessment', 'تقييم'], course: ['Course', 'مقرر'], unit: ['Learning unit', 'وحدة تعلّم'], lesson: ['Lesson', 'درس'], result: ['Academic result', 'نتيجة أكاديمية'],
   attention_policy: ['Attention policy', 'سياسة الانتباه'], curriculum: ['Curriculum context', 'سياق المنهج'], intervention: ['Practice task', 'مهمة تدريب'], learner: ['Learner context', 'سياق الطالب'], outcome: ['Outcome comparison', 'مقارنة النتائج'], reference: ['Learning reference', 'مرجع تعلّم'], reference_fixture: ['Reference-school record', 'سجل المدرسة المرجعية'], school: ['School', 'المدرسة'], school_operation: ['School operation', 'إجراء مدرسي'], thinking_focus: ['Thinking focus', 'محور التفكير'], attendance: ['Attendance', 'الحضور'], recommendation: ['Support proposal', 'مقترح دعم'], intelligence_run: ['Analysis record', 'سجل تحليل'], asset: ['Private file source', 'مصدر ملف خاص'],
 } as const;

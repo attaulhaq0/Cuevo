@@ -1,8 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertEdgeWorkerLocal, assertIdleWorkerDispatch, assertStartedEdgeRuntime, edgeRuntimeConnected, requireOwnedGatewayReload, assertOwnedWorkerEvents, assertOpaqueWake, signedWakeHeaders, ownedCronUnscheduleSql, requireCronRemoval, edgeVerificationFailure, safeEdgeFailureCode, readEdgeInventory, edgeWorkerEvidence, requireEdgeArtifactSource, requireNoAnalyticsActivation } from './edge-worker';
+import { assertEdgeWorkerLocal, assertIdleWorkerDispatch, assertStartedEdgeRuntime, edgeRuntimeConnected, requireOwnedGatewayReload, assertOwnedWorkerEvents, assertOpaqueWake, signedWakeHeaders, ownedCronUnscheduleSql, requireCronRemoval, edgeVerificationFailure, safeEdgeFailureCode, readEdgeInventory, edgeWorkerEvidence, requireEdgeArtifactSource, requireNoAnalyticsActivation, inspectUnsignedWorkerResponse } from './edge-worker';
 const status = { API_URL: 'http://127.0.0.1:56321', DB_URL: 'postgresql://postgres:fixture@127.0.0.1:56322/postgres' };
 const worker = 'postgresql://cuevo_worker:fixture@127.0.0.1:56322/postgres';
+
+test('unsigned HTTP readiness identifies the exact worker denial rather than gateway status alone', async () => {
+  const response = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  assert.equal(await inspectUnsignedWorkerResponse(response(401, { code: 'WORKER_AUTH_REQUIRED' })), 'WORKER_AUTH_REQUIRED');
+  for (const [status, body] of [[401, { message: 'No API key found in request' }], [401, { code: 'UNAUTHORIZED_NO_AUTH_HEADER', message: 'Missing authorization header' }], [503, { message: 'name resolution failed' }], [404, { code: 'NOT_FOUND' }], [502, { message: 'upstream unavailable' }]]) assert.equal(await inspectUnsignedWorkerResponse(response(status as number, body)), 'UNKNOWN_RESPONSE');
+  assert.equal(await inspectUnsignedWorkerResponse(response(401, { code: 'WORKER_AUTH_REQUIRED', private: 'unexpected-body' })), 'UNKNOWN_RESPONSE');
+  assert.equal(await inspectUnsignedWorkerResponse(new Response('private-html', { status: 503 })), 'UNKNOWN_RESPONSE');
+  let discarded = false;
+  const unknownBody = new ReadableStream({ cancel() { discarded = true; } });
+  assert.equal(await inspectUnsignedWorkerResponse(new Response(unknownBody, { status: 503 })), 'UNKNOWN_RESPONSE');
+  assert.equal(discarded, true);
+});
+test('worker HTTP identity inspection bounds private response reads and stores no response content', async () => {
+  let canceled = false;
+  const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('private-response-body'.repeat(100))); }, cancel() { canceled = true; } });
+  assert.equal(await inspectUnsignedWorkerResponse(new Response(body, { status: 401 })), 'UNKNOWN_RESPONSE');
+  assert.equal(canceled, true);
+});
+test('worker response cancellation cannot hold identity inspection beyond its bounded read deadline', async () => {
+  const stalled = () => new ReadableStream<Uint8Array>({ cancel: () => new Promise<void>(() => {}) });
+  assert.equal(await inspectUnsignedWorkerResponse(new Response(stalled(), { status: 503 })), 'UNKNOWN_RESPONSE');
+  const started = performance.now();
+  assert.equal(await inspectUnsignedWorkerResponse(new Response(stalled(), { status: 401 })), 'UNKNOWN_RESPONSE');
+  assert.ok(performance.now() - started < 1500);
+});
+test('unsigned worker identity cannot reach processing when the actual handler rejects absent authentication', async () => {
+  const { createWorkerHandler } = await import('../../apps/worker/src/jobs/outbox/edge-handler');
+  let connected = false;
+  const handler = createWorkerHandler({ purposeKey: 'a'.repeat(64), databaseUrl: 'private-fixture-url' }, async () => { connected = true; throw Error('Must not connect'); });
+  const response = await handler(new Request('http://127.0.0.1/functions/v1/cuevo-worker', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: 'b53cfa42-4280-4d87-bb83-e4c19d6085f6' }) }));
+  assert.equal(await inspectUnsignedWorkerResponse(response), 'WORKER_AUTH_REQUIRED');
+  assert.equal(connected, false);
+});
 
 test('runtime verification admits only current hashed worker and exact portable analytics sources', () => {
   requireEdgeArtifactSource('apps/worker/src/edge.ts');

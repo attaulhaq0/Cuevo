@@ -56,7 +56,7 @@ test.describe('actual isolated Student learning journey', () => {
     if (locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
     await page.getByRole('button', { name: `${locale === 'ar' ? 'فتح الدرس' : 'Open lesson'}: Explain one check`, exact: true }).click();
     await page.getByRole('button', { name: `${locale === 'ar' ? 'فتح النشاط' : 'Open activity'}: ${title}`, exact: true }).click();
-    await expect(page.locator('.student-learning-journey__panel > header h3')).toBeFocused();
+    await expect(page.locator('.student-learning-journey__panel > header h2')).toBeFocused();
     return page.locator('.student-learning-journey__panel');
   }
   async function capture(page: Page, info: TestInfo, name: string) {

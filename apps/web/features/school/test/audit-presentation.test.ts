@@ -65,3 +65,28 @@ test('Arabic reading uses localized action, unknown and status with semantic LTR
   assert.equal(record.querySelector('header h3')?.textContent, 'تغيير صلاحيات الأسرة');
   assert.equal(record.querySelector('.school-audit-source')?.textContent.includes('school_operation'), false);
 });
+
+test('current native writer actions have bilingual captions without changing source or outcome meaning', () => {
+  const cases = [
+    ['learner.observation_policy.approved', 'learner_observation_policy', 'Learning observation policy approval', 'اعتماد سياسة رصد التعلّم', 'Learning observation policy', 'سياسة رصد التعلّم'],
+    ['assessment.create', 'assessment', 'Assessment creation', 'إنشاء تقييم', 'Assessment', 'تقييم'],
+    ['learning.content.draft', 'learning_content', 'Learning content draft', 'مسودة محتوى تعلّم', 'Learning content', 'محتوى تعلّم'],
+    ['learning.content.publish', 'learning_content', 'Learning content publication', 'نشر محتوى تعلّم', 'Learning content', 'محتوى تعلّم'],
+    ['marking.create', 'marking', 'Assessment marking record', 'سجل تصحيح تقييم', 'Assessment marking', 'تصحيح تقييم'],
+    ['submission.create', 'submission', 'Work submission record', 'سجل تسليم عمل', 'Submitted work', 'عمل مسلّم'],
+  ];
+  for (const [action, objectType, en, ar, kindEn, kindAr] of cases) {
+    for (const [locale, title, kind] of [['en', en, kindEn], ['ar', ar, kindAr]] as const) {
+      const source = { ...row, action, objectType, outcome: 'failed' as const };
+      const view = auditPresentation(source, locale);
+      assert.equal(view.title, title); assert.equal(view.kind, kind);
+      assert.equal(view.source, locale === 'en' ? 'Source context unavailable' : 'سياق المصدر غير متاح');
+      assert.equal(view.status, locale === 'en' ? 'Failed' : 'فشل');
+      const document = parse(render([source], locale));
+      assert.equal(document.querySelector('header h3')?.textContent, title);
+      assert.equal(document.querySelector('details')?.hasAttribute('open'), false);
+      assert.equal(document.querySelector('.school-audit-source')?.textContent, `${view.source} · ${kind}`);
+      assert.equal(auditPresentation({ ...source, objectType: 'reference_fixture' }, locale).title, locale === 'en' ? 'Action description unavailable' : 'وصف الإجراء غير متاح');
+    }
+  }
+});

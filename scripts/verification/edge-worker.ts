@@ -23,6 +23,26 @@ export function requireNoAnalyticsActivation(value: unknown) {
 type DispatchControl = { enabled: boolean; state: string; wake_id: string | null; endpoint: string | null; vault_secret_name: string | null; allow_local: boolean };
 type EventRecord = { id: string; school_id: string; actor_id: string; type: string; entity_type: string; entity_id: string; version: number; metadata: unknown; deduplication_key: string };
 type Check = { name: string; passed: boolean; durationMs?: number; count?: number };
+/** HTTP status alone may belong to Kong or an unavailable default route. */
+export async function inspectUnsignedWorkerResponse(response: Response): Promise<'WORKER_AUTH_REQUIRED' | 'UNKNOWN_RESPONSE'> {
+  if (response.status !== 401) { void response.body?.cancel().catch(() => undefined); return 'UNKNOWN_RESPONSE'; }
+  const reader = response.body?.getReader();
+  if (!reader) return 'UNKNOWN_RESPONSE';
+  let timedOut = false, size = 0;
+  const deadline = performance.now() + 1000;
+  const chunks: Uint8Array[] = [];
+  let timer: ReturnType<typeof setTimeout>;
+  const expired = new Promise<null>(done => { timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => undefined); done(null); }, 1000); });
+  try {
+    for (;;) { const part = await Promise.race([reader.read(), expired]); if (!part) return 'UNKNOWN_RESPONSE'; if (part.done) break; size += part.value.byteLength; if (size > 512) { void reader.cancel().catch(() => undefined); return 'UNKNOWN_RESPONSE'; } chunks.push(part.value); }
+    if (timedOut || performance.now() >= deadline) { void reader.cancel().catch(() => undefined); return 'UNKNOWN_RESPONSE'; }
+    const bytes = new Uint8Array(size); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).join('|') === 'code' && 'code' in value && value.code === 'WORKER_AUTH_REQUIRED' ? 'WORKER_AUTH_REQUIRED' : 'UNKNOWN_RESPONSE';
+  } catch { return 'UNKNOWN_RESPONSE'; }
+  finally { clearTimeout(timer!); reader.releaseLock(); }
+}
 
 export function assertEdgeWorkerLocal(status: Pick<LocalStatus, 'API_URL' | 'DB_URL'>, workerConnection: string | undefined) {
   assertCuevoLocalTarget(status);
@@ -95,7 +115,11 @@ async function main() {
   const workerUrl = assertEdgeWorkerLocal(status, process.env.WORKER_DATABASE_URL);
   for (const port of [3000, 4000, 4001]) { let reachable = false; try { await fetch(`http://127.0.0.1:${port}/health/live`, { signal: AbortSignal.timeout(800) }); reachable = true; } catch { /* Stopped application precondition. */ } if (reachable) throw Error('Stop Cuevo applications before exclusive Edge verification.'); }
   const publicEndpoint = status.API_URL.replace(/\/$/, '') + '/functions/v1/cuevo-worker';
-  try { const existing = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), signal: AbortSignal.timeout(1500) }); if ([200, 202, 400, 401, 405, 503].includes(existing.status)) throw Error('An existing Edge worker is active; stop it before verification.'); } catch (error) { if (error instanceof Error && error.message.startsWith('An existing')) throw error; }
+  let existingWorker = false;
+  let baselineHttp: { status: number | null; identity: 'WORKER_AUTH_REQUIRED' | 'UNKNOWN_RESPONSE' | 'TRANSPORT_UNAVAILABLE' } = { status: null, identity: 'TRANSPORT_UNAVAILABLE' };
+  try { const existing = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); const identity = await inspectUnsignedWorkerResponse(existing); baselineHttp = { status: existing.status, identity }; existingWorker = identity === 'WORKER_AUTH_REQUIRED'; } catch { /* Docker inventory independently rejects every active runtime baseline. */ }
+  process.stdout.write('Edge baseline HTTP observation: ' + JSON.stringify(baselineHttp) + '\n');
+  if (existingWorker) throw Error('An existing Edge worker is active; stop it before verification.');
   const docker = (...args: string[]) => safeExecute('docker', args);
   const databaseFormat = '{"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}}},"NetworkSettings":{"Ports":{{json .HostConfig.PortBindings}},"Networks":{{json .NetworkSettings.Networks}}}}';
   validateOutageDatabaseContainer(JSON.parse(await docker('inspect', '--format', databaseFormat, 'supabase_db_cuevo')));
@@ -107,6 +131,7 @@ async function main() {
   const beforeContainers = await containers();
   const baselineGateway = beforeContainers.find(row => row.name === '/supabase_kong_cuevo');
   const baselineEdge = beforeContainers.find(row => row.name === '/supabase_edge_runtime_cuevo');
+  requireOwnedGatewayReload(baselineGateway, baselineGateway);
   if (baselineEdge?.running) throw Error('Existing Cuevo Edge runtime must be stopped before verification.');
   const unrelated = beforeContainers.filter(row => row.name !== '/supabase_edge_runtime_cuevo');
   const artifactPath = resolve('.local/edge-artifacts/cuevo-worker/artifact.json');
@@ -154,7 +179,7 @@ async function main() {
     const requestId = (await client!.query("select net.http_post(url:=$1,headers:=jsonb_build_object('Content-Type','application/json'),body:=jsonb_build_object('version',1,'wakeId',$2::uuid),timeout_milliseconds:=5000)as id", [endpoint, randomUUID()])).rows[0]?.id;
     const probe = String(requestId); if (!/^[1-9][0-9]*$/.test(probe)) throw Error('Owned internal route probe identity unavailable.');
     probeRequestIds.push(probe);
-    await waitFor(async () => (await client!.query('select status_code from net._http_response where id=$1::bigint', [probe])).rows[0]?.status_code === 401, 15000);
+    await waitFor(async () => { const result = (await client!.query('select status_code,content from net._http_response where id=$1::bigint', [probe])).rows[0]; return result?.status_code === 401 && typeof result.content === 'string' && Buffer.byteLength(result.content) <= 512 && await inspectUnsignedWorkerResponse(new Response(result.content, { status: 401 })) === 'WORKER_AUTH_REQUIRED'; }, 15000);
     check(name + '-internal-gateway-auth-ready', true);
   };
   try {
@@ -174,7 +199,7 @@ async function main() {
     server = spawnOwnedProcess(process.execPath, [cli, 'functions', 'serve', 'cuevo-worker', '--env-file=' + envFile, '--network-id=cuevo-local'], { cwd: resolve('.'), env: childEnvironment, stdio: 'ignore' });
     server.on('error', () => { canceled = true; });
     phase = 'AUTH';
-    await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), signal: AbortSignal.timeout(1500) }); return response.status === 401; } catch { return false; } }, 30000);
+    await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
     await waitFor(async () => { const current = (await containers()).find(row => row.name === '/supabase_edge_runtime_cuevo'); if (!edgeRuntimeConnected(current)) return false; ownedEdge = assertStartedEdgeRuntime(baselineEdge, current); return true; }, 30000);
     check('owned-edge-runtime', true);
     phase = 'GATEWAY_INITIAL';
@@ -215,7 +240,7 @@ async function main() {
     phase = 'RESTART';
     server = spawnOwnedProcess(process.execPath, [cli, 'functions', 'serve', 'cuevo-worker', '--env-file=' + envFile, '--network-id=cuevo-local'], { cwd: resolve('.'), env: childEnvironment, stdio: 'ignore' }); server.on('error', () => { canceled = true; });
     await waitFor(async () => { const current = (await containers()).find(row => row.name === '/supabase_edge_runtime_cuevo'); if (!edgeRuntimeConnected(current)) return false; ownedEdge = assertStartedEdgeRuntime(stoppedEdge ? { ...stoppedEdge, running: false } : undefined, current); return true; }, 30000);
-    await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), signal: AbortSignal.timeout(1500) }); return response.status === 401; } catch { return false; } }, 30000);
+    await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
     phase = 'GATEWAY_RELOAD';
     await readyGateway('restart');
     phase = 'RECOVERY';

@@ -43,6 +43,7 @@ test('reviewed thinking focus follows the Student course journey and immutable p
   const preparation = await request('teacher', `/assessments/${task.id}`);
   await request('teacher', `/assessments/${task.id}/publish`, { expectedPreparationVersion: preparation.preparationVersion, expectedPolicyVersion: preparation.policyVersion, expectedAvailabilityVersion: preparation.availabilityVersion });
   const activity = await request('teacher', `/lessons/${lesson.id}/activities`, { title: `Explain the choice ${suffix}`, instructions: task.instructions, kind: 'assignment', sequence: 1 });
+  const practice = await request('teacher', `/lessons/${lesson.id}/activities`, { title: `Practice the method ${suffix}`, instructions: 'Explain one checking step without a linked response task.', kind: 'practice', sequence: 2 });
   const content = await request('teacher', `/learning-content/activity/${activity.id}`);
   await request('teacher', `/learning-content/activity/${activity.id}/draft`, { resource: 'activity', expectedRevision: content.draftRevision, title: activity.title, content: task.instructions, kind: 'assignment', assessmentId: task.id, reason: 'Link the exact same-course response task.' });
   const draftContent = await request('teacher', `/learning-content/activity/${activity.id}`);
@@ -59,6 +60,11 @@ test('reviewed thinking focus follows the Student course journey and immutable p
   await page.locator('.learning-unit-directory').getByRole('button', { name: new RegExp(`Checking unit ${suffix}`) }).click();
   await page.getByRole('button', { name: `Open lesson: Checking lesson ${suffix}`, exact: true }).click();
   const journey = page.locator('.student-learning-journey'); await expect(journey).toBeVisible();
+  await journey.getByRole('button', { name: `Open activity: ${practice.title}`, exact: true }).click();
+  await journey.getByRole('button', { name: 'Open this task', exact: true }).click();
+  await expect(journey.locator('.activity-section > h3.activity-section__title')).toHaveText(practice.title);
+  for (const locale of ['English', 'العربية']) { await page.getByRole('button', { name: locale, exact: true }).click(); if (locale === 'العربية') await journey.getByRole('button', { name: 'فتح هذه المهمة', exact: true }).click(); expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]); }
+  await page.getByRole('button', { name: 'English', exact: true }).click();
   await journey.getByRole('button', { name: `Open activity: Explain the choice ${suffix}`, exact: true }).click();
   const focus = journey.locator('.student-learning-journey__thinking');
   await expect(focus).toContainText('Evaluate'); await expect(focus).toContainText('Understand');

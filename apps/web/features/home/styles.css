@@ -167,7 +167,7 @@
   .student-trail__content { grid-template-columns:minmax(0,1fr); padding:var(--space-3); gap:var(--space-3); }
   .student-trail__intro, .student-trail__current, .student-trail__goal, .student-trail__feedback, .student-trail__upcoming, .student-trail__companion-picker, .student-trail__stages, .student-trail__bottom-row { grid-column: 1; grid-row: auto; }
   .student-trail__current { grid-row: 2; }
-  .student-trail__task-art { block-size:clamp(6rem,26cqi,8rem); }
+  .student-trail__task-art { block-size:max(6rem,31cqi,min(32cqi,9.5rem)); }
   .student-trail .student-trail__work, .student-trail .student-trail__work-subject { inline-size: 42cqi; block-size: 30cqi; inset-inline-start: 23%; inset-block-end: 1cqi; }
   .student-trail .student-trail__pedestal { inline-size: 62cqi; block-size: 22cqi; inset-inline-start: 19%; inset-block-end: -2cqi; }
   .student-trail__foxi-crop { inline-size: 32cqi; max-inline-size: 10rem; inset-inline-end: 11%; }
@@ -184,5 +184,6 @@
   .student-trail__bottom-row, .student-trail__bottom-row:has(> :only-child) { grid-template-columns: minmax(0, 1fr); max-inline-size: none; }
 }
 @media (max-width: 540px) { .student-trail__stages { grid-template-columns: repeat(3, minmax(0, 1fr)); } .student-trail__stage-art { inline-size: 3.5rem; block-size: 3.5rem; } .student-trail__bottom-row { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1001px) and (max-width: 1100px) { .student-trail__task-art { block-size:max(7rem,43cqi,min(47cqi,12.2rem)); } }
 @media (max-width: 359px) { .student-trail__stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (prefers-reduced-motion: reduce) { .student-trail__stages { scroll-behavior: auto; } }
