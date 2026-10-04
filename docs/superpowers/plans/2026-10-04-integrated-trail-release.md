@@ -22,9 +22,9 @@
 
 ## Tasks
 
-- [ ] Capture the46 pending primary files from HEAD8ede801 with unchanged-source SHA256 proof; run source guards, typecheck/lint and observation-policy/command tests, then commit that isolated checkpoint.
-- [ ] Merge design HEADd91b9da into the integration branch without committing; reconcile every conflict by owner. Session/form must retain G continuation guards and immutable validator capture plus design route/child notices and original binary receipt validators. School/Progress integrate observation policy into the selected Trail owner.
-- [ ] Reconcile documents/maps/status and test/verification runners. Keep strengthened current account browser wrappers; update selectors for the one Trail UI. Review all same-name migration blobs and test discovery.
+- [x] Capture the46 pending primary files from HEAD8ede801 with unchanged-source SHA256 proof; run source guards, typecheck/lint and observation-policy/command tests, then commit that isolated checkpoint.
+- [x] Merge design HEADd91b9da into the integration branch without committing; reconcile every conflict by owner. Session/form must retain G continuation guards and immutable validator capture plus design route/child notices and original binary receipt validators. School/Progress integrate observation policy into the selected Trail owner.
+- [x] Reconcile documents/maps/status and test/verification runners. Keep strengthened current account browser wrappers; update selectors for the one Trail UI. Review all same-name migration blobs and test discovery.
 - [ ] Run architecture/docs/repository checks and fixtures, lint/typecheck, units, configured builds, browser secret checks and independent diff/security review. Fix reproduced failures through their owner with meaningful regression tests.
 - [ ] Commit the reconciled source, push only `codex/cuevo-integrated-review`, create and attach a draft PR against `main`, run existing Actions and inspect each exact-SHA job. Preserve failed evidence and fix failures; never weaken checks or relabel skipped evidence.
 - [ ] Run five-role real synthetic authentication/source/browser journeys against the integrated runtime and the isolated full CI database, including English/Arabic, desktop/mobile, zoom/reflow, current scope, denied/error and receipt recovery. Record exact commit/build/API/migration ownership.
