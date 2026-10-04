@@ -1,4 +1,18 @@
 .school-workspace { margin-block-start: var(--space-6); min-inline-size: 0; }
+.school-audit-records { display:grid;gap:var(--space-3); }
+.school-audit-row { margin:0;padding:var(--space-3); }
+.school-audit-row > header { display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:var(--space-2); }
+.school-audit-row h3 { font-size:var(--type-body);margin:0;overflow-wrap:anywhere; }
+.school-audit-source { margin-block:var(--space-2);font-size:var(--type-sm);overflow-wrap:anywhere; }
+.school-audit-context { display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);font-size:var(--type-sm);margin-block:var(--space-2); }
+.school-audit-context > div { display:flex;flex-wrap:wrap;gap:var(--space-2); }
+.school-audit-context dt { color:var(--color-text-secondary); }
+.school-audit-context dd,.school-audit-technical dd { margin:0;overflow-wrap:anywhere; }
+.school-audit-technical { font-size:var(--type-sm); }
+.school-audit-technical > summary { display:flex;align-items:center;min-block-size:2.75rem;cursor:pointer;color:var(--color-link); }
+.school-audit-technical > dl { display:grid;gap:var(--space-2);margin-block:var(--space-2); }
+.school-audit-technical > dl > div { display:grid;grid-template-columns:minmax(8rem,.3fr) minmax(0,1fr);gap:var(--space-2); }
+@media(max-width:767px){.school-audit-context{display:grid;gap:var(--space-2)}.school-audit-technical>dl>div{grid-template-columns:minmax(0,1fr);gap:var(--space-1)}}
 .school-automation-review > .cuevo-section-header { margin-block-end:var(--space-3); }
 .school-automation-help { font-size:var(--type-sm);margin-block-start:var(--space-1); }
 .school-automation-help p { max-inline-size:75ch; }

@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Progress's `report-theme.ts` captures only resolved presentation tokens; the public pure `@cuevo/ui` reading-document style creates self-contained native-result exports. Current report source/parsing/authorization stays in Progress/API Academic. Shared CommandForm's `command-field-value.ts` converts retained datetime values for native display without rewriting commands. School Audit's private caption/model/stateless reader lead with current human action/context while retaining source order, denial and closed provenance.
+
 The [4 October viewport density repair](design/2026-10-04-workspace-viewport-density.md) consolidates authenticated toolbar/actions/heading/pagination rhythm in `packages/ui`, with route spacing owned once by Shell. Current selected learning/source/learner work is composed through the same feature owners; first-useful-content and obstruction QA remain separate from backend/MVP acceptance. Authentication desktop/mobile stays unchanged by this repair.
 
 Its shared `cuevo-section-header` groups existing context and related filters/actions before the reading plane. Evaluation mode, Run status Refresh, School Audit/support, learning resources, portfolio collection creation, report-period/export and Admin recognition configuration use this responsive anatomy through their current owners. Controls and source/command authority stay single; mobile/RTL wrapping replaces empty desktop header space without hiding facts.

@@ -1,5 +1,7 @@
 # Shared web infrastructure
 
+CommandForm's `command-field-value.ts` converts an absolute retained ISO timestamp into the valid local minute display required by `datetime-local`. This is presentation only: original timezone/seconds/fractions, command body and idempotency key remain immutable for retry. Existing native working values and other field types are unchanged. The actual Admin Guardian journey verifies precise37.321-second payloads, aborted/malformed receipt recovery, valid nonblank retained input, stale revision409 and exact relationship restoration; generic input conversion tests cover malformed/zero/local values.
+
 Paged and bounded-list parsers call the item parser with only its source item. This reconciles canonical `fe04cab` and prevents array index/page contents from being misread as explicit context arguments. Owner parsers still validate selected learner/source scope; paging adds no authority.
 
 `api/client.ts` exposes `CommandJournal.pending()` as a read-only, deeply cloned list of original commands for feature-owned recovery. Features validate their own endpoint/payload before restoring intent; inspecting or changing a returned clone cannot replace a journal entry, settle a key, authorize a retry or expose another actor's state. Session scope changes retain the existing journal-clearing rules. The list is not a second task ledger or customer-facing source catalogue.

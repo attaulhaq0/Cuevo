@@ -41,3 +41,16 @@ test('standalone report labels the recorded source date truthfully and keeps nat
  assert.doesNotMatch(html,/Result released at/);assert.doesNotMatch(ar,/وقت إصدار النتيجة/);
  assert.match(html,/<p class="native" dir="ltr">0 \/ 10<\/p>/);assert.ok(html.includes('12:00 AM'));
 });
+test('download captures the approved semantic reading style without external assets or replacing native result facts',()=>{
+ const source=parseAcademicReport(report);
+ const html=renderAcademicReport(source,'en',{canvas:'rgb(9, 22, 44)',surface:'rgb(19, 37, 64)',muted:'rgb(28, 51, 82)',text:'rgb(237, 246, 255)',secondary:'rgb(192, 213, 237)',border:'rgb(56, 85, 120)',primary:'rgb(20, 95, 227)',fontFamily:'Arial, Tahoma, sans-serif'});
+ assert.match(html,/--document-primary:rgb\(20, 95, 227\)/);assert.match(html,/--document-text:rgb\(237, 246, 255\)/);
+ assert.doesNotMatch(html,/#23352a|#efefe8|url\(|@import|<link|<script/);
+ assert.match(html,/<p class="native" dir="ltr">0 \/ 10<\/p>/);assert.match(html,/NOT_ESTABLISHED/);assert.match(html,/@media print/);
+});
+test('report sharing describes school publication rather than Parent consent and keeps raw source versions closed',()=>{
+ const html=renderAcademicReport(parseAcademicReport(report),'en');
+ assert.doesNotMatch(html,/Parent approval/);assert.match(html,/School sharing/);
+ const primary=html.replace(/<details>[\s\S]*?<\/details>/g,'');
+ assert.doesNotMatch(primary,/v1/);assert.match(primary,/Source record date \(UTC\)/);
+});
