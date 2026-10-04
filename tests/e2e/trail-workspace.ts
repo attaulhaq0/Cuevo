@@ -36,11 +36,17 @@ export async function expectTrailWorkspace(page: Page, role?: string): Promise<v
 }
 
 /** Profile destinations are reached through the same visible popover as customers. */
+async function openVisibleTrailProfile(page: Page): Promise<void> {
+  const trigger = page.locator('.workspace-chrome__person > button');
+  await trigger.scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  await expect(page.locator('.workspace-chrome__profile')).toBeVisible();
+}
 export async function trailWorkspaceAction(page: Page, label: string): Promise<Locator> {
   if (['Access details', 'Access settings', 'تفاصيل الوصول', 'إعدادات الوصول', 'Account', 'الحساب'].includes(label)) {
-    const trigger = page.locator('.workspace-chrome__person > button');
-    await expect(trigger).toBeVisible();
-    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+    await openVisibleTrailProfile(page);
     const current = label === 'Access details' ? 'Access settings' : label === 'تفاصيل الوصول' ? 'إعدادات الوصول' : label;
     return page.locator('.workspace-chrome__profile').getByRole('button', { name: current, exact: true });
   }
@@ -50,15 +56,8 @@ export async function openTrailWorkspace(page: Page, label: string): Promise<voi
   const action = await trailWorkspaceAction(page, label); await expect(action).toBeVisible(); await expect(action).toBeEnabled(); await action.click();
 }
 export async function signOutTrailWorkspace(page: Page): Promise<void> {
-  const trigger = page.locator('.workspace-chrome__person > button');
-  await trigger.scrollIntoViewIfNeeded();
-  // The native profile closes on document scrolling. Let scrolling caused by
-  // reaching an offscreen trigger finish before opening its visible popover.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  await expect(trigger).toBeVisible();
-  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  await openVisibleTrailProfile(page);
   const locale = await page.locator('.workspace-chrome').getAttribute('lang');
-  await expect(page.locator('.workspace-chrome__profile')).toBeVisible();
   await page.locator('.workspace-chrome__profile').getByRole('button', { name: locale === 'ar' ? 'تسجيل الخروج' : 'Sign out', exact: true }).click();
   await expect(page.locator('.auth-form')).toBeVisible();
   await expect(page.getByRole('button', { name: locale === 'ar' ? 'تسجيل الدخول' : 'Sign in', exact: true })).toBeVisible();

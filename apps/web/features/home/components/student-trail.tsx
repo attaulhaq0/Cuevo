@@ -45,7 +45,7 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
     <div className="student-trail__content">
 
       <div className="student-trail__intro-row">
-        <header className="student-trail__intro"><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{context.displayName ? <>{t.hello}, <bdi>{context.displayName}</bdi>!</> : t.helloUnknown}</h1><h2>{t.nextStep}</h2><p>{t.introduction}</p></header>
+        <header className="student-trail__intro"><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{context.displayName ? <>{t.hello}{locale === 'ar' ? '، ' : ', '}<bdi>{context.displayName}</bdi>!</> : t.helloUnknown}</h1><h2>{t.nextStep}</h2><p>{t.introduction}</p></header>
       </div>
 
       <div className="student-trail__scene">

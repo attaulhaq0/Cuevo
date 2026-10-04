@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import { spawnOwnedProcess, stopOwnedProcesses } from './process';
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -39,4 +41,26 @@ test('POSIX shutdown forces a descendant that ignores TERM after its root exits'
     descendant = await new Promise<number>((resolve, reject) => { child.stdout!.once('data', value => resolve(Number(String(value).trim()))); child.once('error', reject); setTimeout(() => reject(Error('POSIX fixture readiness failed.')), 3000).unref(); });
     await stopOwnedProcesses([child]); assert.equal(await exited(child.pid!), true); assert.equal(await exited(descendant), true);
   } finally { await stopOwnedProcesses([child]).catch(() => undefined); if (descendant && alive(descendant)) process.kill(descendant, 'SIGKILL'); }
+});
+test('Playwright graceful POSIX teardown closes an owned detached writer and its inherited launcher pipe', { skip: process.platform === 'win32' }, async () => {
+  const { launchProcess } = createRequire(import.meta.url)('playwright-core/lib/coreBundle').utils as { launchProcess(options: Record<string, unknown>): Promise<{ launchedProcess: ReturnType<typeof spawn>; gracefullyClose(): Promise<void> }> };
+  const ownership = JSON.stringify(resolve(import.meta.dirname, 'process.ts'));
+  const script = `const {spawnOwnedProcess,stopOwnedProcesses}=require(${ownership});const child=spawnOwnedProcess(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:['ignore','pipe','pipe']});child.stdout.pipe(process.stdout,{end:false});child.stderr.pipe(process.stderr,{end:false});const keepAlive=setInterval(()=>{},1000);process.on('SIGTERM',()=>{void stopOwnedProcesses([child]).finally(()=>clearInterval(keepAlive));});process.stdout.write('owned-fixture-child:'+String(child.pid)+'\\n');`;
+  let launched: Awaited<ReturnType<typeof launchProcess>> | undefined, descendant = 0;
+  let resolveReady!: (pid: number) => void;
+  const ready = new Promise<number>(done => { resolveReady = done; });
+  const log = (message: string) => {
+    const match = /^\[pid=[1-9][0-9]*\]\[out\] owned-fixture-child:([1-9][0-9]*)$/.exec(message);
+    if (match) resolveReady(Number(match[1]));
+  };
+  try {
+    launched = await launchProcess({ command: process.execPath, args: ['--import', 'tsx', '-e', script], stdio: 'stdin', env: process.env, cwd: resolve(import.meta.dirname, '../..'), shell: false, tempDirectories: [], log, onExit() {}, attemptToGracefullyClose: async () => { process.kill(-launched!.launchedProcess.pid!, 'SIGTERM'); } });
+    descendant = await Promise.race([ready, new Promise<never>((_, reject) => setTimeout(() => reject(Error('Owned launcher fixture readiness failed.')), 3000).unref())]);
+    assert.ok(descendant > 0);
+    await Promise.race([launched.gracefullyClose(), new Promise<never>((_, reject) => setTimeout(() => reject(Error('Owned graceful launcher fixture did not close.')), 3000).unref())]);
+    assert.equal(await exited(descendant), true);
+  } finally {
+    if (descendant && alive(descendant)) process.kill(-descendant, 'SIGKILL');
+    if (launched?.launchedProcess.pid && alive(launched.launchedProcess.pid)) process.kill(-launched.launchedProcess.pid, 'SIGKILL');
+  }
 });

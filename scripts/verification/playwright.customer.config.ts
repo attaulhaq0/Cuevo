@@ -14,5 +14,5 @@ export default defineConfig({
     { name: 'customer-firefox', use: { browserName: 'firefox' } },
     { name: 'customer-webkit', use: { browserName: 'webkit' } },
   ],
-  webServer: { command: 'node --import tsx scripts/verification/production-runtime.ts', cwd: root, url: 'http://localhost:3000', reuseExistingServer: false, timeout: 30000 },
+  webServer: { command: 'node --import tsx scripts/verification/production-runtime.ts', cwd: root, url: 'http://localhost:3000', reuseExistingServer: false, timeout: 30000, gracefulShutdown: { signal: 'SIGTERM', timeout: 10000 } },
 });

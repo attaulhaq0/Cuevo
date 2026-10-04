@@ -57,6 +57,12 @@ test('Arabic uses the same composition and localized unknown states with determi
   const value = context(); const first = render(value, 'ar'); const second = render(value, 'ar');
   assert.equal(first, second); assert.match(first, /lang="ar" dir="rtl"/); assert.match(first, /مرحبًا بعودتك/); assert.match(first, /النقاط المسجّلة غير متاحة بعد/);
 });
+
+test('known Student greeting uses localized Arabic punctuation and keeps the name bidi-isolated', () => {
+  const value = context(); value.displayName = 'Lina Al-Kuwari';
+  assert.match(render(value, 'ar'), /مرحبًا، <bdi>Lina Al-Kuwari<\/bdi>!/);
+  assert.match(render(value, 'en'), /Hello, <bdi>Lina Al-Kuwari<\/bdi>!/);
+});
 test('view has no autonomous award path and does not turn unknown participation into an unchecked choice', () => {
   const value = context(); value.classChallenge = { title: 'Share a method', description: 'Learning together', periodLabel: null, alias: null, participating: null, participationLabel: 'Participation is unavailable' };
   const html = render(value); assert.match(html, /role="status">Participation is unavailable/); assert.doesNotMatch(html, /type="checkbox"/); assert.doesNotMatch(html, /\b(?:Level|XP|earned|award)\b/i);

@@ -32,6 +32,9 @@ test('sign-out reaches an offscreen native profile after its document scroll has
   const trigger = page.locator('.workspace-chrome__person > button');
   const bounds = (await trigger.boundingBox())!;
   expect(bounds.y + bounds.height).toBeLessThan(0);
+  await openTrailWorkspace(page, 'Access settings');
+  await expect(page.getByRole('heading', { name: 'Your school access', exact: true })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 900));
   await signOutTrailWorkspace(page);
   await expect(page.getByLabel('School email', { exact: true })).toBeVisible();
   await expect(page.locator('.workspace-chrome')).toHaveCount(0);

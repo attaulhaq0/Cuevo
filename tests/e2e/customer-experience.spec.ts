@@ -79,7 +79,7 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
   }
   if (name === 'Overview') {
     await expectTrailWorkspace(page, role);
-    const required: Record<CustomerRole, string> = { admin: 'تهيئة المدرسة', coordinator: 'شواهد الصف', teacher: 'السجلات التي تحتاج انتباهك', student: 'خطوتك التالية في التعلّم', parent: 'التعلّم، بوضوح' };
+    const required: Record<CustomerRole, string> = { admin: 'سياق المدرسة', coordinator: 'شواهد الصف', teacher: 'مساحات عملك', student: 'خطوتك التالية في التعلّم', parent: 'كيف يمكنك المساعدة' };
     await expect(main.getByRole('heading', { name: required[role], exact: true })).toBeVisible();
   } else if (name === 'School') {
     const expected = role === 'admin' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'الحسابات والدعوات', 'سجل تدقيق المدرسة', 'مراجعة الأتمتة', 'فترة ملاحظات التعلّم', 'العمليات اليومية']
@@ -96,10 +96,12 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
   } else if (name === 'Development') {
     await selector('فترة التعلّم', 'اختر فترة');
     if (staff) await selector('الطالب', 'اختر طالبًا');
-    await expect(main.getByText('اختر فترة تعلّم لعرض نقاطها وأنشطتها وإنجازاتها المسجّلة.',{exact:true})).toBeVisible();
+    if (role === 'student' || role === 'admin') await expect(main.getByText('اختر فترة تعلّم لعرض نقاطها وأنشطتها وإنجازاتها المسجّلة.',{exact:true}).first()).toBeVisible();
+    else await expect(main.getByText('اختر طالبًا مكتمل السياق المدرسي الحالي لفتح نموّه الشخصي.', { exact: true })).toBeVisible();
   } else if (name === 'Curriculum context') {
-    await expect(tabs.getByRole('button')).toHaveText(['مصادر المنهج', 'أهداف التعلّم', 'برامج المدرسة', 'الولاية وأطر الجودة']);
-    await expect(tabs.getByRole('button', { name: 'مصادر المنهج', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const sourceTabs = main.locator('.curriculum-workspace__navigation').getByRole('group', { name: destination.label, exact: true });
+    await expect(sourceTabs.getByRole('button')).toHaveText(['مصادر المنهج', 'أهداف التعلّم', 'برامج المدرسة', 'الولاية وأطر الجودة']);
+    await expect(sourceTabs.getByRole('button', { name: 'مصادر المنهج', exact: true })).toHaveAttribute('aria-pressed', 'true');
   } else if (name === 'Learning') {
     await expect(tabs.getByRole('button')).toHaveText(manager || role === 'student' ? ['المقررات', 'التقييمات', 'التسليمات'] : ['المقررات', 'التقييمات']);
     await expect(tabs.getByRole('button', { name: 'المقررات', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -116,14 +118,16 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
       : role === 'teacher' ? ['المقترحات', 'مهام التدريب', 'النتائج', 'حالة التحليلات', 'ملاحظات التقييم', 'اعتماد التنفيذ']
         : role === 'student' ? ['مهام التدريب', 'النتائج'] : ['المقترحات', 'مهام التدريب', 'النتائج'];
     await expect(tabs.getByRole('button')).toHaveText(expected);
-    await expect(tabs.getByRole('button', { name: role === 'student' ? 'مهام التدريب' : 'المقترحات', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const selectedTab = tabs.getByRole('button', { name: role === 'student' ? 'مهام التدريب' : 'المقترحات', exact: true });
+    await selectedTab.click(); await settled(page); await expect(selectedTab).toHaveAttribute('aria-pressed', 'true');
   } else if (name === 'Access settings') {
     await expect(main.getByRole('heading', { name: 'العضوية الحالية', exact: true })).toBeVisible();
     await expect(main.getByRole('heading', { name: 'الميزات التي توفرها مدرستك', exact: true })).toBeVisible();
   } else if (name === 'Account') {
     await expect(main.getByRole('heading', { name: 'سياق الطالب', exact: true })).toBeVisible();
     await expect(main.getByRole('button', { name: 'تحديث سياق الطالب', exact: true })).toBeVisible();
-    if (role !== 'student') await selector('اختر الطالب', 'اختر الطالب');
+    if (role === 'parent') await selector('الطفل', 'اختر الطفل لعرض سجلاته');
+    else if (role !== 'student') await selector('اختر الطالب', 'اختر الطالب');
   }
 }
 async function capture(page: Page, name: string) { const directory = resolve(evidence, runId, test.info().project.name); await mkdir(directory, { recursive: true }); await page.screenshot({ path: resolve(directory, name), fullPage: false }); }
@@ -336,7 +340,7 @@ test('all roles use readable primary headings and selectors across current Engli
       const choice = await trailWorkspaceAction(page, destination.label);
       await choice.click(); await settled(page);
       if (!['Access settings', 'Account'].includes(name)) await expect(choice).toHaveAttribute('aria-current', 'page');
-      await arabicPrimaryLabels(page, role, name, destination);
+      await test.step(`${role}/${name}: Arabic source labels and current role context`, () => arabicPrimaryLabels(page, role, name, destination));
       await settled(page);
       const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td').allTextContents();
       expect(primary.join(' '), `${role}/${name} Arabic primary labels`).not.toMatch(identifier);
@@ -355,16 +359,26 @@ test('a completed learning activity remains completed after leaving and reopenin
   const course = await command(page, teacherToken, '/v1/courses', { classId, subjectId, title, description: 'A source-backed learning practice.' });
   const unit = await command(page, teacherToken, `/v1/courses/${course.id}/units`, { title: 'Checking steps', sequence: 1 });
   const lesson = await command(page, teacherToken, `/v1/units/${unit.id}/lessons`, { title: 'Explain a check', sequence: 1, body: 'Work through your example and explain how you checked it.' });
-  await command(page, teacherToken, `/v1/lessons/${lesson.id}/activities`, { title: 'Record your practice', sequence: 1, kind: 'practice', instructions: 'Complete a checking step.' });
+  const activity = await command(page, teacherToken, `/v1/lessons/${lesson.id}/activities`, { title: 'Record your practice', sequence: 1, kind: 'practice', instructions: 'Complete a checking step.' });
   await command(page, teacherToken, `/v1/courses/${course.id}/publish`, {});
   await signIn(page, all.find(row => row.role === 'student')!); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click();
   const row = page.locator('.course-list > li').filter({ hasText: title }); await findPaged(page, row);
   await row.getByRole('button', { name: 'Open course', exact: true }).click();
+  async function openPractice() {
+    await page.locator('.learning-unit-directory').getByRole('button', { name: /Checking steps/, exact: false }).click();
+    await page.getByRole('button', { name: 'Open lesson: Explain a check', exact: true }).click();
+    await page.getByRole('button', { name: 'Open activity: Record your practice', exact: true }).click();
+    await page.locator('.student-learning-journey').getByRole('button', { name: 'Open this task', exact: true }).click();
+  }
+  await openPractice();
+  const completionResponse = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/activities/${activity.id}/complete` && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Complete activity', exact: true }).click();
-  await expect(page.getByText('Activity completion confirmed.', { exact: true })).toBeVisible();
+  const completion = await completionResponse; expect(completion.ok()).toBe(true); const completedSource = await completion.json(); expect(completedSource.activityId).toBe(activity.id);
+  await expect(page.locator('.student-learning-journey').getByText('Recorded completion', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Back to courses', exact: true }).click(); await findPaged(page, row);
   await row.getByRole('button', { name: 'Open course', exact: true }).click();
-  await expect(page.getByText('Activity completion confirmed.', { exact: true })).toBeVisible();
+  await openPractice();
+  await expect(page.locator('.student-learning-journey').getByText('Recorded completion', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Complete activity', exact: true })).toHaveCount(0);
   await capture(page, '13-reopened-completed-practice.png');
 });
