@@ -2,6 +2,12 @@ import { LearningApiError } from '../../shared/api/client.ts';
 import { thinkingFocusResponseSchema, submissionArtifactSchema, submissionInputSchema, submissionWorkDraftResponseSchema, submissionWorkSourceSchema, type SubmissionArtifact, type ThinkingFocusResponse } from '@cuevo/contracts';
 
 export type Choice = { id: string; name: string;yearGroupName?:string;academicYearName?:string };
+/** In-memory editor intent never authorizes work or crosses a source revision. */
+export function currentTeacherSubmissionEditor(value: unknown, source: { id: string; revision: number; status: string }): 'return' | 'close' | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !['SUBMITTED','RESUBMITTED'].includes(source.status)) return null;
+  const intent=value as Record<string,unknown>;
+  return Object.keys(intent).length===3 && intent.id===source.id && intent.revision===source.revision && (intent.action==='return'||intent.action==='close') ? intent.action : null;
+}
 export function choiceLabel(choice:Choice){return[choice.name,choice.yearGroupName,choice.academicYearName].filter(Boolean).join(' · ');}
 export function staffCourseChoices(courses:Course[],classes:Choice[],subjects:Choice[],complete:boolean,unavailable:string){const rows=courses.map(course=>{const schoolClass=classes.filter(row=>row.id===course.classId),subject=subjects.filter(row=>row.id===course.subjectId);const context=schoolClass.length===1&&subject.length===1&&!!schoolClass[0].name.trim()&&!!subject[0].name.trim();return{value:course.id,label:[course.title.trim()||unavailable,...(context?[choiceLabel(schoolClass[0]),subject[0].name]:[unavailable])].join(' · '),requiresReview:!complete||!context||!course.title.trim()};});return rows.map(row=>({...row,requiresReview:row.requiresReview||rows.filter(other=>other.label===row.label).length!==1}));}
 export function staffRubricChoices(rows:{id:string;title:string;version:string}[],complete:boolean,unavailable:string){const choices=rows.map(row=>({value:row.id,label:[row.title.trim()||unavailable,row.version.trim()].filter(Boolean).join(' · '),requiresReview:!complete||!row.title.trim()||!row.version.trim()}));return choices.map(row=>({...row,requiresReview:row.requiresReview||choices.filter(other=>other.label===row.label).length!==1}));}

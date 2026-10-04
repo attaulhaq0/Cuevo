@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import type { Assessment, Submission, SubmissionDraft } from '../model';
-import { assessmentWorkAvailable, currentSubmissionActionReceipt, currentSubmissionDraft, currentTextDraftReceipt, currentSubmissionReceipt, parseSubmission, preferredSubmissionDraft } from '../model';
+import { assessmentWorkAvailable, currentSubmissionActionReceipt, currentSubmissionDraft, currentTeacherSubmissionEditor, currentTextDraftReceipt, currentSubmissionReceipt, parseSubmission, preferredSubmissionDraft } from '../model';
 import { useLearningApi } from '../api';
 import { useApi, useApiQuery } from '../../../shared/hooks/use-api';
 import { useApp } from '../../../shared/session/providers';
@@ -60,10 +60,16 @@ export function SubmissionHistory({ submissionId }: { submissionId: string }) {
 
 export function TeacherSubmissionActions({ submission, onChanged }: { submission: Pick<Submission, 'id' | 'revision' | 'status'>; onChanged: () => void }) {
   const { t } = useLearningApi();
-  const { membership } = useApp();
+  const { membership, formDrafts } = useApp();
   const { journal } = useApi();
-  const [action, setAction] = useState<'return' | 'close' | null>(() => journal.get(`/v1/submissions/${submission.id}/return`) ? 'return' : journal.get(`/v1/submissions/${submission.id}/close`) ? 'close' : null);
+  const intentSlot=`${membership?.schoolId}:${membership?.userId}:/v1/submissions/${submission.id}/editor-intent`;
+  const [action, setAction] = useState<'return' | 'close' | null>(() => journal.get(`/v1/submissions/${submission.id}/return`) ? 'return' : journal.get(`/v1/submissions/${submission.id}/close`) ? 'close' : currentTeacherSubmissionEditor(formDrafts.model(intentSlot),submission));
+  function chooseAction(value:'return'|'close'|null) {
+    setAction(value);
+    if(value) formDrafts.saveModel(intentSlot,{id:submission.id,revision:submission.revision,action:value});
+    else formDrafts.remove(intentSlot);
+  }
   const [commandLocked, setCommandLocked] = useState(false);
   const modesLocked = commandLocked || !!journal.get(`/v1/submissions/${submission.id}/return`) || !!journal.get(`/v1/submissions/${submission.id}/close`);
-  return <div>{submission.status !== 'RETURNED' && submission.status !== 'CLOSED' ? <div className="learning-actions"><Button type="button" variant="secondary" disabled={modesLocked} onClick={() => setAction('return')}><CuevoIcon name="feedback" size={18} />{t.returnWork}</Button><Button type="button" variant="quiet" disabled={modesLocked} onClick={() => setAction('close')}>{t.closeWork}</Button></div> : null}{action ? <CommandForm title={action === 'return' ? t.returnWork : t.closeWork} path={`/v1/submissions/${submission.id}/${action}`} fields={action === 'return' ? [{ name: 'feedback', label: t.returnFeedback, type: 'textarea', required: true, maxLength: 10000 }] : []} body={values => ({ expectedRevision: submission.revision, ...(action === 'return' ? { feedback: String(values.get('feedback')) } : {}) })} onLockedChange={setCommandLocked} validateReceipt={(result, originalCommand) => { currentSubmissionActionReceipt(result, action, submission.id, membership?.userId, originalCommand.body); }} onSaved={() => { setAction(null); onChanged(); }} onCancel={() => setAction(null)} actionLabel={action === 'return' ? t.returnWork : t.closeWork} /> : null}<SubmissionHistory submissionId={submission.id} /></div>;
+  return <div>{submission.status !== 'RETURNED' && submission.status !== 'CLOSED' ? <div className="learning-actions"><Button type="button" variant="secondary" disabled={modesLocked} onClick={() => chooseAction('return')}><CuevoIcon name="feedback" size={18} />{t.returnWork}</Button><Button type="button" variant="quiet" disabled={modesLocked} onClick={() => chooseAction('close')}>{t.closeWork}</Button></div> : null}{action ? <CommandForm title={action === 'return' ? t.returnWork : t.closeWork} path={`/v1/submissions/${submission.id}/${action}`} fields={action === 'return' ? [{ name: 'feedback', label: t.returnFeedback, type: 'textarea', required: true, maxLength: 10000 }] : []} body={values => ({ expectedRevision: submission.revision, ...(action === 'return' ? { feedback: String(values.get('feedback')) } : {}) })} onLockedChange={setCommandLocked} validateReceipt={(result, originalCommand) => { currentSubmissionActionReceipt(result, action, submission.id, membership?.userId, originalCommand.body); }} onSaved={() => { chooseAction(null); onChanged(); }} onCancel={() => chooseAction(null)} actionLabel={action === 'return' ? t.returnWork : t.closeWork} /> : null}<SubmissionHistory submissionId={submission.id} /></div>;
 }
