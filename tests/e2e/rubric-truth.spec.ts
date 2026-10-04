@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -41,11 +42,11 @@ test('teacher creates a rubric and releases native criteria with approved parent
     if (await page.getByRole('button', { name: 'English', exact: true }).isVisible()) await page.getByRole('button', { name: 'English', exact: true }).click();
     await page.getByLabel('School email').fill(account.email);
     await page.getByLabel('Password', { exact: true }).fill(account.password);
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, account.role);
     await page.getByRole('button', { name: 'Academic', exact: true }).click();
   };
   const signOut = async () => {
-    await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+    await signOutTrailWorkspace(page);
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   };
   let visualIndex = 0;

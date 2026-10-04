@@ -3,7 +3,12 @@ import { createCustomerContext, type CustomerContext } from './customer-test-con
 
 describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current school calendar maintenance', () => {
   let context: CustomerContext;
-  beforeAll(async () => { context = await createCustomerContext(); }, 60000);
+  beforeAll(async () => {
+    context = await createCustomerContext();
+    // Positive maintenance requires current distinguishable classes; retain
+    // the shared duplicate identity fixture and separate authorization cases.
+    await context.client.query("update app.classes set name=case when id=$2 then 'Synthetic maintenance Cedar class'else 'Synthetic maintenance Maple class'end where school_id=$1 and id in($2,$3)",[context.school,context.classId,context.secondClassId]);
+  }, 60000);
   afterAll(async () => { await context?.close(); });
   it('corrects and cancels an exact event with history, expected revisions and current admin authority', async () => {
     const record = { classId: context.classId, title: 'Family school meeting', description: 'School-approved current event', startsAt: '2027-02-01T10:00:00Z', endsAt: '2027-02-01T11:00:00Z', parentVisible: true };

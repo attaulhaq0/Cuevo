@@ -29,6 +29,8 @@ export class CommandJournal {
     return command;
   }
   get(slot: string): Command | undefined { return this.commands.get(slot); }
+  /** Feature recovery may inspect original commands without changing the journal. */
+  pending(): Command[] { return [...this.commands.values()].map(command => structuredClone(command)); }
   confirm(slot: string, expectedKey?: string): boolean {
     const command = this.commands.get(slot);
     if (!command || expectedKey !== undefined && command.key !== expectedKey) return false;
@@ -43,10 +45,11 @@ export function captureCommandReceiptValidator(command: Command, validate?: Comm
   const original = structuredClone(command);
   return receipt => validate(receipt, structuredClone(original));
 }
-export function confirmCommandReceipt(journal: CommandJournal, slot: string, expectedKey: string, receipt: unknown, onCurrentReceipt?: (receipt: unknown) => void, validateReceipt?: (receipt: unknown) => void): boolean {
-  if (journal.get(slot)?.key !== expectedKey) return false;
+export function confirmCommandReceipt(journal: CommandJournal, slot: string, expectedKey: string, receipt: unknown, onCurrentReceipt?: (receipt: unknown) => void, validateReceipt?: CommandReceiptValidator): boolean {
+  const originalCommand = journal.get(slot);
+  if (!originalCommand || originalCommand.key !== expectedKey) return false;
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || !('id' in receipt) || typeof receipt.id !== 'string' || !receipt.id) throw new LearningApiError('invalid', true);
-  try { validateReceipt?.(receipt); } catch { throw new LearningApiError('invalid', true); }
+  try { validateReceipt?.(receipt, originalCommand); } catch { throw new LearningApiError('invalid', true); }
   // A validator must never publish an old-scope callback or settle a replacement key.
   if (journal.get(slot)?.key !== expectedKey) return false;
   try { onCurrentReceipt?.(receipt); } catch { throw new LearningApiError('invalid', true); }

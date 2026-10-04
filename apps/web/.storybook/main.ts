@@ -2,7 +2,7 @@ import type { StorybookConfig } from '@storybook/nextjs-vite';
 import { fileURLToPath } from 'node:url';
 
 const config: StorybookConfig = {
-  stories: ['../../../packages/ui/src/**/*.stories.@(ts|tsx)'],
+  stories: ['../../../packages/ui/src/**/*.stories.@(ts|tsx)', '../features/**/*.stories.@(ts|tsx)'],
   framework: { name: '@storybook/nextjs-vite', options: {} },
   async viteFinal(viteConfig) {
     const existingAliases = viteConfig.resolve?.alias;

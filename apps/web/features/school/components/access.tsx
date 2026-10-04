@@ -1,23 +1,42 @@
 'use client';
-import { useState } from 'react';
-import { Button } from '@cuevo/ui';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { schoolAccessRevision, schoolAccessBasis, schoolAccessSourceKey, type SchoolPerson, type SchoolRow } from '../model';
 import { useApp } from '../../../shared/session/providers';
 import { CommandForm, type FormField } from '../../../shared/components/command-form';
 import { schoolAr, schoolEn } from '../messages';
-import { SchoolRecords } from './records';
+import { AccessDirectory } from './access-directory';
+import { schoolAccessDirectoryRows, currentAccessDirectoryRow, currentAccessPerson, filterAccessDirectory, recoveredAccessRelationship, type AccessDirectoryKind, type AccessDirectoryRow } from '../access-directory-model';
+import { accessDirectoryEn, accessDirectoryAr } from '../access-directory-messages';
+import { LearningApiError } from '../../../shared/api/client';
 import { schoolPersonChoices, schoolRecordChoices } from '../selection';
-import { schoolRelationshipDisplays,schoolRelationshipSelectionSafe,type SchoolRelationshipDisplay } from '../relationship-display';
-export function SchoolAccess({ people, enrollments, assignments, guardians, classes, subjects, canManage, onChanged,relationshipsComplete=true }: { people: SchoolPerson[]; enrollments: SchoolRow[]; assignments: SchoolRow[]; guardians: SchoolRow[]; classes: SchoolRow[]; subjects: SchoolRow[]; canManage: boolean; onChanged: () => void;relationshipsComplete?:boolean }) {
-  const { locale, dictionary, membership, formDrafts,commandJournal } = useApp(); const t = locale === 'ar' ? schoolAr : schoolEn;
+import { schoolRelationshipSelectionSafe } from '../relationship-display';
+export function SchoolAccess({ people, enrollments, assignments, guardians, classes, subjects, canManage, onChanged, relationshipsComplete = true }: { people: SchoolPerson[]; enrollments: SchoolRow[]; assignments: SchoolRow[]; guardians: SchoolRow[]; classes: SchoolRow[]; subjects: SchoolRow[]; canManage: boolean; onChanged: () => void; relationshipsComplete?: boolean }) {
+  const { locale, dictionary, membership, formDrafts, commandJournal } = useApp(); const t = locale === 'ar' ? schoolAr : schoolEn;
+  const copy = locale === 'ar' ? accessDirectoryAr : accessDirectoryEn;
+  useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
   const prefix = `${membership?.schoolId}:${membership?.userId}:/v1/school/`;
-  const retainedPerson = people.find(row => formDrafts.get(`${prefix}people/${row.id}/configure`));
-  const retainedAction = retainedPerson ? 'person' : formDrafts.get(`${prefix}enrollments`) ? 'enrollment' : formDrafts.get(`${prefix}teacher-assignments`) ? 'assignment' : formDrafts.get(`${prefix}guardian-relationships`) ? 'guardian' : null;
+  const retainedPerson = people.find(row => commandJournal.get(`/v1/school/people/${row.id}/configure`) || formDrafts.get(`${prefix}people/${row.id}/configure`));
+  const retainedAction = retainedPerson ? 'person' : commandJournal.get('/v1/school/enrollments') || formDrafts.get(`${prefix}enrollments`) ? 'enrollment' : commandJournal.get('/v1/school/teacher-assignments') || formDrafts.get(`${prefix}teacher-assignments`) ? 'assignment' : commandJournal.get('/v1/school/guardian-relationships') || formDrafts.get(`${prefix}guardian-relationships`) ? 'guardian' : null;
   const [action, setAction] = useState<'person' | 'enrollment' | 'assignment' | 'guardian' | null>(retainedAction); const [personId, setPersonId] = useState(retainedPerson?.id ?? '');
-  const [relationship, setRelationship] = useState<SchoolRow | null>(null);
-  const personChoices=schoolPersonChoices(people,locale); const person=people.find(row=>row.id===personId&&!personChoices.find(choice=>choice.value===row.id)?.requiresReview);
-  const names = Object.fromEntries([...personChoices.map(choice => [choice.value, choice.label]), ...classes.map(row => [row.id, String(row.name)]), ...subjects.map(row => [row.id, String(row.name)])]);
-  const choices=(rows:SchoolRow[])=>rows.length&&'displayName'in rows[0]?schoolPersonChoices(rows as SchoolPerson[],locale).filter(choice=>!choice.requiresReview):schoolRecordChoices(rows,rows===classes?'classes':'subjects',locale).filter(choice=>!choice.requiresReview);
+  const [relationship, setRelationship] = useState<SchoolRow | null>(() => {
+    if (!retainedAction || retainedAction === 'person') return null;
+    const path = retainedAction === 'enrollment' ? '/v1/school/enrollments' : retainedAction === 'assignment' ? '/v1/school/teacher-assignments' : '/v1/school/guardian-relationships';
+    return recoveredAccessRelationship(retainedAction, commandJournal.get(path)?.body ?? formDrafts.get(`${membership?.schoolId}:${membership?.userId}:${path}`)?.values ?? {}, retainedAction === 'enrollment' ? enrollments : retainedAction === 'assignment' ? assignments : guardians);
+  });
+  const [directoryKind, setDirectoryKind] = useState<AccessDirectoryKind>(retainedAction ?? 'person');
+  const [query, setQuery] = useState(''); const [selectedId, setSelectedId] = useState<string | null>(retainedPerson?.id ?? relationship?.id ?? null);
+  const selectedHeading = useRef<HTMLHeadingElement>(null), focusSelected = useRef(false);
+  const [selectionRequest, setSelectionRequest] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const [reviewedPerson, setReviewedPerson] = useState<SchoolPerson | null>(retainedAction === 'person' ? retainedPerson ?? null : null);
+  const pending = commandJournal.pending().some(command => /^\/v1\/school\/(people\/|enrollments$|teacher-assignments$|guardian-relationships$)/.test(command.path));
+  const selectionLocked = locked || pending;
+  const personChoices = schoolPersonChoices(people, locale);
+  const currentPerson = currentAccessPerson(people, personId);
+  const personSelectionSafe = !!currentPerson && personChoices.find(choice => choice.value === personId)?.requiresReview === false;
+  const person = action === 'person' && reviewedPerson ? reviewedPerson : currentPerson;
+  const choices = (rows: SchoolRow[]) => rows.length && 'displayName' in rows[0] ? schoolPersonChoices(rows as SchoolPerson[], locale).filter(choice => !choice.requiresReview) : schoolRecordChoices(rows, rows === classes ? 'classes' : 'subjects', locale).filter(choice => !choice.requiresReview);
   const select = (name: string, label: string, rows: SchoolRow[]): FormField => ({ name, label, type: 'select', required: true, options: choices(rows) });
   const local = (value: string | null | undefined) => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '';
   const windows: FormField[] = [{ name: 'effectiveFrom', label: t.effectiveFrom, type: 'datetime-local', required: true, defaultValue: action === 'person' ? local(person?.effectiveFrom) : undefined }, { name: 'effectiveTo', label: t.effectiveTo, type: 'datetime-local', defaultValue: action === 'person' ? local(person?.effectiveTo) : undefined }, { name: 'confirmAccessChange', label: t.confirmAccess, type: 'checkbox', required: true }];
@@ -29,30 +48,64 @@ export function SchoolAccess({ people, enrollments, assignments, guardians, clas
     else if (typeof value === 'string') field.defaultValue = value;
   }
   const titles = { person: t.configurePerson, enrollment: t.enrollment, assignment: t.assignment, guardian: t.guardian }; const paths = { person: `/v1/school/people/${personId}/configure`, enrollment: '/v1/school/enrollments', assignment: '/v1/school/teacher-assignments', guardian: '/v1/school/guardian-relationships' };
-  const statusLabel = (value: unknown) => value === 'active' ? t.active : value === 'revoked' ? t.revoked : value === 'completed' ? t.completed : value === 'pending' ? t.pending : t.nameUnavailable;
+  const statusLabel = (value: unknown) => value === 'active' ? t.active : value === 'suspended' ? t.suspended : value === 'revoked' ? t.revoked : value === 'completed' ? t.completed : value === 'pending' ? t.pending : t.nameUnavailable;
+  const dateLabel = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
   const accessRows = {person: people, enrollment: enrollments, assignment: assignments, guardian: guardians};
-  function selectedRelationshipSafe(){
-    if(!action||action==='person')return true;
-    const draft=formDrafts.get(`${membership?.schoolId}:${membership?.userId}:${paths[action]}`);
-    const keys=action==='enrollment'?['classId','studentId']:action==='assignment'?['classId','subjectId','teacherId']:['parentId','studentId'];
-    const retainedExisting=Number(draft?.basis.expectedRevision)>0;
-    const selectedId=relationship?.id??(retainedExisting?accessRows[action].find(row=>keys.every(key=>row[key]===draft?.values[key]))?.id:undefined);
-    return !relationship&&!retainedExisting||schoolRelationshipSelectionSafe(action,selectedId,accessRows[action],people,classes,subjects,locale,relationshipsComplete);
-  }
-  const relationshipSafe=selectedRelationshipSafe();
-  const recovery=action&&action!=='person'&&!relationshipSafe?commandJournal.get(paths[action]):undefined;
-  function relationshipCard(kind:'enrollment'|'assignment'|'guardian',row:SchoolRow,display:SchoolRelationshipDisplay){
-    return <article key={`${kind}:${row.id}`} data-access-id={row.id} data-access-kind={kind}><p data-relationship-person><bdi>{display.title}</bdi></p>{kind==='guardian'?<p>{t.relationship}: <bdi>{display.relationshipType??t.nameUnavailable}</bdi></p>:<dl className="academic-facts"><div><dt>{t.class}</dt><dd data-relationship-class="true"><bdi>{display.className??t.nameUnavailable}</bdi></dd></div><div><dt>{t.yearGroup}</dt><dd><bdi>{display.yearGroupName??t.nameUnavailable}</bdi></dd></div><div><dt>{t.year}</dt><dd><bdi>{display.academicYearName??t.nameUnavailable}</bdi></dd></div>{kind==='assignment'?<div><dt>{t.subject}</dt><dd><bdi>{display.subjectName??t.nameUnavailable}</bdi></dd></div>:null}</dl>}<p>{t.status}: {statusLabel(display.status)} · <bdi>{display.effectiveFrom??t.nameUnavailable} – {display.effectiveTo??'—'}</bdi></p><details><summary>{locale==='ar'?'تفاصيل المصدر':'Source details'}</summary><p>{locale==='ar'?'مراجعة السجل':'Record revision'}: {display.revision??t.nameUnavailable}</p></details>{display.requiresReview?<p className="notice">{locale==='ar'?'تعذّر تمييز سياق هذه العلاقة. راجع سجلات المدرسة وحدّث قبل التغيير.':'This relationship context cannot be distinguished. Review school records and refresh before changing it.'}</p>:null}<Button type="button" variant="quiet" disabled={display.requiresReview||!relationshipsComplete} onClick={()=>{setRelationship(row);setAction(kind);}}>{titles[kind]}</Button></article>;
-  }
   function accessBody(values: FormData) {
-    if(!action)throw new Error('invalid');if(action==='person'&&!person)throw new Error('invalid');
-    if(action!=='person'&&!relationshipsComplete)throw new Error('invalid');
-    if(action!=='person'&&!selectedRelationshipSafe())throw new Error('invalid');
+    if (!action) throw new LearningApiError('invalid');
+    if (action === 'person' && !personSelectionSafe || action !== 'person' && (!relationshipsComplete || !selectedRelationshipSafe())) throw new LearningApiError('invalid');
+    if (relationship && !accessRows[action].some(row => row.id === relationship.id && row.revision === relationship.revision) && !commandJournal.get(paths[action])) throw new LearningApiError('conflict');
+    if (action === 'person' && currentPerson?.revision !== person?.revision && !commandJournal.get(paths.person)) throw new LearningApiError('conflict');
     const input = Object.fromEntries(fields[action].map(field => [field.name, field.name === 'confirmAccessChange' ? values.get(field.name) === 'on' : field.name === 'effectiveFrom' ? relationship && String(values.get(field.name)) === local(String(relationship.effectiveFrom)) ? relationship.effectiveFrom : action === 'person' && String(values.get(field.name)) === local(person?.effectiveFrom) ? person!.effectiveFrom : new Date(String(values.get(field.name))).toISOString() : field.name === 'effectiveTo' ? relationship && String(values.get(field.name)) === local(typeof relationship.effectiveTo === 'string' ? relationship.effectiveTo : null) ? relationship.effectiveTo : action === 'person' && String(values.get(field.name)) === local(person?.effectiveTo) ? person!.effectiveTo : values.get(field.name) ? new Date(String(values.get(field.name))).toISOString() : null : String(values.get(field.name))]));
-    for(const field of fields[action].filter(field=>['studentId','parentId','teacherId','classId','subjectId'].includes(field.name))){if(!field.options?.some(option=>option.value===input[field.name]))throw new Error('invalid');}
+    for (const field of fields[action].filter(field => ['studentId', 'parentId', 'teacherId', 'classId', 'subjectId'].includes(field.name))) if (!field.options?.some(option => option.value === input[field.name])) throw new LearningApiError('invalid');
     const revision = schoolAccessRevision(action, input, accessRows[action], personId);
     if (revision !== undefined) input.expectedRevision = revision;
     return input;
   }
-  return <div><h2>{t.people}</h2><p className="notice">{t.accessNote}</p>{personChoices.some(choice=>choice.requiresReview)?<p className="notice">{locale==='ar'?'راجع أسماء الأعضاء وسياقهم في سجلات المدرسة ثم حدّث قبل اختيار الشخص.':'Review member names and current context in school records, then refresh before selecting a person.'}</p>:null}{canManage ? <><div className="learning-actions">{Object.entries(titles).map(([key, title]) => <Button key={key} type="button" variant="secondary" onClick={() => { setRelationship(null); setAction(key as keyof typeof titles); }}>{title}</Button>)}</div>{action === 'person' ? <div className="field"><label htmlFor="school-person-selection">{t.person}</label><select id="school-person-selection" value={personId} onChange={event => setPersonId(event.target.value)}><option value="">{t.person}</option>{personChoices.map(choice=><option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select></div> : null}{action&&action!=='person'&&!relationshipsComplete?<p className="notice">{locale==='ar'?'حمّل سجلات العلاقات الحالية قبل مراجعة هذا التغيير.':'Load current relationship records before reviewing this change.'}</p>:null}{action&&action!=='person'&&!relationshipSafe?<p className="notice">{locale==='ar'?'تغيّر سياق العلاقة المحددة أو تعذّر تمييزه. راجع السجلات الحالية قبل إرسال تغيير جديد.':'The selected relationship context changed or cannot be distinguished. Review current records before sending a new change.'}</p>:null}{recovery&&action?<CommandForm title={titles[action]} path={paths[action]} fields={[]} body={()=>{throw new Error('invalid');}} onSaved={()=>{setAction(null);onChanged();}} note={locale==='ar'?'يمكنك التحقق من نتيجة الطلب السابق بمفتاحه الأصلي. لا يُرسل تغيير جديد من هذا السياق.':'Reconcile the previous request with its original key. This context cannot send a new change.'}/>:action&&(action==='person'?!!person:relationshipsComplete&&relationshipSafe) ? <CommandForm key={`${action}:${relationship?.id ?? personId}`} title={titles[action]} path={paths[action]} fields={fields[action]} body={accessBody} onValuesChange={values => { if (!action) return; const input = Object.fromEntries(values.entries()); const slot=`${membership?.schoolId}:${membership?.userId}:${paths[action]}`; const saved=formDrafts.get(slot); const revision=schoolAccessBasis(action,input,accessRows[action],saved,personId); if(saved&&revision!==undefined)formDrafts.save(slot,saved.values,{...saved.basis,expectedRevision:revision,accessSourceKey:schoolAccessSourceKey(action,input,personId)}); }} onSaved={() => { setAction(null); onChanged(); }} onCancel={() => setAction(null)} note={t.accessNote} /> : null}</> : null}{canManage ? <section aria-label={t.manageRelationships}><h3>{t.manageRelationships}</h3>{([{ kind: 'enrollment' as const, rows: enrollments }, { kind: 'assignment' as const, rows: assignments }, { kind: 'guardian' as const, rows: guardians }]).map(group => {const displays=schoolRelationshipDisplays(group.kind,group.rows,people,classes,subjects,locale);return group.rows.map((row,index) => relationshipCard(group.kind,row,displays[index]));})}</section> : null}<SchoolRecords names={names} title={t.people} rows={people} columns={[{ key: 'displayName', label: t.name }, { key: 'role', label: t.role }, { key: 'status', label: t.status }, { key: 'effectiveFrom', label: t.effectiveFrom }, { key: 'effectiveTo', label: t.effectiveTo }]} /><SchoolRecords names={names} title={t.enrollment} rows={enrollments} columns={[{ key: 'studentId', label: t.student }, { key: 'classId', label: t.class }, { key: 'status', label: t.status }]} /><SchoolRecords names={names} title={t.assignment} rows={assignments} columns={[{ key: 'teacherId', label: t.teacher }, { key: 'classId', label: t.class }, { key: 'subjectId', label: t.subject }, { key: 'status', label: t.status }]} /><SchoolRecords names={names} title={t.guardian} rows={guardians} columns={[{ key: 'parentId', label: t.parent }, { key: 'studentId', label: t.student }, { key: 'status', label: t.status }]} /></div>;
+  const currentRows = accessRows[directoryKind];
+  const recordRows = schoolAccessDirectoryRows(directoryKind, currentRows, people, classes, subjects, locale, relationshipsComplete);
+  const selected = currentAccessDirectoryRow(recordRows, selectedId);
+  useEffect(() => {
+    if (focusSelected.current && selected && selectedHeading.current) {
+      focusSelected.current = false;
+      selectedHeading.current.focus({ preventScroll: true });
+      selectedHeading.current.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
+  }, [selected, selectionRequest]);
+  const editingCurrent = action !== 'person' && relationship ? accessRows[action ?? 'enrollment'].filter(row => row.id === relationship.id) : [];
+  const personBasis = action === 'person' ? formDrafts.get(`${membership?.schoolId}:${membership?.userId}:${paths.person}`)?.basis.expectedRevision : undefined;
+  function selectedRelationshipSafe() {
+    if (!action || action === 'person') return true;
+    const draft = formDrafts.get(`${membership?.schoolId}:${membership?.userId}:${paths[action]}`);
+    const retainedExisting = Number(draft?.basis.expectedRevision) > 0;
+    const original = relationship ?? (retainedExisting ? recoveredAccessRelationship(action, draft?.values ?? {}, accessRows[action]) : null);
+    return !original && !retainedExisting || schoolRelationshipSelectionSafe(action, original?.id, accessRows[action], people, classes, subjects, locale, relationshipsComplete);
+  }
+  const relationshipSafe = selectedRelationshipSafe();
+  const identitySafe = action === 'person' ? personSelectionSafe : relationshipsComplete && relationshipSafe;
+  const recovery = action && commandJournal.get(paths[action]);
+  const sourceCurrent = action === 'person' ? !!currentPerson && currentPerson.revision === person?.revision && (personBasis === undefined || personBasis === currentPerson.revision) : !relationship || editingCurrent.length === 1 && editingCurrent[0].revision === relationship.revision;
+  function chooseKind(kind: AccessDirectoryKind) { if (selectionLocked) return; setDirectoryKind(kind); setSelectedId(null); setQuery(''); setAction(null); setRelationship(null); }
+  function chooseRecord(row: AccessDirectoryRow) {
+    if (selectionLocked || row.requiresReview) return;
+    focusSelected.current = true;
+    setSelectionRequest(value => value + 1);
+    setSelectedId(row.id); setAction(null);
+    if (directoryKind === 'person') { setPersonId(row.id); setRelationship(null); } else setRelationship(row.source);
+  }
+  function editSelected() { if (!selected || selected.requiresReview || selectionLocked) return; if (directoryKind === 'person') { setPersonId(selected.id); setReviewedPerson(currentAccessPerson(people, selected.id) ?? null); } else setRelationship(selected.source); setAction(directoryKind); }
+  function createRelationship() { if (selectionLocked || !relationshipsComplete || directoryKind === 'person') return; setRelationship(null); setSelectedId(null); setAction(directoryKind); }
+  return <div className="school-access-workspace">
+    <header className="cuevo-section-header"><div className="cuevo-section-header__context"><h2>{copy.title}</h2><p>{copy.body}</p></div><details className="school-access-help"><summary>{copy.note}</summary><p>{t.accessNote}</p></details></header>
+    {personChoices.some(choice => choice.requiresReview) ? <p className="notice">{locale === 'ar' ? 'راجع أسماء الأعضاء وسياقهم في سجلات المدرسة ثم حدّث قبل اختيار الشخص.' : 'Review member names and current context in school records, then refresh before selecting a person.'}</p> : null}
+    <div className="school-access-layout">
+      <AccessDirectory locale={locale} kind={directoryKind} rows={filterAccessDirectory(recordRows, query, locale)} selectedId={selectedId} query={query} locked={selectionLocked} statusLabel={statusLabel} onKind={chooseKind} onQuery={setQuery} onSelect={chooseRecord}/>
+      <section className="school-access-selected" aria-label={copy.selected}>
+        {selected ? <><header className="cuevo-section-header"><div className="cuevo-section-header__context"><h2 ref={selectedHeading} tabIndex={-1}><CuevoIcon name="person" size={28}/><bdi>{selected.title}</bdi></h2><p><bdi>{selected.context}</bdi></p></div><Status tone={selected.status === 'active' ? 'positive' : 'neutral'}>{statusLabel(selected.status)}</Status></header>{selected.relationship && directoryKind !== 'guardian' ? <dl className="academic-facts"><div><dt>{t.class}</dt><dd data-relationship-class="true"><bdi>{selected.relationship.className ?? t.nameUnavailable}</bdi></dd></div><div><dt>{t.yearGroup}</dt><dd><bdi>{selected.relationship.yearGroupName ?? t.nameUnavailable}</bdi></dd></div><div><dt>{t.year}</dt><dd><bdi>{selected.relationship.academicYearName ?? t.nameUnavailable}</bdi></dd></div>{directoryKind === 'assignment' ? <div><dt>{t.subject}</dt><dd><bdi>{selected.relationship.subjectName ?? t.nameUnavailable}</bdi></dd></div> : null}</dl> : null}<dl className="school-access-facts"><div><dt>{copy.from}</dt><dd><bdi>{dateLabel(selected.source.effectiveFrom)}</bdi></dd></div><div><dt>{copy.to}</dt><dd><bdi>{selected.source.effectiveTo === null ? copy.ongoing : dateLabel(selected.source.effectiveTo)}</bdi></dd></div></dl><details className="support-reference"><summary>{locale === 'ar' ? 'تفاصيل المصدر' : 'Source details'}</summary><p>{locale === 'ar' ? 'مراجعة السجل' : 'Record revision'}: {typeof selected.source.revision === 'number' ? new Intl.NumberFormat(locale).format(selected.source.revision) : t.nameUnavailable}</p></details>{canManage && !action ? <Button type="button" variant="secondary" disabled={selectionLocked || selected.requiresReview} onClick={editSelected}>{copy.edit}</Button> : null}</> : action ? null : <><h2>{copy.choose}</h2><p>{selectedId ? copy.sourceUnavailable : copy.chooseBody}</p></>}
+        {canManage && directoryKind !== 'person' && !action ? <Button type="button" variant="secondary" disabled={selectionLocked || !relationshipsComplete} onClick={createRelationship}>{copy.create}</Button> : null}
+        {action && !identitySafe ? <p className="notice">{locale === 'ar' ? 'تغيّر سياق العلاقة المحددة أو تعذّر تمييزه. راجع السجلات الحالية قبل إرسال تغيير جديد.' : 'The selected record context changed or cannot be distinguished. Review current records before sending a new change.'}</p> : null}
+        {canManage && action && recovery && (!identitySafe || !sourceCurrent) ? <CommandForm title={titles[action]} path={paths[action]} fields={[]} body={() => { throw new LearningApiError('invalid'); }} onSaved={() => { setAction(null); onChanged(); }} note={locale === 'ar' ? 'يمكنك التحقق من نتيجة الطلب السابق بمفتاحه الأصلي. لا يُرسل تغيير جديد من هذا السياق.' : 'Reconcile the previous request with its original key. This context cannot send a new change.'} /> : canManage && action && identitySafe && (action !== 'person' || person) && sourceCurrent ? <CommandForm key={`${action}:${relationship?.id ?? personId}`} title={titles[action]} path={paths[action]} fields={fields[action]} body={accessBody} onValuesChange={values => { if (!action) return; const input = Object.fromEntries(values.entries()); const slot=`${membership?.schoolId}:${membership?.userId}:${paths[action]}`; const saved=formDrafts.get(slot); const revision=schoolAccessBasis(action,input,accessRows[action],saved,personId); if(saved&&revision!==undefined)formDrafts.save(slot,saved.values,{...saved.basis,expectedRevision:revision,accessSourceKey:schoolAccessSourceKey(action,input,personId)}); }} onLockedChange={setLocked} onSaved={() => { setAction(null); onChanged(); }} onCancel={() => setAction(null)} note={t.accessNote} /> : action && !sourceCurrent ? <p role="status">{copy.sourceUnavailable}</p> : null}
+      </section>
+    </div>
+  </div>;
 }

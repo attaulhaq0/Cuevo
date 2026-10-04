@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -58,13 +59,13 @@ async function fixture(page: Page) {
   const signIn = async (role: Role, feature = 'School') => {
     await page.goto('/');
     await page.getByRole('button', { name: 'English', exact: true }).click();
-    const signOut = page.getByRole('button', { name: 'Sign out', exact: true }).last();
-    if (await signOut.isVisible()) await signOut.click();
+    const signOut = page.locator('.workspace-chrome__person > button');
+    if (await signOut.isVisible()) await signOutTrailWorkspace(page);
     await page.getByLabel('School email', { exact: true }).fill(selected[role].email);
     await page.getByLabel('Password', { exact: true }).fill(selected[role].password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-    await page.getByRole('navigation').getByRole('button', { name: feature, exact: true }).click();
+    await expectTrailWorkspace(page, role);
+    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: feature, exact: true }).click();
     const surface = feature === 'School' ? '.school-workspace' : feature === 'Learning' ? '.learning-workspace' : feature === 'Academic' ? '.academic-workspace' : '.progress-workspace';
     await expect(page.locator(surface)).toBeVisible();
   };
@@ -147,12 +148,10 @@ test('administrator revokes and restores current teacher, learner and guardian s
     const current = (await context.rows(paths[kind])).find(row => matches(kind, row));
     if (!current) throw new Error('Current relationship lookup is unavailable.');
     const personName = kind === 'assignment' ? context.selected.teacher.displayName : context.selected.student.displayName;
-    let record = page.locator(`[data-access-kind="${kind}"]`).filter({ has: page.locator('[data-relationship-person]').filter({ hasText: personName }) });
-    record = kind === 'guardian' ? record.filter({ has: page.locator('[data-relationship-person]').filter({ hasText: context.selected.parent.displayName }) }) : record.filter({ has: page.locator('[data-relationship-class]').filter({ has: page.getByText(context.className, { exact: true }) }) });
-    await expect(record).toHaveCount(1);
-    await expect(record).toHaveAttribute('data-access-id',current.id);
+    const visibleContext = kind === 'guardian' ? new RegExp(context.selected.parent.displayName + '[\\s\\S]*' + personName) : new RegExp(personName + '[\\s\\S]*' + context.className);
+    const record = await selectTrailSchoolRecord(page, kind === 'assignment' ? 'assignment' : kind === 'enrollment' ? 'enrollment' : 'guardian', visibleContext);
     if(kind!=='guardian'){await expect(record.locator('[data-relationship-class]')).toHaveText(context.className);await expect(record).toContainText('Year 1');await expect(record).toContainText('2026–2027');}
-    await record.getByRole('button', { name: titles[kind], exact: true }).click();
+    await record.getByRole('button', { name: 'Edit this record', exact: true }).click();
     const form = page.getByRole('region', { name: titles[kind], exact: true }).filter({ has: page.locator('form') });
     if (kind === 'guardian') {
       await expect(form.getByLabel('Parent / guardian', { exact: true }).locator('option:checked')).toContainText(context.selected.parent.displayName);
@@ -166,7 +165,7 @@ test('administrator revokes and restores current teacher, learner and guardian s
     await form.getByLabel('Status', { exact: true }).selectOption({ label: status });
     await form.getByLabel('I approve this change to current access', { exact: true }).check();
     const saved = await context.save(paths[kind], form);
-    expect(saved.body).toMatchObject({ expectedRevision: current.revision, status: status.toLowerCase(), effectiveFrom: current.effectiveFrom, effectiveTo: current.effectiveTo });
+    expect(saved.body).toMatchObject({ ...(kind === 'guardian' ? {parentId:current.parentId,studentId:current.studentId} : kind === 'assignment' ? {classId:current.classId,subjectId:current.subjectId,teacherId:current.teacherId} : {classId:current.classId,studentId:current.studentId}), expectedRevision: current.revision, status: status.toLowerCase(), effectiveFrom: current.effectiveFrom, effectiveTo: current.effectiveTo });
     expect(saved.receipt.revision).toBe(current.revision + 1);
     await expect(record).toContainText(status);
     return saved;

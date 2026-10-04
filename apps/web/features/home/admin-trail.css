@@ -1,0 +1,93 @@
+.admin-trail { position: relative; isolation: isolate; font-family: 'Cuevo Nunito Sans', var(--font-sans); color: var(--color-text); }
+.admin-trail[lang="ar"] { font-family: var(--font-arabic); }
+.admin-trail__background { position: absolute; z-index: -1; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; opacity: .2; filter: var(--trail-background-filter); pointer-events: none; }
+.workspace-chrome .admin-trail__background { display: none; }
+.admin-trail__content { max-inline-size: var(--content-width); margin-inline: auto; padding: var(--space-3) var(--space-3) var(--space-5); }
+.admin-trail__intro { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding:var(--space-2) var(--space-2) var(--space-3); }
+.admin-trail__intro h1 { margin:0; font-size:var(--type-xl); line-height:1.25; font-weight:var(--font-weight-bold); letter-spacing:var(--tracking-heading); }
+.admin-trail__intro p { margin: var(--space-1) 0; color: var(--color-text-secondary); font-size: var(--type-body); }
+.admin-trail__intro .admin-trail__environment { font-size: var(--type-sm); }
+.admin-trail__school { display: flex; align-items: center; gap: var(--space-4); background: var(--color-material-reading); border-radius: var(--radius-md); padding: var(--space-5); flex: 0 1 20rem; }
+.admin-trail__school svg { color: var(--color-accent); flex: none; }
+.admin-trail__areas { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,6rem),1fr)); gap:var(--space-2); margin-block-end:var(--space-3); }
+.admin-trail__areas button { display:flex; flex-direction:column; align-items:center; gap:var(--space-1); font:inherit; min-block-size:5.5rem; padding:var(--space-2); border:1px solid transparent; border-radius:var(--radius-md); background:var(--color-material-reading); color:var(--color-text); cursor:pointer; text-align:center; }
+.admin-trail__areas button[aria-current="page"] { border-color: var(--color-selection-border); background: var(--color-selection-surface);  border-width: 2px;}
+.admin-trail__area-icon { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; border-radius: var(--radius-pill); background: var(--color-learning-surface); color: var(--color-accent); flex: none; }
+.admin-trail__areas button:nth-child(3n) .admin-trail__area-icon { background: var(--color-practice-surface); color: var(--color-practice-symbol); }
+.admin-trail__areas button:nth-child(4n) .admin-trail__area-icon { background: var(--color-feedback-surface); color: var(--color-feedback-symbol); }
+.admin-trail__areas strong { font-size: var(--type-xs); line-height: 1.3; }
+.admin-trail__areas button > span:last-child { font-size: var(--type-xs); color: var(--color-text-secondary); line-height: 1.3; }
+.admin-trail__grid { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
+
+.admin-trail__right { grid-column: 2; }
+.admin-trail__intro .button { margin-block-start: var(--space-3); }
+@media(max-width:550px) { .admin-trail__intro { display:grid; grid-template-columns:minmax(0,1fr); } .admin-trail__school { padding:var(--space-2); background:transparent; } .admin-trail__areas button { min-block-size:5.5rem; } }
+.admin-trail__left, .admin-trail__right { display: grid; gap: var(--space-4); min-inline-size: 0; }
+.admin-trail__right { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; }
+.admin-trail__policy-column,.admin-trail__status-column { min-inline-size:0; display:grid; gap:var(--space-4); align-content:start; }
+.admin-trail__policy-column { grid-column:1; }
+.admin-trail__status-column { grid-column:2; }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) { grid-template-columns:minmax(0,1fr); }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__policy-column { grid-column:1; }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__status-column { grid-column:1; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__audit { grid-column:1 / -1; }
+.admin-trail__panel { padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-material-reading); min-inline-size: 0; }
+.admin-trail__panel h2 { margin: 0 0 var(--space-3); font-size: var(--type-lg); line-height: 1.35; }
+.admin-trail__heading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
+.admin-trail__heading h2 { margin-block-end: var(--space-2); }
+.admin-trail__heading p { margin: 0 0 var(--space-3); font-size: var(--type-sm); color: var(--color-text-secondary); }
+.admin-trail__heading > .button { padding-inline: var(--space-2); }
+.admin-trail__context dl { margin: 0; }
+.admin-trail__context dl > div { display: grid; grid-template-columns: 1fr 1.1fr; gap: var(--space-3); border-block-end: 1px solid var(--color-border); padding-block: var(--space-2); font-size: var(--type-xs); }
+.admin-trail__context dt { display: flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); }
+.admin-trail__context dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
+.admin-trail__people ul, .admin-trail__configuration ul, .admin-trail__policies ul, .admin-trail__audit ul { list-style: none; margin: 0; padding: 0; }
+.admin-trail__people li { display: flex; align-items: center; gap: var(--space-3); background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2); margin-block: var(--space-1); }
+.admin-trail__people li > span { display: grid; place-items: center; inline-size: 2.75rem; block-size: 2.75rem; border-radius: var(--radius-pill); background: var(--color-learning-surface); color: var(--color-accent); flex: none; }
+.admin-trail__people li > div { flex: 1; min-inline-size: 0; }
+.admin-trail__people h3 { font-size: var(--type-sm); margin: 0; }
+.admin-trail__people p { font-size: var(--type-xs); margin: 0; color: var(--color-text-secondary); }
+.admin-trail__people .button { padding-inline: var(--space-1); }
+.admin-trail__configuration h2 { font-size: var(--type-lead); }
+.admin-trail__configuration li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-border); background: var(--color-surface-muted); border-radius: var(--radius-md); }
+.admin-trail__configuration li > span { inline-size: 2.75rem; block-size: 2.75rem; display: grid; place-items: center; background: var(--color-learning-surface); border-radius: var(--radius-pill); color: var(--color-accent); flex: none; }
+.admin-trail__configuration li:nth-child(3n) > span { background: var(--color-practice-surface); color: var(--color-practice-symbol); }
+.admin-trail__configuration li:nth-child(4n) > span { background: var(--color-feedback-surface); color: var(--color-feedback-symbol); }
+.admin-trail__configuration li > div { flex: 1; min-inline-size: 0; }
+.admin-trail__configuration h3 { font-size: var(--type-sm); margin: 0; }
+.admin-trail__configuration li p { font-size: var(--type-xs); margin: 0; color: var(--color-text-secondary); line-height: 1.3; }
+.admin-trail__configuration li .button { padding-inline: var(--space-1); }
+.admin-trail__policies li { display: flex; gap: var(--space-3); align-items: start; padding: var(--space-3) var(--space-2); border-block-end: 1px solid var(--color-border); }
+.admin-trail__policies li > svg { color: var(--color-accent); margin-block-start: var(--space-1); }
+.admin-trail__policies h3, .admin-trail__governance h3, .admin-trail__execution h3, .admin-trail__audit h3 { margin: 0; font-size: var(--type-sm); line-height: 1.35; }
+.admin-trail__policies p, .admin-trail__governance p, .admin-trail__execution p, .admin-trail__audit p { margin: var(--space-1) 0; font-size: var(--type-xs); color: var(--color-text-secondary); line-height: 1.45; }
+.admin-trail__policies .status, .admin-trail__governance .status, .admin-trail__execution .status { margin-block: var(--space-1); }
+.admin-trail__policies li > div { min-inline-size: 0; }
+.admin-trail__policies li .button { display: flex; inline-size: fit-content; padding: var(--space-2) 0; }
+.admin-trail__audit li { border-block-end: 1px solid var(--color-border); padding-block: var(--space-3); }
+.admin-trail__scope { font-size: var(--type-xs); color: var(--color-text-secondary); line-height: 1.4; }
+.admin-trail .button { min-block-size: 2.75rem; }
+.admin-trail__areas button:disabled { background: var(--color-disabled-surface); color: var(--color-disabled-text); cursor: wait; }
+.admin-trail__direction { flex: none; }
+.admin-trail[dir="rtl"] .admin-trail__direction { transform: rotate(180deg); }
+.admin-trail__empty { margin: 0; padding: var(--space-4) 0; color: var(--color-text-secondary); font-size: var(--type-sm); }
+.admin-trail__notice, .admin-trail__recovery { padding: var(--space-5); background: var(--color-material-reading); border-radius: var(--radius-md); margin-block-end: var(--space-4); }
+.admin-trail__recovery h1 { margin: 0; font-size: var(--type-title); }
+.admin-home-records { display: grid; gap: var(--space-2); padding: 0 var(--space-5) var(--space-5); }
+.admin-home-records > .button { justify-self: start; }
+.admin-home-records > details { min-inline-size: 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-material-reading); }
+.admin-home-records > details > summary { min-block-size: 2.75rem; align-content: center; padding: var(--space-2) var(--space-3); font-size: var(--type-body); font-weight: var(--font-weight-semibold); cursor: pointer; }
+.admin-home-records > details > section { padding: 0 var(--space-3) var(--space-3); }
+.admin-home-records h2 { font-size: var(--type-lg); margin: 0 0 var(--space-2); }
+.admin-home-records ul { margin: 0; padding-inline-start: var(--space-5); }
+.admin-home-records li { padding-block: var(--space-2); overflow-wrap: anywhere; }
+.admin-home-records li h3, .admin-home-records li p { margin: 0; font-size: var(--type-sm); line-height: 1.5; }
+.admin-trail__people .button, .admin-trail__heading > .button { flex:none; }
+.admin-trail__policies[open] > .admin-trail__heading { margin-block-start:var(--space-2); }
+@media(max-width:850px) { .admin-trail__right { grid-template-columns:minmax(0,1fr); } .admin-trail__policy-column,.admin-trail__status-column { grid-column:1; } .admin-trail__right:has(.admin-trail__policies.home-secondary-disclosure) .admin-trail__status-column { grid-template-columns:minmax(0,1fr); } }
+.admin-home-records dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-2) var(--space-4); margin: var(--space-3) 0 0; }
+.admin-home-records dt { font-size: var(--type-sm); color: var(--color-text-secondary); }
+.admin-home-records dd { margin: var(--space-1) 0 0; font-weight: var(--font-weight-semibold); }
+@media (max-width: 1100px) { .admin-trail__areas { grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr)); } .admin-trail__grid { grid-template-columns: minmax(0, 1fr); } .admin-trail__left { grid-template-columns: repeat(2, minmax(0, 1fr)); } .admin-trail__right { grid-column: 1; } }
+@media (max-width: 900px) { .admin-trail__intro { flex-direction: column; align-items: start; } .admin-trail__school { flex: none; padding: var(--space-3) var(--space-4); } .admin-trail__intro > div > p { font-size: var(--type-body); } .admin-trail__left, .admin-trail__right { grid-column: 1; grid-row: auto; } }
+@media (max-width: 550px) { .admin-trail__content { padding: var(--space-2) 0 var(--space-3); } .admin-trail__intro { padding-inline: 0; gap: var(--space-3); } .admin-trail__intro h1 { font-size: 1.75rem; } .admin-trail__areas { display: flex; overflow-x: auto; padding: var(--space-1); margin-inline: calc(-1 * var(--space-1)); gap: var(--space-2); } .admin-trail__areas button { flex: 0 0 8rem; min-block-size: 5.5rem; } .admin-trail__grid, .admin-trail__left, .admin-trail__right { grid-template-columns: minmax(0, 1fr); } .admin-trail__policies, .admin-trail__governance, .admin-trail__execution, .admin-trail__audit { grid-column: 1; grid-row: auto; } .admin-trail__heading { flex-wrap: wrap; } .admin-trail__configuration li { flex-wrap: wrap; } .admin-trail__configuration li .button { margin-inline-start: 3.5rem; } .admin-trail__people li .button { padding-inline: var(--space-1); } .admin-home-records { padding-inline: var(--space-3); } }

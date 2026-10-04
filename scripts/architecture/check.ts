@@ -9,7 +9,7 @@ async function inventory(directory: string): Promise<ArchitectureFile[]> {
     if (ignored.has(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) result.push(...await inventory(absolute));
-    else if (/\.(?:ts|tsx|js|mjs|md|css|json)$/.test(entry.name) && !entry.name.endsWith('.tsbuildinfo')) result.push({ path: path.relative(root, absolute).replaceAll('\\', '/'), content: await readFile(absolute, 'utf8') });
+    else if (/\.(?:ts|tsx|js|mjs|md|css|json|png|webp|jpg|jpeg|svg)$/.test(entry.name) && !entry.name.endsWith('.tsbuildinfo')) result.push({ path: path.relative(root, absolute).replaceAll('\\', '/'), content: /\.(?:png|webp|jpg|jpeg)$/.test(entry.name) ? '' : await readFile(absolute, 'utf8') });
   }
   return result;
 }

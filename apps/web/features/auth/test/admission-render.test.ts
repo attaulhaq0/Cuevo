@@ -13,7 +13,7 @@ function render(element: React.ReactNode, locale: 'en' | 'ar' = 'en') {
 const panel = (view: AdmissionView, locale: 'en' | 'ar' = 'en') => render(createElement(AdmissionPanel, { view, locale, online: true, confirmed: false, onConfirmed: () => {}, onContinue: () => {}, onPassword: () => {}, onOpen: () => {}, onDecline: () => {} }), locale);
 test('server and first client markup are inert and share the same server locale', () => {
   const server = render(createElement(AccountAdmission, { openWorkspace: () => {} }), 'ar'); const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { hash: '#token_hash=private-token&admission_secret=private-secret' } } });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { href: 'https://render.example.invalid/account/admission#token_hash=private-token&admission_secret=private-secret', hash: '#token_hash=private-token&admission_secret=private-secret' } } });
   try { assert.equal(render(createElement(AccountAdmission, { openWorkspace: () => {} }), 'ar'), server); } finally { if (descriptor) Object.defineProperty(globalThis, 'window', descriptor); else Reflect.deleteProperty(globalThis, 'window'); }
   assert.match(server, /دعوة المدرسة/); assert.match(server, /جارٍ تجهيز/); assert.doesNotMatch(server, /private-token|private-secret|token_hash|admission_secret/); assert.doesNotMatch(server, /<form/);
 });

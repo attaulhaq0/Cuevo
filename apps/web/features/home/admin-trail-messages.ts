@@ -1,0 +1,28 @@
+export const adminTrailEn = {
+  chooseArea: 'Choose a workspace above to review its current settings.',
+  title: 'A clear view of your school', introduction: 'Configure your school, people, programmes and policies — all in one place.',
+  schoolUnknown: 'School information is not available', valueUnknown: 'Not provided', environmentUnknown: 'Environment information is not available', date: 'Date',
+  context: 'School context', people: 'People and relationships', configuration: 'School configuration', configurationIntro: 'Review your current school structure, programmes, policies and capabilities.',
+  configurationUnknown: 'Current permitted school settings are not available.', peopleUnknown: 'Current people and relationship records are not available.',
+  personUnknown: 'Person information is not available', relationshipUnknown: 'Current role or relationship is not available',
+  policies: 'Policy and capability status', policyUnknown: 'Current school policy status is not available.', reviewed: 'Reviewed', disabled: 'Disabled', requiresReview: 'Requires review', unknown: 'Unknown',
+  governance: 'AI governance', governanceUnknown: 'Current governance context is not available.', fixture: 'Fixture-only context', liveReview: 'Live readiness requires review', currentGovernance: 'Current reviewed context',
+  execution: 'Automation and recovery', executionUnknown: 'Current execution receipts are not available.', processing: 'Processing', workerLimit: 'Queue completion does not establish a learner outcome or points.',
+  audit: 'Recent activity', auditUnknown: 'Current audit records are not available.', auditEmpty: 'No activity is recorded in this returned audit page.', auditScope: 'Current returned audit records only; this is not a complete activity total.',
+  succeeded: 'Completed', deniedOutcome: 'Denied', failed: 'Failed', targetUnknown: 'Source information is not available', dateUnknown: 'Date is not available',
+  loading: 'Loading current school context…', partial: 'Some current records are not available. Review the source workspace for more.', error: 'Current school context could not be loaded.', denied: 'This school context is not available with your current access.', offline: 'You are offline. Reconnect to check current school context.',
+};
+export const adminTrailAr: typeof adminTrailEn = {
+  chooseArea: 'اختر مساحة عمل أعلاه لمراجعة إعداداتها الحالية.',
+  title: 'صورة واضحة لمدرستك', introduction: 'هيّئ مدرستك والأشخاص والبرامج والسياسات، كلها في مكان واحد.',
+  schoolUnknown: 'معلومات المدرسة غير متاحة', valueUnknown: 'غير مقدّم', environmentUnknown: 'معلومات البيئة غير متاحة', date: 'التاريخ',
+  context: 'سياق المدرسة', people: 'الأشخاص والعلاقات', configuration: 'تهيئة المدرسة', configurationIntro: 'راجع بنية المدرسة الحالية والبرامج والسياسات والإمكانات.',
+  configurationUnknown: 'إعدادات المدرسة الحالية ضمن الصلاحيات غير متاحة.', peopleUnknown: 'سجلات الأشخاص والعلاقات الحالية غير متاحة.',
+  personUnknown: 'معلومات الشخص غير متاحة', relationshipUnknown: 'الدور أو العلاقة الحالية غير متاحة',
+  policies: 'حالة السياسات والإمكانات', policyUnknown: 'حالة سياسات المدرسة الحالية غير متاحة.', reviewed: 'تمت المراجعة', disabled: 'معطّل', requiresReview: 'يتطلب المراجعة', unknown: 'غير معروف',
+  governance: 'حوكمة الذكاء الاصطناعي', governanceUnknown: 'سياق الحوكمة الحالي غير متاح.', fixture: 'سياق اصطناعي فقط', liveReview: 'الجاهزية المباشرة تتطلب المراجعة', currentGovernance: 'سياق حالي تمت مراجعته',
+  execution: 'الأتمتة والاسترداد', executionUnknown: 'إيصالات التنفيذ الحالية غير متاحة.', processing: 'قيد المعالجة', workerLimit: 'لا يثبت اكتمال القائمة نتيجة تعليمية أو نقاطًا.',
+  audit: 'النشاط الأخير', auditUnknown: 'سجلات التدقيق الحالية غير متاحة.', auditEmpty: 'لا يوجد نشاط مسجّل في صفحة التدقيق المُرجعة هذه.', auditScope: 'سجلات التدقيق المُرجعة الحالية فقط؛ ليست عددًا كاملًا للنشاط.',
+  succeeded: 'مكتمل', deniedOutcome: 'مرفوض', failed: 'فشل', targetUnknown: 'معلومات المصدر غير متاحة', dateUnknown: 'التاريخ غير متاح',
+  loading: 'جارٍ تحميل سياق المدرسة الحالي…', partial: 'بعض السجلات الحالية غير متاحة. راجع مساحة المصدر للمزيد.', error: 'تعذّر تحميل سياق المدرسة الحالي.', denied: 'لا يتاح سياق المدرسة هذا ضمن صلاحياتك الحالية.', offline: 'أنت غير متصل. أعد الاتصال للتحقّق من سياق المدرسة الحالي.',
+};

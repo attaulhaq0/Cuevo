@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type APIResponse } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -60,10 +61,10 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
     await page.getByLabel('School email').fill(account.email);
     await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
+    await expectTrailWorkspace(page, account.role);
   };
   const signOut = async () => {
-    await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+    await signOutTrailWorkspace(page);
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   };
   const mutation = (path: string) => page.waitForResponse(response => response.url() === `${apiUrl}${path}` && response.request().method() === 'POST');

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ShieldAlert, WifiOff, RefreshCw, ShieldCheck } from 'lucide-react';
-import { Button } from '@cuevo/ui';
+import { Button, CuevoIcon } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { Brand } from '../../../shared/components/brand';
 import { LanguageSwitch } from '../../../shared/components/language-switch';
@@ -28,15 +27,15 @@ export function AccessState() {
   return <div className="access-page">
     <header className="public-header"><Brand /><LanguageSwitch /></header>
     <main id="main-content" className="access-state" tabIndex={-1}>
-      <div className="access-state__icon">{!online ? <WifiOff size={30} aria-hidden="true" /> : checking ? <ShieldCheck size={30} aria-hidden="true" /> : <ShieldAlert size={30} aria-hidden="true" />}</div>
+      <div className="access-state__icon"><CuevoIcon name={!online ? 'offline' : checking ? 'shield' : 'shieldAlert'} size={30}/></div>
       <p className="eyebrow">{t.schoolWorkspace}</p>
       <h1>{content.title}</h1>
       <p role="status" aria-live="polite">{content.body}</p>
       {checking ? <div className="loading-line" aria-hidden="true" /> : <div className="access-state__actions">
-        <Button type="button" onClick={refreshAccess} disabled={!online}><RefreshCw size={16} aria-hidden="true" />{t.retry}</Button>
+        <Button type="button" onClick={refreshAccess} disabled={!online}><CuevoIcon name="refresh" size={16}/>{t.retry}</Button>
         <Button type="button" variant="quiet" disabled={signingOut} onClick={() => void returnToSignIn()}>{signingOut ? t.signingOut : t.returnSignIn}</Button>
       </div>}
-      {failure?.requestId ? <details className="support-reference"><summary>{t.reference}</summary><bdi>{failure.requestId}</bdi></details> : null}
+      {failure?.requestId ? <details className="support-reference"><summary>{t.reference}</summary><p><bdi>{failure.requestId}</bdi></p></details> : null}
       {signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null}
     </main>
     <footer className="public-footer"><span>{t.company}</span><span>{t.foundation}</span></footer>

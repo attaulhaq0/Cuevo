@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -13,8 +14,8 @@ test('teacher-led group membership, peer replies, moderation and family notifica
   const directory = resolve('.local/customer-readiness/community-actions', new Date().toISOString().replace(/[:.]/g, '-'));
   await mkdir(directory, { recursive: true });
   const writes: { action: string; status: number; id: string }[] = [];
-  async function signIn(role: string) { const account = accounts.find(item => item.role === role)!; await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('navigation').getByRole('button', { name: 'Community', exact: true }).click(); await settled(page); }
-  async function signOut() { await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
+  async function signIn(role: string) { const account = accounts.find(item => item.role === role)!; await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, role); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Community', exact: true }).click(); await settled(page); }
+  async function signOut() { await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
   async function mutate(action: string, path: RegExp, click: () => Promise<unknown>) { const pending = page.waitForResponse(response => path.test(new URL(response.url()).pathname) && response.request().method() === 'POST'); await click(); const response = await pending; expect(response.ok(), action).toBe(true); const receipt = await response.json() as { id: string }; writes.push({ action, status: response.status(), id: receipt.id }); await settled(page); return receipt; }
   async function openGroup() { const row = page.locator('.community-room').filter({ has: page.getByRole('heading', { name: title, exact: true }) }); await target(page, row); await row.getByRole('button', { name: 'Open discussion', exact: true }).click(); await settled(page); }
   try {

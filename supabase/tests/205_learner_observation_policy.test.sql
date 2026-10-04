@@ -22,7 +22,8 @@ insert into app.courses(school_id,id,class_id,subject_id,title,description,creat
 insert into app.units(school_id,id,course_id,title,sequence)select school,unit_id,course_id,'Reviewed unit',1 from observation_fixture;
 insert into app.lessons(school_id,id,unit_id,title,sequence,body)select school,lesson_id,unit_id,'Reviewed lesson',1,'School authored example'from observation_fixture;
 insert into app.activities(school_id,id,lesson_id,title,kind,instructions,sequence)select school,activity_id,lesson_id,'Reviewed practice','practice','Explain a check',1 from observation_fixture;
-insert into app.activity_completions(school_id,id,activity_id,learner_id)select school,completion_id,activity_id,'20000000-0000-4000-8000-000000000012'from observation_fixture;
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true),set_config('app.school_id',(select school::text from observation_fixture),true);
+insert into app.activity_completions(school_id,id,activity_id,learner_id,completed_at)select school,completion_id,activity_id,'20000000-0000-4000-8000-000000000012',clock_timestamp()-interval'20 days'from observation_fixture;
 insert into internal.outbox_events(id,school_id,actor_id,type,entity_type,entity_id,version,metadata,deduplication_key,state,attempt_count,max_attempts,last_error_code)select original_event,school,'20000000-0000-4000-8000-000000000012','activity.complete','activity',completion_id,1,'{}','original-missing-policy','FAILED',5,5,'PROCESSING_REQUIRES_REVIEW'from observation_fixture;
 select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true),set_config('app.school_id',(select school::text from observation_fixture),true);
 set local role cuevo_api;
@@ -38,7 +39,7 @@ select throws_ok($$select*from internal.learner_observation_policy_revisions$$,'
 reset role;
 select is((select count(*)from internal.learner_observation_policy_revisions where school_id=(select school from observation_fixture)),1::bigint,'one immutable approval');
 select is((select count(*)from internal.audit_events where school_id=(select school from observation_fixture)and action='learner.observation_policy.approved'),1::bigint,'one canonical approval audit');
-select throws_ok($$update app.learner_state_policies set development_window_days=21 where school_id=(select school from observation_fixture)$$,'22023',null,'current policy cannot contradict its immutable approval');
+select throws_ok($$update app.learner_state_policies set development_window_days=22 where school_id=(select school from observation_fixture)$$,'22023',null,'current policy cannot contradict its immutable approval');
 select throws_ok($$update internal.learner_observation_policy_revisions set development_window_days=30 where id=(select policy_id from observation_fixture)$$,'55000',null,'approval history cannot be edited');
 update observation_fixture set refresh_event=(select event_id from internal.learner_observation_refresh_sources where policy_id=(select policy_id from observation_fixture)and kind='PAGE');
 
@@ -118,7 +119,7 @@ select is(internal.process_learner_event((select refresh_event from observation_
 reset role;
 select is((select observation_policy_version from app.learner_state_snapshots where school_id=(select school from observation_fixture)and learner_id='20000000-0000-4000-8000-000000000012'),1,'snapshot stamps actual applied policy version');
 set local role cuevo_api;
-select is((internal.read_current_learner_projection('20000000-0000-4000-8000-000000000012')->'development'->'practice'->>'count'),'1','current read receives recovered factual practice');
+select is((internal.read_current_learner_projection('20000000-0000-4000-8000-000000000012')->'development'->'practice'->>'count'),'0','narrow window excludes retained old practice without inventing a signal');
 select lives_ok($$select internal.approve_learner_observation_policy('{"developmentWindowDays":30,"expectedVersion":1,"reason":"Reviewed wider observation window","confirmApproval":true}','new-policy-key',repeat('c',64),'policy-fixture')$$,'new explicit window approval succeeds');
 select is((internal.read_current_learner_projection('20000000-0000-4000-8000-000000000012')->'development'->'practice'->'count'),'null'::jsonb,'old policy snapshot counts become unknown until current refresh');
 select throws_ok($$select internal.approve_learner_observation_policy('{"developmentWindowDays":14,"expectedVersion":0,"reason":"Reviewed school observation window","confirmApproval":true}','reviewed-policy-key',repeat('b',64),'policy-fixture')$$,'22023',null,'old approved key cannot resurrect superseded policy');
@@ -192,6 +193,27 @@ reset role;
 select is((select count(*)from internal.learner_observation_refresh_sources source where source.school_id=(select school from observation_fixture)and source.policy_id=(select approval_id from app.learner_state_policies where school_id=(select school from observation_fixture))and source.kind='LEARNER'and not exists(select 1 from observation_volume_before before_page where before_page.event_id=source.event_id)),11::bigint,'all eleven current-source learners get one newly planned delivery each');
 select is((select count(distinct source.learner_id)from internal.learner_observation_refresh_sources source where source.school_id=(select school from observation_fixture)and source.policy_id=(select approval_id from app.learner_state_policies where school_id=(select school from observation_fixture))and source.kind='LEARNER'and not exists(select 1 from observation_volume_before before_page where before_page.event_id=source.event_id)),11::bigint,'pagination creates no duplicate learner delivery');
 select is((select count(*)from internal.learner_observation_refresh_sources where school_id=(select school from observation_fixture)and policy_id=(select approval_id from app.learner_state_policies where school_id=(select school from observation_fixture))and kind='PAGE'and cursor_id is not null),1::bigint,'terminal second page creates no empty continuation');
+
+
+-- A retained factual completion can become newly eligible when the school widens its reviewed window.
+savepoint wider_window_signal;
+select is((select count(*)from app.learner_signals where school_id=(select school from observation_fixture)and rule_version=2),0::bigint,'new policy does not fabricate signal before source refresh');
+insert into observation_boundary(kind,event_id,learner_id,lease_token)select 'WIDEN_REFRESH',event_id,learner_id,gen_random_uuid()from internal.learner_observation_refresh_sources where school_id=(select school from observation_fixture)and policy_id=(select approval_id from app.learner_state_policies where school_id=(select school from observation_fixture))and kind='LEARNER'and learner_id='20000000-0000-4000-8000-000000000012';
+update internal.outbox_events set state='PROCESSING',lease_token=(select lease_token from observation_boundary where kind='WIDEN_REFRESH'),lease_until=clock_timestamp()+interval'30 seconds'where id=(select event_id from observation_boundary where kind='WIDEN_REFRESH');
+set local role cuevo_worker;
+select is(internal.process_learner_event((select event_id from observation_boundary where kind='WIDEN_REFRESH'),(select lease_token from observation_boundary where kind='WIDEN_REFRESH'))->>'status','REFRESHED','restricted worker refreshes wider policy from retained exact sources');
+reset role;
+select is((select count(*)from app.learner_signals where school_id=(select school from observation_fixture)and learner_id='20000000-0000-4000-8000-000000000012'),1::bigint,'wider approved window creates the newly eligible source-backed practice signal');
+select is((select rule_version from app.learner_signals where school_id=(select school from observation_fixture)and learner_id='20000000-0000-4000-8000-000000000012'),2,'newly eligible signal uses current explicit policy version');
+set local role cuevo_api;
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true),set_config('app.school_id',(select school::text from observation_fixture),true);
+select is(jsonb_array_length(internal.read_current_practice_signals(25,null,'20000000-0000-4000-8000-000000000012')->'items'),1,'newly eligible signal is readable by its exact authorized learner');
+select is(internal.read_current_practice_signals(25,null,'20000000-0000-4000-8000-000000000012')->'items'->0->>'count','1','public signal count agrees with the exact retained source');
+select is(jsonb_array_length(internal.read_current_practice_signals(25,null,'20000000-0000-4000-8000-000000000012')->'items'->0->'sourceEventIds'),1,'public signal retains its real processed recovery source event');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
+select is(jsonb_array_length(internal.read_current_practice_signals(25,null,'20000000-0000-4000-8000-000000000012')->'items'),1,'authorized administrator reads the same factual signal');
+reset role;
+rollback to savepoint wider_window_signal;release savepoint wider_window_signal;
 
 -- Every private helper and new raw table is denied independently to every runtime/Data API role.
 select ok(not has_function_privilege(role_name,signature,'EXECUTE'),role_name||' cannot execute private '||signature)

@@ -12,7 +12,7 @@ test('same-context room refresh preserves only candidate identity while loading 
   assert.equal(currentGroupCandidateRoom(current, { scope: current.scope, classId: 'class-a', rooms: [], loading: false, failed: true }).id, null);
 });
 import test from 'node:test';
-import { parseRoom, parsePost, parseAnnouncement, parseNotification, replyParentContext, type Post } from '../model.ts';
+import { parseRoom, parsePost, parseAnnouncement, parseNotification, replyParentContext, reportSourceContext, type Post } from '../model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
 test('rooms require private scoped topics and explicit post/moderation permissions', () => {
   const room = { id: 'r', classId: 'c', name: 'Class room', type: 'CLASS', ownerId: 't', status: 'ACTIVE', canModerate: false, canPost: true, privateTopic: 'cuevo:school:room:r' };
@@ -36,6 +36,15 @@ test('reply context distinguishes a missing page from an actual hidden parent', 
   assert.deepEqual(replyParentContext('parent', []), { state: 'NOT_LOADED' });
   assert.deepEqual(replyParentContext('parent', [visible]), { state: 'VISIBLE', authorName: 'Teacher' });
   assert.deepEqual(replyParentContext('parent', [{ ...visible, status: 'HIDDEN', body: null }]), { state: 'HIDDEN' });
+});
+
+test('reported-message context uses only the exact currently loaded room source',()=>{
+ const post:Post={id:'reported',roomId:'room',actorId:'actor',authorName:'Teacher',body:'Exact message',replyToId:null,createdAt:'2026-10-02T00:00:00Z',status:'VISIBLE',reactions:[]};
+ assert.deepEqual(reportSourceContext('reported','room',[post],true),{state:'VISIBLE',post});
+ assert.deepEqual(reportSourceContext('reported','room',[post],false),{state:'NOT_LOADED'});
+ assert.deepEqual(reportSourceContext('reported','room',[{...post,roomId:'another'}],true),{state:'NOT_LOADED'});
+ assert.deepEqual(reportSourceContext('reported','room',[],true),{state:'NOT_LOADED'});
+ const hidden={...post,status:'HIDDEN' as const,body:null};assert.deepEqual(reportSourceContext('reported','room',[hidden],true),{state:'HIDDEN',post:hidden});
 });
 test('notifications carry their own authorized title independently of loaded announcement pages', () => {
   const notification = { id: 'a', announcementId: 'a', title: 'Exact current notice', kind: 'ANNOUNCEMENT', createdAt: '2026-10-02T00:00:00Z', readAt: null };

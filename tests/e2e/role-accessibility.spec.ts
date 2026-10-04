@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, trailWorkspaceAction } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -42,9 +43,16 @@ async function signIn(page: Page, role: Role) {
   const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
   await keyboardActivate(page, page.getByRole('button', { name: 'Sign in', exact: true }));
   const current = await (await verified).json() as { displayName: string };
-  await expect(page.locator('.workspace-intro .eyebrow')).toContainText(current.displayName);
-  await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Next action', exact: true })).toBeVisible();
+  if (role === 'student') {
+    await expect(page.locator('.student-trail__intro h1')).toContainText(current.displayName);
+    await expect(page.locator('.workspace-chrome__person')).toContainText('Student');
+    await expect(page.getByRole('heading', { name: 'Your next learning step', exact: true })).toBeVisible();
+  } else {
+    await expectTrailWorkspace(page, role);
+    await expect(page.locator('.workspace-chrome__person > button strong')).toHaveText(current.displayName);
+    const titles: Record<string, string | RegExp> = { admin: 'A clear view of your school', coordinator: 'Programme and learning review', teacher: 'Your teaching day', parent: /^(Learning, clearly|Learning clearly with)/ };
+    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(titles[role]);
+  }
   if (role === 'parent') {
     const child = page.getByLabel('Child', { exact: true });
     const option = child.locator('option[value]:not([value=""]):not([disabled])').first();
@@ -109,14 +117,15 @@ for (const role of roles) {
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await signIn(page, role); await page.emulateMedia({ reducedMotion: 'reduce' });
     const navigation = page.getByRole('navigation', { name: 'Workspace navigation', exact: true });
-    const names = await navigation.getByRole('button').allTextContents();
+    const railNames = await navigation.locator('button[data-workspace-destination]').allTextContents();
+    const names = [...railNames, 'Access settings', 'Account'];
     expect(names).toContain('Learning'); expect(names).toContain('Academic'); expect(names).toContain('Progress');
     if (role === 'parent') { expect(names).not.toContain('Development'); expect(names).not.toContain('Next steps'); expect(names).not.toContain('Curriculum context'); }
     if (role === 'student') expect(names).not.toContain('Curriculum context');
     for (let index = 0; index < names.length; index++) {
       await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
-      const target = page.getByRole('navigation', { name: 'Workspace navigation', exact: true }).getByRole('button', { name: names[index].trim(), exact: true });
-      await keyboardActivate(page, target); await expect(target).toHaveAttribute('aria-current', 'page');
+      const target = await trailWorkspaceAction(page, names[index].trim());
+      await keyboardActivate(page, target); if (!['Access settings', 'Account'].includes(names[index].trim())) await expect(target).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('main h1')).toBeFocused(); await settled(page);
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
       // Staff/parent progress must select a real permitted learner before reviewing evidence.
@@ -152,7 +161,7 @@ test('protected content clears offline and only returns after current membership
   await page.screenshot({ path: resolve(evidence, 'student-offline-ar.png') });
   const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
   await context.setOffline(false); expect((await verified).ok()).toBe(true);
-  await expect(page.getByRole('navigation')).toBeVisible(); await expect(page.getByRole('heading', { name: 'الخطوة التالية', exact: true })).toBeVisible();
+  await expectTrailWorkspace(page, 'student'); await expect(page.getByRole('heading', { name: 'خطوتك التالية في التعلّم', exact: true })).toBeVisible();
 });
 
 test('sign-in keyboard controls, validation errors and bilingual labels remain associated at narrow reflow', async ({ page }) => {
@@ -177,7 +186,7 @@ test('sign-in keyboard controls, validation errors and bilingual labels remain a
 
 test('command form refusal is associated with named fields and supports keyboard cancellation', async ({ page }) => {
   await signIn(page, 'admin');
-  await keyboardActivate(page, page.getByRole('navigation').getByRole('button', { name: 'School', exact: true })); await settled(page);
+  await keyboardActivate(page, page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true })); await settled(page);
   await keyboardActivate(page, page.getByRole('button', { name: 'Create academic year', exact: true }));
   const form = page.getByRole('region', { name: 'Create academic year', exact: true });
   await form.getByLabel('Name', { exact: true }).fill('Synthetic refusal case');
@@ -198,7 +207,7 @@ for (const state of [{ status: 403, title: 'School access is unavailable for thi
     const displayName = await signIn(page, 'parent'); await mkdir(evidence, { recursive: true });
     // Fault injection checks presentation/recovery only. API/SQL suites prove actual authorization denial.
     await page.route('**/v1/me', route => route.fulfill({ status: state.status, contentType: 'application/json', body: JSON.stringify({ code: 'TEST_MEMBERSHIP_FAILURE', requestId: `presentation-${state.status}` }), headers: { 'access-control-allow-origin': '*' } }));
-    await keyboardActivate(page, page.getByRole('navigation').getByRole('button', { name: 'Access details', exact: true }));
+    await keyboardActivate(page, await trailWorkspaceAction(page, 'Access settings'));
     await keyboardActivate(page, page.getByRole('button', { name: 'Refresh access', exact: true }));
     await expect(page.getByRole('heading', { name: state.title, exact: true })).toBeVisible(); await expect(page.getByRole('navigation')).toHaveCount(0);
     await expect(page.getByText(displayName, { exact: false })).toHaveCount(0); await expect(page.getByRole('status')).toBeVisible();
@@ -208,6 +217,6 @@ for (const state of [{ status: 403, title: 'School access is unavailable for thi
     await keyboardActivate(page, page.getByRole('button', { name: 'Try again', exact: true })); expect((await verified).ok()).toBe(true);
     await expect(page.getByRole('heading', { name: 'Your school access', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Current membership', exact: true })).toContainText('Parent / guardian');
-    await expect(page.locator('.workspace-intro .eyebrow')).toContainText(displayName);
+    await expect(page.locator('.workspace-chrome__person > button strong')).toHaveText(displayName);
   });
 }

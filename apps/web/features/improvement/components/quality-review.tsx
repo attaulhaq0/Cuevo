@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Button } from '@cuevo/ui';
 import { intelligenceQualityReviewStatusSchema } from '@cuevo/contracts';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
@@ -12,7 +13,7 @@ export function IntelligenceQualityReview({ runId }: { runId: string }) {
   const current = useApiQuery(`/v1/intelligence/runs/${runId}/review`, parseReview, refresh);
   const title = ar ? 'مراجعة جودة المقترح' : 'Review proposal quality';
   if (current.loading) return <p role="status">{ar ? 'جارٍ تحميل المراجعة…' : 'Loading review…'}</p>;
-  if (current.error) return <LearningError error={current.error} />;
+  if (current.error) return <><LearningError error={current.error}/><Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{ar?'المحاولة مجددًا':'Try again'}</Button></>;
   if (!current.data) return null;
   const unknown = { value: 'UNKNOWN', label: ar ? 'غير معروف / لم يُقيّم' : 'Unknown / not assessed' };
   const groups = [

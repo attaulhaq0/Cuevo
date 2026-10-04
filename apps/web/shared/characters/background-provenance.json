@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "approval": "Founder selected Midnight Trail and retained light on3October2026",
+  "source": {
+    "rawPNG": "C:/Users/hp/.codex/visualizations/2026/10/03/cuevo-trail-implementation/dark-background-review/backgrounds/midnight.png",
+    "rawSha256": "e1473c61f51dc8a7bf90fa05ed0d8f1182575a66845c7b709c421c97c8f2f775",
+    "reviewPNG": "C:/Users/hp/.codex/visualizations/2026/10/03/cuevo-trail-implementation/dark-background-review/backgrounds/midnight-review.png",
+    "reviewSha256": "37864e388fd976531a4c0af65b924c7c999426d699bf37ba71b9e1d3524525bd",
+    "model": "gpt-image-2.5-sunburst",
+    "prompt": "C:/Users/hp/.codex/visualizations/2026/10/03/cuevo-trail-implementation/dark-background-review/prompts/midnight.txt",
+    "method": "Bundled unmodified image_gen.py edit with original light ribbon reference"
+  },
+  "runtime": [
+    {
+      "theme": "light",
+      "path": "apps/web/shared/characters/assets/trail-background.png",
+      "sha256": "959324022fe2c03badbd1daa898acabda756e0282dbc28a8ab6a2b4ae94f40ee",
+      "bytes": 1515291,
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "processing": "Existing original bytes retained"
+    },
+    {
+      "theme": "dark",
+      "path": "apps/web/shared/characters/assets/trail-background-midnight.webp",
+      "sha256": "dd47b54eae2bf4c210dc0bc2c7063c65a7ebc3bdcf25d95fd6dcd9b05657b08f",
+      "bytes": 1131584,
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "processing": "Native generated PNG with isolated linear-luminance highlight cap0.07; lossless WebP exactly matches reviewed RGB pixels",
+      "maximumLuminance": 0.07087664727479631
+    }
+  ],
+  "usage": "One theme-aware decorative TrailBackground with CSS-first light/dark/System selection; no domain authority, no live generation, no native4K claim"
+}

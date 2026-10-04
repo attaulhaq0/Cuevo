@@ -119,3 +119,5 @@ The 3 October founder-authorized [Character Progression System foundation](../ar
 - [52-DECISION-LOG-MVP.md](research/52-DECISION-LOG-MVP.md)
 - [57-CURRENT-RESEARCH-CHECKLIST-2026-10-01.md](research/57-CURRENT-RESEARCH-CHECKLIST-2026-10-01.md)
 - [86-RESEARCH-SOURCE-INDEX-2026-10-01.md](research/86-RESEARCH-SOURCE-INDEX-2026-10-01.md)
+
+The approved [Trail migration](../superpowers/specs/2026-10-03-cuevo-trail-mvp-redesign.md), [companion strategy](../superpowers/specs/2026-10-03-student-companion-growth.md) and [implementation plan](../superpowers/plans/2026-10-03-cuevo-trail-implementation.md) are implementation guidance, not additional numbered product sources or acceptance claims. Current registry paths/hashes remain the exact source authority.

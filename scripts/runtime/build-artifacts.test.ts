@@ -38,7 +38,7 @@ test('compiled API function imports without a listener and preserves actual deni
   assert.deepEqual(await readdir(join(directory, 'public')), []);
   const configuration = JSON.parse(await readFile(join(directory, 'vercel.json'), 'utf8'));
   assert.deepEqual(configuration.rewrites, [{ source: '/:path*', destination: '/api/index' }]);
-  assert.equal(configuration.outputDirectory, 'public'); assert.equal(configuration.functions['api/index.mjs'].includeFiles, 'supabase/seed/curriculum/**');
+  assert.equal(configuration.outputDirectory, 'public'); assert.deepEqual(configuration.functions['api/index.mjs'].includeFiles, ['supabase/seed/curriculum/**','pedagogy/**']);
   assert.ok(artifact.sources.some(source => source.path === 'apps/api/src/serverless.ts'));
   assert.equal(artifact.sources.some(source => source.path === 'apps/api/src/main.ts'), false);
   const packFiles = artifact.files.filter(file => file.path.startsWith('supabase/seed/curriculum/'));
@@ -86,5 +86,29 @@ test('compiled API private pack root stays relative to its artifact despite an u
     invoke(true);
   } finally {
     assert.equal(resolve(directory, '..'), parent); await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('Node and Vercel artifacts retain the private reviewed catalogue and resolve it independently of cwd', async () => {
+  const source=await readFile(resolve('apps/api/src/modules/curriculum/pedagogy/revised-bloom-v1.json'));
+  const manifest=JSON.parse(await readFile(resolve('apps/api/src/modules/curriculum/pedagogy/manifest.json'),'utf8'));
+  assert.equal(createHash('sha256').update(source).digest('hex'),manifest.files['revised-bloom-v1.json']);
+  for(const target of ['api','api-vercel']as const){
+    const artifact=await buildRuntimeArtifact(target),directory=resolve('.local/runtime-artifacts',target);
+    const expected=artifact.files.filter(file=>file.path==='pedagogy/revised-bloom-v1.json');
+    assert.equal(expected.length,1);assert.equal(expected[0]!.sha256,manifest.files['revised-bloom-v1.json']);
+    assert.deepEqual(await readFile(join(directory,expected[0]!.path)),source);
+    const privateRoot=target==='api-vercel'?join(directory,'.vercel/output/functions/api/index.func'):directory;
+    assert.deepEqual(await readFile(join(privateRoot,'pedagogy/revised-bloom-v1.json')),source);
+    if(target==='api-vercel'){assert.deepEqual(await readdir(join(directory,'public')),[]);assert.equal(artifact.files.some(file=>file.path.includes('/static/')&&file.path.includes('pedagogy')),false);}
+    const probe=join(privateRoot,target==='api-vercel'?'api/catalogue-probe.mjs':'catalogue-probe.mjs');
+    await build({entryPoints:[resolve('apps/api/src/modules/curriculum/pedagogy/catalogue.ts')],outfile:probe,bundle:true,platform:'node',target:'node24',format:'esm',packages:'external',define:{CUEVO_PEDAGOGY_CATALOGUE_URL:JSON.stringify(target==='api-vercel'?'../pedagogy/revised-bloom-v1.json':'./pedagogy/revised-bloom-v1.json')},alias:{'@cuevo/domain':resolve('packages/domain/src/index.ts'),'@cuevo/contracts':resolve('packages/contracts/src/index.ts')}});
+    const invoke=(tampered:boolean)=>{
+      const script=`import assert from 'node:assert/strict';const{getThinkingFocusCatalogue}=await import(${JSON.stringify(pathToFileURL(probe).href)});${tampered?"assert.throws(getThinkingFocusCatalogue,{code:'THINKING_FOCUS_SOURCE_REQUIRES_REVIEW'});":"const catalogue=getThinkingFocusCatalogue();assert.equal(catalogue.taxonomyVersion,'revised-bloom-2001-cuevo-v1');assert.equal(catalogue.processes.length,6);assert.equal(catalogue.interpretation,'TASK_DEMAND_NOT_LEARNER_LEVEL');"}`;
+      const child=spawnSync(process.execPath,['--input-type=module','--eval',script],{cwd:resolve('apps/web'),env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot},encoding:'utf8',timeout:10000});
+      assert.equal(child.status,0,child.stderr);
+    };
+    try{invoke(false);await writeFile(join(privateRoot,'pedagogy/revised-bloom-v1.json'),Buffer.concat([source,Buffer.from('\n')]));invoke(true);}
+    finally{await writeFile(join(privateRoot,'pedagogy/revised-bloom-v1.json'),source);await rm(probe,{force:true});}
   }
 });

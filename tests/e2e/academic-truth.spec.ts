@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -22,7 +23,7 @@ test('teacher reviews and releases native result; student follows source evidenc
   await command(`/v1/courses/${course.id}/publish`, {}, teacherToken);
   const assessment = await command('/v1/assessments', { courseId: course.id, title, instructions: 'Explain the synthetic example.', maxScore: 10 }, teacherToken);
   await command(`/v1/assessments/${assessment.id}/submissions`, { content: 'A synthetic response with a traceable source.' }, studentToken);
-  const signIn = async (a: Account) => { await page.goto('/'); await page.getByLabel('School email').fill(a.email); await page.getByLabel('Password', { exact: true }).fill(a.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Academic', exact: true }).click(); };
+  const signIn = async (a: Account) => { await page.goto('/'); await page.getByLabel('School email').fill(a.email); await page.getByLabel('Password', { exact: true }).fill(a.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page); await page.getByRole('button', { name: 'Academic', exact: true }).click(); };
   await signIn(teacher);
   await page.locator('.marking-queue__item').filter({ hasText: title }).click();
   const linkForm = page.getByRole('region', { name: 'Link approved objective', exact: true });
@@ -34,7 +35,7 @@ test('teacher reviews and releases native result; student follows source evidenc
   await page.getByRole('button', { name: 'Release result', exact: true }).click();
   const release = page.getByRole('region', { name: 'Release result', exact: true }); await expect(release.getByRole('checkbox')).not.toBeChecked(); await release.getByRole('button', { name: 'Release result', exact: true }).click();
   await expect(page.locator('.mark-review').getByText('Released', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await signIn(student);
+  await signOutTrailWorkspace(page); await signIn(student);
   const result = page.locator('.academic-row').filter({ hasText: title }); await expect(result.locator('.native-score strong')).toHaveText('0'); await result.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(result.locator('.evidence-provenance')).toContainText('Submission');
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

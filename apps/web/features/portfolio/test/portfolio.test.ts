@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parsePortfolioItem, parsePortfolioRevision, parsePrivateAsset, parsePortfolioSourceWork, parsePortfolioRequestedReview, parsePortfolioFeedbackRequest,portfolioWorkChoices } from '../model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
+import * as portfolio from '../model.ts';
+import { CommandJournal, confirmCommandReceipt } from '../../../shared/api/client.ts';
 const item = { id: 'p', revisionId: 'pr1', revision: 1, learnerId: 'l', sourceModel: 'numeric', title: 'Selected explanation', reflection: 'I explained the source.', createdAt: '2026-10-01T00:00:00Z', feedback: null, featured: false, approvalState: 'AWAITING_REVIEW', parentVisible: false, reviewedAt: null, evidenceId: 'e', resultId: 'r', submissionId: 's', referenceId: 'ref', referenceVersion: 'v1', policyVersion: 2, nativeResult: { type: 'numeric', score: 0, maxScore: 10, policyVersion: 2 }, assessmentTitle: 'School task', referenceTitle: 'Objective' };
 test('selected work preserves zero and source/native revision without inheriting parent approval', () => {
   const result = parsePortfolioItem(item); assert.equal(result.parentVisible, false);
@@ -35,3 +37,110 @@ test('requested feedback retains exact learner and reflection identity before re
 test('selected work labels use real source/time context and require clear names for exact duplicates',()=>{const source=parsePortfolioItem(item);const choices=portfolioWorkChoices([source,{...source,id:'other'}],'en');assert.equal(choices.every(choice=>choice.ambiguous),true);assert.equal(choices.some(choice=>choice.label.includes('other')||choice.label.includes(source.revisionId)),false);const clear=portfolioWorkChoices([source,{...source,id:'other',title:'A different checking explanation'}],'ar');assert.equal(clear.every(choice=>!choice.ambiguous),true);assert.throws(()=>parsePortfolioItem({...item,title:''}),LearningApiError);});
 test('portfolio identity keeps learner and submitted context before matching-title review choices',()=>{const identity={status:'READY',learnerName:'Lina Hassan',className:'Cedar',yearGroupName:'Year 8',academicYearName:'2026–2027',courseTitle:'Checking methods',assessmentTitle:'Selected checking',submittedAt:'2026-10-02T01:00:00Z',submissionRevision:1};const first=parsePortfolioItem({...item,identity});const second=parsePortfolioItem({...item,id:'other',learnerId:'other-learner',identity:{...identity,learnerName:'Maha Hassan'}});const choices=portfolioWorkChoices([first,second],'en');assert.equal(choices.every(choice=>!choice.ambiguous),true);assert.match(choices[0].label,/Lina Hassan/);assert.match(choices[1].label,/Maha Hassan/);assert.equal(choices.some(choice=>choice.label.includes('other-learner')),false);});
 test('missing portfolio identity is explicit unknown and cannot label review by technical identifier',()=>{const unknown=parsePortfolioItem(item);assert.equal(unknown.identity.status,'REQUIRES_REVIEW');assert.equal(unknown.identity.learnerName,null);assert.throws(()=>parsePortfolioItem({...item,identity:{status:'READY',learnerName:null,className:'Cedar',yearGroupName:'Year 8',academicYearName:'2026–2027',courseTitle:'Checking',assessmentTitle:'Selected work',submittedAt:'2026-10-02T01:00:00Z',submissionRevision:1}}),LearningApiError);});
+
+const sourceId='00000000-0000-4000-8000-000000000001';
+const otherId='00000000-0000-4000-8000-000000000002';
+const document={id:sourceId,name:'Checking.pdf',contentType:'application/pdf' as const,byteSize:12,sha256:'a'.repeat(64),state:'AVAILABLE' as const};
+const exactItem=parsePortfolioItem({...item,id:sourceId,revisionId:sourceId,learnerId:sourceId,evidenceId:sourceId,resultId:sourceId,submissionId:sourceId,referenceId:sourceId,submissionKind:'TEXT',responseKind:'TEXT',artifactCount:1,identity:{status:'READY',learnerName:'Lina',className:'Cedar',yearGroupName:'Year 8',academicYearName:'2026–2027',courseTitle:'Checking',assessmentTitle:'School task',submittedAt:'2026-10-01T00:00:00Z',submissionRevision:1}});
+const exactSource=parsePortfolioSourceWork({itemId:sourceId,revisionId:sourceId,portfolioRevision:1,learnerId:sourceId,learnerName:'Lina',evidenceId:sourceId,resultId:sourceId,referenceId:sourceId,referenceVersion:'v1',policyVersion:2,source:{kind:'TEXT',submissionId:sourceId,submissionRevision:1,assessmentId:sourceId,assessmentTitle:'School task',submittedAt:'2026-10-01T00:00:00Z',content:'Exact answer',artifacts:[document]}});
+const readContext={apiUrl:'https://api.cuevo.invalid',membership:{schoolId:'school',userId:'learner',role:'student'},accessToken:'token',accessGeneration:1,online:true,status:'ready'};
+
+test('protected detail and document-review acknowledgements disappear on the first changed-context projection',()=>{
+ assert.equal(typeof portfolio.portfolioReadScope,'function');
+ const scope=portfolio.portfolioReadScope(readContext,'/v1/portfolio/items/source',0);
+ const response={scope,value:exactSource};const acknowledgements={scope,value:[sourceId]};
+ assert.equal(portfolio.currentPortfolioRead(response,scope)?.source.content,'Exact answer');
+ for(const context of [{...readContext,apiUrl:'https://replacement.invalid'},{...readContext,membership:{...readContext.membership,schoolId:'other-school'}},{...readContext,membership:{...readContext.membership,userId:'other-learner'}},{...readContext,membership:{...readContext.membership,role:'teacher'}},{...readContext,accessToken:'replacement-token'},{...readContext,accessGeneration:2},{...readContext,online:false},{...readContext,status:'verifying'}]){
+  const next=portfolio.portfolioReadScope(context,'/v1/portfolio/items/source',0);
+  assert.equal(portfolio.currentPortfolioRead(response,next),null);
+  assert.equal(portfolio.currentPortfolioRead(acknowledgements,next),null);
+ }
+ for(const next of [portfolio.portfolioReadScope(readContext,'/v1/portfolio/items/other',0),portfolio.portfolioReadScope(readContext,'/v1/portfolio/items/source',1),null])assert.equal(portfolio.currentPortfolioRead(response,next),null);
+});
+test('exact selected source requires every known academic and submitted context before review',()=>{
+ assert.equal(typeof portfolio.portfolioSourceMatchesItem,'function');
+ assert.equal(portfolio.portfolioSourceMatchesItem(exactSource,exactItem),true);
+ for(const source of [{...exactSource,portfolioRevision:2},{...exactSource,evidenceId:otherId},{...exactSource,resultId:otherId},{...exactSource,referenceId:otherId},{...exactSource,referenceVersion:'v2'},{...exactSource,policyVersion:3},{...exactSource,learnerName:'Other learner'},{...exactSource,source:{...exactSource.source,submissionRevision:2}},{...exactSource,source:{...exactSource.source,assessmentTitle:'Other task'}},{...exactSource,source:{...exactSource.source,submittedAt:'2026-10-02T00:00:00Z'}},{...exactSource,source:{...exactSource.source,kind:'FILE' as const,content:''}},{...exactSource,source:{...exactSource.source,artifacts:[]}}])assert.equal(portfolio.portfolioSourceMatchesItem(source,exactItem),false);
+});
+test('document selections require exact full submission parity and an available unique subset',()=>{
+ assert.equal(typeof portfolio.portfolioDocumentSelectionValid,'function');
+ const all={submissionId:sourceId,assessmentId:sourceId,learnerId:sourceId,revision:1,responseKind:'TEXT' as const,content:'Exact answer',artifacts:[document,{...document,id:otherId,name:'Other.pdf'}]};
+ assert.equal(portfolio.portfolioDocumentSelectionValid(all,exactSource,exactItem,[sourceId,otherId]),true);
+ for(const chosen of [[sourceId,sourceId],['unknown'],[sourceId,otherId,otherId],['a','b','c','d','e','f']])assert.equal(portfolio.portfolioDocumentSelectionValid(all,exactSource,exactItem,chosen),false);
+ for(const changed of [{...all,revision:2},{...all,assessmentId:otherId},{...all,responseKind:'FILE' as const,content:''},{...all,content:'Other answer'},{...all,artifacts:[{...document,state:'RETIRED' as const}]},{...all,artifacts:[{...document,sha256:'b'.repeat(64)}]}])assert.equal(portfolio.portfolioDocumentSelectionValid(changed,exactSource,exactItem,[sourceId]),false);
+ const fileItem={...exactItem,responseKind:'FILE' as const};const fileSource={...exactSource,source:{...exactSource.source,kind:'FILE' as const,content:''}};const fileAll={...all,responseKind:'FILE' as const,content:''};
+ assert.equal(portfolio.portfolioDocumentSelectionValid(fileAll,fileSource,fileItem,[]),false);
+ assert.equal(portfolio.portfolioDocumentSelectionValid(fileAll,fileSource,fileItem,[sourceId]),true);
+});
+test('source validation precedes document controls and downloaded acknowledgements retain exact byte metadata',()=>{
+ assert.equal(typeof portfolio.portfolioDocumentSourcesMatch,'function');
+ const all={submissionId:sourceId,assessmentId:sourceId,learnerId:sourceId,revision:1,responseKind:'TEXT' as const,content:'Exact answer',artifacts:[document]};
+ assert.equal(portfolio.portfolioDocumentSourcesMatch(all,exactSource,exactItem),true);
+ assert.equal(portfolio.portfolioDocumentSourcesMatch({...all,artifacts:[{...document,sha256:'b'.repeat(64)}]},exactSource,exactItem),false);
+ const reviewed=portfolio.portfolioArtifactReviewKey(document);
+ for(const changed of [{...document,sha256:'b'.repeat(64)},{...document,byteSize:13},{...document,name:'Other.pdf'},{...document,state:'RETIRED' as const}])assert.notEqual(portfolio.portfolioArtifactReviewKey(changed),reviewed);
+});
+test('requested review rejects a policy mismatch between its native result and embedded selected work',()=>{
+ const request={id:sourceId,itemId:sourceId,revisionId:sourceId,learnerId:sourceId,learnerName:'Lina',title:'Selected explanation',message:'Please review',state:'PENDING' as const,requestedAt:'2026-10-01T00:00:00Z'};
+ const source=parsePortfolioRequestedReview({requestId:sourceId,itemId:sourceId,revisionId:sourceId,revision:1,title:'Selected explanation',reflection:'Exact reflection',learnerId:sourceId,learnerName:'Lina',sourceModel:'numeric',nativeResult:{type:'numeric',score:0,maxScore:10,policyVersion:2},evidenceId:sourceId,resultId:sourceId,assessmentTitle:'School task',referenceTitle:'Objective',work:exactSource});
+ assert.equal(typeof portfolio.portfolioRequestedReviewMatchesRequest,'function');
+ assert.equal(portfolio.portfolioRequestedReviewMatchesRequest(source,request),true);
+ assert.equal(portfolio.portfolioRequestedReviewMatchesRequest({...source,work:{...exactSource,policyVersion:3}},request),false);
+ assert.equal(portfolio.portfolioRequestedReviewMatchesRequest({...source,title:'Other reflection'},request),false);
+});
+test('upload settles only a matching complete available receipt and retains malformed-success retries',()=>{
+ assert.equal(typeof portfolio.parsePrivateAssetReceipt,'function');
+ const staged={id:sourceId,ownerId:sourceId,name:'Checking.pdf',contentType:'application/pdf',byteSize:12,sha256:'a'.repeat(64),state:'STAGED',createdAt:'2026-10-01T00:00:00Z',objectPath:'private/opaque'};
+ const expected={ownerId:sourceId,name:'Checking.pdf',contentType:'application/pdf' as const,byteSize:12,sha256:'a'.repeat(64)};
+ assert.equal(portfolio.parsePrivateAssetReceipt(staged,expected,'stage').id,sourceId);
+ const journal=new CommandJournal();const command=journal.prepare('finalize',`/v1/assets/${sourceId}/finalize`,{contentBase64:'ZXhhY3Q='});
+ for(const receipt of [{id:sourceId},{...staged,state:'AVAILABLE',id:otherId},{...staged,state:'AVAILABLE',ownerId:otherId},{...staged,state:'AVAILABLE',sha256:'b'.repeat(64)},{...staged,state:'AVAILABLE',byteSize:13},{...staged,state:'AVAILABLE',name:'Other.pdf'},staged]){
+  assert.throws(()=>confirmCommandReceipt(journal,'finalize',command.key,receipt, value=>{portfolio.parsePrivateAssetReceipt(value,expected,'finalize',sourceId);}),error=>error instanceof LearningApiError&&error.uncertain);
+  assert.equal(journal.get('finalize')?.key,command.key);
+ }
+ assert.equal(confirmCommandReceipt(journal,'finalize',command.key,{...staged,state:'AVAILABLE'},value=>{portfolio.parsePrivateAssetReceipt(value,expected,'finalize',sourceId);}),true);
+ assert.equal(journal.get('finalize'),undefined);
+});
+test('portfolio command receipts retain original keys until the exact immutable transition is confirmed',()=>{
+ assert.equal(typeof portfolio.parsePortfolioCommandReceipt,'function');
+ const expected={id:sourceId,revisionId:sourceId,revision:1};
+ const cases=[
+  {command:'create' as const,expected:undefined,valid:{id:sourceId,revisionId:otherId,revision:1,status:'AWAITING_REVIEW'},invalid:[{id:sourceId},{id:sourceId,revisionId:otherId,revision:2,status:'AWAITING_REVIEW'},{id:sourceId,revisionId:otherId,revision:1,status:'REVIEWED'}]},
+  {command:'reflection' as const,expected,valid:{id:sourceId,revisionId:otherId,revision:2,status:'AWAITING_REVIEW'},invalid:[{id:otherId,revisionId:otherId,revision:2,status:'AWAITING_REVIEW'},{id:sourceId,revisionId:sourceId,revision:2,status:'AWAITING_REVIEW'},{id:sourceId,revisionId:otherId,revision:1,status:'AWAITING_REVIEW'},{id:sourceId,revisionId:otherId,revision:2,status:'REVIEWED'}]},
+  {command:'review' as const,expected,valid:{id:sourceId,revisionId:sourceId,revision:1,status:'REVIEWED'},invalid:[{id:otherId,revisionId:sourceId,revision:1,status:'REVIEWED'},{id:sourceId,revisionId:otherId,revision:1,status:'REVIEWED'},{id:sourceId,revisionId:sourceId,revision:2,status:'REVIEWED'},{id:sourceId,revisionId:sourceId,revision:1,status:'AWAITING_REVIEW'}]},
+  {command:'revoke' as const,expected,valid:{id:sourceId,revisionId:sourceId,revision:1,status:'PARENT_REVOKED'},invalid:[{id:sourceId,revisionId:otherId,revision:1,status:'PARENT_REVOKED'},{id:sourceId,revisionId:sourceId,revision:2,status:'PARENT_REVOKED'},{id:sourceId,revisionId:sourceId,revision:1,status:'REVIEWED'}]},
+ ];
+ for(const example of cases){
+  const journal=new CommandJournal();const pending=journal.prepare(example.command,'/v1/portfolio/items/source/'+example.command,{expectedRevision:1});
+  for(const value of [null,[],{},...example.invalid,{...example.valid,id:'invalid'},{...example.valid,revisionId:'invalid'},{...example.valid,revision:0},{...example.valid,revision:1.5}]){
+   assert.throws(()=>confirmCommandReceipt(journal,example.command,pending.key,value,receipt=>{portfolio.parsePortfolioCommandReceipt(receipt,example.command,example.expected);}),error=>error instanceof LearningApiError&&error.uncertain);
+   assert.equal(journal.get(example.command)?.key,pending.key);
+  }
+  assert.equal(confirmCommandReceipt(journal,example.command,pending.key,example.valid,receipt=>{portfolio.parsePortfolioCommandReceipt(receipt,example.command,example.expected);}),true);
+  assert.equal(journal.get(example.command),undefined);
+ }
+ for(const command of ['reflection','review','revoke'] as const)assert.throws(()=>portfolio.parsePortfolioCommandReceipt({id:sourceId,revisionId:sourceId,revision:1,status:'REVIEWED'},command),error=>error instanceof LearningApiError&&error.uncertain);
+});
+test('student and selected-child portfolio pages reject another learner and unapproved parent projections',()=>{
+ const own=portfolio.parsePortfolioItemForLearner(exactItem,sourceId,false);
+ assert.equal(own.learnerId,sourceId);
+ assert.throws(()=>portfolio.parsePortfolioItemForLearner({...exactItem,learnerId:otherId},sourceId,false),LearningApiError);
+ assert.throws(()=>portfolio.parsePortfolioItemForLearner(exactItem,null,true),LearningApiError);
+ const approved={...exactItem,approvalState:'REVIEWED',parentVisible:true,feedback:'Reviewed this reflection.',reviewedAt:'2026-10-02T11:00:00Z'};
+ assert.equal(portfolio.parsePortfolioItemForLearner(approved,sourceId,true).parentVisible,true);
+ assert.throws(()=>portfolio.parsePortfolioItemForLearner({...approved,learnerId:otherId},sourceId,true),LearningApiError);
+ assert.throws(()=>portfolio.parsePortfolioItemForLearner({...approved,parentVisible:false},sourceId,true),LearningApiError);
+ assert.throws(()=>portfolio.parsePortfolioItemForLearner(exactItem,sourceId,true),LearningApiError);
+});
+test('released portfolio source choices require the exact current learner before display or selection',()=>{
+ const result={id:sourceId,submissionId:sourceId,learnerId:sourceId,referenceId:sourceId,referenceVersion:'v1',evidenceId:sourceId,createdAt:'2026-10-01T11:00:00Z',status:'RELEASED',revision:1,policyVersion:2,feedback:'Check your explanation.',assessmentTitle:'School task',referenceTitle:'Objective',model:'numeric',score:0,maxScore:10,nativeResult:{type:'numeric',score:0,maxScore:10,policyVersion:2}};
+ assert.equal(portfolio.parsePortfolioReleasedResultForLearner(result,sourceId).nativeResult.type,'numeric');
+ assert.throws(()=>portfolio.parsePortfolioReleasedResultForLearner({...result,learnerId:otherId},sourceId),LearningApiError);
+ assert.throws(()=>portfolio.parsePortfolioReleasedResultForLearner(result,null),LearningApiError);
+});
+test('portfolio history verifies the immutable item source before using revision pagination identity',()=>{
+ const older={...exactItem,revisionId:otherId,revision:2,reflection:'A different saved reflection.',createdAt:'2026-10-02T11:00:00Z',approvalState:'REVIEWED',parentVisible:true,feedback:'An earlier review.',reviewedAt:'2026-10-02T11:01:00Z',artifactCount:0,sourceWorkApproved:true};
+ const row=portfolio.parsePortfolioHistoryForItem(older,exactItem);
+ assert.equal(row.id,otherId);assert.equal(row.revision,2);assert.equal(row.parentVisible,true);assert.equal(row.artifactCount,0);
+ for(const changed of [{...older,id:otherId},{...older,learnerId:otherId},{...older,evidenceId:otherId},{...older,resultId:otherId},{...older,submissionId:otherId},{...older,referenceId:otherId},{...older,referenceVersion:'v2'},{...older,policyVersion:3,nativeResult:{...older.nativeResult,policyVersion:3}}])assert.throws(()=>portfolio.parsePortfolioHistoryForItem(changed,exactItem),LearningApiError);
+});

@@ -1,3 +1,4 @@
+import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { classLearningSummarySchema } from '@cuevo/contracts';
@@ -8,7 +9,7 @@ test('coordinator reviews a source-linked class page with native evidence, separ
   const account = accounts.find(item => item.role === 'coordinator')!;
   await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page);
   await page.getByRole('button', { name: 'Review evidence and outcomes', exact: true }).first().click();
   const panel = page.getByRole('region', { name: 'Class evidence and support', exact: true }); await expect(panel).toBeVisible();
   const selector = panel.getByLabel('Class', { exact: true });

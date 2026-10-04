@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createElement } from 'react';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { resolveCompanionPose, type CompanionRegistry } from '../model.ts';
+Object.assign(globalThis, { React });
+const { CompanionView } = await import('../companion-view.tsx');
+const pose = { src: '/public-ready.webp', width: 240, height: 320 };
+const registry: CompanionRegistry = { foxi: { ready: pose, read: { ...pose, src: '/public-read.webp' }, work: { ...pose, src: '/public-work.webp' } }, owl: { ready: pose, read: pose, work: pose }, rabbit: { ready: pose, read: pose, work: pose }, turtle: { ready: pose, read: pose, work: pose } };
+test('allowed four identities resolve authored poses with their intrinsic geometry', () => { for (const name of ['foxi', 'owl', 'rabbit', 'turtle']) { const resolved = resolveCompanionPose(registry, name, 'read'); assert.equal(resolved?.width, 240); assert.equal(resolved?.height, 320); } });
+test('unknown character never guesses a new identity while unknown pose uses the same ready fallback', () => { assert.equal(resolveCompanionPose(registry, 'unapproved', 'read'), null); assert.equal(resolveCompanionPose(registry, 'foxi', 'unknown'), pose); });
+test('missing requested art uses current ready art and missing all art hides image safely', () => { const partial: CompanionRegistry = { foxi: { ready: pose }, owl: {}, rabbit: {}, turtle: {} }; assert.equal(resolveCompanionPose(partial, 'foxi', 'work'), pose); assert.equal(resolveCompanionPose(partial, 'owl', 'read'), null); });
+test('failed pose URLs fall back once to ready and failed ready art cannot cycle back to a broken image', () => { assert.equal(resolveCompanionPose(registry, 'foxi', 'read', ['/public-read.webp']), pose); assert.equal(resolveCompanionPose(registry, 'foxi', 'read', ['/public-read.webp', '/public-ready.webp']), null); });
+test('renderer preserves explicit hide, adjacent text and caller receipt privacy', () => { const html = renderToStaticMarkup(createElement(CompanionView, { registry, character: 'foxi', state: 'acknowledge', visible: false, quiet: true, reducedMotion: true, receipt: { key: 'private-receipt', current: true, confirmed: true }, fallback: createElement('p', null, 'Your current task remains available') })); assert.match(html, /current task remains available/); assert.doesNotMatch(html, /<img|private-receipt|award|points|Level/); });
+test('confirmed receipt only selects static ready equivalent and never emits animation or success', () => { const html = renderToStaticMarkup(createElement(CompanionView, { registry, character: 'foxi', state: 'acknowledge', visible: true, receipt: { key: 'exact-current', current: true, confirmed: true } })); assert.match(html, /width="240" height="320"/); assert.match(html, /alt=""/); assert.doesNotMatch(html, /animation|exact-current|Saved|XP|Completed/); });
+test('quiet/reduced motion rendering has identical semantic content with no video or autonomous callback', () => { const html = renderToStaticMarkup(createElement(CompanionView, { registry, character: 'foxi', state: 'work', visible: true, quiet: true, reducedMotion: true })); assert.match(html, /public-work.webp/); assert.doesNotMatch(html, /<video|autoplay|localStorage|<button/); });

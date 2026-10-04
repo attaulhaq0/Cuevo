@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -10,7 +11,7 @@ test('administrator invites a new learner and the recipient accepts, saves a pas
   const email = `new-learner-${randomUUID()}@example.test`; const name = 'Noura · new school learner'; const password = randomBytes(24).toString('base64url');
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.name)); page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning' && /hydrat/i.test(message.text())) errors.push(message.text()); });
   await page.goto('/'); await page.getByLabel('School email', { exact: true }).fill(admin.email); await page.getByLabel('Password', { exact: true }).fill(admin.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByText('School access verified', { exact: true })).toBeVisible(); await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click();
+  await expectTrailWorkspace(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click();
   await page.getByRole('button', { name: 'Accounts and invitations', exact: true }).click();
   const panel = page.getByRole('region', { name: 'School accounts and invitations', exact: true }); const form = panel.getByRole('region', { name: 'Invite someone to school', exact: true });
   await form.getByLabel('Registered name', { exact: true }).fill(name); await form.getByLabel('Email', { exact: true }).fill(email); await form.getByLabel('Approved role', { exact: true }).selectOption('student'); await form.getByLabel('School approval reason', { exact: true }).fill('Reviewed synthetic school admission through the actual administrator screen.');
@@ -35,8 +36,8 @@ test('administrator invites a new learner and the recipient accepts, saves a pas
     await recipient.getByLabel('New password', { exact: true }).fill(password); await recipient.getByLabel('Confirm password', { exact: true }).fill(password); await recipient.getByRole('button', { name: 'Save password', exact: true }).click();
     await expect(recipient.getByText('Password saved', { exact: true })).toBeVisible();
     await recipient.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(recipient.locator('html')).toHaveAttribute('dir', 'rtl'); expect((await new AxeBuilder({ page: recipient }).include('main').analyze()).violations).toEqual([]); await recipient.screenshot({ path: testInfo.outputPath('admitted-arabic-mobile.png') });
-    await recipient.getByRole('button', { name: 'English', exact: true }).click(); await recipient.getByRole('button', { name: 'Open workspace', exact: true }).click(); await expect(recipient).toHaveURL('http://localhost:3000/'); await expect(recipient.getByText('School access verified', { exact: true })).toBeVisible(); await expect(recipient.getByRole('navigation').getByRole('button', { name: 'Learning', exact: true })).toBeVisible();
-    await recipient.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await recipient.getByLabel('School email', { exact: true }).fill(email); await recipient.getByLabel('Password', { exact: true }).fill(password); await recipient.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(recipient.getByText('School access verified', { exact: true })).toBeVisible(); expect(errors).toEqual([]);
+    await recipient.getByRole('button', { name: 'English', exact: true }).click(); await recipient.getByRole('button', { name: 'Open workspace', exact: true }).click(); await expect(recipient).toHaveURL('http://localhost:3000/'); await expectTrailWorkspace(recipient); await expect(recipient.getByRole('navigation').getByRole('button', { name: 'Learning', exact: true })).toBeVisible();
+    await signOutTrailWorkspace(recipient); await recipient.getByLabel('School email', { exact: true }).fill(email); await recipient.getByLabel('Password', { exact: true }).fill(password); await recipient.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(recipient); expect(errors).toEqual([]);
   } finally {
     await recipientContext.close(); const removed = await page.request.delete('http://127.0.0.1:56324/api/v1/messages', { data: { IDs: [mailId] } }); expect(removed.ok()).toBe(true);
   }

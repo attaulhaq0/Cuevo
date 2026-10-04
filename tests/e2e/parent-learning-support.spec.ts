@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -49,10 +50,10 @@ test('parent selects a child and reads only current school-published support wit
   page.on('console', message => { if (message.type() === 'error' || /hydration|did not match/i.test(message.text())) errors.push(message.text()); });
   const signIn = async (account: Account) => {
     await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
-    const signOut = page.getByRole('button', { name: 'Sign out', exact: true }).last(); if (await signOut.isVisible()) await signOut.click();
+    const signOut = page.locator('.workspace-chrome__person > button'); if (await signOut.isVisible()) await signOutTrailWorkspace(page);
     await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password);
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-    await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click(); await expect(page.locator('.school-workspace')).toBeVisible();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, account.role);
+    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await expect(page.locator('.school-workspace')).toBeVisible();
   };
   const settled = async () => { await expect(page.locator('main [role="status"]').filter({ hasText: /^Loading/ })).toHaveCount(0); };
   const choose = async (select: Locator, id: string, label: string) => {

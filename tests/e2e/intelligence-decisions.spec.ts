@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -71,13 +72,13 @@ test('teacher rejects one proposal and approves exact edited instructions throug
   const signIn = async (account: Account) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'English', exact: true }).click();
-    const signOut = page.getByRole('button', { name: 'Sign out', exact: true }).last();
-    if (await signOut.isVisible()) await signOut.click();
+    const signOut = page.locator('.workspace-chrome__person > button');
+    if (await signOut.isVisible()) await signOutTrailWorkspace(page);
     await page.getByLabel('School email', { exact: true }).fill(account.email);
     await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-    await page.getByRole('navigation').getByRole('button', { name: 'Next steps', exact: true }).click();
+    await expectTrailWorkspace(page, account.role);
+    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Next steps', exact: true }).click();
   };
   const loadTarget = async (target: Locator, last = false) => {
     await expect(page.getByText('Loading next steps…', { exact: true })).toHaveCount(0);

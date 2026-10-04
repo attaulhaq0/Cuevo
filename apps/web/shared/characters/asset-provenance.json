@@ -1,0 +1,194 @@
+[
+  {
+    "character": "foxi",
+    "state": "ready",
+    "file": "companion-foxi-ready.webp",
+    "width": 275,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\foxi-neutral-ready\\master.png",
+    "sourceSha256": "48b852f8640fe1adf0db5bddd604f360e705115cf57e740e463afdd3eb46e625",
+    "sha256": "f26102084952977a1ac3096b66c0657c3eb15522e9975b35462f562ce1a24ca1",
+    "bytes": 30810,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "foxi",
+    "state": "read",
+    "file": "companion-foxi-read.webp",
+    "width": 276,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\foxi-read-open-book\\master.png",
+    "sourceSha256": "68f834ac84d49d1c55207a436b5e726d7568c3f51f8a4219ac04d55748974057",
+    "sha256": "f288e90f69448a6c5229181ef963e390353c6aa735332d3b36b1e4707e672b78",
+    "bytes": 30018,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "foxi",
+    "state": "work",
+    "file": "companion-foxi-work.webp",
+    "width": 292,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\foxi-write-note\\master.png",
+    "sourceSha256": "094263f4d6575f57e7b17a3c815aad508cec3ee464bd615b1123719f6c7694c9",
+    "sha256": "cf45a25c0993c0743aa48d8db51de07a51d35b81d29a9c03e36376321167baa7",
+    "bytes": 33226,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "owl",
+    "state": "ready",
+    "file": "companion-owl-ready.webp",
+    "width": 252,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\owl-neutral-ready\\master.png",
+    "sourceSha256": "9ba7c552412af19bf476932f91a3febc6735da49deff70a34ce09ab8ce0c98e0",
+    "sha256": "283164e977a7f494dce7e371809ec1b8055f2382b3f8662db6ad813c50fe928b",
+    "bytes": 32902,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "owl",
+    "state": "read",
+    "file": "companion-owl-read.webp",
+    "width": 278,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\owl-read-open-book\\master.png",
+    "sourceSha256": "e346a7d0ba839d43e739811d4e8755e9bd1f16820d01ace10c51bb0156e25af1",
+    "sha256": "e6df175d130cd281f38e474d03735fe2bc6a182e7aeec891f28fba6ea27257b9",
+    "bytes": 34544,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "owl",
+    "state": "work",
+    "file": "companion-owl-work.webp",
+    "width": 258,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\owl-write-note\\master.png",
+    "sourceSha256": "8334ef0519a2f2a509e0e56a82e130ccf9fbe7995c1d4fc6770763dbce7088d6",
+    "sha256": "2f4aa47f3e5b420c68f01acecb43db871e2107c6b628a65a2b51d75b80ab9ea0",
+    "bytes": 34450,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "rabbit",
+    "state": "ready",
+    "file": "companion-rabbit-ready.webp",
+    "width": 307,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\rabbit-neutral-ready\\master.png",
+    "sourceSha256": "7f79ac1ca92d4124b1340fd7a689716c5c70502fb97851476c86ff0e6154f97b",
+    "sha256": "2f5ead9c524ab1dfefd3faca7f7e3ffd9a88e83dd01a3a7dd9bf0edc397ff434",
+    "bytes": 29428,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "rabbit",
+    "state": "read",
+    "file": "companion-rabbit-read.webp",
+    "width": 341,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\rabbit-read-open-book\\master.png",
+    "sourceSha256": "294513bd511296ece91a37dcc4121ca7f608995aceec0aa1ee5d26d487db350a",
+    "sha256": "a59a5fada4ebd5295df46714de8866565a7cb798ba431aab7e3d7799f4fa3dcf",
+    "bytes": 30866,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "rabbit",
+    "state": "work",
+    "file": "companion-rabbit-work.webp",
+    "width": 300,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\rabbit-write-note\\master.png",
+    "sourceSha256": "33b258c9c0bc23eeeb017895bfeb023f69f8342188fec2d62fb06fadfb391144",
+    "sha256": "f6c69dd5ef3acb50ada53d56288ac5e72f29bfd3d1708b430400c8eb16f305e6",
+    "bytes": 29262,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "turtle",
+    "state": "ready",
+    "file": "companion-turtle-ready.webp",
+    "width": 239,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\turtle-neutral-ready\\master.png",
+    "sourceSha256": "15df7c025113fe5cbe2e565c224d20a0c8652c0be83b50eab7aad6e57bc216bc",
+    "sha256": "d764fd6f50a956b3248bb00cdd96b0dcdadaf4152d25e8a6368b9a4e6872a208",
+    "bytes": 27324,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "turtle",
+    "state": "read",
+    "file": "companion-turtle-read.webp",
+    "width": 309,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\turtle-read-open-book\\master.png",
+    "sourceSha256": "23f8bbed741285d59b5d0a6d29ff87e88b85c90d76f56757ba0534a47198e8ae",
+    "sha256": "f6e9e744a37d6c1c541b5f59a025c2950336e232c33b51cc0ff31323a4ba7137",
+    "bytes": 30780,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  },
+  {
+    "character": "turtle",
+    "state": "work",
+    "file": "companion-turtle-work.webp",
+    "width": 280,
+    "height": 384,
+    "source": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\library\\production-individual\\transparent\\character\\turtle-write-note\\master.png",
+    "sourceSha256": "7e47cfb9449b67c76cb5dad3985698a57da2134019595a79abd389fa8ced3d1a",
+    "sha256": "95c4e36668ee4910b1f04010093c8eb51ec5d4864ce6e34cf062d5ad20b1a7b3",
+    "bytes": 31158,
+    "alpha": [
+      0,
+      255
+    ],
+    "acceptedSource": "production-individual-v5 ROOT reviewed; integration acceptance separate"
+  }
+]

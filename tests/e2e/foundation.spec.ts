@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
@@ -27,12 +28,12 @@ test('all five synthetic roles authenticate through Supabase and current API mem
     await page.goto('/');
     await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Account', exact: true }).first()).not.toBeEmpty();
-    await expect(page.locator('.workspace-intro .eyebrow')).not.toContainText(/Synthetic (admin|teacher|student|parent|coordinator)\s*\d+/);
+    await expectTrailWorkspace(page, role);
+    await expect(page.locator('.workspace-chrome__person > button')).toHaveAccessibleName('Profile and settings');
+    await expect(page.locator('.workspace-chrome__person > button strong')).not.toContainText(/Synthetic (admin|teacher|student|parent|coordinator)\s*\d+/);
     const heading = page.locator('main h1'); await expect(heading).not.toBeEmpty();
     expect(await page.evaluate(() => localStorage.length)).toBe(0);
-    await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+    await signOutTrailWorkspace(page);
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   }
 });

@@ -1,3 +1,4 @@
+import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -7,8 +8,8 @@ test('current group member choice survives a roster refresh after a confirmed ea
   const teacher = accounts.find(account => account.role === 'teacher')!;
   await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByLabel('School email', { exact: true }).fill(teacher.email); await page.getByLabel('Password', { exact: true }).fill(teacher.password);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByRole('navigation').getByRole('button', { name: 'Community', exact: true }).click(); await settled(page);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page);
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Community', exact: true }).click(); await settled(page);
   if (!await page.locator('.community-room[data-room-type="CLASS"]').count()) {
     await page.getByRole('button', { name: 'Create teacher-led room', exact: true }).click();
     const room = page.getByRole('region', { name: 'Create teacher-led room', exact: true });

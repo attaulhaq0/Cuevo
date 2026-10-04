@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -6,7 +7,7 @@ test('learner verifies own private file bytes and retires it through a confirmed
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as { role: string; email: string; password: string }[];
   const student = accounts.find(account => account.role === 'student')!;
   const directory = resolve('.local/customer-readiness/private-file', new Date().toISOString().replace(/[:.]/g, '-')); await mkdir(directory, { recursive: true });
-  await page.goto('/'); await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
+  await page.goto('/'); await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
   const filename = `Checking notes ${Date.now()}.txt`; const bytes = Buffer.from('Private synthetic checking notes.');
   await page.getByLabel('Choose private file', { exact: true }).setInputFiles({ name: filename, mimeType: 'text/plain', buffer: bytes });
   const finalized = page.waitForResponse(response => /\/v1\/assets\/[^/]+\/finalize$/.test(new URL(response.url()).pathname) && response.request().method() === 'POST');
@@ -21,12 +22,12 @@ test('learner verifies own private file bytes and retires it through a confirmed
   await page.route(downloadPattern, async route => { try { const response = await route.fetch(); downloadStarted(); await heldDownload; await route.fulfill({ response }); } catch { /* Actor scope cancellation prevents completion of the held request. */ } finally { downloadHandled(); } });
   const canceledDownload = page.waitForEvent('requestfailed', { predicate: request => new URL(request.url()).pathname === `/v1/assets/${asset.id}/download`, timeout: 15000 });
   await row.getByRole('button', { name: 'Download private file', exact: true }).click(); await startedDownload;
-  await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   releaseDownload(); await handledDownload; const canceled = await canceledDownload; expect(canceled.failure()?.errorText).toMatch(/abort|cancel|failed/i); await page.unroute(downloadPattern);
   // Request failure and the settled route are controlled final events; allow queued browser delivery callbacks to run.
   await page.waitForTimeout(200);
   expect(deliveries).toEqual([]);
-  await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('navigation').getByRole('button', { name: 'Portfolio', exact: true }).click(); await expect(row).toBeVisible();
+  await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Portfolio', exact: true }).click(); await expect(row).toBeVisible();
   await page.screenshot({ path: resolve(directory, 'before-retirement.png') });
   await row.getByRole('button', { name: 'Retire private file', exact: true }).click();
   const retirement = row.getByRole('region', { name: 'Retire private file', exact: true }); await expect(retirement.getByLabel('I confirm this private file should no longer be available')).not.toBeChecked(); await retirement.getByLabel('Reason', { exact: true }).fill('The learner replaces these notes with current work.'); await retirement.getByLabel('I confirm this private file should no longer be available').check();

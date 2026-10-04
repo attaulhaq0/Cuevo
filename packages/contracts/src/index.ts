@@ -36,3 +36,4 @@ export * from './learner-profile';
 export * from './restricted-records';
 export * from './automation-review';
 export * from './diagnostics-contract';
+export * from './thinking-focus';

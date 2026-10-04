@@ -24,6 +24,10 @@ test('canonical sources allow repeated README text, configuration and historical
   ]), []);
 });
 
+test('framework public media has one documented owner without becoming another application', () => {
+  assert.deepEqual(inspect([file('apps/web/public/media/auth/foxi-wave-v1.mp4'),file('apps/web/public/README.md','Public decorative media; authentication owns its use.')],['apps/web/public','apps/web/public/media','apps/web/public/media/auth']),[]);
+});
+
 test('intentional public forwarding surfaces and Next route boilerplate are not duplicate implementations', () => {
   assert.deepEqual(inspect([
     file('apps/web/features/academic/ui.tsx', "export { Workspace } from './components/workspace';\n"),

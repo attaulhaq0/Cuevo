@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -12,12 +13,12 @@ async function signIn(page: Page, account: Account) {
   await page.getByLabel('School email').fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(account.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-  await page.getByRole('navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
+  await expectTrailWorkspace(page, account.role);
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
 }
 async function signOut(page: Page) {
   await page.getByRole('button', { name: 'English', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+  await signOutTrailWorkspace(page);
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 }
 async function findWork(page: Page, row: Locator) {

@@ -16,7 +16,7 @@ export const commonEn = {
   errorUnavailable: 'The school service is unavailable. Please try again.',
   uncertain: 'The outcome is not confirmed. Retry the same action without editing it so it cannot create a duplicate.',
   retrySame: 'Retry the same action',
-  requestReference: 'Support reference',
+  requestReference: 'Reference for support',
   aiUnavailable: 'AI analysis is not configured. No model analysis was produced. You can author a teacher proposal from the available evidence.',
   aiFailed: 'This analysis attempt did not produce a proposal. Review the evidence and start a new analysis when ready.'
 };
@@ -39,7 +39,7 @@ export const commonAr = {
   errorUnavailable: 'خدمة المدرسة غير متاحة. يُرجى المحاولة مجددًا.',
   uncertain: 'لم تتأكّد نتيجة الإجراء. أعد الإجراء نفسه دون تعديله لمنع إنشاء نسخة مكررة.',
   retrySame: 'إعادة الإجراء نفسه',
-  requestReference: 'مرجع الدعم',
+  requestReference: 'مرجع للمساعدة',
   aiUnavailable: 'تحليل الذكاء الاصطناعي غير مهيّأ. لم يُنتَج تحليل من نموذج. يمكنك إعداد مقترح معلّم من الشواهد المتاحة.',
   aiFailed: 'لم ينتج عن محاولة التحليل هذه مقترح. راجع الشواهد وابدأ تحليلاً جديداً عندما تكون مستعداً.'
 };

@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "sourcePack": "production-individual-v5",
+  "intent": "Public decorative role illustrations with localized adjacent HTML labels; no role selection or authority",
+  "assets": [
+    {
+      "name": "student-profile",
+      "id": "trail.expanded-icon.student-profile",
+      "sourceSha256": "98f2e835ef3a8fce6644714ae3a958946103cb7344cf5a87da8c73a27f39e529",
+      "transparentMasterSha256": "59a6734459249cfd11858349629b47e41ce40f0c5a72801db7017cf53d474f98",
+      "nativeSourceSize": [
+        1536,
+        1024
+      ],
+      "nativeMasterSize": [
+        757,
+        845
+      ],
+      "runtimePath": "apps/web/shared/characters/assets/role-student-profile.webp",
+      "runtimeSize": [
+        128,
+        128
+      ],
+      "runtimeSha256": "34af1a46e1fc052235ea1b7cb0c80007acfc78d2b5ef23e074c76f946dcd1133",
+      "runtimeBytes": 5892
+    },
+    {
+      "name": "teacher-profile",
+      "id": "trail.expanded-icon.teacher-profile",
+      "sourceSha256": "b139763e88d6c3044fc27874aedede2c92920b993a61cab6d0ea045d551e2593",
+      "transparentMasterSha256": "312736d5353dff57617106dd38a479d888761897b437ac54d85058a930224e31",
+      "nativeSourceSize": [
+        1536,
+        1024
+      ],
+      "nativeMasterSize": [
+        719,
+        942
+      ],
+      "runtimePath": "apps/web/shared/characters/assets/role-teacher-profile.webp",
+      "runtimeSize": [
+        128,
+        128
+      ],
+      "runtimeSha256": "e77d0e6b9c3d1c9b0bce51bde87ee876c6209cf9da22e0b0384760e71a0ba0de",
+      "runtimeBytes": 5204
+    },
+    {
+      "name": "guardian-context",
+      "id": "trail.expanded-icon.guardian-context",
+      "sourceSha256": "0eadccbc4c299226790c036ad41f0e880ac1a1a5b3d436379749704ca80ce3cc",
+      "transparentMasterSha256": "21dc38fcbf3b561c1527bd47ed8ddcea88861d2068e676b88eefd50c5eb2006a",
+      "nativeSourceSize": [
+        1536,
+        1024
+      ],
+      "nativeMasterSize": [
+        841,
+        885
+      ],
+      "runtimePath": "apps/web/shared/characters/assets/role-guardian-context.webp",
+      "runtimeSize": [
+        128,
+        128
+      ],
+      "runtimeSha256": "566cbc782f154d01fa98410aa8efd34b342ca196fb83c12b3a9752582b3d3866",
+      "runtimeBytes": 5794
+    },
+    {
+      "name": "programme",
+      "id": "trail.expanded-icon.programme",
+      "sourceSha256": "6d8ae2d227a7a685c577f3392d0ac4a4252f403b9ca309df7993991862330451",
+      "transparentMasterSha256": "ebbc23f151b686172b93375b6191b31dcfac5e0cbd6a17554f76bbfb6d326d63",
+      "nativeSourceSize": [
+        1536,
+        1024
+      ],
+      "nativeMasterSize": [
+        755,
+        831
+      ],
+      "runtimePath": "apps/web/shared/characters/assets/role-programme.webp",
+      "runtimeSize": [
+        128,
+        128
+      ],
+      "runtimeSha256": "4e4fa3cc2d0603b0ebcdd64507f47f7a37cae82e06bff9d7925b54724873a2d9",
+      "runtimeBytes": 5956
+    },
+    {
+      "name": "school-boundary",
+      "id": "trail.expanded-icon.school-boundary",
+      "sourceSha256": "1ef7084e40734fcfb4aa0f11fe953982f8b83bbb771fdb2e770d957bb0da8b38",
+      "transparentMasterSha256": "2241f451c8a1ca3c898e1e7cd1a739fc274dbc2a7f712241dda11495ed63ca49",
+      "nativeSourceSize": [
+        1536,
+        1024
+      ],
+      "nativeMasterSize": [
+        938,
+        893
+      ],
+      "runtimePath": "apps/web/shared/characters/assets/role-school-boundary.webp",
+      "runtimeSize": [
+        128,
+        128
+      ],
+      "runtimeSha256": "a76addae7bf7085cd2330a5a34808dcdd0b76b6fe1a32f9c53943d8d321c3fb3",
+      "runtimeBytes": 7252
+    }
+  ]
+}

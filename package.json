@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "node --import tsx scripts/runtime/dev.ts",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
+    "typecheck": "node --import tsx scripts/verification/typecheck-workspaces.ts",
     "lint": "eslint .",
     "test": "vitest run && npm run test --workspace=@cuevo/web && node --import tsx --test scripts/local-runtime.test.ts",
     "test:watch": "vitest",
@@ -39,7 +39,7 @@
     "hosted:plan": "node --import tsx scripts/database/hosted-synthetic-plan.ts",
     "test:hosted-plan": "node --import tsx --test scripts/database/hosted-synthetic-plan.test.ts",
     "check:docs": "node --import tsx scripts/docs/check.ts",
-    "test:docs": "node --import tsx --test scripts/docs/rules.test.ts",
+    "test:docs": "node --import tsx --test scripts/docs/rules.test.ts scripts/docs/reference-inventory.test.ts",
     "check:repository": "node --import tsx scripts/repository/check.ts",
     "test:repository": "node --import tsx --test scripts/repository/rules.test.ts",
     "verify:technical": "node --import tsx scripts/verification/technical-exit.ts",

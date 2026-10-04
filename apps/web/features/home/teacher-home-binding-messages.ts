@@ -1,0 +1,26 @@
+export const teacherHomeEn = {
+  reload: 'Refresh teaching records', work: 'Review current work', followUp: 'Review follow-up', portfolio: 'Review selected work', waitingPractice: 'Practice awaiting completion', reviewPractice: 'Open approved practice',
+  currentPages: 'These are the current records loaded for this workspace. More records may be available.',
+  noSource: 'Current source context is unavailable. Open the owning workspace to check.',
+  marking: 'Assessment and feedback', markingBody: 'Review submitted work using your school’s marking scale.',
+  learning: 'Learning', learningBody: 'Prepare current courses, lessons and activities.',
+  evidence: 'Learner evidence', evidenceBody: 'Review native results and recorded learning actions separately.',
+  support: 'Approved support', supportBody: 'Review proposals, practice and follow-up with source context.',
+  school: 'School day', schoolBody: 'Open your permitted classes, calendar and attendance.',
+  community: 'School communication', communityBody: 'Open current class discussions and approved updates.',
+  portfolioBody: 'Review selected work, reflection and exact family sharing.',
+  submissions: 'Submitted work', practiceRecords: 'Follow-up records', portfolioRecords: 'Selected work awaiting review', proposals: 'Current proposals', updates: 'School updates', allWork: 'Open all assessment work',
+};
+export const teacherHomeAr: typeof teacherHomeEn = {
+  reload: 'تحديث سجلات التدريس', work: 'مراجعة العمل الحالي', followUp: 'مراجعة المتابعة', portfolio: 'مراجعة العمل المختار', waitingPractice: 'تدريب بانتظار الإكمال', reviewPractice: 'فتح التدريب المعتمد',
+  currentPages: 'هذه السجلات الحالية المحمّلة لمساحة العمل. قد تتوافر سجلات إضافية.',
+  noSource: 'السياق المصدري الحالي غير متاح. افتح مساحة العمل ذات الصلة للتحقق.',
+  marking: 'التقييم والملاحظات', markingBody: 'راجع الأعمال المسلّمة وفق مقياس التقييم المدرسي.',
+  learning: 'التعلّم', learningBody: 'أعدّ المقررات والدروس والأنشطة الحالية.',
+  evidence: 'شواهد الطالب', evidenceBody: 'راجع النتائج الأصلية وأنشطة التعلّم المسجّلة كلًا على حدة.',
+  support: 'الدعم المعتمد', supportBody: 'راجع المقترحات والتدريب والمتابعة مع سياق المصادر.',
+  school: 'اليوم المدرسي', schoolBody: 'افتح الصفوف والتقويم والحضور ضمن صلاحياتك.',
+  community: 'التواصل المدرسي', communityBody: 'افتح مناقشات الصف الحالية والتحديثات المعتمدة.',
+  portfolioBody: 'راجع العمل المختار والتأمّل ومشاركة الأسرة المحددة.',
+  submissions: 'الأعمال المسلّمة', practiceRecords: 'سجلات المتابعة', portfolioRecords: 'الأعمال المختارة بانتظار المراجعة', proposals: 'المقترحات الحالية', updates: 'تحديثات المدرسة', allWork: 'فتح جميع أعمال التقييم',
+};

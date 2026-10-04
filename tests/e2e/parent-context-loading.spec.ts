@@ -1,3 +1,4 @@
+import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -63,7 +64,7 @@ test('parent work stays unresolved during child verification and the selected ch
   // Access has no child-content consumer, so the first directory read belongs to the tested destination.
   await page.goto('/?view=access'); await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByLabel('School email', { exact: true }).fill(parent.email); await page.getByLabel('Password', { exact: true }).fill(parent.password);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page);
   await expect(page.getByRole('heading', { name: 'Your school access', exact: true })).toBeVisible();
   for (const destination of ['Portfolio', 'Academic', 'Progress']) {
     await page.getByRole('button', { name: 'English', exact: true }).click();
@@ -86,7 +87,7 @@ test('parent work stays unresolved during child verification and the selected ch
     });
     heldPhase = true; prematurelyStarted.length = 0;
     try {
-      await page.getByRole('navigation').getByRole('button', { name: destination, exact: true }).click();
+      await page.locator('.workspace-chrome__navigation').getByRole('button', { name: destination, exact: true }).click();
       await directoryObserved;
       await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'Checking current child relationships…' })).toBeVisible();
       await assertUnresolved(page, destination);

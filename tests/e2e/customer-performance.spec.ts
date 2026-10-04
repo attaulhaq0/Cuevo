@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator, type Request } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -78,7 +79,7 @@ test('customer performance: production browser navigation, private bytes, fixtur
   async function signIn(target: Page, account: Account) {
     await target.goto('/'); await target.getByRole('button', { name: 'English', exact: true }).click();
     await target.getByLabel('School email', { exact: true }).fill(account.email); await target.getByLabel('Password', { exact: true }).fill(account.password);
-    await target.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(target.getByText('School access verified', { exact: true })).toBeVisible(); await settled(target);
+    await target.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(target, account.role); await settled(target);
   }
   async function navigate(name: string, target = page) {
     await target.getByRole('navigation').getByRole('button', { name, exact: true }).click();
@@ -176,7 +177,7 @@ test('customer performance: production browser navigation, private bytes, fixtur
       const rejected = responseFor(page, /\/decision$/); await rejection.getByRole('button', { name: 'Reject proposal', exact: true }).click(); expect((await rejected).status()).toBe(200); await settled(page);
     }
     firstUse.push({ scenario: 'request-fixture-proposal', navigationActions: 2, fieldSelections: 1, confirmationActions: 1, result: 'Explicit fixture label, pending human decision and rejection control visible.' });
-    checkpoint = 'private-file'; await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await signIn(page, student); await navigate('Portfolio');
+    checkpoint = 'private-file'; await signOutTrailWorkspace(page); await signIn(page, student); await navigate('Portfolio');
     const fileBytes = Buffer.alloc(256 * 1024, 65);
     for (let repeat = 0; repeat < repetitions; repeat++) {
       const name = `Performance checking notes — sample ${repeat + 1}.txt`;

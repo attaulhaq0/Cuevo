@@ -1,0 +1,29 @@
+# Cuevo authentication reference and character integration plan
+
+**Goal:** Implement the founder-approved authentication concept in the existing frontend and establish a reusable student character plan from the supplied assets.
+
+**Architecture:** Auth UI stays in `features/auth`; shared branding, locale/session and package UI primitives retain their owners. Character originals/provenance stay with their student presentation owner; no asset or UI pose grants authority or access.
+
+**Selected target:** The founder-approved 1536x1024 authentication concept is preserved in ignored `.local/design-concepts/auth-refinement/auth-senior-concept.png`. It is byte-identical to the supplied approval image `C:/Users/hp/AppData/Local/Temp/codex-clipboard-0c314a8a-56a5-46e4-843b-2aed9fef8de8.png`; SHA-256: `f562e3d57bbeca0db6741fc349172cdc15c8e40759da94e9d59a392317e9cdc5`.
+
+The desktop target is a full-bleed 62.5% illustrated region and 37.5% white form region. Place the official Cuevo logo inside the illustration at the top, language controls inside the white region, a large navy two-line heading above four horizontal learning stages, and the waving orange fox in its navy outfit with glasses and tablet below. The pale blue ribbon background and fox are independent raster assets; labels and controls remain localized UI. The form occupies the white region without a floating card. Visible company attribution is omitted from this surface; E Deviser remains the company and Cuevo the product.
+
+**Selected mobile target:** On 1 October 2026 the founder selected concept A, compact welcome with the form first, preserved in ignored `.local/design-concepts/auth-mobile/compact.png`, 1024x1536, SHA-256 `cd39280b557dcfc9b41ebbe2af9aca22265dc2df81835c6846f5502acc796dad`. Use one compact brand/language row, one Welcome h1 with school-issued account guidance and a small instance of the existing waving fox. Follow immediately with the functional form, tabs, help and device/privacy information. Omit the mobile learning diagram, role tray and duplicate desktop hero introduction. The second mobile proposal is not an implementation target.
+
+**Superseded exploration:** `F:/Edeviser-Docs-PR343-Correction-20260928-import-fixture-desktop.png`, 1440x900, was the earlier supplied inspiration. Its desk fox and three-zone composition are historical inputs, not the current implementation target. Asset provenance and hashes are recorded in the [auth asset decision](../../decisions/2026-10-01-auth-presentation-assets.md) and [auth media owner](../../../apps/web/features/auth/assets/README.md).
+
+## Implementation tasks
+
+- [x] Integrate the generated ribbon background and model-assisted waving-fox derivative from the approved concept, preserving exact source/derivative hashes and alpha-processing provenance. Reuse the separately supplied official Cuevo mark through shared branding. Inspect twelve supplied ZIP poses separately for usable transparent assets and non-punitive presentation; the ZIP is not the source of the auth fox derivative.
+- [x] Centralize controlled auth utility icons through the existing UI package and move authentication CSS to its feature owner. Use shared palette/elevation/type tokens consistent with the selected reference.
+- [x] Build real Sign in / Account help panels, eye control, sanitized credential/service feedback, exact school-issued account guidance and privacy/device disclosure. Keep email/password/API membership behavior; do not invent register/magic link/persistent-session/analytics consent features.
+- [x] Use localized learning-stage and role labels with controlled UI icons on desktop. Match the full-bleed illustrated/white desktop composition and the separately approved compact mobile concept A, with one welcome block and no mobile stage diagram/role tray/duplicate hero. Keep form content in top-anchored normal flow so errors, account help, enlarged text and open privacy details remain reachable by scrolling; artwork must not obscure text or controls.
+- [x] Add meaningful tests for current multiple-school error classification and browser behavior; preserve original session/no-cache/access checks. Place technical support references inside deliberate disclosures.
+- [x] Compare the final approved desktop and mobile A concepts with the real rendered auth page at matching viewport/state, then verify desktop/mobile/Arabic, keyboard, axe, reduced motion and error/help/configuration states. Keep native browser zoom, equivalent viewport reflow and text enlargement evidence distinct. Run web tests/lint/typecheck/build and mandatory architecture/docs/repository checks. Record exact results and unresolved gaps in the [auth QA report](../../reports/2026-10-01-auth-design-qa.md). Real protected role sign-in requires an independent runtime and remains separate from presentation tests. Implementation and asset availability alone do not close this acceptance checklist.
+- [x] Document MVP character use and later K-12 expansion, including age-appropriate/quiet presentation, explicit cosmetic choices, source-linked learning/recognition, student tutoring/memory policy requirements and all-role common design system.
+
+## Scope and concurrency
+
+Only the isolated design checkout is edited. The customer-readiness chat owns dirty `G:/Cuevo`; its newer session drafts/child-context/human-label contracts must be reconciled before integration. No database/service credential/root runtime reset. Stop pending fictional-buddy concept jobs after the founder provides their actual character pack. The earlier atlas remains planning evidence; no discarded image is an accepted implementation target.
+
+Registration, reset/magic links, persistent login, generalized tutoring and durable companion memory are absent current behavior; their visual presence in a screenshot does not authorize fake flows or bypass required policy/contracts. Preserve truthful product claims and official/synthetic limitations.

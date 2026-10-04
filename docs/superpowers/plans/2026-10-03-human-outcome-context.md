@@ -1,5 +1,7 @@
 # Human measured-outcome context
 
+Design-branch reconciliation, 3 October 2026: the checked tasks below are historical canonical-backend evidence from commit `da45359`, not new acceptance for this design branch. The approved Trail view keeps its two native source panels and exact Student task gate while reconciling the optional read contract, parser fixes from `fe04cab`, three exact append-only migration blobs and associated tests. No database reset/application or mutable backend-tree copy is part of this reconciliation. Current design-source API/SQL/browser verification and complete MVP acceptance remain separate gates.
+
 **Goal:** Let staff and learners identify whose approved practice and assessments a measured outcome describes.
 
 **Sources:** Product04/10/12/18/21/39/63/81 and the independent human-language review. Existing native measurement and authorization remain authoritative.

@@ -9,6 +9,8 @@ E Deviser is the company. Cuevo is the product. Build the standalone K–12 Lear
 3. When unfamiliar, complete the initial product/architecture baseline in the context map. For every task read its domain bundle, nearest scoped AGENTS/owner README, tests/golden cases and approved curriculum artifacts.
 4. Follow [MVP gates](docs/product/overview/01-MVP-SCOPE-AND-GATES.md), [exit criteria](docs/product/overview/83-MVP-EXIT-CRITERIA.md) and [implementation order](docs/product/delivery/87-IMPLEMENTATION-ORDER-FINAL.md).
 
+The current consolidation uses one [integrated source handover](docs/reports/2026-10-04-cuevo-integration-handover.md) for checkpoint identities, ownership reconciliation, verification and release blockers. Earlier branch reports retain their original evidence scope; they do not establish acceptance for the combined source.
+
 The full corpus lives under [docs/product](docs/product/README.md). [Index](docs/product/index.md) and [registry](docs/product/registry.json) resolve every numbered source and former root filename. The full earlier starting brief is retained at [source-start-here](docs/product/history/source-start-here.md); current paths and context-loading rules supersede its older root reading list.
 
 ## Working protocol

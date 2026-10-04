@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import {test,expect,type Page} from '@playwright/test';
 import {readFile,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -5,8 +6,8 @@ import {randomUUID} from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 type Account={role:string;email:string;password:string};
 const schoolId='10000000-0000-4000-8000-000000000001';
-async function signIn(page:Page,account:Account){await page.goto('/');await page.getByRole('button',{name:'English',exact:true}).click();await page.getByLabel('School email').fill(account.email);await page.getByLabel('Password',{exact:true}).fill(account.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByText('School access verified',{exact:true})).toBeVisible();await page.getByRole('navigation').getByRole('button',{name:'Portfolio',exact:true}).click();}
-async function signOut(page:Page){await page.getByRole('button',{name:'English',exact:true}).click();await page.getByRole('button',{name:'Sign out',exact:true}).last().click();await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();}
+async function signIn(page:Page,account:Account){await page.goto('/');await page.getByRole('button',{name:'English',exact:true}).click();await page.getByLabel('School email').fill(account.email);await page.getByLabel('Password',{exact:true}).fill(account.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expectTrailWorkspace(page, account.role);await page.locator('.workspace-chrome__navigation').getByRole('button',{name:'Portfolio',exact:true}).click();}
+async function signOut(page:Page){await page.getByRole('button',{name:'English',exact:true}).click();await signOutTrailWorkspace(page);await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();}
 test('learner organizes selected work and the current teacher reviews the exact requested reflection',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);const issues:string[]=[];page.on('pageerror',error=>issues.push(error.message));page.on('console',message=>{if(message.type()==='error'||message.type()==='warning')issues.push(message.text());});
  const accounts=JSON.parse(await readFile('.local/synthetic-accounts.json','utf8'))as Account[];const student=accounts.find(account=>account.role==='student')!;const teacher=accounts.find(account=>account.role==='teacher')!;const parent=accounts.find(account=>account.role==='parent')!;

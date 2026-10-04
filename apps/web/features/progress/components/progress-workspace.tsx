@@ -2,10 +2,9 @@
 
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Status } from '@cuevo/ui';
-import { RefreshCw } from 'lucide-react';
+import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
-import { parseLearnerState, parseObservation, parseSignal, type LearnerState, type Observation, type Signal } from '../model';
+import { currentLearnerState, parseLearnerState, parseLearnerObservation, parseLearnerSignal, progressLearnerChoices, type LearnerState, type Observation, type Signal, type LearnerStateSource } from '../model';
 import { LearningApiError } from '../../../shared/api/client';
 import { parsePersonChoice } from '../../../shared/api/people';
 import { progressAr, progressEn } from '../messages';
@@ -20,63 +19,124 @@ import { ReportExport } from './report-export';
 import { ClassLearningSummaryPanel } from './class-learning-summary';
 import { useChildContext } from '../../../shared/hooks/use-child-context';
 import { ChildSelector } from '../../../shared/components/child-selector';
+import { trailAssets } from '../../../shared/characters/assets';
+import { CompanionView } from '../../../shared/characters/ui';
+import { companionPoses } from '../../../shared/characters/companion-assets';
+import { canOpenWorkspace } from '../../../shared/session/capabilities';
 import { LearningObservationPolicyPanel } from './observation-policy';
 
 
 export function ProgressWorkspace() {
+  const { membership, status, online, locale } = useApp();
+  const t = locale === 'ar' ? progressAr : progressEn;
+  if (!online) return <p className="notice" role="status">{t.offline}</p>;
+  if (status !== 'ready' || !membership || !canOpenWorkspace('progress', membership.entitlements, membership.role)) return null;
+  return <CurrentProgressWorkspace key={`${membership.schoolId}:${membership.userId}:${membership.role}`} />;
+}
+
+function CurrentProgressWorkspace() {
   const { membership, locale, accessGeneration } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
   const own = membership?.role === 'student';
   const parent = membership?.role === 'parent';
+  const coordinator = membership?.role === 'coordinator';
   const classReviewer = membership?.role === 'teacher' || membership?.role === 'coordinator' || membership?.role === 'admin';
   const [learnerId, setLearnerId] = useState<string | null>(own ? membership.userId : null);
-  const [detailSelection, setDetailSelection] = useState<{ id: string; label: string; request: number; context: string } | null>(null);
+  const [detailSelection, setDetailSelection] = useState<{ id: string; label: string; request: number; context: string; source: 'class' | 'directory' } | null>(null);
   const [classLearnerLabel, setClassLearnerLabel] = useState<{ id: string; label: string | null; context: string } | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [showCompanion, setShowCompanion] = useState(true);
   const childContext = useChildContext(refresh);
   const people = usePaginatedLearningQuery(own || parent ? null : '/v1/people?limit=100', parsePersonChoice, refresh);
-  const activeLearnerId = parent ? childContext.child?.id ?? null : learnerId;
+  const peopleCurrent = people.loaded && !people.loading && !people.loadingMore && !people.error && !people.moreError && !people.nextCursor;
+  const choices=progressLearnerChoices(people.data,t.learnerContextUnavailable,peopleCurrent);
+  const classSelected=learnerId&&detailSelection?.id===learnerId&&detailSelection.source==='class';
+  const labelContext = `${membership?.schoolId}:${membership?.userId}:${accessGeneration}:${refresh}`;
+  const coordinatorClassCurrent=classLearnerLabel?.id===learnerId&&classLearnerLabel.context===labelContext&&classLearnerLabel.label!==null;
+  const activeLearnerId = own ? membership?.userId ?? null : parent ? childContext.child?.id ?? null : coordinator&&classSelected?coordinatorClassCurrent?learnerId:null:classSelected||choices.some(choice=>choice.value===learnerId&&!choice.requiresReview)?learnerId:null;
   const learners = people.data.filter((person) => person.role === 'student') ?? [];
   const selectedLearner = learners.find(learner => learner.userId === activeLearnerId);
-  const labelContext = `${membership?.schoolId}:${membership?.userId}:${accessGeneration}:${refresh}`;
   const currentClassLabel = classLearnerLabel?.id === activeLearnerId && classLearnerLabel.context === labelContext ? classLearnerLabel.label : null;
-  const peopleCurrent = people.loaded && !people.loading && !people.error;
   const selectedLabel = own ? membership?.displayName ?? t.learnerContextUnavailable : parent ? childContext.child?.displayName ?? t.learnerContextUnavailable : currentClassLabel ?? (peopleCurrent && selectedLearner ? [selectedLearner.displayName, ...selectedLearner.classLabels].join(' · ') : detailSelection?.id === activeLearnerId && detailSelection.context === labelContext ? detailSelection.label : t.learnerContextUnavailable);
   const receiveClassLearnerLabel = useCallback((id: string, label: string | null, context: string) => {
     setClassLearnerLabel(previous => previous?.id === id && previous.label === label && previous.context === context ? previous : { id, label, context });
   }, []);
   const reviewLearner = (id: string, label?: string) => {
+    if(id&&!label&&!choices.some(choice=>choice.value===id&&!choice.requiresReview))return;
     setLearnerId(id || null);
     const learner = learners.find(learner => learner.userId === id);
-    if (id) setDetailSelection(previous => ({ id, label: label ?? (learner ? [learner.displayName, ...learner.classLabels].join(' · ') : t.learnerContextUnavailable), request: (previous?.request ?? 0) + 1, context: labelContext }));
+    if (id) setDetailSelection(previous => ({ id, label: label ?? (learner ? [learner.displayName, ...learner.classLabels].join(' · ') : t.learnerContextUnavailable), request: (previous?.request ?? 0) + 1, context: labelContext, source:label?'class':'directory' }));
   };
-  return <section className="progress-workspace">{membership?.role==='admin'?<LearningObservationPolicyPanel/>:null}<ChildSelector context={childContext} />{classReviewer ? <ClassLearningSummaryPanel refresh={refresh} onReviewLearner={reviewLearner} selectedLearnerId={activeLearnerId} labelContext={labelContext} onLearnerContext={receiveClassLearnerLabel} /> : null}<div className="progress-toolbar">{!own && !parent ? <div className="field"><label htmlFor="learner-selection">{t.learner}</label><select id="learner-selection" value={learnerId ?? ''} onChange={(event) => reviewLearner(event.target.value)}><option value="">{t.chooseLearner}</option>{learners.map((learner) => <option key={learner.userId} value={learner.userId}>{[learner.displayName, ...learner.classLabels].join(' · ')}</option>)}</select><LoadMore query={people} /></div> : null}<Button type="button" variant="secondary" onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" />{t.refresh}</Button></div>{people.error ? <LearningError error={people.error} /> : !own && !parent && people.loading ? <p role="status">{t.loading}</p> : !own && !parent && !learners.length ? <p className="learning-empty">{t.noLearners}</p> : null}{parent ? <p className="notice">{t.parentSafe}</p> : null}{activeLearnerId ? <LearnerDetail key={`${activeLearnerId}:${detailSelection?.id === activeLearnerId ? detailSelection.request : 0}`} learnerId={activeLearnerId} learnerLabel={selectedLabel} focusRequest={detailSelection?.id === activeLearnerId ? detailSelection.request : 0} refresh={refresh} parent={parent} /> : null}</section>;
+  return <section className="progress-workspace" data-role={membership?.role}>
+    <header className="progress-intro"><details className="progress-intro__guide"><summary>{t.aboutProgress}</summary><p>{t.progressGuide}</p></details><div className="progress-intro__actions">{own ? <div className="progress-companion"><CompanionView registry={companionPoses} character="foxi" state="read" visible={showCompanion} /><Button type="button" variant="quiet" onClick={() => setShowCompanion(value => !value)}>{showCompanion ? t.hideCompanion : t.showCompanion}</Button></div> : null}<Button type="button" variant="secondary" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" size={16} />{t.refresh}</Button></div></header>
+    {membership?.role === 'admin' ? <LearningObservationPolicyPanel /> : null}
+    <ChildSelector context={childContext} />
+    <div className={classReviewer?`progress-review-layout${coordinator?' coordinator-progress-layout':''}`:undefined} data-selected={classReviewer&&!!activeLearnerId}>
+    {classReviewer ? <ClassLearningSummaryPanel refresh={refresh} onReviewLearner={reviewLearner} selectedLearnerId={coordinator?learnerId:activeLearnerId} labelContext={labelContext} onLearnerContext={receiveClassLearnerLabel} /> : null}
+    <div className={classReviewer?`progress-review-reading${coordinator?' coordinator-progress-reading':''}`:undefined}>
+    <div className="progress-toolbar">{!own && !parent ? <div className="field"><label htmlFor="learner-selection">{t.learner}</label><select id="learner-selection" value={choices.some(choice=>choice.value===learnerId&&!choice.requiresReview)?learnerId??'':''} disabled={!peopleCurrent} onChange={(event) => reviewLearner(event.target.value)}><option value="">{t.chooseLearner}</option>{choices.map(choice=><option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={people} />{!people.error&&!people.loading&&(people.nextCursor||choices.some(choice=>choice.requiresReview))?<p className="notice">{t.learnerChoicesReview}</p>:null}</div> : null}</div>
+    {people.error ? <LearningError error={people.error} /> : !own && !parent && people.loading ? <p role="status">{t.loading}</p> : !own && !parent && !learners.length ? <p className="learning-empty">{t.noLearners}</p> : null}
+    {parent ? <p className="notice">{t.parentSafe}</p> : null}
+    {activeLearnerId ? <LearnerDetail key={`${activeLearnerId}:${detailSelection?.id === activeLearnerId ? detailSelection.request : 0}`} learnerId={activeLearnerId} learnerLabel={selectedLabel} focusRequest={detailSelection?.id === activeLearnerId ? detailSelection.request : 0} refresh={refresh} parent={parent} /> : null}
+    </div></div>
+  </section>;
 }
 
 function LearnerDetail({ learnerId, learnerLabel, focusRequest, refresh, parent }: { learnerId: string; learnerLabel: string; focusRequest: number; refresh: number; parent: boolean }) {
-  const { locale } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
+  const { locale, membership, accessToken, online, accessGeneration } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
   const heading = useRef<HTMLHeadingElement>(null); const focusedRequest = useRef(0);
-  const state = useApiQuery(`/v1/learners/${learnerId}/state`, parseLearnerState, refresh);
+  const scope = `${membership?.schoolId}:${membership?.userId}:${membership?.role}:${learnerId}:${accessToken ?? ''}:${online}:${accessGeneration}:${refresh}`;
+  const parseState = useCallback((value: unknown): LearnerStateSource => {
+    const current = parseLearnerState(value);
+    if (current.learnerId !== learnerId) throw new LearningApiError('invalid');
+    return { scope, value: current };
+  }, [scope, learnerId]);
+  const parseObservation = useCallback((value: unknown) => parseLearnerObservation(value, learnerId), [learnerId]);
+  const parseSignal = useCallback((value: unknown) => parseLearnerSignal(value, learnerId), [learnerId]);
+  const state = useApiQuery(`/v1/learners/${learnerId}/state`, parseState, refresh);
+  const current = currentLearnerState(state.data, scope, learnerId);
   const observations = usePaginatedLearningQuery(parent ? null : `/v1/observations?limit=100&learnerId=${learnerId}`, parseObservation, refresh);
   const signals = usePaginatedLearningQuery(parent ? null : `/v1/signals?limit=100&learnerId=${learnerId}`, parseSignal, refresh);
   useEffect(() => {
-    if (!focusRequest || focusedRequest.current === focusRequest || state.loading) return;
+    if (!focusRequest || focusedRequest.current === focusRequest || state.loading || !current && !state.error) return;
     focusedRequest.current = focusRequest;
     heading.current?.focus({ preventScroll: true });
     heading.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [focusRequest, state.loading]);
-  const detailHeading = <h2 className="learner-detail-heading" ref={heading} tabIndex={-1}>{t.currentLearnerEvidence} · <bdi>{learnerLabel}</bdi></h2>;
+  }, [focusRequest, state.loading, state.error, current]);
+  const detailHeading = <h2 className="learner-detail-heading" ref={heading} tabIndex={-1} aria-label={`${t.currentLearnerEvidence} · ${learnerLabel}`}><bdi>{learnerLabel}</bdi></h2>;
   const label = `${t.currentLearnerEvidence} · ${learnerLabel}`;
-  if (state.loading) return <section aria-label={label}>{detailHeading}<p role="status" className="learning-empty">{t.loading}</p></section>;
+  if (state.loading || !current && !state.error) return <section aria-label={label}>{detailHeading}<p role="status" className="learning-empty">{t.loading}</p></section>;
   if (state.error) return <section aria-label={label}>{detailHeading}<LearningError error={state.error} /></section>;
-  if (!state.data || state.data.learnerId !== learnerId) return <section aria-label={label}>{detailHeading}<LearningError error={new LearningApiError('invalid')} /></section>;
-  return <section aria-label={label}>{detailHeading}{state.data.status === 'UNKNOWN' ? <div className="notice" role="status"><strong>{t.unknown}</strong><p>{t.unknownBody}</p></div> : state.data.freshness === 'STALE' ? <div className="notice" role="status"><strong>{t.stale}</strong><p>{t.staleBody}</p><p>{t.snapshotAsOf}: <bdi>{dateLabel(state.data.generatedAt, locale, t.unknown)}</bdi></p></div> : state.data.freshness === 'APPROVED_PROJECTION' ? <p className="learning-form__note">{t.parentSafe}</p> : <p className="learning-form__note">{t.snapshot} · {t.version}: {state.data.version} · {t.generatedAt}: <bdi>{dateLabel(state.data.generatedAt, locale, t.unknown)}</bdi></p>}{state.data.projection ? <p className="notice">{t.academic}: {new Intl.NumberFormat(locale).format(state.data.projection.academic.returnedCount)} / {state.data.projection.academic.totalCount === null ? t.unknown : new Intl.NumberFormat(locale).format(state.data.projection.academic.totalCount)} {t.recordsShown}. {state.data.projection.academic.truncated ? t.moreClassSources : t.coverageUnknown}</p> : null}<AcademicRows state={state.data} />{!parent ? <>
-    <section className="progress-section"><h2>{t.development}</h2><p className="learning-form__note">{t.developmentBody}</p>{state.data.development.completeness === 'RECORDED_ONLY' ? <p className="learning-form__note"><strong>{t.recordedOnly}.</strong> {t.recordedOnlyBody}</p> : null}<p className="learning-form__note">{t.window}: <bdi>{dateLabel(state.data.development.windowStart, locale, t.unknown)} – {dateLabel(state.data.development.windowEnd, locale, t.unknown)}</bdi></p><dl className="observation-counts">{(['practice', 'revision', 'reflection'] as const).map((kind) => <div key={kind}><dt>{t[kind]}</dt><dd>{countLabel(state.data!.development[kind].count, locale, t.unknown)}{state.data!.development[kind].observationIds.length ? <details><summary>{t.sourceIds}</summary>{state.data!.projection?.observations[kind].truncated ? <p>{state.data!.projection.observations[kind].returnedCount} / {state.data!.projection.observations[kind].totalCount} {t.recordsShown}</p> : null}<ul className="source-id-list">{state.data!.development[kind].observationIds.map((id) => <li key={id}><bdi>{id}</bdi></li>)}</ul></details> : null}</dd></div>)}</dl></section>
-    <section className="progress-section"><h2>{t.engagement}</h2><p className="learning-form__note">{t.engagementBody}</p><dl className="academic-facts"><div><dt>{t.completionCount}</dt><dd>{countLabel(state.data.engagement.completedActivityCount, locale, t.unknown)}</dd></div><div><dt>{t.lastCompleted}</dt><dd><bdi>{dateLabel(state.data.engagement.lastCompletedAt, locale, t.unknown)}</bdi></dd></div></dl></section>
-    <section className="progress-section"><h2>{t.observations}</h2>{observations.loading ? <p role="status">{t.loading}</p> : observations.error ? <LearningError error={observations.error} /> : <ObservationRows observations={observations.data} />}<LoadMore query={observations} /></section>
-    <AttentionSection learnerId={learnerId} refresh={refresh} /><section className="progress-section"><h2>{t.signals}</h2>{signals.loading ? <p role="status">{t.loading}</p> : signals.error ? <LearningError error={signals.error} /> : <SignalRows signals={signals.data} />}<LoadMore query={signals} /></section>
-    <section className="progress-section" aria-label={t.support}><h2>{t.support}</h2><p className="learning-form__note">{t.supportBody}</p>{state.data.projection?.support ? <p>{state.data.projection.support.returnedCount} / {state.data.projection.support.totalCount ?? t.unknown} {t.recordsShown}</p> : null}<SupportRows state={state.data} /></section>
-    <section className="progress-section" aria-label={t.impact}><h2>{t.impact}</h2>{state.data.projection?.outcomes ? <p>{state.data.projection.outcomes.returnedCount} / {state.data.projection.outcomes.totalCount ?? t.unknown} {t.recordsShown}</p> : null}{state.data.impact.status === 'measured' ? <OutcomeList outcomes={state.data.impact.outcomes} /> : <p className="learning-form__note">{t.unmeasured}</p>}</section>
-  </> : null}<ReportExport learnerId={learnerId} /></section>;
+  if (!current) return <section aria-label={label}>{detailHeading}<LearningError error={new LearningApiError('invalid')} /></section>;
+  return <section className="progress-detail" aria-label={label}>{detailHeading}
+    <nav className="progress-chapters" aria-label={t.exploreProgress}><a href="#progress-academic"><CuevoIcon name="assessment" size={18} />{t.academic}</a>{!parent ? <><a href="#progress-actions"><CuevoIcon name="development" size={18} />{t.development}</a><a href="#progress-support"><CuevoIcon name="help" size={18} />{t.support}</a></> : null}<a href="#progress-reports"><CuevoIcon name="portfolio" size={18} />{t.resultPages}</a></nav>
+    {current.status === 'UNKNOWN' ? <div className="notice" role="status"><strong>{t.unknown}</strong><p>{t.unknownBody}</p></div> : current.freshness === 'STALE' ? <div className="notice" role="status"><strong>{t.stale}</strong><p>{t.staleBody}</p><p>{t.snapshotAsOf}: <bdi>{dateLabel(current.generatedAt, locale, t.unknown)}</bdi></p></div> : current.freshness === 'APPROVED_PROJECTION' ? <p className="learning-form__note">{t.parentSafe}</p> : <p className="progress-updated">{t.snapshot} · {t.generatedAt}: <bdi>{dateLabel(current.generatedAt, locale, t.unknown)}</bdi></p>}
+    {current.projection ? <p className="notice">{t.academic}: {countLabel(current.projection.academic.returnedCount, locale, t.unknown)} / {countLabel(current.projection.academic.totalCount, locale, t.unknown)} {t.recordsShown}. {current.projection.academic.truncated ? t.moreClassSources : t.coverageUnknown}</p> : null}
+    <div className="progress-story-grid" data-parent={parent} data-teacher={membership?.role === 'teacher'}>
+      <AcademicRows state={current} />
+      {membership?.role === 'teacher' ? <AttentionSection learnerId={learnerId} refresh={refresh}/> : null}
+      {!parent ? <section className="progress-section" id="progress-actions"><ProgressSectionHeading title={t.development} icon="development" /><p className="learning-form__note">{t.developmentBody}</p>{current.development.completeness === 'RECORDED_ONLY' ? <p className="learning-form__note"><strong>{t.recordedOnly}.</strong> {t.recordedOnlyBody}</p> : null}<p className="learning-form__note">{t.window}: <bdi>{dateLabel(current.development.windowStart, locale, t.unknown)} – {dateLabel(current.development.windowEnd, locale, t.unknown)}</bdi></p><dl className="observation-counts">{(['practice', 'revision', 'reflection'] as const).map(kind => <div key={kind}><dt><CuevoIcon name={kind === 'revision' ? 'feedback' : kind === 'reflection' ? 'reflection' : 'practice'} size={20} />{t[kind]}</dt><dd><strong>{countLabel(current.development[kind].count, locale, t.unknown)}</strong>{current.development[kind].observationIds.length ? <details><summary>{t.sourceIds}</summary>{current.projection?.observations[kind].truncated ? <p>{countLabel(current.projection.observations[kind].returnedCount, locale, t.unknown)} / {countLabel(current.projection.observations[kind].totalCount, locale, t.unknown)} {t.recordsShown}</p> : null}<ul className="source-id-list">{current.development[kind].observationIds.map(id => <li key={id}><bdi>{id}</bdi></li>)}</ul></details> : null}</dd></div>)}</dl>
+        <div className="progress-completion"><h3>{t.engagement}</h3><p className="learning-form__note">{t.engagementBody}</p><dl className="academic-facts"><div><dt>{t.completionCount}</dt><dd>{countLabel(current.engagement.completedActivityCount, locale, t.unknown)}</dd></div><div><dt>{t.lastCompleted}</dt><dd><bdi>{dateLabel(current.engagement.lastCompletedAt, locale, t.unknown)}</bdi></dd></div></dl></div>
+      </section> : null}
+    </div>
+    {!parent ? <>
+      <div className="progress-follow-up-grid">
+        <section className="progress-section" id="progress-support" aria-label={t.support}><ProgressSectionHeading title={t.support} icon="help" /><p className="learning-form__note">{t.supportBody}</p>{current.projection?.support ? <p>{countLabel(current.projection.support.returnedCount, locale, t.unknown)} / {countLabel(current.projection.support.totalCount, locale, t.unknown)} {t.recordsShown}</p> : null}<SupportRows state={current} /></section>
+        <section className="progress-section" aria-label={t.impact}><ProgressSectionHeading title={t.impact} icon="assessment" />{current.projection?.outcomes ? <p>{countLabel(current.projection.outcomes.returnedCount, locale, t.unknown)} / {countLabel(current.projection.outcomes.totalCount, locale, t.unknown)} {t.recordsShown}</p> : null}{current.impact.status === 'measured' ? <OutcomeList outcomes={current.impact.outcomes} /> : <p className="learning-form__note">{t.unmeasured}</p>}</section>
+      </div>
+      <details className="progress-record-history"><summary><CuevoIcon name="reflection" size={20} />{t.recordHistory}</summary>
+      <section className="progress-section"><ProgressSectionHeading title={t.observations} icon="reflection" />{observations.loading ? <p role="status">{t.loading}</p> : observations.error ? <LearningError error={observations.error} /> : <ObservationRows observations={observations.data} />}<LoadMore query={observations} /></section>
+      {membership?.role !== 'teacher' ? <AttentionSection learnerId={learnerId} refresh={refresh} /> : null}
+      <section className="progress-section"><ProgressSectionHeading title={t.signals} icon="progress" />{signals.loading ? <p role="status">{t.loading}</p> : signals.error ? <LearningError error={signals.error} /> : <SignalRows signals={signals.data} />}<LoadMore query={signals} /></section>
+      </details>
+    </> : null}
+    <div id="progress-reports"><ReportExport learnerId={learnerId} /></div>
+  </section>;
+}
+
+function ProgressSectionHeading({ title, icon }: { title: string; icon: CuevoIconName }) {
+  const { membership } = useApp();
+  const art = icon === 'assessment' ? trailAssets.work : icon === 'development' ? trailAssets.grow : icon === 'help' ? trailAssets.practice : icon === 'reflection' ? trailAssets.reflect : null;
+  return <div className="progress-section-heading"><span>{membership?.role === 'student' && art ? <img src={art} width={48} height={48} alt="" /> : <CuevoIcon name={icon} size={24} variant="filled" />}</span><h2>{title}</h2></div>;
 }
 
 function SupportRows({ state }: { state: LearnerState }) {
@@ -88,7 +148,7 @@ function SupportRows({ state }: { state: LearnerState }) {
 function AcademicRows({ state }: { state: LearnerState }) {
   const { locale } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
   const [evidenceId, setEvidenceId] = useState<string | null>(null);
-  return <section className="progress-section"><h2>{t.academic}</h2>{state.academic.length ? state.academic.map((row) => <article key={row.resultId} className="academic-row" data-result-id={row.resultId}><div className="learning-section-heading"><div><h3>{row.assessmentTitle ?? (row.nativeResult.type === 'numeric' ? t.native : t.nativeRubric)}</h3><p>{row.referenceTitle ?? t.objectiveUnavailable}</p><details><summary>{t.sources}</summary><p>{t.referenceVersion}: <bdi>{row.referenceVersion}</bdi> · {t.policy}: {row.nativeResult.policyVersion}</p><bdi>{row.referenceId}</bdi></details></div><bdi className="learning-form__note">{dateLabel(row.observedAt, locale, t.unknown)}</bdi></div><NativeResultView result={row.nativeResult} /><Button type="button" variant="quiet" aria-expanded={evidenceId === row.evidenceId} onClick={() => setEvidenceId(evidenceId === row.evidenceId ? null : row.evidenceId)}>{evidenceId === row.evidenceId ? t.closeEvidence : t.evidence}</Button>{evidenceId === row.evidenceId ? <EvidenceDetail evidenceId={row.evidenceId} /> : null}</article>) : <p className="learning-empty">{t.noAcademic}</p>}</section>;
+  return <section className="progress-section progress-academic" id="progress-academic"><ProgressSectionHeading title={t.academic} icon="assessment" />{state.academic.length ? state.academic.map(row => <article key={row.resultId} className="academic-row" data-result-id={row.resultId}><div className="learning-section-heading"><div><h3>{row.assessmentTitle ?? t.assessmentNameUnavailable}</h3><p>{row.referenceTitle ?? t.objectiveUnavailable}</p></div><bdi className="learning-form__note">{dateLabel(row.observedAt, locale, t.unknown)}</bdi></div><NativeResultView result={row.nativeResult} /><div className="learning-actions"><Button type="button" variant="secondary" aria-expanded={evidenceId === row.evidenceId} onClick={() => setEvidenceId(evidenceId === row.evidenceId ? null : row.evidenceId)}><CuevoIcon name="assessment" size={18} />{evidenceId === row.evidenceId ? t.closeEvidence : t.evidence}</Button><details><summary>{t.sources}</summary><dl className="academic-facts"><div><dt>{t.reference}</dt><dd><bdi>{row.referenceId}</bdi></dd></div><div><dt>{t.referenceVersion}</dt><dd><bdi>{row.referenceVersion}</bdi></dd></div><div><dt>{t.policy}</dt><dd>{new Intl.NumberFormat(locale).format(row.nativeResult.policyVersion)}</dd></div></dl></details></div>{evidenceId === row.evidenceId ? <EvidenceDetail evidenceId={row.evidenceId} learnerId={state.learnerId} /> : null}</article>) : <p className="learning-empty">{t.noAcademic}</p>}</section>;
 }
 function ObservationRows({ observations }: { observations: Observation[] }) {
   const { locale } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;

@@ -7,7 +7,7 @@ export const verificationSteps=[
  {name:'docs-fixtures',args:['--import','tsx','--test','scripts/docs/rules.test.ts']},
  {name:'cicd',args:['--import','tsx','scripts/verification/cicd-check.ts']},
  {name:'cicd-fixtures',args:['--import','tsx','--test','scripts/verification/cicd-contracts.test.ts']},
- {name:'verification-rules',args:['--import','tsx','--test','scripts/verification/rules.test.ts','scripts/verification/posthog-evidence.test.ts','scripts/verification/browser-account-phase.test.ts','scripts/verification/account-capture-cleanup.test.ts']},
+ {name:'verification-rules',args:['--import','tsx','--test','scripts/verification/rules.test.ts','scripts/verification/posthog-evidence.test.ts','scripts/verification/browser-account-phase.test.ts','scripts/verification/account-capture-cleanup.test.ts','scripts/verification/typecheck-workspaces.test.ts']},
  {name:'outage-rules',args:['--import','tsx','--test','scripts/verification/runtime-outage-rules.test.ts']},
  {name:'local-runtime',args:['--import','tsx','--test','scripts/local-runtime.test.ts','scripts/runtime/environment.test.ts','scripts/runtime/posthog-local.test.ts','scripts/runtime/local-school-accounts.test.ts','scripts/runtime/initial-school.test.ts','scripts/runtime/process.test.ts','scripts/runtime/foundry-environment.test.ts','scripts/runtime/reference-drain-rules.test.ts','scripts/runtime/source-paths.test.ts']},
  {name:'migration-replay-rules',args:['--import','tsx','--test','scripts/database/replay-plan.test.ts','scripts/database/hosted-synthetic-plan.test.ts','scripts/database/browser-pilot-volume-rules.test.ts']},

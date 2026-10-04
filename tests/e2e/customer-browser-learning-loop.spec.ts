@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -36,10 +37,10 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await page.getByLabel('School email', { exact: true }).fill(account.email);
     await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
+    await expectTrailWorkspace(page, role);
   }
-  async function signOut() { await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
-  async function navigate(name: string) { await page.getByRole('navigation').getByRole('button', { name, exact: true }).click(); await settled(page); }
+  async function signOut() { await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
+  async function navigate(name: string) { await page.locator('.workspace-chrome__navigation').getByRole('button', { name, exact: true }).click(); await settled(page); }
   async function capture(name: string) { await page.screenshot({ path: resolve(directory, name), fullPage: true }); }
   async function visibleMutation(path: string, action: () => Promise<void>): Promise<Receipt> {
     const pending = page.waitForResponse(response => response.url() === `${api}${path}` && response.request().method() === 'POST');
@@ -249,7 +250,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('parent'); await navigate('Academic'); const childSelect = page.getByLabel('Child', { exact: true });
     await expect(page.getByText('Read your child’s released results, teacher feedback and approved evidence.', { exact: true })).toBeVisible();
     await selectHumanLabel(childSelect,new RegExp(`${escapeRegExp(studentName)}.*Year 1.*Cedar`));const parentResult = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: followUpTitle, exact: true }) });
-    await loadTarget(parentResult, page.locator('.academic-workspace')); await expect(parentResult.locator('.native-score strong')).toHaveText('7'); await expect(page.getByRole('navigation').getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
+    await loadTarget(parentResult, page.locator('.academic-workspace')); await expect(parentResult.locator('.native-score strong')).toHaveText('7'); await expect(page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
     await capture('09-parent-approved-native-result.png');
     await signOut();await signIn('student');await navigate('Portfolio');await page.getByRole('button',{name:'Select released work',exact:true}).click();
     const selectWork=page.getByRole('region',{name:'Select released work',exact:true});const releasedChoices=page.locator('.portfolio-workspace > .notice').filter({has:page.getByText('Released source evidence',{exact:true})});const selectedWork=await selectHumanLabel(selectWork.getByLabel('Released source evidence',{exact:true}),humanContextLabel(followUpTitle),releasedChoices,String(followUp.evidenceId));expect(selectedWork).toContain('Objective: Synthetic school-authored explanation objective');expect(selectedWork).toContain('Result revision: 1');expect(selectedWork).toContain('Released:');

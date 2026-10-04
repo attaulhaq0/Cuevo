@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, openTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace, trailWorkspaceAction } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -19,12 +20,12 @@ const arabicDestinations: Record<string, ArabicDestination> = {
   Academic: { label: 'الأكاديمي', refresh: 'تحديث السجلات الأكاديمية' },
   Progress: { label: 'التقدّم', refresh: 'تحديث حالة الطالب' },
   'Next steps': { label: 'الخطوات التالية', refresh: 'تحديث الخطوات التالية' },
-  'Access details': { label: 'تفاصيل الوصول', heading: 'وصولك إلى المدرسة', refresh: 'تحديث التحقّق من الوصول' },
+  'Access settings': { label: 'إعدادات الوصول', heading: 'وصولك إلى المدرسة', refresh: 'تحديث التحقّق من الوصول' },
   Account: { label: 'الحساب', heading: 'حسابك' },
 };
 const arabicRoleHeadings: Record<CustomerRole, string> = {
-  admin: 'تأسيس المدرسة', teacher: 'مساحة عملك التعليمية', student: 'تعلّمك يبدأ هنا',
-  parent: 'اتصالك بالمدرسة', coordinator: 'متابعة التعلّم',
+  admin: 'صورة واضحة لمدرستك', teacher: 'يومك في التدريس', student: 'مرحبًا بعودتك',
+  parent: 'التعلّم، بوضوح', coordinator: 'مراجعة البرنامج والتعلّم',
 };
 const evidence = resolve('.local/customer-readiness/ux');
 const runId = new Date().toISOString().replace(/[:.]/g, '-');
@@ -58,12 +59,12 @@ async function signIn(page: Page, account: Account) {
   await page.getByLabel('School email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(account.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
+  await expectTrailWorkspace(page, account.role);
 }
 async function settled(page: Page) { await expect(page.locator('main [role="status"]').filter({ hasText: /^(Loading|جارٍ تحميل)/ })).toHaveCount(0); }
 async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string, destination: ArabicDestination) {
   const main = page.getByRole('main');
-  await expect(main.getByRole('heading', { level: 1 })).toHaveText(name === 'Overview' ? arabicRoleHeadings[role] : destination.heading ?? destination.label);
+  if (name === 'Overview' && role === 'student') await expect(main.getByRole('heading', { level: 1 })).toHaveText(/^مرحبًا، /); else if (name === 'Overview' && role === 'parent') await expect(main.getByRole('heading', { level: 1 })).toHaveText(/^(التعلّم، بوضوح|تعلّم واضح مع)/); else await expect(main.getByRole('heading', { level: 1 })).toHaveText(name === 'Overview' ? arabicRoleHeadings[role] : destination.heading ?? destination.label);
   if (destination.refresh) await expect(main.getByRole('button', { name: destination.refresh, exact: true })).toBeVisible();
   const staff = role === 'admin' || role === 'teacher' || role === 'coordinator';
   const manager = role === 'admin' || role === 'teacher';
@@ -77,18 +78,17 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
     await selector('الطفل', 'اختر الطفل لعرض سجلاته');
   }
   if (name === 'Overview') {
-    await expect(main.getByRole('heading', { name: 'الخطوة التالية', exact: true })).toBeVisible();
-    await expect(main.getByRole('heading', { name: 'السياق المدرسي القادم', exact: true })).toBeVisible();
-    await expect(main.getByRole('heading', { name: 'قراءة الإعلانات المعتمدة', exact: true })).toBeVisible();
-    if (role === 'student' || role === 'parent') await expect(main.getByRole('heading', { name: 'قراءة ملاحظات المعلّم', exact: true })).toBeVisible();
+    await expectTrailWorkspace(page, role);
+    const required: Record<CustomerRole, string> = { admin: 'تهيئة المدرسة', coordinator: 'شواهد الصف', teacher: 'السجلات التي تحتاج انتباهك', student: 'خطوتك التالية في التعلّم', parent: 'التعلّم، بوضوح' };
+    await expect(main.getByRole('heading', { name: required[role], exact: true })).toBeVisible();
   } else if (name === 'School') {
-    const expected = role === 'admin' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'سجل تدقيق المدرسة', 'مراجعة الأتمتة', 'الحسابات والدعوات', 'فترة ملاحظات التعلّم', 'العمليات اليومية']
+    const expected = role === 'admin' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'الحسابات والدعوات', 'سجل تدقيق المدرسة', 'مراجعة الأتمتة', 'فترة ملاحظات التعلّم', 'العمليات اليومية']
       : role === 'coordinator' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'العمليات اليومية']
         : role === 'teacher' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'العمليات اليومية']
           : role === 'parent' ? ['الدعم التعليمي المعتمد', 'العمليات اليومية'] : ['العمليات اليومية'];
     await expect(tabs.getByRole('button')).toHaveText(expected);
     await expect(tabs.getByRole('button', { name: role === 'admin' ? 'الإعداد' : 'العمليات اليومية', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    if (staff && role !== 'admin') await selector('السجلات اليومية للصف', 'جميع الصفوف المسموح بها');
+    if (staff && role !== 'admin') {await main.getByRole('button',{name:'العمليات اليومية',exact:true}).click();await selector('السجلات اليومية للصف', 'جميع الصفوف المسموح بها');}
   } else if (name === 'Community') {
     await expect(tabs.getByRole('button')).toHaveText(role === 'parent' ? ['الإعلانات', 'الإشعارات', 'محادثات أولياء الأمور والمعلّمين']
       : manager ? ['غرف الصف والمجموعات', 'الإعلانات', 'الإشعارات', 'محادثات أولياء الأمور والمعلّمين'] : ['غرف الصف والمجموعات', 'الإعلانات', 'الإشعارات']);
@@ -96,8 +96,7 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
   } else if (name === 'Development') {
     await selector('فترة التعلّم', 'اختر فترة');
     if (staff) await selector('الطالب', 'اختر طالبًا');
-    await expect(main.getByRole('heading', { name: 'الإنجازات', exact: true })).toBeVisible();
-    await expect(main.getByRole('heading', { name: 'سجل أنشطة التعلّم', exact: true })).toBeVisible();
+    await expect(main.getByText('اختر فترة تعلّم لعرض نقاطها وأنشطتها وإنجازاتها المسجّلة.',{exact:true})).toBeVisible();
   } else if (name === 'Curriculum context') {
     await expect(tabs.getByRole('button')).toHaveText(['مصادر المنهج', 'أهداف التعلّم', 'برامج المدرسة', 'الولاية وأطر الجودة']);
     await expect(tabs.getByRole('button', { name: 'مصادر المنهج', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -118,9 +117,9 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
         : role === 'student' ? ['مهام التدريب', 'النتائج'] : ['المقترحات', 'مهام التدريب', 'النتائج'];
     await expect(tabs.getByRole('button')).toHaveText(expected);
     await expect(tabs.getByRole('button', { name: role === 'student' ? 'مهام التدريب' : 'المقترحات', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  } else if (name === 'Access details') {
+  } else if (name === 'Access settings') {
     await expect(main.getByRole('heading', { name: 'العضوية الحالية', exact: true })).toBeVisible();
-    await expect(main.getByRole('heading', { name: 'الإمكانات المهيّأة', exact: true })).toBeVisible();
+    await expect(main.getByRole('heading', { name: 'الميزات التي توفرها مدرستك', exact: true })).toBeVisible();
   } else if (name === 'Account') {
     await expect(main.getByRole('heading', { name: 'سياق الطالب', exact: true })).toBeVisible();
     await expect(main.getByRole('button', { name: 'تحديث سياق الطالب', exact: true })).toBeVisible();
@@ -150,7 +149,7 @@ test('student keeps typed response when choosing draft save and recovers the ser
   const title = `Customer draft ${randomUUID().slice(0, 8)}`;
   const assignment = await assessment(page, title);
   await signIn(page, (await accounts()).find(row => row.role === 'student')!);
-  await page.getByRole('navigation').getByRole('button', { name: 'Learning', exact: true }).click();
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click();
   await page.getByRole('button', { name: 'Assessments', exact: true }).click();
   const row = page.locator('.assessment-section').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
   await findPaged(page, row);
@@ -172,7 +171,7 @@ test('student keeps typed response when choosing draft save and recovers the ser
 
 test('school editor survives same-scope refresh and clears after access is denied', async ({ page }) => {
   await signIn(page, (await accounts()).find(row => row.role === 'admin')!);
-  await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
   await page.getByRole('button', { name: 'Create academic year', exact: true }).click();
   const form = page.getByRole('region', { name: 'Create academic year', exact: true });
   await form.getByLabel('Name', { exact: true }).fill('Preserve this school setup draft');
@@ -201,10 +200,9 @@ test('editing a suspended identity preserves its existing lifecycle and effectiv
   const original = { displayName: person.displayName, role: person.role, status: person.status, effectiveFrom: person.effectiveFrom, effectiveTo: person.effectiveTo, confirmAccessChange: true };
   await command(page, accessToken, `/v1/school/people/${userId}/configure`, { ...original, status: 'suspended', expectedRevision:person.revision });
   try {
-    await signIn(page, admin); await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
+    await signIn(page, admin); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
     await page.getByRole('button', { name: 'People and access', exact: true }).click(); await settled(page);
-    await page.getByRole('button', { name: 'Manage school account', exact: true }).click();
-    await page.getByLabel('Person', { exact: true }).selectOption(userId);
+    const selected = await selectTrailSchoolRecord(page, 'person', person.displayName); await selected.getByRole('button', { name: 'Edit this record', exact: true }).click();
     const form = page.getByRole('region', { name: 'Manage school account', exact: true });
     await form.scrollIntoViewIfNeeded(); await capture(page, '05-suspended-person-edit-default.png');
     await expect(form.getByLabel('Status', { exact: true })).toHaveValue('suspended');
@@ -214,8 +212,8 @@ test('editing a suspended identity preserves its existing lifecycle and effectiv
 
 test('browser back and forward retain the selected authorized workspace', async ({ page }) => {
   await signIn(page, (await accounts()).find(row => row.role === 'admin')!);
-  await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
-  await page.getByRole('navigation').getByRole('button', { name: 'Learning', exact: true }).click(); await settled(page);
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click(); await settled(page);
   await capture(page, '06-learning-before-browser-back.png');
   await page.goBack(); await capture(page, '07-browser-back-result.png');
   await expect(page.locator('main h1')).toHaveText('School');
@@ -225,7 +223,7 @@ test('browser back and forward retain the selected authorized workspace', async 
 test('school context temporary failure can be retried from the feature', async ({ page }) => {
   await signIn(page, (await accounts()).find(row => row.role === 'admin')!);
   await page.route('**/v1/school/context', route => route.fulfill({ status: 503, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ code: 'REQUEST_UNAVAILABLE', requestId: 'customer-context-retry' }) }));
-  await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click();
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toBeVisible(); await capture(page, '08-school-initial-unavailable.png');
   await page.unroute('**/v1/school/context');
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
@@ -255,9 +253,9 @@ test('parent explicitly selects the child for approved results and the same chil
     await expect(child).toHaveValue(''); await capture(page, '09-parent-choose-child.png');
     await child.selectOption(childId);
     const report = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/learners/${childId}/academic-report`);
-    await page.getByRole('navigation').getByRole('button', { name: 'Academic', exact: true }).click();
+    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Academic', exact: true }).click();
     expect((await report).ok()).toBe(true); await expect(page.getByLabel('Child', { exact: true })).toHaveValue(childId);
-    await page.getByRole('navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
+    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
     await expect(page.getByLabel('Child', { exact: true })).toHaveValue(childId);
     await capture(page, '10-parent-selected-child-portfolio.png');
     await configureRelationship({ ...relationship, status: 'revoked' });
@@ -270,9 +268,10 @@ test('parent explicitly selects the child for approved results and the same chil
 
 test('main school relationships show readable names and no opaque identifiers', async ({ page }) => {
   await signIn(page, (await accounts()).find(row => row.role === 'admin')!);
-  await page.getByRole('navigation').getByRole('button', { name: 'School', exact: true }).click();
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click();
   await page.getByRole('button', { name: 'People and access', exact: true }).click(); await settled(page);
-  const text = await page.locator('main table').allTextContents();
+  const directory = page.locator('.school-access-directory'); await expect(directory).toBeVisible();
+  const text = await directory.locator('li button').allTextContents(); expect(text.length).toBeGreaterThan(0);
   expect(text.join(' ')).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   await capture(page, '11-school-readable-relationships.png');
 });
@@ -283,7 +282,7 @@ test('rubric authoring uses meaningful descriptors and keeps typed work during r
   const teacherToken = await token(page, teacher);
   const title = `Reasoning review ${new Date().toISOString()}`;
   const course = await command(page, teacherToken, '/v1/courses', { classId, subjectId, title, description: 'Customer authoring verification.' });
-  await signIn(page, teacher); await page.getByRole('navigation').getByRole('button', { name: 'Academic', exact: true }).click();
+  await signIn(page, teacher); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Academic', exact: true }).click();
   await page.getByRole('button', { name: 'Rubrics', exact: true }).click(); await settled(page);
   await page.getByRole('button', { name: 'Create school rubric', exact: true }).click();
   const editor = page.getByRole('region', { name: 'Create school rubric', exact: true });
@@ -315,10 +314,10 @@ test('all roles use readable primary headings and selectors across current Engli
   for (const role of roles) {
     await page.setViewportSize({ width: 1440, height: 960 });
     await signIn(page, all.find(row => row.role === role)!);
-    const navigation = page.getByRole('navigation'); const names = (await navigation.getByRole('button').allTextContents()).map(name => name.trim());
-    expect(names, `${role} has current customer navigation`).toEqual(expect.arrayContaining(['Overview', 'Access details', 'Account']));
+    const navigation = page.locator('.workspace-chrome__navigation'); const railNames = (await navigation.locator('button[data-workspace-destination]').allTextContents()).map(name => name.trim()); const names = [...railNames, 'Access settings', 'Account'];
+    expect(names, `${role} has current customer navigation`).toEqual(expect.arrayContaining(['Overview', 'Access settings', 'Account']));
     for (const name of names) {
-      await navigation.getByRole('button', { name, exact: true }).click(); await settled(page);
+      await openTrailWorkspace(page, name); await settled(page);
       const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td').allTextContents();
       expect(primary.join(' '), `${role}/${name} English primary labels`).not.toMatch(identifier);
     }
@@ -331,21 +330,21 @@ test('all roles use readable primary headings and selectors across current Engli
       expect(destination, `Arabic primary-label expectation for ${role}/${name}`).toBeDefined();
       return destination;
     });
-    await expect(navigation.getByRole('button')).toHaveText(destinations.map(destination => destination.label));
+    await expect(navigation.locator('button[data-workspace-destination]')).toHaveText(destinations.slice(0, railNames.length).map(destination => destination.label));
     for (const [index, name] of names.entries()) {
       const destination = destinations[index];
-      const choice = navigation.getByRole('button', { name: destination.label, exact: true });
+      const choice = await trailWorkspaceAction(page, destination.label);
       await choice.click(); await settled(page);
-      await expect(choice).toHaveAttribute('aria-current', 'page');
+      if (!['Access settings', 'Account'].includes(name)) await expect(choice).toHaveAttribute('aria-current', 'page');
       await arabicPrimaryLabels(page, role, name, destination);
       await settled(page);
       const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td').allTextContents();
       expect(primary.join(' '), `${role}/${name} Arabic primary labels`).not.toMatch(identifier);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${role}/${name} Arabic mobile overflow`).toBe(true);
     }
-    await expect(page.getByRole('main').getByRole('button', { name: 'تسجيل الخروج', exact: true }).last()).toBeVisible();
+    await expect(page.locator('.workspace-chrome__person > button')).toHaveAccessibleName('الملف الشخصي والإعدادات');
     await page.getByRole('button', { name: 'English', exact: true }).click();
-    await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+    await signOutTrailWorkspace(page);
   }
 });
 
@@ -358,7 +357,7 @@ test('a completed learning activity remains completed after leaving and reopenin
   const lesson = await command(page, teacherToken, `/v1/units/${unit.id}/lessons`, { title: 'Explain a check', sequence: 1, body: 'Work through your example and explain how you checked it.' });
   await command(page, teacherToken, `/v1/lessons/${lesson.id}/activities`, { title: 'Record your practice', sequence: 1, kind: 'practice', instructions: 'Complete a checking step.' });
   await command(page, teacherToken, `/v1/courses/${course.id}/publish`, {});
-  await signIn(page, all.find(row => row.role === 'student')!); await page.getByRole('navigation').getByRole('button', { name: 'Learning', exact: true }).click();
+  await signIn(page, all.find(row => row.role === 'student')!); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click();
   const row = page.locator('.course-list > li').filter({ hasText: title }); await findPaged(page, row);
   await row.getByRole('button', { name: 'Open course', exact: true }).click();
   await page.getByRole('button', { name: 'Complete activity', exact: true }).click();

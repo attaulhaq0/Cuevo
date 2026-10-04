@@ -9,7 +9,8 @@ Cuevo is a standalone K–12 Learning Experience Platform connecting school cont
 - [Product context](docs/product/README.md): complete specifications, [task reading guide](docs/product/context-map.md) and [source index](docs/product/index.md).
 - [Codebase map](docs/codebase-map.md): implementation ownership and public interfaces.
 - [Repository layout](docs/architecture/repository-layout.md): hierarchy and dependency rules.
-- [Current status](docs/implementation-status.md): current repairs and scoped tests pass; replacement frozen verification and customer acceptance remain in progress. Official curriculum, live-provider and hosted acceptance remain separate.
+- [Integrated source handover](docs/reports/2026-10-04-cuevo-integration-handover.md): canonical consolidation plan, preserved authorities, current verification and remaining release gates.
+- [Current status](docs/implementation-status.md): integration verification and customer acceptance remain in progress. Official curriculum, live-provider and hosted acceptance remain separate.
 - [Scalable event architecture](docs/architecture/scalable-event-processing.md): accepted full-app foundation, staged progression, evidence and improvement gates; locally verified execution with hosted/load acceptance pending.
 - [Documentation index](docs/README.md): architecture, decisions, reports and plans.
 - [PostHog analytics](docs/operations/posthog.md): current QA/team/investor/institution dashboards, minimized live synthetic capture and local activation/disable commands.

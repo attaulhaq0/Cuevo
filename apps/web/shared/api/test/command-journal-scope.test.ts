@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FormDrafts } from '../../session/form-drafts.ts';
 import { CommandJournal, confirmCommandReceipt, LearningApiError } from '../client.ts';
 import * as client from '../client.ts';
 
@@ -110,4 +111,76 @@ test('feature parser failures remain uncertain even when the parser throws a def
     assert.throws(() => confirmCommandReceipt(journal, 'draft', command.key, { id: 'source' }, () => { throw error; }), (failure: unknown) => failure instanceof LearningApiError && failure.kind === 'invalid' && failure.uncertain === true);
     assert.equal(journal.get('draft')?.key, command.key);
   }
+});
+
+test('pure original-command validation also protects an unmounted form before settlement', () => {
+  const journal = new CommandJournal();
+  const command = journal.prepare('goal', '/v1/development/goals', { title: 'My original goal' });
+  let validated = 0;
+  const validator = (receipt: unknown, original: typeof command) => {
+    validated++;
+    assert.equal(original, command);
+    if ((receipt as { title: string }).title !== original.body.title) throw new LearningApiError('invalid');
+  };
+  assert.throws(() => confirmCommandReceipt(journal, 'goal', command.key, { id: 'goal', title: 'Wrong goal' }, undefined, validator), failure => failure instanceof LearningApiError && failure.uncertain);
+  assert.equal(journal.get('goal')?.key, command.key);
+  assert.equal(confirmCommandReceipt(journal, 'goal', command.key, { id: 'goal', title: 'My original goal' }, undefined, validator), true);
+  assert.equal(validated, 2);
+});
+
+test('the public binary validator receives the exact original command before current effects', () => {
+  const journal = new CommandJournal();
+  const command = journal.prepare('goal', '/v1/development/goals', { title: 'Plan my practice' });
+  const calls: string[] = [];
+  assert.equal(confirmCommandReceipt(journal, 'goal', command.key, { id: 'goal', title: 'Plan my practice' }, () => calls.push('effect'), (receipt, original) => {
+    assert.equal(original, command);
+    assert.equal((receipt as { title: string }).title, original.body.title);
+    calls.push('validated');
+  }), true);
+  assert.deepEqual(calls, ['validated', 'effect']);
+});
+
+test('captured validation settles an offscreen receipt without consuming a newer working draft', async () => {
+  const journal = new CommandJournal(), drafts = new FormDrafts();
+  const slot = 'school:actor:goal';
+  drafts.save(slot, { title: 'Original goal' }, { expectedVersion: 2 });
+  const submitted = drafts.get(slot);
+  const command = journal.prepare('goal', '/v1/development/goals', { title: 'Original goal', expectedVersion: 2 });
+  const validate = client.captureCommandReceiptValidator(command, (receipt, original) => {
+    if ((receipt as { title: string; version: number }).title !== original.body.title || (receipt as { version: number }).version !== Number(original.body.expectedVersion) + 1) throw Error('Wrong original receipt');
+  });
+  let release!: (receipt: unknown) => void;
+  const response = new Promise<unknown>(resolve => { release = resolve; });
+  const completion = response.then(receipt => confirmCommandReceipt(journal, 'goal', command.key, receipt, undefined, validate));
+  drafts.save(slot, { title: 'Newer working goal' }, { expectedVersion: 3 });
+  command.body.title = 'Mutated retained value';
+  release({ id: 'goal', title: 'Original goal', version: 3 });
+  assert.equal(await completion, true);
+  assert.equal(drafts.consume(slot, submitted), false);
+  assert.equal(drafts.get(slot)?.values.title, 'Newer working goal');
+  assert.equal(journal.get('goal'), undefined);
+});
+
+test('cleared or replaced keys never invoke a prior validator or current UI callback', () => {
+  const journal = new CommandJournal();
+  const prior = journal.prepare('goal', '/v1/development/goals', { title: 'Prior' });
+  journal.clear();
+  const current = journal.prepare('goal', prior.path, { title: 'Current' });
+  let calls = 0;
+  assert.equal(confirmCommandReceipt(journal, 'goal', prior.key, { id: 'prior' }, () => calls++, () => calls++), false);
+  assert.equal(calls, 0);
+  assert.equal(journal.get('goal'), current);
+});
+test('a pending-command snapshot survives working-draft loss without permitting mutation of the original request', () => {
+  const journal = new CommandJournal(), drafts = new FormDrafts();
+  const command = journal.prepare('/v1/curriculum/courses/source/plans', '/v1/curriculum/courses/source/plans', { periodId: 'period', expectedPeriodRevision: 2, reason: 'Reviewed original source' });
+  drafts.saveModel('school:actor:/v1/curriculum/courses/source/plans:intent', { kind: 'create' });
+  drafts.clearRead('school:actor:', '/v1/curriculum/courses/source/coverage');
+  assert.equal(drafts.model('school:actor:/v1/curriculum/courses/source/plans:intent'), undefined);
+  const snapshot = journal.pending();
+  assert.deepEqual(snapshot, [command]);
+  snapshot[0].body.expectedPeriodRevision = 9;
+  assert.equal(journal.get(command.path)?.body.expectedPeriodRevision, 2);
+  journal.clear();
+  assert.deepEqual(journal.pending(), []);
 });

@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -16,8 +17,8 @@ async function signIn(page: Page, role: string) {
   await page.getByLabel('School email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(account.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-  await page.getByRole('navigation').getByRole('button', { name: 'Academic', exact: true }).click();
+  await expectTrailWorkspace(page, role);
+  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Academic', exact: true }).click();
 }
 
 async function capture(page: Page, name: string) {
@@ -68,7 +69,7 @@ test('coordinator reads the exact saved objective description before approving t
   const creation = await created;
   expect(creation.status()).toBe(200);
   const receipt = await creation.json();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signOutTrailWorkspace(page);
   await signIn(page, 'coordinator');
   await page.getByRole('button', { name: 'Objectives', exact: true }).click();
   const row = page.locator('.academic-reference-list .academic-row').filter({ has: page.getByRole('heading', { name: title, exact: true }) });

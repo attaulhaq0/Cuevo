@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -40,13 +41,13 @@ async function fixture(page: Page) {
   };
   const signIn = async (account: Account) => {
     await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
-    const signOut = page.getByRole('button', { name: 'Sign out', exact: true }).last();
-    if (await signOut.isVisible()) { await signOut.click(); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
+    const signOut = page.locator('.workspace-chrome__person > button');
+    if (await signOut.isVisible()) { await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
     await page.getByLabel('School email', { exact: true }).fill(account.email);
     await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible();
-    await page.getByRole('navigation').getByRole('button', { name: 'Learning', exact: true }).click();
+    await expectTrailWorkspace(page, account.role);
+    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click();
   };
   const openCourse = async (title: string) => {
     const row = page.locator('.course-list > li').filter({ has: page.getByRole('heading', { name: title, exact: true }) });

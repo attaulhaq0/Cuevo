@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
-import { Button } from '@cuevo/ui';
+import { Button, CuevoIcon } from '@cuevo/ui';
 import { useRouter } from 'next/navigation';
 import type { Locale } from '../../../shared/i18n/locale';
 import { Brand } from '../../../shared/components/brand';
@@ -50,7 +49,7 @@ export function AccountAdmission({ openWorkspace }: { openWorkspace: () => void 
   return <div className="sign-in-page">
     <header className="public-header"><Brand /><LanguageSwitch /></header>
     <main id="main-content" className="sign-in-main" tabIndex={-1}>
-      <section className="sign-in-story" aria-labelledby="admission-heading"><p className="eyebrow">{admissionCopy(locale).title}</p><h1 id="admission-heading">{admissionCopy(locale).introduction}</h1><p className="sign-in-story__body">{admissionCopy(locale).body}</p><p className="session-safety"><ShieldCheck size={18} aria-hidden="true" />{admissionCopy(locale).safety}</p></section>
+      <section className="sign-in-story" aria-labelledby="admission-heading"><p className="eyebrow">{admissionCopy(locale).title}</p><h1 id="admission-heading">{admissionCopy(locale).introduction}</h1><p className="sign-in-story__body">{admissionCopy(locale).body}</p><p className="session-safety"><CuevoIcon name="shield" size={18} />{admissionCopy(locale).safety}</p></section>
       <AdmissionPanel view={view} locale={locale} online={online} confirmed={confirmed} onConfirmed={setConfirmed} onContinue={() => void accept()} onPassword={event => void savePassword(event)} onOpen={() => { if (flow.current?.passwordConfirmed) { refreshAccess(); openWorkspace(); } }} onDecline={() => { if (!pending.current) { flow.current = null; setView({ stage: 'declined' }); } }} />
     </main>
     <footer className="public-footer"><span>{dictionary.company}</span><span>{dictionary.foundation}</span></footer>
@@ -68,7 +67,7 @@ export function AdmissionPanel({ view, locale, online, confirmed, onConfirmed, o
     {view.failure ? <p id="admission-error" className="form-error" role="alert">{admissionFailureCopy(locale, view.failure)}</p> : null}
     {canContinue ? <form className="sign-in-form" onSubmit={event => { event.preventDefault(); onContinue(); }}>
       <label className="admission-confirmation"><input type="checkbox" checked={confirmed} onChange={event => onConfirmed(event.target.checked)} aria-describedby="admission-panel-heading" /> <span>{t.confirmation}</span></label>
-      <Button type="submit" disabled={!confirmed || !online}>{view.stage === 'error' && view.failure === 'outcome-unknown' ? t.retry : t.continue}<ArrowRight className="directional-icon" size={18} aria-hidden="true" /></Button>
+      <Button type="submit" disabled={!confirmed || !online}>{view.stage === 'error' && view.failure === 'outcome-unknown' ? t.retry : t.continue}<CuevoIcon name="arrow" className="directional-icon" size={18} /></Button>
       <Button type="button" variant="quiet" onClick={onDecline}>{t.decline}</Button>
     </form> : null}
     {accepted ? <p><strong>{t.role}: </strong>{view.role ? t.roles[view.role] : t.unknownRole}</p> : null}
@@ -78,7 +77,7 @@ export function AdmissionPanel({ view, locale, online, confirmed, onConfirmed, o
       <div className="field"><label htmlFor="admission-confirm-password">{t.confirmPassword}</label><input id="admission-confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required disabled={busy || !online} dir="ltr" aria-invalid={view.failure === 'password-invalid'} aria-describedby={`admission-password-hint${view.failure ? ' admission-error' : ''}`} /></div>
       <Button type="submit" disabled={busy || !online}>{busy ? t.passwordSaving : t.passwordSave}</Button>
     </form> : null}
-    {view.stage === 'complete' ? <div className="sign-in-form"><p role="status"><strong>{t.passwordSaved}</strong> {t.passwordSavedBody}</p><Button type="button" onClick={onOpen} disabled={!online}>{t.open}<ArrowRight className="directional-icon" size={18} aria-hidden="true" /></Button></div> : null}
+    {view.stage === 'complete' ? <div className="sign-in-form"><p role="status"><strong>{t.passwordSaved}</strong> {t.passwordSavedBody}</p><Button type="button" onClick={onOpen} disabled={!online}>{t.open}<CuevoIcon name="arrow" className="directional-icon" size={18} /></Button></div> : null}
     <div className="sign-in-help"><p>{t.contact}</p></div>
   </section>;
 }

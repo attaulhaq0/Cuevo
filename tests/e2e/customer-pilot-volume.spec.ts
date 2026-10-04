@@ -1,3 +1,4 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -32,9 +33,9 @@ test('pilot browser volume: current class/state, source learning, large communit
   async function login(role: string) {
     const account = accounts.find(account => account.role === role)!;
     await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password);
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page.getByText('School access verified', { exact: true })).toBeVisible(); await settled();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, role); await settled();
   }
-  async function navigate(name: string) { await page.getByRole('navigation').getByRole('button', { name, exact: true }).click(); if (name !== 'Overview') await expect(page.locator('main h1')).toHaveText(name); await settled(); }
+  async function navigate(name: string) { await page.locator('.workspace-chrome__navigation').getByRole('button', { name, exact: true }).click(); if (name !== 'Overview') await expect(page.locator('main h1')).toHaveText(name); await settled(); }
   async function measure(scenario: string, action: () => Promise<unknown>, rows: Locator) { const start = performance.now(); await action(); await settled(); timing.push({ scenario, durationMs: Math.round((performance.now() - start) * 100) / 100, renderedRows: await rows.count() }); }
   async function nextPages(container: Locator, rows: Locator, expectedAtLeast: number) {
     const identities = () => rows.evaluateAll(elements => elements.map(element => element.getAttribute('data-post-id') ?? element.getAttribute('data-portfolio-id') ?? element.getAttribute('data-class-learner-id') ?? element.querySelector('h3')?.textContent?.trim() ?? ''));
@@ -67,7 +68,7 @@ test('pilot browser volume: current class/state, source learning, large communit
       expect(await page.locator('.marking-queue__item').count()).toBeGreaterThanOrEqual(100);
     }
     await page.screenshot({ path: resolve(directory, 'teacher-source-page.png') });
-    await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); phase = 'student'; await login('student');
+    await signOutTrailWorkspace(page); phase = 'student'; await login('student');
     for (let index = 0; index < 5; index++) {
       await navigate('Overview'); await measure('student-learning-large-assessment-page', () => navigate('Learning'), page.locator('.course-list > li'));
       await page.getByRole('button', { name: 'Assessments', exact: true }).click(); await settled(); expect(await page.locator('.assessment-section').count()).toBe(100);
@@ -82,7 +83,7 @@ test('pilot browser volume: current class/state, source learning, large communit
     }
     await page.screenshot({ path: resolve(directory, 'student-large-portfolio.png') });
     const ownItem = page.locator('[data-portfolio-id]').last(); await ownItem.getByRole('button', { name: 'Source work', exact: true }).click(); await expect(ownItem.getByRole('region', { name: 'Source work', exact: true })).toContainText('Synthetic explanation imported for browser pilot volume.');
-    await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); phase = 'parent'; await login('parent');
+    await signOutTrailWorkspace(page); phase = 'parent'; await login('parent');
     for (let index = 0; index < 5; index++) {
       await navigate('Overview'); await measure('parent-notification-1000-history-first-page', async () => { await navigate('Community'); await page.getByRole('button', { name: 'Notifications', exact: true }).click(); }, page.locator('.community-post'));
       expect(await page.locator('.community-post').count()).toBe(100); await nextPages(page.locator('.community-workspace'), page.locator('.community-post'), 200);

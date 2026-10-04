@@ -1,3 +1,4 @@
+import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -25,7 +26,7 @@ test('selected learner heading follows current authorized names after school cor
   }
   try {
     await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email').fill(teacher.email); await page.getByLabel('Password', { exact: true }).fill(teacher.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByText('School access verified', { exact: true })).toBeVisible(); await page.getByRole('navigation').getByRole('button', { name: 'Progress', exact: true }).click();
+    await expectTrailWorkspace(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Progress', exact: true }).click();
     await page.getByLabel('Class', { exact: true }).selectOption({ label: 'Year 1 · Cedar · Year 1 · 2026–2027' });
     const row = page.locator(`[data-class-learner-id="${learnerId}"]`); await row.getByRole('button', { name: 'Review this learner', exact: true }).click();
     await expect(page.getByRole('heading', { name: /^Current learner evidence · Lina Al-Kuwari/ })).toBeFocused();

@@ -1,3 +1,4 @@
+import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
@@ -14,7 +15,7 @@ test('processed evidence and recorded habits stay separate in bilingual learner 
   const course = await command('/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title: `Revision source ${randomUUID().slice(0, 6)}`, description: 'Independent observed revision fixture.' }); await command(`/v1/courses/${course.id}/publish`, {}); const assessment = await command('/v1/assessments', { courseId: course.id, title: 'Source revision', instructions: 'Explain and revise.', maxScore: 10 }); const original = await command(`/v1/assessments/${assessment.id}/submissions`, { content: 'Original source.' }, studentToken); const feedback = await command(`/v1/submissions/${original.id}/return`, { feedback: 'Review the checking step.', expectedRevision: 1 }); const revised = await command(`/v1/submissions/${original.id}/resubmit`, { content: 'Revised after explicit feedback.', returnId: feedback.id, expectedRevision: 1 }, studentToken);
   const errors: string[] = []; const warnings: string[] = [];
   page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'warning') warnings.push(m.text()); });
-  await page.goto('/'); await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.goto('/'); await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page);
   await page.getByRole('button', { name: 'Progress', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Academic evidence', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Learning observations', exact: true })).toBeVisible();
