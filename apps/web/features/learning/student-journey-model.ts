@@ -4,6 +4,10 @@ import { LearningApiError } from '../../shared/api/client';
 import { parseAssessment } from './model';
 
 export type JourneyState = 'available' | 'completed' | 'submitted' | 'returned' | 'released' | 'unknown';
+/** Activity and linked assessment demands have independent review authority. */
+export function journeyThinkingFocusSources(activity: Activity, task: Assessment | null, courseId: string): { kind: 'activity' | 'assessment'; value: Activity['thinkingFocus'] }[] {
+  return [{ kind: 'activity', value: activity.thinkingFocus }, ...(task && activity.assessmentId === task.id && task.courseId === courseId ? [{ kind: 'assessment' as const, value: task.thinkingFocus }] : [])];
+}
 export function journeyFeedbackRows<T extends ReleasedResult & { scope: string }>(rows: T[], scope: string, error: LearningApiError | null, moreError: LearningApiError | null): ReleasedResult[] {
   if ([error, moreError].some(value => value && ['denied', 'unauthorized'].includes(value.kind))) return [];
   return rows.filter(row => row.scope === scope);

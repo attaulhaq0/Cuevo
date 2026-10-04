@@ -3,6 +3,9 @@
 .curriculum-workspace__pagination,.curriculum-planning__pagination { min-inline-size:0; margin:0; padding:0; border:0; }
 .curriculum-record { padding-block: var(--space-5); border-block-end: 1px solid var(--color-border); }
 .curriculum-record h2 { font-size: var(--type-lg); }
+.curriculum-workspace .curriculum-record__title { display:flex; align-items:center; gap:var(--space-3); min-inline-size:0; }
+.curriculum-record__title > .cuevo-icon { flex:none; }
+.curriculum-record__title > span { min-inline-size:0; overflow-wrap:anywhere; }
 .curriculum-record details { overflow-wrap: anywhere; font-size: var(--type-sm); }
 .curriculum-record > details { margin-block: var(--space-2); }
 .curriculum-record > details > summary { min-block-size: var(--space-8); padding-block: var(--space-2); cursor: pointer; }

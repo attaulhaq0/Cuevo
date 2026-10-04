@@ -1,4 +1,8 @@
 .learning-workspace { margin-block-start: var(--space-3); }
+.learning-assessment-journey { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-3); margin-block:var(--space-3); padding:var(--space-4); background:var(--color-material-reading); border:1px solid var(--color-border); border-radius:var(--radius-lg); }
+.learning-assessment-journey > p { flex:1 1 26rem; max-inline-size:var(--reading-width); color:var(--color-text-secondary); line-height:var(--line-height-body); }
+.student-learning-journey__thinking { display:grid; gap:var(--space-3); }
+.student-learning-journey__thinking h4 { font-size:var(--type-sm); color:var(--color-text-secondary); margin-block-end:var(--space-1); }
 .learning-path-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-3); }
 .learning-path-heading .eyebrow { color: var(--color-link); font-size: var(--type-body); font-weight: 700; }
 .learning-path-heading__body { margin-block-start: var(--space-1); font-size: var(--type-sm); line-height: var(--line-height-body); max-inline-size: 60ch; }

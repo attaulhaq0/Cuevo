@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { journeySelection, journeyTaskContext, journeyFeedbackRows, parseJourneyTask } from '../student-journey-model.ts';
+import { journeySelection, journeyTaskContext, journeyFeedbackRows, parseJourneyTask, journeyThinkingFocusSources } from '../student-journey-model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
 import type { Activity, Assessment, Lesson } from '../model.ts';
 import type { ReleasedResult } from '../../academic/model.ts';
@@ -31,6 +31,15 @@ test('connected task previews reject another assessment or course even on succes
   assert.equal(parseJourneyTask(task, activity, 'course').id, 'task');
   assert.throws(() => parseJourneyTask({ ...task, id: 'another' }, activity, 'course'));
   assert.throws(() => parseJourneyTask(task, activity, 'another'));
+});
+
+test('linked activity and assessment thinking focus remain distinct current sources before opening work', () => {
+  const linked = { ...task, thinkingFocus: null };
+  const sources = journeyThinkingFocusSources(activity, linked, task.courseId);
+  assert.deepEqual(sources, [{ kind: 'activity', value: undefined }, { kind: 'assessment', value: null }]);
+  assert.deepEqual(journeyThinkingFocusSources(activity, { ...linked, id: 'foreign-task' }, task.courseId), [{ kind: 'activity', value: undefined }]);
+  assert.deepEqual(journeyThinkingFocusSources(activity, { ...linked, courseId: 'foreign-course' }, task.courseId), [{ kind: 'activity', value: undefined }]);
+  assert.deepEqual(journeyThinkingFocusSources({ ...activity, assessmentId: null }, linked, task.courseId), [{ kind: 'activity', value: undefined }]);
 });
 test('a denied continuation clears previously loaded feedback while bounded unavailable reads keep truthful current records', () => {
   const rows = [{ ...result, scope: 'current' }];

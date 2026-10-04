@@ -10,7 +10,7 @@ import { parseServerConfig } from '@cuevo/config';
 import { assertCuevoLocalConfig, assertCuevoLocalTarget, type LocalStatus } from '../configure-local';
 import { runtimeEnvironment } from '../runtime/environment';
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
-import { baselineExternalRestart, isCuevoDependencyContainer, requireCuevoLifecycleCommand, requireOriginalReceipt, sameContainerIdentities, sameUnrelatedContainers, validateOutageDatabaseContainer, type ObservedContainer } from './runtime-outage-rules';
+import { baselineExternalRestart, isCuevoDependencyContainer, requireCuevoLifecycleCommand, requireOriginalReceipt, sameContainerIdentities, sameUnrelatedContainers, validateOutageDatabaseContainer, waitForCuevoProviderReady, type ProviderReadinessSample, type ObservedContainer } from './runtime-outage-rules';
 
 const execute = promisify(execFile);
 async function safeExecute(command: string, args: string[]) { try { return (await execute(command, args, { timeout: 30000, maxBuffer: 1024 * 1024 })).stdout; } catch { throw Error('Runtime verification command failed; review the sanitized phase evidence.'); } }
@@ -20,6 +20,7 @@ const checks: { name: string; passed: boolean; durationMs?: number }[] = [];
 const preservationChanges: { id: string; name?: string; beforeRunning: boolean; afterRunning?: boolean; restarted: boolean }[] = [];
 const relatedRecoveries: { name: string; restarted: boolean; running: boolean }[] = [];
 const lifecycleCommands: { action: string; container: string }[] = [];
+const providerReadiness: ProviderReadinessSample[] = [];
 const externalDrift: { id: string; name: string; beforeRestartCount: number; afterRestartCount: number; beforeStatus: string; afterStatus: string; changed: boolean; status: 'NOT_ESTABLISHED' }[] = [];
 const school = randomUUID(); const classId = randomUUID(); const subjectId = randomUUID(); const yearId = randomUUID(); const groupId = randomUUID();
 const actors = { admin: '20000000-0000-4000-8000-000000000001', teacher: '20000000-0000-4000-8000-000000000004', student: '20000000-0000-4000-8000-000000000012' };
@@ -39,6 +40,14 @@ const inspectDatabase = async () => {
   const format = '{"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}}},"NetworkSettings":{"Ports":{{json .HostConfig.PortBindings}},"Networks":{{json .NetworkSettings.Networks}}}}';
   validateOutageDatabaseContainer(JSON.parse(await docker('inspect', '--format', format, 'supabase_db_cuevo')));
 };
+const providerReady = () => waitForCuevoProviderReady({
+  inspect: async remainingMs => {
+    const format = '{"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}}},"NetworkSettings":{"Ports":{{json .HostConfig.PortBindings}},"Networks":{{json .NetworkSettings.Networks}}},"State":{"Running":{{json .State.Running}},"Restarting":{{json .State.Restarting}},"Health":{{if .State.Health}}{"Status":{{json .State.Health.Status}}}{{else}}null{{end}}}}';
+    try { return JSON.parse((await execute('docker', ['inspect', '--format', format, 'supabase_db_cuevo'], { timeout: Math.min(5000, remainingMs), maxBuffer: 1024 * 1024 })).stdout); } catch { throw Error('Outage recovery cannot inspect the verified Cuevo database; details withheld.'); }
+  },
+  readStatus: async remainingMs => { try { const result = await execute(process.execPath, [cli, 'status', '-o', 'json'], { timeout: Math.min(10000, remainingMs), maxBuffer: 1024 * 1024 }); return { exitCode: 0, stdout: result.stdout, stderr: '' }; } catch(error) { const failure = error as {code?: unknown}; return { exitCode: typeof failure.code === 'number' ? failure.code : null, stdout: '', stderr: '' }; } },
+  onSample: value => providerReadiness.push(value),
+});
 const lifecycle = async (action: 'stop' | 'start') => { requireCuevoLifecycleCommand(action, 'supabase_db_cuevo'); await inspectDatabase(); lifecycleCommands.push({ action, container: 'supabase_db_cuevo' }); return action === 'stop' ? docker('stop', '--time', '10', 'supabase_db_cuevo') : docker('start', 'supabase_db_cuevo'); };
 const snapshotContainers = async (): Promise<ObservedContainer[]> => {
   const ids = (await docker('ps', '-aq')).split(/\r?\n/).filter(Boolean);
@@ -138,6 +147,9 @@ try {
   phase = 'DATABASE_RESTART_REPLAY';
   const databaseRestartStarted = Date.now(); await lifecycle('start'); databaseStopped = false;
   await waitUntil(async () => await health(4000, true) && await health(4001, true), 45000);
+  phase = 'DATABASE_NATIVE_PROVIDER_READY';
+  await providerReady();
+  checks.push({ name: 'database_native_provider_health_and_status_recovered', passed: true });
   phase = 'DATABASE_RECOVERED_RECEIPT';
   requireOriginalReceipt(receipt, await request('student', path, {}, key));
   phase = 'DATABASE_RECOVERED_PROJECTION';
@@ -160,12 +172,12 @@ try {
 } catch { checks.push({ name: `outage_drill_${phase.toLowerCase()}`, passed: false }); process.exitCode = 1; }
 finally {
   let clean = true;
-  try { if (databaseStopped) { await lifecycle('start'); await waitUntil(async () => { try { return (await owner.query('select true ready')).rows[0]?.ready === true; } catch { return false; } }, 45000, true); } } catch { clean = false; }
+  try { if (databaseStopped) { await lifecycle('start'); await waitUntil(async () => { try { return (await owner.query('select true ready')).rows[0]?.ready === true; } catch { return false; } }, 45000, true); await providerReady(); } } catch { clean = false; }
   try { await stopOwnedProcesses(children); } catch { clean = false; }
   try { await owner.query('ROLLBACK'); await cleanupTenant(); } catch { await owner.query('ROLLBACK').catch(() => undefined); clean = false; }
   await owner.end();
   checks.push({ name: 'owned_runtime_stopped_synthetic_tenant_cleaned', passed: clean });
-  await writeFile(resolve(evidenceDirectory, 'evidence.json'), JSON.stringify({ status: checks.length > 1 && checks.every(check => check.passed) ? 'VERIFIED' : 'FAILED', checks, preservationChanges, relatedRecoveries, lifecycleCommands, externalDrift, stableUnrelatedContainerCount: stableForeign.length, baselineRestartingUnrelatedCount: unstableForeign.length, unrelatedContainerPreservation: unstableForeign.length ? 'PARTIAL_EXTERNAL_STATE_NOT_ESTABLISHED' : 'VERIFIED', liveModelCalls: 0, scope: 'LOCAL_SYNTHETIC_REAL_HTTP_RESTART_OUTAGE' }, null, 2) + '\n');
+  await writeFile(resolve(evidenceDirectory, 'evidence.json'), JSON.stringify({ status: checks.length > 1 && checks.every(check => check.passed) ? 'VERIFIED' : 'FAILED', checks, providerReadiness, preservationChanges, relatedRecoveries, lifecycleCommands, externalDrift, stableUnrelatedContainerCount: stableForeign.length, baselineRestartingUnrelatedCount: unstableForeign.length, unrelatedContainerPreservation: unstableForeign.length ? 'PARTIAL_EXTERNAL_STATE_NOT_ESTABLISHED' : 'VERIFIED', liveModelCalls: 0, scope: 'LOCAL_SYNTHETIC_REAL_HTTP_RESTART_OUTAGE' }, null, 2) + '\n');
   if (!clean) process.exitCode = 1;
   process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
 }

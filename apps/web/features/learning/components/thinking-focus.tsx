@@ -53,7 +53,7 @@ export function ThinkingFocusSummary({ value, locale = 'en' }: { value: Thinking
   const current = parsed.success ? parsed.data : null;
   const focus = current?.status === 'APPROVED' ? current.classification?.focus : null;
   const description = focus ? t.prompts[focus.primaryProcess] : current?.status === 'SOURCE_CHANGED' ? t.sourceChanged : current?.status === 'AWAITING_REVIEW' ? t.awaiting : current?.status === 'REJECTED' ? t.rejected : current?.status === 'WITHDRAWN' ? t.withdrawn : t.unknown;
-  return <div className="thinking-focus-summary"><p><CuevoIcon name="learning" size={20} /><span>{description}</span></p>{focus ? <details><summary>{t.title}</summary><p>{t.processes[focus.primaryProcess]}{focus.additionalProcesses.length ? ` · ${focus.additionalProcesses.map(process => t.processes[process]).join(' · ')}` : ''}</p><p>{t.explanation}</p></details> : null}</div>;
+  return <div className="thinking-focus-summary"><p><CuevoIcon name="learning" size={20} /><span>{description}</span></p>{focus ? <><p className="thinking-focus-summary__categories"><strong>{t.processes[focus.primaryProcess]}</strong>{focus.additionalProcesses.length ? ` · ${focus.additionalProcesses.map(process => t.processes[process]).join(' · ')}` : ''}</p><details><summary>{t.title}</summary><p>{t.processes[focus.primaryProcess]}{focus.additionalProcesses.length ? ` · ${focus.additionalProcesses.map(process => t.processes[process]).join(' · ')}` : ''}</p><p>{t.explanation}</p></details></> : null}</div>;
 }
 
 export function ThinkingFocusEditor(props: EditorProps) {

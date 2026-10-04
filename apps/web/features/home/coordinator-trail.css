@@ -47,9 +47,6 @@
 .coordinator-trail__source-note { font-size:var(--type-sm); line-height:1.6; color:var(--color-text-secondary); margin:var(--space-2) 0 var(--space-3); }
 .coordinator-trail__source-controls { margin-block:var(--space-3); font-size:var(--type-sm); line-height:1.5; }
 .coordinator-trail__choices-note, .coordinator-trail__selection .coordinator-trail__source-controls { grid-column:1 / -1; }
-.coordinator-trail__records > details { background:var(--color-material-reading); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); margin-block-end:var(--space-3); }
-.coordinator-trail__records summary { cursor:pointer; min-block-size:2.75rem; align-content:center; }
-.coordinator-trail__records article { padding-block:var(--space-3); border-block-start:1px solid var(--color-border); }
 .coordinator-trail__evidence-native { margin-block:var(--space-3); }
 .coordinator-trail__gap { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-surface-muted); border-radius: var(--radius-md); margin-block-end: var(--space-3); }
 .coordinator-trail__gap p { margin: 0; color: var(--color-text-secondary); font-size: var(--type-sm); }

@@ -14,9 +14,11 @@ export const parentCalendarAr: typeof parentCalendarEn = {
 };
 export const learnerProfileEn = {
   title: 'Learner context', choose: 'Select learner', identity: 'School identity', school: 'School', classes: 'Current enrollment', courses: 'Current courses', empty: 'No current context is recorded.', loading: 'Loading learner context…', refresh: 'Refresh learner context', note: 'Identity, enrollment and current learning context are shown separately. Approved instructions appear in the relevant task.',
+  loadingChoices: 'Loading current learner choices…', choicesUnavailable: 'Learner choices could not be confirmed. Refresh learner context to try again.', chooseContext: 'Choose a current learner to open their school context.',
   contextUnknown: 'Current class unavailable', completeChoices: 'Load all learner choices before opening learner context.', ambiguous: 'Review learner names and current class context in school records, then refresh.', course: 'Course', class: 'Class', subject: 'Subject', from: 'Enrollment starts', to: 'Enrollment ends', ongoing: 'No end date recorded', chooseChild: 'Choose a child through your current approved relationship.', noLearners: 'No currently permitted learners are available.',
 };
 export const learnerProfileAr: typeof learnerProfileEn = {
   title: 'سياق الطالب', choose: 'اختر الطالب', identity: 'الهوية المدرسية', school: 'المدرسة', classes: 'التسجيل الحالي', courses: 'المقررات الحالية', empty: 'لا يوجد سياق حالي مسجّل.', loading: 'جارٍ تحميل سياق الطالب…', refresh: 'تحديث سياق الطالب', note: 'يُعرض سياق الهوية والتسجيل والتعلّم الحالي بشكل منفصل. تُعرض التعليمات المعتمدة في المهمة ذات الصلة.',
+  loadingChoices: 'جارٍ تحميل خيارات الطلاب الحالية…', choicesUnavailable: 'تعذر التحقق من خيارات الطلاب. حدّث سياق الطالب للمحاولة مجددًا.', chooseContext: 'اختر طالبًا حاليًا لفتح سياقه المدرسي.',
   contextUnknown: 'الصف الحالي غير متاح', completeChoices: 'حمّل جميع خيارات الطلاب قبل فتح سياق الطالب.', ambiguous: 'راجع أسماء الطلاب وسياق الصف الحالي في سجلات المدرسة ثم حدّث السياق.', course: 'المقرر', class: 'الصف', subject: 'المادة', from: 'بداية التسجيل', to: 'نهاية التسجيل', ongoing: 'لم يُسجّل تاريخ انتهاء', chooseChild: 'اختر طفلًا ضمن علاقتك الحالية المعتمدة.', noLearners: 'لا يتاح طلاب ضمن الصلاحيات الحالية.',
 };

@@ -1,5 +1,10 @@
 .school-workspace { margin-block-start: var(--space-6); min-inline-size: 0; }
 .school-audit-records { display:grid;gap:var(--space-3); }
+.school-audit-row.cuevo-record { margin:0; }
+.school-profile-selector { display:flex;flex-wrap:wrap;align-items:end;gap:var(--space-2);margin-block:var(--space-3); }
+.school-profile-selector > label { flex-basis:100%; }
+.school-profile-selector > select { flex:1 1 18rem; }
+.school-profile-selector > .pagination-actions { flex:0 1 auto;margin:0; }
 .school-audit-row { margin:0;padding:var(--space-3); }
 .school-audit-row > header { display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:var(--space-2); }
 .school-audit-row h3 { font-size:var(--type-body);margin:0;overflow-wrap:anywhere; }

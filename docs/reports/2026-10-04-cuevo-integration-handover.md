@@ -65,3 +65,19 @@ Repairs retain production authority: parity guards now lock the unchanged canoni
 GitHubCodeQL findings reported5high alerts in reflected JSON test transport, three HTML/regex test assertions and repository forwarding regex. Test transport now emits explicit serialized JSON; rendered text assertions parse actual markup and check mixed-case script/img absence; the forwarding scanner uses a cursor parser instead of nested backtracking. Fresh CodeQL must confirm the repairs; no alert is dismissed or hidden.
 
 Founder confirms team manual review will use the existing account and no new members should be added. Manual review remains pending; GitHub cannot record PRauthor selfapproval. No bypass, false human approval or production promotion is asserted.
+
+## Resumed4October UI and recovery checkpoint
+
+Founder resumed after laptop shutdown. Preserved paused patches, source backups and all11 supplied screenshot inputs. Recurring twice-daily QA is active again. The prior6afbde6 PR/push runs passed225APIcases/100files and2016SQL/118files plus outage, thenfailed recoveryCLIstatus; no complete aggregate is claimed.
+
+Recovery now admits normalSupabaseCLIstatus only after exactDocker nativeRunning=true/Restarting=false/healthy, with monotonicboundeddeadline, per-commandbudget and minimized diagnostics. Injectedlate/unknown/failure tests pass; actualCIrestart/recovery remains pending.
+
+Nested Academic/School/Curriculum/Community/Improvement choices now consume one@cuevo/uiWorkspaceTabs with nativebutton/pressed/disabled semantics, currentownerhandlers and illustratedmetaphors. Selected/external/resize state reveals only therail and preservesfocus/pagescroll. Academicobjectives/rubrics/practice/audit/run/execution and Accountidentity useopaqueCuevo reading material; existingfields/receipts/sourceprovenance stayintact. Learnercontext no longer claimsno learnersduringloading/incomplete/failed sources. Schoolfallsbacktoanofferedcurrentsectionifitsobservationtablosescapability.
+
+Overview removes duplicatehistorylistsalreadyownedbydedicateddomainworkspaces, while retainingactualsummary/action/currentnativefeedback/sourceerrorandpaging. AdminDevelopment fixesaphantomgridcolumnandgroupscurrentpolicypoint/milestone/datevaluesandperiod/backfill separatelyfromselectedlearnerprogress. ItsfouroriginalCommandFormattributeASTsremainidentical. Numberedlevels/cosmeticsare stillunimplementedandneverfaked.
+
+Studentdirectassessment offersOpenlearningjourneyusingitscurrentexactcourse andBacktothistask. Selected activity andlinkedassessmentfocusremainindependent; reviewedcategorynamesarevisiblebesidetheirhuman taskdemanddescription, withoptionalexplanationclosed. Genericseedremainsunclassified. A test-ownedisolatedTeacher→differentCoordinatorreview fixturecreatedcurrentAPImappingsApply/Evaluate for actualjourneyvalidation. Existing full source/curriculum/rights/privacy gates remain.
+
+Local resumedunit1336/web752(then759withnewownerchecks) passed, typecheck/lint/build/guards passwithscoped source limitations. Ten actualcompiledroleAcademicEN1366/AR390caseshadno horizontalpageoverflow orpageerrors. ParentHomeconversation403 is anexplicitunconfiguredsyntheticpolicy state, not a clean full-flow pass. Independentownerreviews/mountedfixtures cover preservedcommands, unknown/denied statesandtabs. New finalCI and complete role/sourcebrowser gates remain required.
+
+The standard CI browser inventory now includes integrated-thinking-journey.spec.ts: current Teacher source/preparation, different Coordinator review, Student exact task→course/unit/lesson→linked task, submission snapshot, native-zero release and Parent snapshot/Arabic read. It is not an opt-in design-runtime test; discovery208cases/105files. Authored scope and private API assertions remain, with clean reference restoration owned by the verification runner. This test has been authored/typechecked; native CI execution is pending.

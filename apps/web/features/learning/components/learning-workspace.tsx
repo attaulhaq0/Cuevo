@@ -2,7 +2,7 @@
 
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, CuevoIcon, Status } from '@cuevo/ui';
+import { Button, CuevoIcon, Status, WorkspaceTabs, type CuevoIconName } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { parseChoice,choiceLabel, staffCourseChoices, learningTitle, parseCourse, parseAssessment, parseSubmission, type Choice, type Course, type Assessment, type Submission } from '../model';
 import { useLearningApi } from '../api';
@@ -16,6 +16,7 @@ import { LoadMore } from '../../../shared/components/load-more';
 import type{NavigationIntent}from'../../../shared/session/navigation-intent';
 import{LearningApiError}from'../../../shared/api/client';
 import { trailAssets } from '../../../shared/characters/assets';
+import { learningAr, learningEn } from '../messages';
 
 type Tab = 'courses' | 'assessments' | 'submissions';
 
@@ -49,10 +50,11 @@ export function LearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{vi
 
 function CurrentLearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{view:'learning'}>|null}={}) {
   const { t } = useLearningApi();
-  const { membership, accessGeneration, online, status } = useApp();
+  const { membership, accessGeneration, online, status, locale } = useApp();
   const [tab, setTab] = useState<Tab>('courses');
   const [refresh, setRefresh] = useState(0);
   const [courseId, setCourseId] = useState<string | null>(null);
+  const [assessmentJourney, setAssessmentJourney] = useState<{ assessmentId: string; courseId: string } | null>(null);
   const [creating, setCreating] = useState<'course' | 'assessment' | null>(null);
   const canAuthor = membership?.role === 'teacher' || membership?.role === 'admin';
   const hasLearning = membership?.entitlements.includes('learning');
@@ -75,14 +77,16 @@ function CurrentLearningWorkspace({intent}:{intent?:Extract<NavigationIntent,{vi
   if (!hasLearning) return <div className="notice" role="status">{t.notAvailable}</div>;
   if(intent?.source==='assessment'&&!hasAssessment)return <section><Button type="button" variant="quiet" onClick={()=>window.history.back()}>{t.backCourses}</Button><LearningError error={new LearningApiError('denied')}/></section>;
   if(intent?.source==='course')return <CourseView courseId={intent.id} onBack={()=>window.history.back()} canAuthor={canAuthor}/>;
-  if(intent?.source==='assessment')return <section><Button type="button" variant="quiet" onClick={()=>window.history.back()}>{t.backCourses}</Button>{exact.loading?<p role="status">{t.loading}</p>:exact.error?<><LearningError error={exact.error}/><Button type="button" onClick={reload}>{t.refresh}</Button></>:exact.data?<AssessmentList initiallySelectedId={intent.id} assessments={[exact.data]} submissions={[]} submissionsComplete={false} onSubmitted={reload}/>:null}</section>;
+  if(intent?.source==='assessment'&&assessmentJourney?.assessmentId===intent.id)return <CourseView courseId={assessmentJourney.courseId} onBack={()=>setAssessmentJourney(null)} canAuthor={canAuthor} backLabel={t.backTask}/>;
+  if(intent?.source==='assessment')return <section><Button type="button" variant="quiet" onClick={()=>window.history.back()}>{t.backCourses}</Button>{exact.loading?<p role="status">{t.loading}</p>:exact.error?<><LearningError error={exact.error}/><Button type="button" onClick={reload}>{t.refresh}</Button></>:exact.data?<>{membership?.role==='student'?<StudentAssessmentJourneyLink assessment={exact.data} locale={locale} onOpen={courseId=>setAssessmentJourney({assessmentId:exact.data!.id,courseId})}/>:null}<AssessmentList key={intent.id} initiallySelectedId={intent.id} assessments={[exact.data]} submissions={[]} submissionsComplete={false} onSubmitted={reload}/></>:null}</section>;
   if (courseId) return <CourseView courseId={courseId} onBack={() => { setCourseId(null); reload(); }} canAuthor={canAuthor} />;
   const active = tab === 'courses' ? courses : tab === 'assessments' ? assessments : submissions;
   const needsSubmissionQueue = assessments.data.some(assessment => assessment.currentSubmission === undefined);
   const currentSourceLoading = tab === 'assessments' && membership?.role === 'student' && needsSubmissionQueue && submissions.loading;
   const currentSourceError = tab === 'assessments' && membership?.role === 'student' && needsSubmissionQueue ? submissions.error : null;
   const tabs: Tab[] = ['courses', ...(hasAssessment ? ['assessments' as const] : []), ...(hasAssessment && canSeeSubmissions ? ['submissions' as const] : [])];
-  return <div className="learning-workspace">{membership?.role === 'student' && tab === 'courses' ? <div className="learning-path-heading"><div><p className="eyebrow">{t.learningPath}</p><p className="learning-path-heading__body">{t.learningPathBody}</p></div><img src={trailAssets.lesson} width={112} height={112} alt="" aria-hidden="true" /></div> : null}<div className="learning-toolbar"><div className="learning-tabs" role="group" aria-label={t.learning}>{tabs.map((item) => <button key={item} type="button" aria-pressed={tab === item} onClick={() => { setTab(item); setCreating(null); }}>{t[item]}</button>)}</div><Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" size={18} />{t.refresh}</Button></div>
+  const tabIcons: Record<Tab, CuevoIconName> = { courses: 'learning', assessments: 'assessment', submissions: 'portfolio' };
+  return <div className="learning-workspace">{membership?.role === 'student' && tab === 'courses' ? <div className="learning-path-heading"><div><p className="eyebrow">{t.learningPath}</p><p className="learning-path-heading__body">{t.learningPathBody}</p></div><img src={trailAssets.lesson} width={112} height={112} alt="" aria-hidden="true" /></div> : null}<div className="learning-toolbar"><WorkspaceTabs label={t.learning} items={tabs.map(item=>({id:item,label:t[item],icon:tabIcons[item]}))} selected={tab} onChange={id=>{if(tabs.includes(id as Tab)){setTab(id as Tab);setCreating(null);}}}/><Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" size={18} />{t.refresh}</Button></div>
     {canAuthor ? <div className="learning-actions">{tab === 'courses' ? <Button type="button" onClick={() => setCreating('course')}><CuevoIcon name="practice" size={18} />{t.createCourse}</Button> : tab === 'assessments' && hasAssessment ? <Button type="button" disabled={!courses.data?.length} onClick={() => setCreating('assessment')}><CuevoIcon name="practice" size={18} />{t.createAssessment}</Button> : null}</div> : membership?.role !== 'student' ? <p className="learning-form__note">{t.readOnly}</p> : null}
     {creating === 'course' ? <>{classes.data?.length && subjects.data?.length ? <CreateCourse classes={classes.data} subjects={subjects.data} onSaved={saved} onCancel={() => setCreating(null)} /> : classes.error ? <LearningError error={classes.error} /> : subjects.error ? <LearningError error={subjects.error} /> : <p className="notice">{classes.loading || subjects.loading ? t.loading : t.choicesUnavailable}</p>}<LoadMore query={classes} label={t.class}/><LoadMore query={subjects} label={t.subject}/></> : null}
     {creating === 'assessment' ? <>{!courseChoicesComplete?<p className="notice">{t.courseChoicesLoading}</p>:null}{courseChoices.some(choice=>choice.requiresReview)?<p className="notice">{t.courseContextReview}</p>:null}{courseChoicesComplete&&courseChoices.some(choice=>!choice.requiresReview)?<CreateAssessment choices={courseChoices.filter(choice=>!choice.requiresReview)} onSaved={saved} onCancel={() => setCreating(null)}/>:null}<LoadMore query={courses} label={t.course}/><LoadMore query={classes} label={t.class}/><LoadMore query={subjects} label={t.subject}/>{courses.error||classes.error||subjects.error?<LearningError error={courses.error??classes.error??subjects.error!}/>:null}</>:null}
@@ -103,4 +107,9 @@ function CreateAssessment({ choices, onSaved, onCancel }: { choices:{value:strin
   const { t } = useLearningApi();
   const [model,setModel]=useState('numeric');
   return <CommandForm title={t.createAssessment} path="/v1/assessments" fields={[{ name: 'courseId', label: t.course, type: 'select', required: true, options: choices }, { name: 'title', label: t.title, required: true },{name:'intendedSubmissionKind',label:t.taskType,type:'select',required:true,defaultValue:'TEXT',options:[{value:'TEXT',label:t.textTask},{value:'QUIZ',label:t.quizQuestions}]},{name:'intendedModel',label:t.assessmentModel,type:'select',required:true,defaultValue:'numeric',options:[{value:'numeric',label:t.numericModel},{value:'rubric',label:t.rubricModel}]}, ...(model==='numeric'?[{ name: 'maxScore', label: t.maxScore, type: 'number'as const, min: 0.01, max: 100000, step: 'any'as const, defaultValue: 10, required: true }]:[]), { name: 'dueAt', label: t.dueAt, type: 'datetime-local' }, { name: 'instructions', label: t.instructions, type: 'textarea', required: true }]} onValuesChange={values=>setModel(String(values.get('intendedModel')||'numeric'))} body={(values) => { const dueAt = String(values.get('dueAt') ?? ''); if(!choices.some(choice=>choice.value===String(values.get('courseId'))))throw new LearningApiError('conflict'); return { courseId: String(values.get('courseId')), title: String(values.get('title')), instructions: String(values.get('instructions')), maxScore:values.get('intendedModel')==='rubric'?10:Number(values.get('maxScore')),preparation:true,intendedSubmissionKind:String(values.get('intendedSubmissionKind')),intendedModel:String(values.get('intendedModel')), ...(dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}) }; }} onSaved={onSaved} onCancel={onCancel} note={t.preparationNote} />;
+}
+
+export function StudentAssessmentJourneyLink({ assessment, locale, onOpen }: { assessment: Assessment; locale: 'en' | 'ar'; onOpen: (courseId: string) => void }) {
+  const t = locale === 'ar' ? learningAr : learningEn;
+  return <div className="learning-assessment-journey"><p>{t.learningJourneyBody}</p><Button type="button" variant="secondary" onClick={() => onOpen(assessment.courseId)}><CuevoIcon name="learning" size={24}/>{t.openLearningJourney}</Button></div>;
 }

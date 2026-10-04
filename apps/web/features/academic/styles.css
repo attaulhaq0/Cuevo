@@ -17,6 +17,10 @@
 }
 .academic-workspace > .home-context-section { margin-block-start: var(--space-4); padding-block-start: var(--space-4); }
 .academic-row { padding-block: var(--space-5) var(--space-6); border-block-end: 1px solid var(--color-border); }
+.academic-row.cuevo-record .rubric-result-criteria { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:var(--space-3);max-inline-size:none; }
+.academic-row.cuevo-record .rubric-result-criteria > div { display:block;padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface-muted); }
+.academic-row.cuevo-record .rubric-result-criteria dd { margin:var(--space-2) 0 0; }
+.academic-row.cuevo-record .rubric-result-criteria ul { margin:0;padding-inline-start:var(--space-5); }
 .academic-row .learning-section-heading { margin-block-start: var(--space-3); }
 .released-results { display: grid; gap: var(--space-3); }
 .released-results > h2 { font-size: var(--type-lead); }

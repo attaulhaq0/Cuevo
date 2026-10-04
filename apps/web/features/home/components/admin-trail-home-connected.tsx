@@ -54,11 +54,7 @@ function CurrentAdminHome({ onNavigate, headingRef }: { onNavigate: (destination
   const currentRows = <T extends { sourceScope: string | null },>(query: { data: T[]; error: unknown; moreError: unknown; loading: boolean }) => query.error || query.moreError || query.loading || !sourceScope ? [] : query.data.filter(row => row.sourceScope === sourceScope);
   const personRows = currentRows(people);
   const personName = (id: unknown) => adminHomePersonName(personRows, id, t.personUnknown);
-  const relationshipItems = [
-    ...currentRows(enrollments).map(row => ({ key: `enrollment:${row.id}`, title: t.learner, names: personName(row.studentId), state: String(row.status), from: typeof row.effectiveFrom === 'string' ? row.effectiveFrom : null, to: typeof row.effectiveTo === 'string' ? row.effectiveTo : null })),
-    ...currentRows(assignments).map(row => ({ key: `assignment:${row.id}`, title: t.teacher, names: personName(row.teacherId), state: String(row.status), from: typeof row.effectiveFrom === 'string' ? row.effectiveFrom : null, to: typeof row.effectiveTo === 'string' ? row.effectiveTo : null })),
-    ...currentRows(guardians).map(row => ({ key: `guardian:${row.id}`, title: t.guardian, names: `${personName(row.parentId)} · ${personName(row.studentId)}`, state: String(row.status), from: typeof row.effectiveFrom === 'string' ? row.effectiveFrom : null, to: typeof row.effectiveTo === 'string' ? row.effectiveTo : null })),
-  ]; const auditRows = currentRows(audit);
+  const auditRows = currentRows(audit);
   const queries = [source, automation, people, enrollments, assignments, guardians, audit];
   const denied = queries.some(query => query.error?.kind === 'denied' || query.error?.kind === 'unauthorized' || 'moreError' in query && (query.moreError?.kind === 'denied' || query.moreError?.kind === 'unauthorized'));
   const failed = queries.some(query => query.error || 'moreError' in query && query.moreError); const partial = [people, enrollments, assignments, guardians, audit].some(query => query.nextCursor);
@@ -81,48 +77,6 @@ function CurrentAdminHome({ onNavigate, headingRef }: { onNavigate: (destination
   };
   return <div className="admin-home-connected">
     <AdminTrailHomeView context={view} locale={locale} headingRef={currentHeadingRef} />
-    <section className="home-native-context admin-home-records" aria-label={t.source}>
-      <Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button>
-      {queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}
-      {!denied && sourceScope ? <>
-        <details>
-          <summary>{t.people}</summary>
-          <section aria-label={t.people}>
-            <h2>{t.people}</h2>
-            <ul>{personRows.map(person => <li key={person.id}><bdi>{personName(person.id)}</bdi> · {t.roles[person.role]} · {t.statuses[person.status]}</li>)}</ul>
-            <LoadMore query={people} label={t.people} />
-          </section>
-        </details>
-        <details>
-          <summary>{t.relationships}</summary>
-          <section aria-label={t.relationships}>
-            <h2>{t.relationships}</h2>
-            <ul>{relationshipItems.map(row => <li key={row.key}>
-              <h3>{row.title}</h3>
-              <p><bdi>{row.names}</bdi> · {t.statuses[row.state as keyof typeof t.statuses] ?? t.relationshipUnknown}</p>
-              <p>{date(row.from)}{row.to ? ` – ${date(row.to)}` : ''}</p>
-            </li>)}</ul>
-            {!relationshipItems.length ? <p>{t.relationshipUnknown}</p> : null}
-            {[{ query: enrollments, label: t.learner }, { query: assignments, label: t.teacher }, { query: guardians, label: t.guardian }].map(({ query, label }) => <LoadMore key={label} query={query} label={label} />)}
-          </section>
-        </details>
-        <details>
-          <summary>{t.audit}</summary>
-          <section aria-label={t.audit}>
-            <h2>{t.audit}</h2>
-            <ul>{auditRows.map(record => <li key={record.id}><bdi>{record.actorName ?? t.personUnknown}</bdi> · <bdi>{record.objectName ?? t.sourceUnknown}</bdi> · {date(record.occurredAt)}</li>)}</ul>
-            <LoadMore query={audit} label={t.audit} />
-          </section>
-        </details>
-        {execution ? <details>
-          <summary>{t.automation}</summary>
-          <section aria-label={t.automation}>
-            <h2>{t.automation}</h2>
-            <p>{t.executionBody}</p>
-            <dl>{(['returned', 'pending', 'processing', 'completed', 'failed', 'receiptCount'] as const).map(key => <div key={key}><dt>{key === 'receiptCount' ? t.received : t[key]}</dt><dd>{new Intl.NumberFormat(locale).format(execution.execution[key])}</dd></div>)}</dl>
-          </section>
-        </details> : null}
-      </> : null}
-    </section>
+    <div className="home-overview-controls"><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button>{queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}{!denied && sourceScope ? [{query: people,label:t.people},{query:enrollments,label:t.learner},{query:assignments,label:t.teacher},{query:guardians,label:t.guardian},{query:audit,label:t.audit}].map(({query,label}) => query.nextCursor || query.moreError ? <LoadMore key={label} query={query} label={label} /> : null) : null}</div>
   </div>;
 }

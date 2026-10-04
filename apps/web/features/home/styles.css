@@ -2,11 +2,18 @@
 @import './parent-trail.css';
 @import './coordinator-trail.css';
 @import './admin-trail.css';
-.teacher-home-records { padding: var(--space-2) var(--space-3) var(--space-4); display: grid; gap: var(--space-3); }
-.teacher-home-records > .button { justify-self: start; }
-.teacher-home-records summary { min-block-size: 2.75rem; cursor: pointer; align-content: center; }
-.teacher-home-records article { padding-block: var(--space-4); }
-.teacher-home-records article h2 { font-size: var(--type-lg); }
+.home-overview-controls { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); padding:var(--space-3) var(--space-4); border-block-start:1px solid var(--color-border); }
+.home-overview-controls > section { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); }
+.home-overview-controls p { margin:0; font-size:var(--type-sm); color:var(--color-text-secondary); }
+.home-overview-controls .pagination-actions { margin:0; }
+.home-overview-controls:empty { display:none; }
+.home-overview-continuations:empty { display:none; }
+.home-overview-continuations, .home-overview-destinations { display:flex; flex-wrap:wrap; gap:var(--space-2); }
+.student-home__section { min-inline-size:0; padding:var(--space-3); border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-material-reading); }
+.student-home__section h2 { margin:0; font-size:var(--type-body); }
+.student-home__section p { margin:var(--space-1) 0; color:var(--color-text-secondary); font-size:var(--type-sm); }
+.student-home__section .field { max-inline-size:36rem; margin:var(--space-2) 0 0; }
+
 
 .role-home { margin-block-start:var(--space-2); }
 .home-action-section, .home-context-section { margin-block:var(--space-3) var(--space-4); }
@@ -16,14 +23,6 @@
 .home-action-list h3, .home-context-section h3 { font-size: var(--type-lg); }
 .home-context-section article { padding-block: var(--space-4); }
 .student-home__records { padding: var(--space-3) var(--space-4) var(--space-4); display: grid; gap: var(--space-2); }
-.student-home__section { border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-5); min-inline-size: 0; }
-.student-home__section article { padding-block: var(--space-4); overflow-wrap: anywhere; }
-.student-home__section .field { max-inline-size: 36rem; margin-block: var(--space-4); }
-.student-home__section h3 { font-size: var(--type-lg); }
-.student-home__section > summary { cursor: pointer; font-weight: 700; font-size: var(--type-lg); min-block-size: 2.75rem; }
-.student-home__section:where(details) { border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-material-reading); padding:0 var(--space-4); }
-.student-home__section:where(details)[open] { padding-block-end:var(--space-3); }
-.student-home__section:where(details) > summary { display:list-item; align-content:center; font-size:var(--type-body); }
 .home-secondary-disclosure > summary { cursor:pointer; min-block-size:2.75rem; align-content:center; font-size:var(--type-body); font-weight:var(--font-weight-semibold); }
 .home-secondary-disclosure > summary h2 { display:inline; margin:0; padding:0; font-size:inherit; font-weight:inherit; line-height:inherit; }
 .home-secondary-disclosure > summary:focus-visible { outline:var(--focus-width) solid var(--color-focus); outline-offset:var(--focus-offset); }
@@ -31,7 +30,6 @@
 .home-secondary-disclosure[open] > summary { margin-block-end:var(--space-3); }
 .home-secondary-disclosure[open] > :is(h2,.teacher-trail__section-heading,.parent-trail__panel-heading) { display:none; }
 .home-secondary-disclosure .button { margin-block-start:var(--space-2); }
-.student-home__section > summary:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
 .student-home__presentation { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .student-home__native { margin-block: var(--space-3); }
 .student-home__native summary { cursor: pointer; min-block-size: 2.75rem; display: flex; align-items: center; }
