@@ -472,16 +472,26 @@ for (const locale of locales) {
     const measurements = [];
     for (const width of [1440, 900, 390, 320, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      await expect.poll(() => art.evaluate(element => (element as HTMLImageElement).currentSrc)).toMatch(width < 768 ? /welcome-fox\./ : /studio-companions\./);
       await expect.poll(() => art.evaluate(element => {
-        const image = element as HTMLImageElement; return image.complete && image.naturalWidth > 0;
+        const image = element as HTMLImageElement; return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
       })).toBe(true);
+      await expect.poll(() => art.evaluate(async element => {
+        try { await (element as HTMLImageElement).decode(); return true; } catch { return false; }
+      }), { message: 'The newly selected responsive image must finish decoding' }).toBe(true);
       const bounds = await geometry(page);
       const image = await art.evaluate(element => {
         const image = element as HTMLImageElement, r = image.getBoundingClientRect();
         const scene = image.closest('.auth-companions__scene')!.getBoundingClientRect();
-        return { width: r.width, height: r.height, naturalRatio: image.naturalWidth / image.naturalHeight, source: image.currentSrc, fit: getComputedStyle(image).objectFit, insideScene: r.left >= scene.left - 1 && r.right <= scene.right + 1 && r.top >= scene.top - 1 && r.bottom <= scene.bottom + 1 };
+        const visual = image.closest('.auth-visual')!.getBoundingClientRect();
+        return { width: r.width, height: r.height, naturalRatio: image.naturalWidth / image.naturalHeight, source: image.currentSrc, fit: getComputedStyle(image).objectFit, mask: getComputedStyle(image).maskImage, insideScene: r.left >= scene.left - 1 && r.right <= scene.right + 1 && r.top >= scene.top - 1 && r.bottom <= scene.bottom + 1, insideVisual: r.left >= visual.left - 1 && r.right <= visual.right + 1 && r.top >= visual.top - 1 && r.bottom <= visual.bottom + 1 };
       });
-      expect.soft(image.fit, `${locale}/${width}: mobile uses the approved upper-body crop; desktop contains the full scene`).toBe(width < 768 ? 'cover' : 'contain');
+      expect.soft(image.fit, `${locale}/${width}: the whole character or desktop pair is contained`).toBe('contain');
+      if (width < 768) {
+        expect.soft(image.mask, 'The full mobile character has no fading mask').toBe('none');
+        expect.soft(image.width / image.height, 'Mobile retains the full portrait rather than a square crop').toBeCloseTo(image.naturalRatio, 2);
+        expect.soft(image.insideVisual, 'The mobile container cannot clip Foxi’s feet or tail').toBe(true);
+      }
       expect.soft(image.insideScene, `${locale}/${width}: poster remains inside its bounded scene`).toBe(true);
       measurements.push({ width, bounds, image });
       assertLayout(bounds, `${locale}/${width}: decoded artwork`);

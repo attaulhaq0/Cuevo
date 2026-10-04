@@ -167,6 +167,7 @@ for (const locale of ['en', 'ar'] as const) {
         await expect(page.locator('.learning-loop__roles')).toBeHidden();
         const primary = await page.locator('.auth-submit').boundingBox();
         expect(primary!.y + primary!.height, `${locale}: mobile sign-in must be visible before scrolling`).toBeLessThanOrEqual(viewport.height);
+        expect(bounds.document.height, `${locale}: the full Foxi preserves the normal mobile viewport fit`).toBeLessThanOrEqual(viewport.height + 1);
       }
       if ([1536, 1440, 390].includes(viewport.width)) await screenshot(page, testInfo, `auth-${locale}-${viewport.width}x${viewport.height}`);
     }
