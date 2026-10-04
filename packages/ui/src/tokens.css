@@ -321,6 +321,18 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 .workspace .learning-section-heading h3 { font-size:var(--type-lg); }
 .workspace .learning-section-heading h4 { font-size:var(--type-body); }
 .workspace .learning-section-heading p { color:var(--color-text-secondary); font-size:var(--type-sm); margin-block-start:var(--space-1); }
+/* Related section controls share the heading's space before the reading plane. */
+.workspace .cuevo-section-header { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:var(--space-3); margin-block:0 var(--space-3); min-inline-size:0; }
+.workspace .cuevo-section-header__context { flex:1 1 26rem; min-inline-size:0; }
+.workspace .cuevo-section-header :where(h2) { font-size:var(--type-lead); }
+.workspace .cuevo-section-header :where(h3) { font-size:var(--type-lg); }
+.workspace .cuevo-section-header__context > p { max-inline-size:var(--reading-width); margin-block:var(--space-1) 0; color:var(--color-text-secondary); font-size:var(--type-sm); }
+.workspace .cuevo-section-header > .learning-actions { flex:0 1 auto; margin:0; }
+.workspace .cuevo-section-header > :is(.field,.cuevo-section-header__filter) { flex:0 1 20rem; min-inline-size:0; margin:0; }
+.workspace .cuevo-section-header__filter { display:grid; gap:var(--space-2); font-size:var(--type-sm); inline-size:100%; }
+.workspace .cuevo-section-header__filter select { inline-size:100%; min-inline-size:0; }
+.workspace .cuevo-section-header__context > .field { margin:0; max-inline-size:20rem; }
+@media(max-width:767px) { .workspace .cuevo-section-header__context { flex-basis:100%; } .workspace .cuevo-section-header > :is(.field,.cuevo-section-header__filter) { flex:1 1 100%; } .workspace .cuevo-section-header > .learning-actions { flex:1 1 100%; } .workspace .cuevo-section-header--illustrated { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; } .workspace .cuevo-section-header--illustrated > :is(.button,.learning-actions) { grid-column:1 / -1; } }
 .workspace .pagination-actions { margin-block:var(--space-2); display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); }
 .workspace .pagination-actions > p { color:var(--color-text-muted); font-size:var(--type-xs); }
 @media(max-width:767px) { .workspace .learning-section-heading { flex-wrap:wrap; } .workspace .learning-toolbar { align-items:start; } .workspace .learning-toolbar > .button { padding-inline:var(--space-2); } }

@@ -127,6 +127,7 @@
   .workspace .workspace-chrome__rail ul { justify-content: start; gap: var(--space-1); }
   .workspace .workspace-chrome__rail button { min-block-size: 4rem; min-inline-size: 5.75rem; max-inline-size: 7rem; padding: var(--space-2); gap: var(--space-1); border-radius: var(--radius-md); }
   .workspace .workspace-chrome__content { padding-block-end: calc(6rem + env(safe-area-inset-bottom)); }
+  .workspace .workspace-main :is(button,input,select,textarea,a,[tabindex]) { scroll-margin-block-end: calc(6rem + env(safe-area-inset-bottom)); }
   .workspace .workspace-chrome__rail-control { min-inline-size: 2.75rem; padding: var(--space-1); }
 }
 @media (max-width: 360px) { .workspace .workspace-chrome__header { padding-inline: var(--space-3); } .workspace .workspace-chrome__person strong { max-inline-size: 6rem; } }

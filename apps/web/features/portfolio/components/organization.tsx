@@ -59,10 +59,9 @@ export function PortfolioOrganization({ items, refresh, onChanged }: { items: Po
   function saved() { setCreate(false); setCursor(null); onChanged(); }
   if (!allowed) return null;
   return <section className="portfolio-organization" aria-label={t.organizeWork}>
-    <header className="portfolio-section-heading"><img src={trailAssets.portfolio} width={56} height={56} alt="" aria-hidden="true" /><div><h2>{t.organizeWork}</h2>{student ? <p>{trail.collectionStory}</p> : null}</div></header>
+    <header className="portfolio-section-heading cuevo-section-header cuevo-section-header--illustrated"><img src={trailAssets.portfolio} width={56} height={56} alt="" aria-hidden="true" /><div className="cuevo-section-header__context"><h2>{t.organizeWork}</h2>{student ? <p>{trail.collectionStory}</p> : null}</div>{student ? <Button type="button" variant="secondary" onClick={() => setCreate(true)}><CuevoIcon name="portfolio" size={18} />{t.createCollection}</Button> : null}</header>
     <div className={`portfolio-organization-layout${student ? '' : ' portfolio-organization-layout--reviewer'}`}>
       {student ? <div className="portfolio-collection-controls">
-        <Button type="button" variant="secondary" onClick={() => setCreate(true)}><CuevoIcon name="portfolio" size={18} />{t.createCollection}</Button>
         {create ? <CommandForm title={t.createCollection} path="/v1/portfolio/collections" fields={[{ name: 'title', label: t.collectionTitle, required: true, maxLength: 200 }, { name: 'description', label: t.collectionDescription, type: 'textarea', maxLength: 2000 }]} body={values => ({ title: String(values.get('title')), description: String(values.get('description') ?? '') })} onSaved={saved} onCancel={() => setCreate(false)} /> : null}
         {collections.loading ? <p role="status">{t.loading}</p> : collections.error ? <LearningError error={collections.error} /> : <>
           <div className="field"><label htmlFor="portfolio-collection">{t.collectionTitle}</label><select id="portfolio-collection" value={collectionId} onChange={event => { setCollectionId(event.target.value); setCursor(null); }}><option value="">{t.chooseCollection}</option>{collections.data.map(collection => <option key={collection.id} value={collection.id}>{collection.title}</option>)}</select></div>
