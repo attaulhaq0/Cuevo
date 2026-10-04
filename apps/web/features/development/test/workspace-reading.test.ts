@@ -8,14 +8,14 @@ import { FormDrafts } from '../../../shared/session/form-drafts.ts';
 
 const policy = { id: '30000000-0000-4000-8000-000000000001', version: 4, points: { practice: 0, revision: 7, reflection: 13 }, milestones: [], approvedBy: '30000000-0000-4000-8000-000000000002', approvedAt: '2026-10-03T00:00:00Z' };
 const base = { loaded: true, loading: false, loadingMore: false, error: null, moreError: null, nextCursor: null, loadMore() {} };
-const fixture = { app: {} as Record<string, unknown>, policyState: { ...base, data: [policy] } as Record<string, unknown> };
+const fixture = { app: {} as Record<string, unknown>, policyState: { ...base, data: [policy] } as Record<string, unknown>, emptyState: { ...base, data: [] } };
 Object.assign(globalThis, { React, developmentReadingFixture: fixture });
 // Only read/session inputs are replaced; the actual owner, policy renderer,
 // shared controls, errors and source parsers are rendered in this Node test.
 registerHooks({ load(url, context, nextLoad) {
   const path = url.replaceAll('\\', '/');
   if (path.endsWith('/shared/session/providers.tsx')) return { format: 'module', shortCircuit: true, source: 'export function useApp(){return globalThis.developmentReadingFixture.app}' };
-  if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: `export function usePaginatedLearningQuery(path,parse){const source=path?.includes('/policies')?globalThis.developmentReadingFixture.policyState:${JSON.stringify({ ...base, data: [] })};return{...source,data:source.data.map(parse),loadMore(){}}}` };
+  if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: 'export function usePaginatedLearningQuery(path,parse){const source=path?.includes("/policies")?globalThis.developmentReadingFixture.policyState:globalThis.developmentReadingFixture.emptyState;return{...source,data:source.data.map(parse),loadMore(){}}}' };
   return nextLoad(url, context);
 } });
 const { DevelopmentWorkspace } = await import('../components/development-workspace.tsx');
