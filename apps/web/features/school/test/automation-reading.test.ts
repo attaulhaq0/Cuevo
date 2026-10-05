@@ -45,3 +45,7 @@ test('partial processing and failed native source remain review states while act
   assert.match(html, /Practice points: 0/); assert.match(html, /2,000-event review limit/);
   assert.match(html, /Processing claims exhausted/); assert.doesNotMatch(html, /Recorded processed receipt<\/p>/);
 });
+
+test('zero returned runs in a truncated review remains partial rather than claiming no runs in the window',()=>{
+ for(const locale of['en','ar']as const){const source:SchoolAutomation={...review,execution:{...review.execution,returned:0,truncated:true,pending:0,processing:0,completed:0,failed:0,retried:0,receiptCount:0,latestCompletionAt:null,runs:[]}};const html=render(null,locale,source);assert.doesNotMatch(html,locale==='en'?/No allowlisted events are recorded/:/لا توجد أحداث مسموحة مسجّلة/);assert.match(html,/data-state="review"/);assert.doesNotMatch(html,/data-state="empty"/);}
+});

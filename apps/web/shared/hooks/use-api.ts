@@ -9,7 +9,7 @@ import { queryReadEnabled, queryReadFrame } from './query-frame';
 
 export function useApi() {
   const app = useApp();
-  const { apiUrl, accessToken, membership, locale, refreshAccess, commandJournal, formDrafts, reportDiagnostic } = app;
+  const { apiUrl, accessToken, membership, locale, refreshAccess, commandJournal, formDrafts, reportDiagnostic, readLifecycle } = app;
   const schoolId = membership?.schoolId;
   const scope = queryReadFrame(app, null, 0);
   const currentScope = useRef(scope); currentScope.current = scope;
@@ -18,9 +18,12 @@ export function useApi() {
   const t = locale === 'ar' ? commonAr : commonEn;
   const request = useCallback(async (path: string, options: { command?: Command; signal?: AbortSignal; isCurrentRead?: () => boolean } = {}) => {
     if (!accessToken || !schoolId) throw new LearningApiError('unauthorized');
-    const isCurrent = () => mounted.current && currentScope.current === scope && !options.signal?.aborted && (options.isCurrentRead?.() ?? true);
+    const readFrame = !options.command ? readLifecycle?.capture() : undefined;
+    if (readFrame && !readLifecycle?.isCurrent(readFrame)) throw new LearningApiError('unavailable');
+    const signal = readFrame ? options.signal ? AbortSignal.any([options.signal, readFrame.signal]) : readFrame.signal : options.signal;
+    const isCurrent = () => mounted.current && currentScope.current === scope && !signal?.aborted && (!readFrame || !!readLifecycle?.isCurrent(readFrame)) && (options.isCurrentRead?.() ?? true);
     try {
-      return await apiRequest({ apiUrl, accessToken, schoolId }, path, { ...(options.command ? { method: 'POST' as const, key: options.command.key, body: options.command.body, signal: options.signal } : { signal: options.signal }), observe: value => {
+      return await apiRequest({ apiUrl, accessToken, schoolId }, path, { ...(options.command ? { method: 'POST' as const, key: options.command.key, body: options.command.body, signal: options.signal } : { signal }), observe: value => {
         const feature = diagnosticFeature(path);
         if (feature && isCurrent()) reportDiagnostic({ category: value.category, feature, status: value.status, timing: diagnosticTiming(value.durationMs) });
       } });
@@ -29,7 +32,7 @@ export function useApi() {
       if (isCurrent() && error instanceof LearningApiError && error.kind === 'unauthorized') refreshAccess();
       throw error;
     }
-  }, [accessToken, apiUrl, schoolId, refreshAccess, formDrafts, scope, reportDiagnostic]);
+  }, [accessToken, apiUrl, schoolId, refreshAccess, formDrafts, scope, reportDiagnostic, readLifecycle]);
   const parseResponse = useCallback(<T,>(path: string, value: unknown, parse: (value: unknown) => T): T => {
     const feature = diagnosticFeature(path);
     return parseDiagnosticResponse(value, parse, observation => { if (feature && mounted.current && currentScope.current === scope) reportDiagnostic(observation); }, { category: 'response_invalid', feature: feature ?? 'other', status: 'invalid', timing: 'unknown' });
@@ -39,7 +42,7 @@ export function useApi() {
 
 export function useApiQuery<T>(path: string | null, parse: (value: unknown) => T, refresh: number) {
   const { request, parseResponse } = useApi();
-  const app = useApp(); const { formDrafts, membership } = app;
+  const app = useApp(); const { formDrafts, membership, readLifecycle } = app;
   const frame = queryReadFrame(app, path, refresh), enabled = queryReadEnabled(app, path);
   const currentFrame = useRef(frame); currentFrame.current = frame;
   const requestRef = useRef(request); requestRef.current = request;
@@ -52,12 +55,14 @@ export function useApiQuery<T>(path: string | null, parse: (value: unknown) => T
     const controller = new AbortController();
     setState({ frame, data: null, loading: true, error: null });
     const currentParseResponse = parseResponseRef.current;
-    void requestRef.current(path, { signal: controller.signal, isCurrentRead: () => currentFrame.current === frame }).then((value) => {
-      if (!controller.signal.aborted && currentFrame.current === frame) setState({ frame, data: currentParseResponse(path, value, parse), loading: false, error: null });
+    const readFrame = readLifecycle?.capture();
+    const currentRead = () => !controller.signal.aborted && (!readFrame || !!readLifecycle?.isCurrent(readFrame)) && currentFrame.current === frame;
+    void requestRef.current(path, { signal: controller.signal, isCurrentRead: currentRead }).then((value) => {
+      if (currentRead()) setState({ frame, data: currentParseResponse(path, value, parse), loading: false, error: null });
     }).catch((error) => {
-      if (!controller.signal.aborted && currentFrame.current === frame) { formDrafts.clearRead(draftScope, path); setState({ frame, data: null, loading: false, error: error instanceof LearningApiError ? error : new LearningApiError('invalid') }); }
+      if (currentRead()) { formDrafts.clearRead(draftScope, path); setState({ frame, data: null, loading: false, error: error instanceof LearningApiError ? error : new LearningApiError('invalid') }); }
     });
     return () => controller.abort();
-  }, [frame, enabled, path, parse, formDrafts, draftScope]);
+  }, [frame, enabled, path, parse, formDrafts, draftScope, readLifecycle]);
   return state.frame === frame ? state : empty;
 }

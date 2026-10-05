@@ -1,4 +1,5 @@
 'use client';
+import { IconButton } from '@cuevo/ui';
 
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Button, CuevoIcon, WorkspacePageHeading, WorkspaceState, type CuevoIconName } from '@cuevo/ui';
@@ -171,7 +172,7 @@ function CurrentDevelopmentWorkspace() {
         {!student ? <div className="field development-learner-picker"><label htmlFor={`${id}-learner`}>{t.learner}</label><select ref={learnerPicker} id={`${id}-learner`} value={learnerId} disabled={periodLocked} onChange={event => { focusSelectedLearner.current = event.target.value || null; setLearnerId(event.target.value); }}><option value="">{t.chooseLearner}</option>{learners.map(learner => <option key={learner.value} value={learner.value} disabled={learner.requiresReview}>{learner.label}</option>)}</select>{people.nextCursor || people.moreError ? <LoadMore query={people} label={t.learner} /> : null}{people.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : !learners.length && !people.error ? <WorkspaceState kind={!people.loaded ? "loading" : people.nextCursor || people.moreError ? "review" : "empty"} icon="people" description={!people.loaded ? t.loading : people.nextCursor || people.moreError ? t.completeLearnerChoices : t.noLearners}/> : null}{people.nextCursor ? <p className="development-meta">{t.completeLearnerChoices}</p> : null}{learners.some(learner => learner.requiresReview) ? <WorkspaceState kind="review" icon="people" description={t.ambiguousLearners}/> : null}</div> : null}
         <div className="field"><label htmlFor={`${id}-period`}>{t.period}</label><select id={`${id}-period`} disabled={periodLocked} value={periodId} onChange={event => setPeriodId(event.target.value)}><option value="">{t.choosePeriod}</option>{periodChoices.map(period => <option key={period.value} value={period.value} disabled={period.requiresReview}>{period.label}</option>)}</select></div>
       </div>
-      <Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" />{t.refresh}</Button>
+      <IconButton icon="refresh" label={t.refresh} type="button" onClick={reload} />
       {periods.error || people.error ? <LearningError error={(periods.error ?? people.error)!} /> : null}{periods.nextCursor || periods.moreError ? <LoadMore query={periods} label={t.period} /> : null}{periodChoices.some(choice => choice.requiresReview) ? <WorkspaceState kind="review" icon="calendar" description={t.ambiguousPeriods}/> : null}
       {periodId && !activePeriod && periods.loaded && !periods.loading && !periods.error && !periods.moreError ? <WorkspaceState kind="unavailable" icon="calendar" description={t.currentSourceUnavailable}/> : null}
     </div>

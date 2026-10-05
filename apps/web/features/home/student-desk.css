@@ -162,3 +162,16 @@
 @media(max-width:540px) { .student-trail__content { padding-inline:var(--space-3); } .student-trail__notice { flex-wrap:wrap; } .student-trail__current { grid-template-columns:minmax(0,1fr); padding:var(--space-3); } .student-trail__task-art { inline-size:min(12rem,100%); justify-self:center; block-size:6rem; } .student-trail__stages { grid-template-columns:repeat(2,minmax(0,1fr)); } .student-trail__bottom-row { grid-template-columns:minmax(0,1fr); } .student-trail__period-control .field { grid-template-columns:minmax(0,1fr); } .student-trail__teacher,.student-trail__upcoming-task { flex-wrap:wrap; } }
 @media(max-width:767px) { .student-trail__foxi-crop { inline-size:50%; } }
 @media(max-width:600px) { .student-trail__feedback-actions { display:block; } .student-trail__feedback-actions > .button { inline-size:100%; } }
+
+/* Home previews lead to existing period and reflection readers. Equal desktop ends use their current actions, never filler. */
+.student-trail__bottom-row--compact { grid-template-columns:minmax(0,.6fr) minmax(0,1.4fr); align-items:stretch; }
+.student-trail__bottom-row--compact > .student-trail__panel { display:flex; flex-direction:column; }
+.student-trail__bottom-row--compact .student-trail__treasure { margin-block-end:var(--space-2); }
+.student-trail__bottom-row--compact .student-trail__recognition-copy { flex:1; }
+.student-trail__panel-footer { margin-block-start:auto; padding-block-start:var(--space-2); display:flex; justify-content:flex-end; }
+.student-trail__bottom-row--compact .student-trail__portfolio .student-trail__panel-footer { order:5; }
+.student-trail__bottom-row--compact .student-trail__portfolio > .pagination-actions { order:4; }
+@media(max-width:540px) { .student-trail__bottom-row--compact { grid-template-columns:minmax(0,1fr); align-items:start; } }
+
+.student-trail__bottom-row--compact .student-trail__recognition .student-trail__panel-heading { display:flex; align-items:center; gap:var(--space-2); }
+.student-trail__bottom-row--compact .student-trail__recognition .student-trail__treasure { margin:0; }

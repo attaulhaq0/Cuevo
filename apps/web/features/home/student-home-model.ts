@@ -106,3 +106,10 @@ export function studentRecognition(input: { learnerId: string; period: Period | 
   return { ...unavailable, status: 'recorded', totalPoints: summary.totalPoints, currentMilestone: achievements[0]?.title ?? null, earnedMilestones: achievements,
     entries: current(input.ledger) ? input.ledger.data.filter(inScope).map(item => ({ label: item.occurredAt, kind: item.kind, points: item.points })) : [] };
 }
+
+
+/** Presentation may omit a generic pager banner without declaring these bounded sources complete. */
+export function studentHomePagingOnly(sources: readonly Pick<HomeSourcePage<unknown>, 'loaded'|'loading'|'nextCursor'|'error'|'moreError'>[], assessments: HomeSourcePage<Assessment>, submissions: HomeSourcePage<Submission>): boolean {
+ return sources.some(source=>!!source.nextCursor)&&sources.every(source=>source.loaded===true&&source.loading===false&&source.error===null&&source.moreError===null)
+  &&assessments.data.every(item=>item.currentSubmission!==undefined||complete(submissions));
+}

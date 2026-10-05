@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef } from 'react';
 import { apiRequest } from '../api/client';
 import { browserDiagnosticsConfigSchema } from '@cuevo/contracts';
 import { BrowserDiagnosticsSession, classifyRuntimeDiagnostic, diagnosticViewport, type DiagnosticSignal } from './browser-diagnostics';
+import type { SessionReadLifecycle } from '../session/read-lifecycle';
 import type { BrowserDiagnosticObservation, DiagnosticLocale } from '@cuevo/contracts/analytics';
 
 export type { DiagnosticSignal } from './browser-diagnostics';
-type CurrentDiagnosticContext = { apiUrl: string; userId?: string; schoolId?: string; accessToken?: string; ready: boolean; online: boolean; accessGeneration: number; locale: DiagnosticLocale };
+type CurrentDiagnosticContext = { apiUrl: string; userId?: string; schoolId?: string; accessToken?: string; ready: boolean; online: boolean; accessGeneration: number; locale: DiagnosticLocale; readLifecycle?: SessionReadLifecycle };
 
 export function useBrowserDiagnostics(context: CurrentDiagnosticContext) {
   const scope = `${context.apiUrl}:${context.userId ?? ''}:${context.schoolId ?? ''}:${context.accessToken ?? ''}:${context.ready}:${context.online}:${context.accessGeneration}`;
@@ -15,10 +16,11 @@ export function useBrowserDiagnostics(context: CurrentDiagnosticContext) {
   const currentLocale = useRef(context.locale); currentLocale.current = context.locale;
   const session = useRef<BrowserDiagnosticsSession | null>(null);
   useEffect(() => {
-    if (!context.ready || !context.online || !context.accessToken || !context.userId || !context.schoolId) return;
+    if (!context.ready || !context.online || !context.accessToken || !context.userId || !context.schoolId || context.readLifecycle && !context.readLifecycle.enabled) return;
     const configurationController = new AbortController();
+    const readFrame = context.readLifecycle?.capture();
     const capturedScope = scope;
-    const isCurrent = () => currentScope.current === capturedScope && !configurationController.signal.aborted;
+    const isCurrent = () => currentScope.current === capturedScope && !configurationController.signal.aborted && (!readFrame || !!context.readLifecycle?.isCurrent(readFrame));
     const config = { apiUrl: context.apiUrl, accessToken: context.accessToken, schoolId: context.schoolId };
     const reporter = new BrowserDiagnosticsSession({ isCurrent, send: async (value, signal) => {
       if (!isCurrent()) return;
@@ -35,7 +37,7 @@ export function useBrowserDiagnostics(context: CurrentDiagnosticContext) {
       if (args.some(value => typeof value === 'string' && classifyRuntimeDiagnostic(value) === 'hydration_error')) reportRuntime('hydration_error');
     };
     let listening = false;
-    void apiRequest(config, '/v1/diagnostics/config', { signal: AbortSignal.any([configurationController.signal, AbortSignal.timeout(5000)]) }).then(value => {
+    void apiRequest(config, '/v1/diagnostics/config', { signal: AbortSignal.any([configurationController.signal, ...(readFrame ? [readFrame.signal] : []), AbortSignal.timeout(5000)]) }).then(value => {
       if (!isCurrent()) return;
       reporter.enable(value);
       if (browserDiagnosticsConfigSchema.safeParse(value).data?.enabled === true) {
@@ -47,7 +49,7 @@ export function useBrowserDiagnostics(context: CurrentDiagnosticContext) {
       if (session.current === reporter) session.current = null;
       if (listening) { window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onRejection); if (console.error === diagnosticConsoleError) console.error = originalConsoleError; }
     };
-  }, [scope, context.apiUrl, context.accessToken, context.schoolId, context.userId, context.ready, context.online]);
+  }, [scope, context.apiUrl, context.accessToken, context.schoolId, context.userId, context.ready, context.online, context.readLifecycle]);
   return useCallback((value: DiagnosticSignal) => {
     session.current?.report({ ...value, locale: currentLocale.current, viewport: diagnosticViewport(window.innerWidth) });
   }, []);

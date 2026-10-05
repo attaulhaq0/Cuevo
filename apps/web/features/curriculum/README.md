@@ -1,5 +1,7 @@
 # Curriculum context workspace
 
+Opened lifecycle history and declared-plan source disclosures use existing Cuevo states for zero rows. Known selected revision history is unconfirmed/review on terminal zero; a continued page remains unknown. Plan teaching/assessment/evidence arrays are empty only when their current authoritative counts are zero, while positive counts with missing bounded arrays remain unknown. This does not infer teaching, attainment, official mappings or staff action permission. Routine refresh presentation keeps the original locks/callbacks. Owner render/source tests remain distinct from native curriculum and customer acceptance.
+
 Current complete empty record pages use the shared icon state within the existing source owner. Initial loading, current failures, later-page failures and nonterminal pages keep their own loading/recovery/continuation rather than claiming no context records. Existing role actions and Refresh remain unchanged; no empty state creates a curriculum, readiness or source authority claim.
 
 One root WorkspacePageHeading names the current records section or existing explicit configuration action. The previous identical root records/editor heading is removed only where this same title supplies the page heading; lower records retain a section heading while an action is open. Planning, objective and source-review owners keep their current course/period/source context and review facts beneath this page. No new read, official claim, permission or mirrored selected source is introduced.

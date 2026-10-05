@@ -1,4 +1,5 @@
 'use client';
+import { IconButton } from '@cuevo/ui';
 import { WorkspaceState } from '@cuevo/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
@@ -21,7 +22,7 @@ function CurrentProgrammeLearners({programmeId,refresh}:{programmeId:string;refr
  useEffect(()=>{if(needsFocus.current&&!query.loading&&(page||query.error)&&heading.current){needsFocus.current=false;heading.current.focus({preventScroll:true});}},[query.loading,query.error,page]);
  function refreshPage(){setCursor(null);setPrevious([]);source.current=undefined;setReload(value=>value+1);}
  return <section className="curriculum-programme-learners" aria-label={t.programmeAssignments}>
-  <header className="curriculum-programme-learners__heading"><div><CuevoIcon name="people" size={25}/><h3 ref={heading} tabIndex={-1}>{t.programmeAssignments}</h3></div><Button type="button" variant="quiet" onClick={refreshPage}><CuevoIcon name="refresh"/>{t.refreshAssignments}</Button></header>
+  <header className="curriculum-programme-learners__heading"><div><CuevoIcon name="people" size={25}/><h3 ref={heading} tabIndex={-1}>{t.programmeAssignments}</h3></div><IconButton icon="refresh" label={t.refreshAssignments} type="button" onClick={refreshPage} /></header>
   <p className="learning-form__note">{t.assignmentScope}</p>{query.loading?<WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/>:query.error?<><LearningError error={query.error}/><WorkspaceState kind="review" icon="help" description={t.assignmentContextChanged}/></>:page?<>
    <div className="curriculum-programme-learners__context"><h4><bdi>{page.programme.name}</bdi></h4><p><bdi>{page.programme.className} · {page.programme.subjectName} · {page.programme.yearGroupName} · {page.programme.academicYearName}</bdi></p><p><bdi>{page.programme.framework} · {page.programme.packProgramme} · {page.programme.packVersion}</bdi></p></div>
    <p className="learning-form__note">{t.assignmentPageNote}</p><div className="curriculum-programme-learners__list">{page.items.length?page.items.map(assignment=><article className="curriculum-programme-learners__assignment" key={assignment.id} data-programme-learner-id={assignment.id}><header><h4><bdi>{assignment.learnerName}</bdi></h4><Status tone={assignment.status==='active'?'positive':'neutral'}>{assignment.status==='active'?t.active:t.revoked}</Status></header><p>{t.assignmentApprovedBy}: <bdi>{assignment.approvedByName}</bdi></p><p><bdi>{new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(assignment.updatedAt))}</bdi></p></article>):<WorkspaceState kind={page.nextCursor?'unknown':'empty'} icon="curriculum" description={page.nextCursor?t.nextAssignments:t.noAssignments}/>}</div>

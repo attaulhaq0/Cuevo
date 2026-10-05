@@ -4,7 +4,7 @@ import { expectTrailWorkspace } from './trail-workspace';
 
 const learner = 'e1100000-0000-4000-8000-000000000001', school = 'e1200000-0000-4000-8000-000000000001';
 const id = (n: number) => `e1300000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-type Mode = 'populated' | 'empty' | 'denied' | 'wrong' | 'partial' | 'feedback_failure';
+type Mode = 'populated' | 'empty' | 'denied' | 'wrong' | 'partial' | 'feedback_failure' | 'unknown_work';
 const work = { id:id(1),courseId:id(2),courseTitle:'Reasoning · Cedar',title:'Explain one checking method',instructions:'Compare the two explanations and choose your next step.',model:'numeric',maxScore:10,rubricId:null,status:'PUBLISHED',dueAt:null,policyVersion:1,availableFrom:null,availableUntil:null,allowLate:true,assignmentState:'OPEN',availabilityVersion:1,submissionKind:'TEXT',currentSubmission:null };
 const result = { id:id(3),submissionId:id(4),assessmentId:id(5),learnerId:learner,revision:1,status:'RELEASED',policyVersion:1,referenceId:id(6),referenceVersion:'1',evidenceId:id(7),createdAt:'2026-10-04T09:00:00Z',assessmentTitle:'Reviewing an explanation',referenceTitle:'Explain the evidence',feedback:'Review why your checking step is appropriate.',model:'numeric',score:0,maxScore:10,nativeResult:{type:'numeric',score:0,maxScore:10,policyVersion:1} };
 const portfolio = (n: number) => ({ id:id(n),revisionId:id(n+30),revision:1,learnerId:learner,sourceModel:'numeric',title:n===10?'My selected explanation':'My revised method',reflection:n===10?'I checked each step and explained why it works.':'I compared both methods before choosing one.',createdAt:'2026-10-04T10:00:00Z',feedback:n===10?null:'A reviewed explanation.',featured:false,approvalState:n===10?'AWAITING_REVIEW':'REVIEWED',parentVisible:false,reviewedAt:n===10?null:'2026-10-04T11:00:00Z',evidenceId:id(7),resultId:id(3),submissionId:id(4),referenceId:id(6),referenceVersion:'1',policyVersion:1,nativeResult:result.nativeResult,assessmentTitle:result.assessmentTitle,referenceTitle:result.referenceTitle,identity:{status:'READY',learnerName:'Lina Hassan',className:'Cedar',yearGroupName:'Year 8',academicYearName:'2026–2027',courseTitle:'Reasoning',assessmentTitle:result.assessmentTitle,submittedAt:'2026-10-03T08:00:00Z',submissionRevision:1} });
@@ -19,7 +19,8 @@ async function desk(page: Page, mode: Mode) {
       if(url.pathname.includes('/auth/v1/token'))data={access_token:'fictional-student-desk-token',token_type:'bearer',expires_in:3600,refresh_token:'fictional-student-desk-refresh',user:{id:learner,aud:'authenticated',role:'authenticated',email:'learner@example.invalid',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-10-01T00:00:00Z'}};
       else if(url.pathname==='/v1/me')data={userId:learner,schoolId:school,membershipId:id(9),role:'student',displayName:'Lina Hassan',school:{id:school,name:'Reference school'},entitlements:['learning','assessment','curriculum','learner.state','improvement','portfolio','community','school.operations']};
       else if(url.pathname==='/v1/diagnostics/config')data={enabled:false};
-      else if(url.pathname==='/v1/assessments')data={items:[work,{...work,id:id(11),title:'Compare your next explanation'}],nextCursor:mode==='partial'?id(82):null};
+      else if(url.pathname==='/v1/assessments'){const current=mode==='unknown_work'?Object.fromEntries(Object.entries(work).filter(([key])=>key!=='currentSubmission')):work;data={items:[current,{...work,id:id(11),title:'Compare your next explanation'}],nextCursor:mode==='partial'?id(82):null};}
+      else if(url.pathname==='/v1/submissions')data={items:[],nextCursor:mode==='unknown_work'?id(83):null};
       else if(url.pathname==='/v1/results'){
         if(mode==='feedback_failure'&&url.searchParams.has('cursor')){status=503;data={code:'REQUEST_UNAVAILABLE'};}
         else data={items:[result],nextCursor:mode==='feedback_failure'?id(81):null};
@@ -43,7 +44,7 @@ async function desk(page: Page, mode: Mode) {
 test('Student Desk shows actual source reflection, native zero and exact task actions with bilingual reflow',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await desk(page,'populated');
-  const selected=page.locator('.student-trail__portfolio');await expect(selected.getByText('I checked each step and explained why it works.',{exact:true})).toBeVisible();
+  const selected=page.locator('.student-trail__portfolio');await expect(selected.getByText('I checked each step and explained why it works.',{exact:true})).toHaveCount(0);await expect(selected.getByRole('heading',{name:'My selected explanation',exact:true})).toBeVisible();
   await expect(selected.getByText('Waiting for review',{exact:true})).toBeVisible();await expect(selected.getByText('Reviewed',{exact:true})).toBeVisible();
   for(const locale of['English','العربية']){
     await page.getByRole('button',{name:locale,exact:true}).click();
@@ -79,25 +80,24 @@ test('a failed summary continuation keeps its named source error and retry visib
   expect(await recovery.evaluate(element=>element.closest('details'))).toBeNull();
 });
 
-test('partial Student work keeps concise source recovery beside the heading without displacing the current task',async({page})=>{
- await desk(page,'partial');
- const row=page.locator('.student-trail__intro-row'),notice=row.locator('.cuevo-workspace-state'),task=page.locator('.student-trail__current');
- await expect(notice).toHaveAttribute('data-state','unknown');await expect(notice.getByRole('button')).toBeVisible();
- for(const locale of ['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();for(const width of[1366,1024,901,768,390,320]){
-  await page.setViewportSize({width,height:900});await expect(page.locator('main h1')).toHaveCount(1);
-  const geometry=await row.evaluate(e=>({height:e.getBoundingClientRect().height,noticeHeight:e.querySelector('.cuevo-workspace-state')!.getBoundingClientRect().height,recoveryHeight:e.querySelector('button')!.getBoundingClientRect().height,overflow:document.documentElement.scrollWidth>innerWidth+1}));
-  expect(geometry.noticeHeight,`${locale}/${width}: source context keeps room for readable copy and its 44px recovery`).toBeLessThanOrEqual(width<=540?128:96);
-  expect(geometry.recoveryHeight).toBeGreaterThanOrEqual(44);expect(geometry.overflow).toBe(false);
-  await expect(task.getByRole('heading',{name:work.title,exact:true})).toBeVisible();
- }}
+test('paged Student work keeps its source continuations without a redundant refresh banner',async({page})=>{
+ await desk(page,'partial');const row=page.locator('.student-trail__intro-row'),task=page.locator('.student-trail__current');
+ for(const locale of['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();for(const width of[1366,1024,901,768,390,320]){
+  await page.setViewportSize({width,height:900});await expect(page.locator('main h1')).toHaveCount(1);await expect(row.locator('.cuevo-workspace-state')).toHaveCount(0);await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');
+  await expect(task.getByRole('heading',{name:work.title,exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ }}await expect(page.locator('.student-trail__upcoming-controls .pagination-actions button')).toBeVisible();await expect(page.locator('.student-trail__portfolio .pagination-actions button')).toBeVisible();
+});
+
+test('unknown submitted-work context retains its Home notice and recovery',async({page})=>{
+ await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .cuevo-workspace-state');await expect(notice).toBeVisible();await expect(notice.getByRole('button')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');
 });
 
 for(const mode of['empty','denied','wrong','partial']as const)test(`Student Portfolio ${mode} remains honest without hiding independent current work`,async({page})=>{
   const reads=await desk(page,mode);const section=page.locator('.student-trail__portfolio');
   if(mode==='empty')await expect(section).toContainText('Choose released work');
-  if(mode==='denied'||mode==='wrong'){await expect(section).not.toContainText('I checked each step');await expect(section.locator('[role="alert"]')).toBeVisible();}
+  if(mode==='denied'||mode==='wrong'){await expect(section).not.toContainText('My selected explanation');await expect(section.locator('[role="alert"]')).toBeVisible();}
   if(mode==='partial'){
-    await expect(section).toContainText('I checked each step');await section.getByRole('button',{name:/^Load more/}).click();
+    await expect(section).toContainText('My selected explanation');await section.getByRole('button',{name:/^Load more/}).click();
     await expect(section).not.toContainText('I checked each step');await expect(section.locator('[role="alert"]')).toBeVisible();expect(reads()).toBeGreaterThan(1);
   }
   await expect(page.getByRole('heading',{name:work.title,exact:true})).toBeVisible();await expect(page.locator('.student-trail__feedback')).toContainText(result.feedback);

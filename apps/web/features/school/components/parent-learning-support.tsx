@@ -9,7 +9,7 @@ import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-q
 import { LearningError } from '../../../shared/components/feedback';
 import { LoadMore } from '../../../shared/components/load-more';
 import { LearningApiError } from '../../../shared/api/client';
-import { schoolAr, schoolEn } from '../messages';
+import { schoolAr, schoolEn, approvedContextAr, approvedContextEn } from '../messages';
 import { currentSchoolRead, parseCurrentLearnerProfile } from '../model';
 import { parentSupportCourses, parentSupportMatches, parentSupportPath, parseParentLearningSupport } from '../parent-support-model';
 
@@ -28,6 +28,8 @@ export function ParentLearningSupport({ learnerId, learnerName, refresh, pageHea
   const support = usePaginatedLearningQuery(path, parseParentLearningSupport, refresh + retry);
   const matches = parentSupportMatches(support.data, learnerId, courseId);
   const active = matches ? support.data.filter(source => source.state === 'ACTIVE') : [];
+  const complete = support.loaded && !support.loading && !support.loadingMore && !support.error && !support.moreError && !support.nextCursor;
+  const emptyCopy = locale === 'ar' ? approvedContextAr : approvedContextEn;
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
   const SupportHeading = pageHeading ? 'h2' : 'h3';
   if (!permitted) return null;
@@ -39,7 +41,7 @@ export function ParentLearningSupport({ learnerId, learnerName, refresh, pageHea
     {profile.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loadingParentSupport} role="status"/> : profile.error ? <LearningError error={profile.error} /> : !currentProfile ? <LearningError error={new LearningApiError('invalid')} /> : !choices.length ? <WorkspaceState kind="empty" icon="learning" description={t.noParentSupportCourses}/> : <>
       <div className="field"><label htmlFor="parent-support-course">{t.parentSupportCourse}</label><select id="parent-support-course" value={path ? courseId : ''} onChange={event => setCourseId(event.target.value)}><option value="">{t.chooseParentSupportCourse}</option>{choices.map(choice => <option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select></div>
       {choices.some(choice => choice.requiresReview) ? <WorkspaceState kind="review" icon="help" description={t.parentSupportAmbiguous}/> : null}
-      {!path ? <WorkspaceState kind="unknown" icon="learning" description={t.chooseParentSupportCourse}/> : support.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loadingParentSupport} role="status"/> : support.error ? <LearningError error={support.error} /> : support.moreError ? <LearningError error={support.moreError} /> : !matches ? <LearningError error={new LearningApiError('invalid')} /> : <>{!active.length ? <WorkspaceState kind={support.nextCursor ? "review" : "empty"} icon="help" description={t.noParentSupport}/> : active.map(source => <article className="school-record" key={source.id}>
+      {!path ? <WorkspaceState kind="unknown" icon="learning" description={t.chooseParentSupportCourse}/> : support.loading || !support.loaded && !support.error ? <WorkspaceState kind="loading" icon="refresh" description={t.loadingParentSupport} role="status"/> : support.error ? <LearningError error={support.error} /> : support.moreError ? <LearningError error={support.moreError} /> : !matches ? <LearningError error={new LearningApiError('invalid')} /> : <>{!active.length ? <WorkspaceState kind={complete ? "empty" : "unknown"} icon="help" description={complete ? t.noParentSupport : emptyCopy.partial} role="status"/> : active.map(source => <article className="school-record" key={source.id}>
         <SupportHeading>{source.title}</SupportHeading><p>{source.courseTitle} · {source.assessmentTitle ?? t.courseWideParentSupport}</p><p className="lesson-content" dir="auto">{source.instructions}</p><p>{t.supportWindow}: <time dateTime={source.effectiveFrom}>{date(source.effectiveFrom)}</time>–<time dateTime={source.effectiveTo}>{date(source.effectiveTo)}</time> · UTC</p>
       </article>)}<LoadMore query={support} label={t.parentSupport} /></>}
     </>}

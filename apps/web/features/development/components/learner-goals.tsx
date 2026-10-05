@@ -1,4 +1,5 @@
 'use client';
+import { IconButton } from '@cuevo/ui';
 import { WorkspaceState } from '@cuevo/ui';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -87,7 +88,7 @@ function CurrentLearnerGoals({ learnerId }: { learnerId: string }) {
     <div className="development-heading">
       <img className="development-art" src={trailAssets.goal} width="80" height="80" alt="" aria-hidden="true" />
       <div><h2 ref={heading} tabIndex={-1}>{t.title}</h2><p>{t.notice}</p></div>
-      <div className="development-actions"><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" />{t.refresh}</Button>{student ? <Button type="button" disabled={locked || !!action && !!commandJournal.get(`/v1/development/goals/${action}/review`)} onClick={event => { focusEditor.current={intent:{scope:focusScope,kind:'create',goalId:null},origin:event.currentTarget}; setCreate(true); setAction(null); setConfirmation(null); }}><CuevoIcon name="goal" />{t.create}</Button> : null}</div>
+      <div className="development-actions"><IconButton icon="refresh" label={t.refresh} type="button" onClick={() => setRefresh(value => value + 1)} />{student ? <Button type="button" disabled={locked || !!action && !!commandJournal.get(`/v1/development/goals/${action}/review`)} onClick={event => { focusEditor.current={intent:{scope:focusScope,kind:'create',goalId:null},origin:event.currentTarget}; setCreate(true); setAction(null); setConfirmation(null); }}><CuevoIcon name="goal" />{t.create}</Button> : null}</div>
     </div>
     {confirmation && goals.loaded && !failed ? <p className="development-confirmation" role="status"><CuevoIcon name="check" />{confirmation}</p> : null}
     {create && courses.loaded && !courses.error && !courses.moreError && courses.data.length ? <CommandForm

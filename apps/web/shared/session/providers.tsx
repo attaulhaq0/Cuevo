@@ -8,6 +8,7 @@ import { getDictionary, type Locale } from '../i18n/locale';
 import { classifyAuthError } from './auth-error';
 import { CommandJournal } from '../api/client';
 import { FormDrafts } from './form-drafts';
+import { SessionReadLifecycle } from './read-lifecycle';
 import { useBrowserDiagnostics, type DiagnosticSignal } from '../diagnostics/use-browser-diagnostics';
 
 type AuthState = 'initializing' | 'signed-out' | 'verifying' | 'ready' | 'error' | 'not-configured';
@@ -36,6 +37,7 @@ type AppContext = {
   selectedChildId: string;
   selectChild: (id: string) => void;
   accessGeneration: number;
+  readLifecycle: SessionReadLifecycle;
   reportDiagnostic: (value: DiagnosticSignal) => void;
 };
 const Context = createContext<AppContext | null>(null);
@@ -52,7 +54,11 @@ export function Providers({ children, initialLocale, config }: { children: React
   const [online, setOnline] = useState(true);
   const selectedSchool = useRef<string | undefined>(undefined);
   const activeUser = useRef<string | undefined>(undefined);
+  const activeToken = useRef<string | undefined>(undefined);
+  const authRevision = useRef(0);
   const accessVerified = useRef(false);
+  const readLifecycle = useRef(new SessionReadLifecycle());
+  const signingOut = useRef(false);
   const accountContinuations = useRef(0);
   const commandJournal = useRef(new CommandJournal());
   const formDrafts = useRef(new FormDrafts());
@@ -83,8 +89,8 @@ export function Providers({ children, initialLocale, config }: { children: React
   }, []);
 
   useEffect(() => {
-    const onOnline = () => { setOnline(true); refreshAccess(); };
-    const onOffline = () => { setOnline(false); setMembership(null); accessVerified.current = false; formDrafts.current.clear(); setNotice(null); };
+    const onOnline = () => { const ticket = readLifecycle.current.pause(); if (!signingOut.current) readLifecycle.current.resume(ticket); setOnline(true); refreshAccess(); };
+    const onOffline = () => { readLifecycle.current.pause(); setOnline(false); setMembership(null); accessVerified.current = false; formDrafts.current.clear(); setNotice(null); };
     setOnline(navigator.onLine);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -103,9 +109,12 @@ export function Providers({ children, initialLocale, config }: { children: React
     let active = true;
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
+      authRevision.current++;
+      activeToken.current = nextSession?.access_token;
       setSession(nextSession);
       setFailure(null);
       if (!nextSession) {
+        readLifecycle.current.pause();
         setMembership(null);
         accessVerified.current = false;
         commandJournal.current.clear();
@@ -114,15 +123,18 @@ export function Providers({ children, initialLocale, config }: { children: React
         activeUser.current = undefined;
         setStatus('signed-out');
       } else {
-        if (activeUser.current !== nextSession.user.id) { selectedSchool.current = undefined; accessVerified.current = false; setMembership(null); commandJournal.current.clear(); formDrafts.current.clear(); setNotice(null); selectChild(''); }
+        if (activeUser.current !== nextSession.user.id) { const ticket = readLifecycle.current.pause(); if (!signingOut.current) readLifecycle.current.resume(ticket); selectedSchool.current = undefined; accessVerified.current = false; setMembership(null); commandJournal.current.clear(); formDrafts.current.clear(); setNotice(null); selectChild(''); }
         activeUser.current = nextSession.user.id;
         if (!accessVerified.current) setStatus('verifying');
         refreshAccess();
       }
     });
+    const initialRevision = authRevision.current;
     void client.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
+      if (!active || authRevision.current !== initialRevision || signingOut.current) return;
       if (error) { setStatus('error'); setFailure(new MembershipError('unauthorized')); return; }
+      activeToken.current = data.session?.access_token;
+      activeUser.current = data.session?.user.id;
       setSession(data.session);
       if (!data.session) setStatus('signed-out');
     });
@@ -130,16 +142,17 @@ export function Providers({ children, initialLocale, config }: { children: React
   }, [client, refreshAccess]);
 
   const accessToken = session?.access_token;
-  const reportDiagnostic = useBrowserDiagnostics({ apiUrl: config.apiUrl, userId: membership?.userId, schoolId: membership?.schoolId, accessToken: status === 'ready' ? accessToken : undefined, ready: status === 'ready', online, accessGeneration, locale });
+  const reportDiagnostic = useBrowserDiagnostics({ apiUrl: config.apiUrl, userId: membership?.userId, schoolId: membership?.schoolId, accessToken: status === 'ready' ? accessToken : undefined, ready: status === 'ready', online, accessGeneration, locale, readLifecycle: readLifecycle.current });
   useEffect(() => {
-    if (!accessToken || !online) return;
+    if (!accessToken || !online || signingOut.current || !readLifecycle.current.enabled) return;
     if (accountContinuations.current > 0) { setMembership(null); accessVerified.current = false; setStatus('verifying'); return; }
     const controller = new AbortController();
+    const readFrame = readLifecycle.current.capture();
     if (!accessVerified.current) { setStatus('verifying'); setMembership(null); }
     setFailure(null);
-    void fetchMembership({ apiUrl: config.apiUrl, accessToken, schoolId: selectedSchool.current, signal: controller.signal })
+    void fetchMembership({ apiUrl: config.apiUrl, accessToken, schoolId: selectedSchool.current, signal: AbortSignal.any([controller.signal, readFrame.signal]) })
       .then((current) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !readLifecycle.current.isCurrent(readFrame)) return;
         selectedSchool.current = current.schoolId;
         accessVerified.current = true;
         setMembership(current);
@@ -147,7 +160,7 @@ export function Providers({ children, initialLocale, config }: { children: React
         setStatus('ready');
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !readLifecycle.current.isCurrent(readFrame)) return;
         setMembership(null);
         formDrafts.current.clear(); setNotice(null);
         accessVerified.current = false;
@@ -167,27 +180,35 @@ export function Providers({ children, initialLocale, config }: { children: React
   }, [client]);
 
   const signOut = useCallback(async () => {
-    if (!client) return false;
+    if (!client || signingOut.current) return false;
+    signingOut.current = true;
+    const actor = activeUser.current;
+    const token = activeToken.current;
+    const ticket = readLifecycle.current.pause();
+    const failed = () => {
+      const changedSession = activeUser.current !== actor || activeToken.current !== token;
+      const currentTicket = activeUser.current && activeToken.current ? readLifecycle.current.pause() : ticket;
+      if ((!changedSession || !!activeUser.current && !!activeToken.current) && readLifecycle.current.resume(currentTicket)) { setAccessGeneration(value => value + 1); refreshAccess(); }
+      return false;
+    };
     try {
       const { error } = await client.auth.signOut({ scope: 'local' });
-      if (error) return false;
-      setMembership(null);
-      setSession(null);
-      selectedSchool.current = undefined;
-      accessVerified.current = false;
-      commandJournal.current.clear();
-      formDrafts.current.clear(); setNotice(null); selectChild('');
-      setStatus('signed-out');
+      signingOut.current = false;
+      if (error || activeUser.current !== actor && activeUser.current !== undefined || activeToken.current !== token && activeToken.current !== undefined) return failed();
+      readLifecycle.current.pause();
+      setMembership(null); setSession(null); selectedSchool.current = undefined; activeUser.current = undefined; activeToken.current = undefined; accessVerified.current = false;
+      commandJournal.current.clear(); formDrafts.current.clear(); setNotice(null); selectChild(''); setStatus('signed-out');
       return true;
-    } catch { return false; }
-  }, [client]);
+    } catch { signingOut.current = false; return failed(); }
+    finally { signingOut.current = false; }
+  }, [client, refreshAccess]);
 
   const restoreSession = useCallback(async (session: { access_token: string; refresh_token: string }): Promise<boolean> => {
     if (!client || !session.access_token || !session.refresh_token) return false;
     try { const { error } = await client.auth.setSession(session); return !error; } catch { return false; }
   }, [client]);
 
-  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, restoreSession, signOut, refreshAccess, holdMembershipVerification, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice: notice?.message ?? null, noticeLocation: notice?.location ?? null, clearNotice, announce, selectedChildId, selectChild, accessGeneration, reportDiagnostic }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ locale, setLocale, dictionary: getDictionary(locale), status, membership, failure, signIn, restoreSession, signOut, refreshAccess, holdMembershipVerification, online, accessToken: status === 'ready' ? accessToken ?? null : null, apiUrl: config.apiUrl, publicConfig:config, commandJournal: commandJournal.current, formDrafts: formDrafts.current, notice: notice?.message ?? null, noticeLocation: notice?.location ?? null, clearNotice, announce, selectedChildId, selectChild, accessGeneration, readLifecycle: readLifecycle.current, reportDiagnostic }}>{children}</Context.Provider>;
 }
 
 export function useApp() {

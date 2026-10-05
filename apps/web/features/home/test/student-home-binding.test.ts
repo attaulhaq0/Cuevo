@@ -4,7 +4,7 @@ import { LearningApiError } from '../../../shared/api/client.ts';
 import { parseAssessment, parseSubmission } from '../../learning/model.ts';
 import { parseReleasedResult } from '../../academic/model.ts';
 import { parseLearnerGoal } from '../../development/model.ts';
-import { selectStudentHomeSources, studentRecognition, currentStudentHomeSummary, currentNativeFeedbackDisclosure, currentStudentHomeDenial, studentHomeReadFrame, type HomeSourcePage } from '../student-home-model.ts';
+import { selectStudentHomeSources, studentHomePagingOnly, studentRecognition, currentStudentHomeSummary, currentNativeFeedbackDisclosure, currentStudentHomeDenial, studentHomeReadFrame, type HomeSourcePage } from '../student-home-model.ts';
 import type { LearnerGoal } from '../../development/model.ts';
 
 const learnerId = '00000000-0000-4000-8000-000000000001';
@@ -142,4 +142,18 @@ test('native feedback disclosure restores only the same exact source after a cur
   assert.equal(currentNativeFeedbackDisclosure(disclosure, 'released-result'), true);
   assert.equal(currentNativeFeedbackDisclosure(null, 'released-result'), false);
   assert.equal(currentNativeFeedbackDisclosure({ ...disclosure, open: false }, 'released-result'), false);
+});
+
+
+test('paging-only Home presentation keeps bounded work incomplete while every loaded task has known submission context', () => {
+ const input=sources();input.assessments.nextCursor='next';const selected=selectStudentHomeSources(input);assert.equal(selected.unresolvedWork,true);assert.equal(selected.workKnown,false);
+ assert.equal(studentHomePagingOnly([input.assessments,input.interventions,input.results], input.assessments, input.submissions),true);
+ input.assessments.data[0]=parseAssessment(assessment);input.submissions.nextCursor='more';
+ assert.equal(studentHomePagingOnly([input.assessments,input.submissions,input.interventions],input.assessments,input.submissions),false);
+});
+
+test('loading unknown and failed Home sources cannot hide their genuine recovery notice as paging', () => {
+ const input=sources();input.assessments.nextCursor='next';
+ for(const source of[{...input.results,loading:true},{...input.results,loaded:false},{...input.results,error:new LearningApiError('unavailable')},{...input.results,moreError:new LearningApiError('denied')}])assert.equal(studentHomePagingOnly([input.assessments,source],input.assessments,input.submissions),false);
+ input.assessments.nextCursor=null;assert.equal(studentHomePagingOnly([input.assessments,input.results],input.assessments,input.submissions),false);
 });

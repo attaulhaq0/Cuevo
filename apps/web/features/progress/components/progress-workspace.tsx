@@ -2,7 +2,7 @@
 
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, CuevoIcon, Status, WorkspaceNavigationContent, WorkspacePageHeading, WorkspaceState, type CuevoIconName } from '@cuevo/ui';
+import { Button, CuevoIcon, IconButton, Status, WorkspaceNavigationContent, WorkspacePageHeading, WorkspaceState, type CuevoIconName } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { currentLearnerState, parseLearnerState, parseLearnerObservation, parseLearnerSignal, progressLearnerChoices, type LearnerState, type Observation, type Signal, type LearnerStateSource } from '../model';
 import { LearningApiError } from '../../../shared/api/client';
@@ -85,7 +85,7 @@ function CurrentProgressWorkspace() {
     });
     return () => cancelAnimationFrame(frame);
   }, [activeLearnerId]);
-  const utilities = <>{own ? <div className="progress-companion"><CompanionView registry={companionPoses} character="foxi" state="read" visible={showCompanion} /><Button type="button" variant="quiet" onClick={() => setShowCompanion(value => !value)}>{showCompanion ? t.hideCompanion : t.showCompanion}</Button></div> : null}<Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" size={18} />{t.refresh}</Button></>;
+  const utilities = <>{own ? <div className="progress-companion"><CompanionView registry={companionPoses} character="foxi" state="read" visible={showCompanion} /><Button type="button" variant="quiet" onClick={() => setShowCompanion(value => !value)}>{showCompanion ? t.hideCompanion : t.showCompanion}</Button></div> : null}<IconButton icon="refresh" label={t.refresh} onClick={() => setRefresh(value => value + 1)} /></>;
   return <section className="progress-workspace" data-role={membership?.role}>
     <WorkspacePageHeading title={t.progress} />
     {!activeLearnerId ? <ProgressNavigation utilities={utilities} /> : null}

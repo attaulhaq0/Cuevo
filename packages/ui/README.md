@@ -4,6 +4,8 @@
 
 Public API: @cuevo/ui for Button/Status, @cuevo/ui/tokens.css for semantic tokens. Component stories are colocated under src and previewed using apps/web/.storybook. No school-specific rules, server credentials or application imports belong here. Feature-specific UI remains in its owning feature. Preserve keyboard, reduced motion, Arabic/RTL and shared design tokens.
 
+`IconButton` keeps the existing Button and illustrated Cuevo icon in a44px native target, with a required localized accessible label and a plain-language tooltip on hover/keyboard focus. It changes no callback, pending or disabled authority. Quiet icon actions use the same semantic tokens in light/dark/RTL; recovery owners still decide whether visible explanatory text is necessary. The tooltip is decorative guidance and duplicates the button's accessible name rather than introducing technical language or a separate request mechanism.
+
 `WorkspaceState` presents owner-supplied empty/loading/denied/unavailable/unknown/review explanations with existing illustrated icons, opaque reading material and optional existing actions. It determines no source status, role or request. Default titles are strong text; owners opt into a real h2/h3/h4 hierarchy. `WorkspaceNavigationContent` places current live owner controls into the existing focused navigation host; `WorkspaceTabs` uses the same placement. Native chapter links retain their own hash/target behavior rather than adopting tab selection. Narrow outer/reading inset tokens cap physical padding while enlarged typography remains unchanged.
 
 ## Authenticated Trail foundation
@@ -52,3 +54,5 @@ Native Tab and Arrow/Home/End focus also reveal the whole current section button
 ## Confirmation controls
 
 The shared workspace tokens own `.checkbox-field` layout and native checkbox size. Its input selector is specific enough to override generic text-input sizing; feature styles do not own global confirmation controls. Labels stay associated with their checkbox and provide the click target. The Portfolio owner browser regression checks the compact size and label activation while retaining exact-source confirmations and pending locks.
+
+`IconButton` owns compact accessible routine actions and hover/focus guidance. Its render test is in `test/icon-button.test.ts` and is discovered by the existing Vitest UI test glob; browser geometry remains a separate check.

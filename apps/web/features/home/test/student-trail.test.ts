@@ -144,3 +144,9 @@ test('Student task continuation stays with its current task panel and no repeate
   assert.match(upcoming,/Load current tasks/);
   assert.doesNotMatch(html,/<footer|student-trail__footer|Upcoming school events|Open class community/);
 });
+
+
+test('compact Home summaries retain title status and source date while period and reflection reading stay in their owners',()=>{
+ const value=context();value.recognition.action={label:'Open recorded learning actions',onClick(){}};value.portfolio={state:'ready',items:[{title:'Current selected work',reflection:'Full reflection belongs in Portfolio',contextLabel:'Current learner · course · task',reviewed:false,dateLabel:'Oct 5, 2026 · UTC'}],action:{label:'Open my portfolio',onClick(){}}};
+ const html=renderToStaticMarkup(createElement(StudentTrailView,{context:value,assets,locale:'en',compactOverview:true}));assert.match(html,/Current selected work/);assert.match(html,/Waiting for review/);assert.match(html,/Oct 5, 2026/);assert.doesNotMatch(html,/Full reflection belongs/);assert.doesNotMatch(html,/Choose a period/);assert.equal((html.match(/student-trail__panel-footer/g)||[]).length,2);assert.doesNotMatch(html,/point-total/);
+});
