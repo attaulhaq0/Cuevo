@@ -1,4 +1,17 @@
 .school-workspace { margin-block-start: var(--space-6); min-inline-size: 0; }
+.school-accounts-layout { display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-3);align-items:start; }
+.school-accounts-layout[data-selected="true"] { grid-template-columns:minmax(16rem,.6fr) minmax(0,1.4fr); }
+.school-accounts-directory,.school-accounts-reader { min-inline-size:0; padding:var(--space-4); background:var(--color-material-reading); border:1px solid var(--color-border);border-radius:var(--radius-lg); }
+.school-accounts-directory ul { padding:0;margin-block:var(--space-3);list-style:none;display:grid;gap:var(--space-2); }
+.school-accounts-directory li>.button { inline-size:100%;display:flex;justify-content:space-between;align-items:start;text-align:start;white-space:normal;gap:var(--space-3); }
+.school-accounts-directory li>.button>span:first-child { min-inline-size:0; }
+.school-accounts-directory :is(strong,small) { display:block;overflow-wrap:anywhere; }
+.school-accounts-directory small { font-size:var(--type-sm);color:var(--color-text-secondary);font-weight:normal; }
+.school-accounts-help { font-size:var(--type-sm);margin-block:var(--space-2); }
+.school-accounts-help summary { min-block-size:var(--control-min-size);display:flex;align-items:center;cursor:pointer; }
+.school-accounts-reader :is(p,h3,bdi) { overflow-wrap:anywhere; }
+.school-accounts-layout[data-selected="true"]>.school-accounts-directory { max-block-size:min(65dvh,40rem);overflow-y:auto;overscroll-behavior:contain; }
+@media(max-width:800px){.school-accounts-layout[data-selected="true"]{grid-template-columns:minmax(0,1fr)}.school-accounts-layout[data-selected="true"]>.school-accounts-directory{display:none}.school-accounts-reader{padding:var(--space-3)}}
 .school-audit-records { display:grid;gap:var(--space-3); }
 .school-audit-row.cuevo-record { margin:0; }
 .school-profile-selector { display:flex;flex-wrap:wrap;align-items:end;gap:var(--space-2);margin-block:var(--space-3); }
@@ -110,6 +123,8 @@
 .school-access-layout { display:grid; grid-template-columns:minmax(19rem,1fr) minmax(0,1.2fr); gap:var(--space-4); align-items:start; }
 .school-access-directory,.school-access-selected { min-inline-size:0; padding:var(--space-4); border:1px solid var(--color-border); border-radius:var(--radius-xl); background:var(--color-material-reading); }
 .school-access-workspace > .cuevo-section-header { margin-block:var(--space-3); }
+.school-access-layout[data-selected="false"] { grid-template-columns:minmax(0,1fr); }
+.school-access-layout[data-selected="false"] .school-access-directory__rows { max-block-size:none;overflow:visible; }
 .school-access-workspace h2 { font-size:var(--type-subheading); }
 .school-access-selected h2 { display:flex; gap:var(--space-2); align-items:center; overflow-wrap:anywhere; }
 .school-access-workspace p { margin-block:var(--space-2); font-size:var(--type-sm); }
@@ -212,6 +227,7 @@
   .school-staff-day .school-attendance-list > li > .button { inline-size:100%; min-inline-size:0; }
 }
 @media(max-width:360px){.school-daily-context-layout{grid-template-columns:minmax(0,1fr)} }
+@media(max-width:540px){.school-daily-context-layout{grid-template-columns:minmax(0,1fr)}.school-daily-context-layout .school-day-filter{flex-wrap:wrap}.school-daily-context-layout input[type="date"]{min-inline-size:min(14rem,100%)}}
 .parent-school-dates { min-inline-size:0; }
 .school-workspace--parent { margin-block-start:var(--space-3); gap:var(--space-3); }
 .school-workspace--parent > .home-context-section { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-3); margin:0; padding:var(--space-3); border-radius:var(--radius-lg); background:var(--color-material-reading); }

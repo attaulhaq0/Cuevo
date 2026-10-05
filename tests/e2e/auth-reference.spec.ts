@@ -57,11 +57,10 @@ async function openSignIn(page: Page, locale: Locale) {
   await expect(page.locator('nextjs-portal [data-nextjs-dialog]')).toHaveCount(0);
 }
 
-async function keyboardReach(page: Page, target: Locator) {
+async function keyboardReach(page: Page, target: Locator, key: 'Tab' | 'Shift+Tab' = 'Tab') {
   await expect(target).toBeVisible();
   await expect(target).toBeEnabled();
   for (let attempt = 0; attempt < 50; attempt++) {
-    await page.keyboard.press('Tab');
     if (await target.evaluate(element => element === document.activeElement)) {
       await expect(target).toBeFocused();
       expect(await target.evaluate(element => {
@@ -72,6 +71,7 @@ async function keyboardReach(page: Page, target: Locator) {
       }), 'Keyboard focus must be visible and within the viewport').toBe(true);
       return;
     }
+    await page.keyboard.press(key);
   }
   throw new Error('Control was not reachable in the auth keyboard order.');
 }
@@ -186,12 +186,33 @@ for (const locale of ['en', 'ar'] as const) {
     expect(errors).toEqual([]);
   });
 
-  test(`${locale}: keyboard sign-in validation, password visibility, account help and truthful device information`, async ({ page, context }, testInfo) => {
+  test(`${locale}: keyboard sign-in validation, password visibility, account help and truthful device information`, async ({ page, context, browserName }, testInfo) => {
     const t = copy[locale]; const authRequests: string[] = [];
     page.on('request', request => { if (/\/auth\/v1\//.test(request.url())) authRequests.push(request.url()); });
-    await page.setViewportSize({ width: 390, height: 844 }); await openSignIn(page, locale);
-    await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); scrollTo(0, 0); });
-    await keyboardActivate(page, page.getByRole('link', { name: t.skip, exact: true }));
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (browserName === 'firefox') {
+      // Fresh Firefox document navigation includes the skip link before any
+      // clicked language control changes its sequential starting position.
+      await page.goto('/'); await page.keyboard.press('Tab');
+      await expect(page.locator('.skip-link')).toBeFocused();
+    }
+    await openSignIn(page, locale);
+    const skip = page.getByRole('link', { name: t.skip, exact: true });
+    if (browserName === 'webkit') {
+      // WebKit's default platform Tab policy omits links. Verify this native
+      // link's visible focus and Enter activation without claiming Tab reach.
+      await page.keyboard.press('Tab'); await skip.focus();
+      expect(await skip.evaluate(element => {
+        const style = getComputedStyle(element), box = element.getBoundingClientRect();
+        return element.matches(':focus-visible') && parseFloat(style.outlineWidth) >= 2 && style.outlineStyle !== 'none'
+          && box.left >= -1 && box.right <= innerWidth + 1 && box.top >= -1 && box.bottom <= innerHeight + 1;
+      }), 'Explicit native skip-link focus must be visible and within the viewport').toBe(true);
+    } else {
+      // Reverse Tab reaches the earlier document link from the clicked
+      // language control; forward Tab need not wrap around browser chrome.
+      await keyboardReach(page, skip, 'Shift+Tab');
+    }
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('main')).toBeFocused();
     const email = page.getByLabel(t.email, { exact: true }); const password = page.getByLabel(t.password, { exact: true });
     await expect(email).toHaveAttribute('autocomplete', 'username');
@@ -211,7 +232,7 @@ for (const locale of ['en', 'ar'] as const) {
     const hide = page.getByRole('button', { name: t.hide, exact: true }); await expect(hide).toHaveAttribute('aria-pressed', 'true');
     await keyboardActivate(page, hide); await expect(password).toHaveAttribute('type', 'password');
     await expect(page.getByRole('button', { name: t.show, exact: true })).toHaveAttribute('aria-pressed', 'false');
-    await keyboardReach(page, page.getByRole('tab', { name: t.signIn, exact: true })); await page.keyboard.press('ArrowRight'); await expect(page.getByRole('tab', { name: t.helpTab, exact: true })).toHaveAttribute('aria-selected', 'true');
+    await keyboardReach(page, page.getByRole('tab', { name: t.signIn, exact: true }), 'Shift+Tab'); await page.keyboard.press('ArrowRight'); await expect(page.getByRole('tab', { name: t.helpTab, exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('heading', { name: t.helpHeading, exact: true })).toBeVisible();
     await expect(page.getByText(t.accountBody, { exact: true })).toBeVisible();
     await expect(page.locator('.auth-account-help').getByText(t.sharedDevice, { exact: true })).toBeVisible();

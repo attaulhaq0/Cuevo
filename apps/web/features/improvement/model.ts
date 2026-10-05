@@ -4,7 +4,7 @@ type SourceReview = { requiresReview?: boolean; reviewReason?: 'ACADEMIC_SOURCE_
 export type Intervention = SourceReview & IntelligenceMetadata & { id: string; recommendationId: string; learnerId: string; referenceId: string; baselineResultId: string; title: string; instructions: string; status: 'ASSIGNED' | 'COMPLETED' | 'MEASURED'; createdAt: string; completedAt: string | null; followUpAssessmentId: string | null };
 export type NumericOutcome = SourceReview & { id: string; interventionId: string; baselineResultId: string; followUpResultId: string; status: 'improved' | 'no_meaningful_change' | 'inconclusive'; difference: number; minimumChange: number; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; reason: string; limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF'; measuredAt: string; context?: OutcomeDisplayContext };
 export type Outcome=NumericOutcome|z.infer<typeof nativeOutcomeDisplaySchema>;
-import { LearningApiError } from '../../shared/api/client.ts';
+import { LearningApiError, type Command } from '../../shared/api/client.ts';
 import { insightContextSchema,intelligenceAnalysisSchema,nativeOutcomeDisplaySchema,outcomeDisplayContextSchema,interventionHelpStatusSchema,interventionChoiceStatusSchema,interventionChoiceInputSchema,interventionHelpInputSchema,interventionHelpReplyInputSchema,type OutcomeDisplayContext,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
 import { z } from 'zod';
 const insightEnvelopeSchema = z.object({ runId: z.uuid(), context: insightContextSchema.nullable() }).strict();
@@ -17,6 +17,9 @@ export function parseInsightContextEnvelope(value: unknown): InsightContextEnvel
     || new Set(context.observations.map(item => item.id)).size !== context.observations.length
     || new Set(context.learningOptions.map(item => item.activityId)).size !== context.learningOptions.length)) throw new LearningApiError('invalid');
   return parsed.data;
+}
+export function parseProposalPracticeContext(value:unknown,expected:{runId:string;learnerId:string;referenceId:string;baselineResultId:string}):InsightContextEnvelope {
+ const parsed=parseInsightContextEnvelope(value);if(parsed.runId!==expected.runId||parsed.context&&(parsed.context.learnerId!==expected.learnerId||parsed.context.reference.id!==expected.referenceId||!parsed.context.recentResults.some(result=>result.resultId===expected.baselineResultId)))throw new LearningApiError('invalid');return parsed;
 }
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function strings(value: Record<string, unknown>, keys: string[]) { return keys.every((key) => typeof value[key] === 'string' && value[key] !== ''); }
@@ -75,6 +78,13 @@ export function approvedPracticeChoiceOptions(status:ReturnType<typeof parseCurr
 }
 export function validatePracticeCompletionReceipt(value:unknown,expected:Intervention):void {
  try{const task=parseIntervention(value);if(task.status!=='COMPLETED'||['id','recommendationId','learnerId','referenceId','baselineResultId','title','instructions','createdAt'].some(key=>task[key as keyof Intervention]!==expected[key as keyof Intervention]))throw new LearningApiError('invalid');}catch{throw new LearningApiError('invalid',true);}
+}
+export function validatePracticeManagementReceipt(value:unknown,expected:Intervention,original:Command):void {
+ try{
+  if(original.path===`/v1/interventions/${expected.id}/reassessment`){const task=parseIntervention(value);if(task.id!==expected.id||task.learnerId!==expected.learnerId||task.referenceId!==expected.referenceId||task.baselineResultId!==expected.baselineResultId||task.followUpAssessmentId!==original.body.assessmentId)throw new LearningApiError('invalid');}
+  else if(original.path===`/v1/interventions/${expected.id}/measure`){const outcome=parseOutcome(value);if(outcome.interventionId!==expected.id||outcome.baselineResultId!==expected.baselineResultId||outcome.followUpResultId!==original.body.followUpResultId||('difference'in outcome?outcome.minimumChange!==original.body.minimumChange:original.body.nativeComparison!=='DESCRIPTORS_ONLY'))throw new LearningApiError('invalid');}
+  else throw new LearningApiError('invalid');
+ }catch{throw new LearningApiError('invalid',true);}
 }
 export function validateInterventionHelpReceipt(value:unknown,interventionId:string,body:Record<string,unknown>,reply:boolean):void {
  try{const status=parseCurrentInterventionHelp(value,interventionId);if(reply){const sent=interventionHelpReplyInputSchema.parse(body);if(!status.help?.response||status.help.response.text!==sent.response)throw new LearningApiError('invalid');}else{const sent=interventionHelpInputSchema.parse(body);if(!status.help||status.help.kind!==sent.kind||status.help.question!==sent.question)throw new LearningApiError('invalid');}}catch{throw new LearningApiError('invalid',true);}

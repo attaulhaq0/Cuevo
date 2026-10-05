@@ -1,3 +1,4 @@
+import { openCurrentReference } from './result-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -72,14 +73,8 @@ test('coordinator reads the exact saved objective description before approving t
   await signOutTrailWorkspace(page);
   await signIn(page, 'coordinator');
   await page.getByRole('button', { name: 'Objectives', exact: true }).click();
-  const row = page.locator('.academic-reference-list .academic-row').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
-  for (let count = 0; count < 30 && !await row.count(); count++) {
-    await expect(page.locator('.academic-workspace').getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0);
-    const more = page.locator('.academic-workspace').getByRole('button', { name: 'Load more', exact: true });
-    if (!await more.count()) break;
-    await more.click();
-    await expect(page.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0);
-  }
+  const row = await openCurrentReference(page,String(receipt.id));
+  await expect(row.getByRole('heading',{name:title,exact:true})).toBeVisible();
   await expect(row).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await capture(page, '03-objective-before-approval.png');
@@ -88,6 +83,7 @@ test('coordinator reads the exact saved objective description before approving t
   const approval = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/academic-references/${receipt.id}/approve` && response.request().method() === 'POST');
   await row.getByRole('region', { name: 'Approve objective', exact: true }).getByRole('button', { name: 'Approve objective', exact: true }).click();
   expect((await approval).status()).toBe(200);
+  await openCurrentReference(page,String(receipt.id));
   await expect(row).toContainText('Approved');
   await expect(row.getByText(description, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });

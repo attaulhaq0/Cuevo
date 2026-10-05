@@ -1,5 +1,8 @@
 import { commonEn, commonAr } from '../../shared/i18n/common';
 export const learningEn = { retiredCourseNote:'This curriculum source is retired. The task is read only; previous results and evidence remain available.',
+  backToStructure: 'Back to course structure',
+  readAssessmentDirectory: 'Choose one assessment to read its current instructions and permitted material.',
+  courseReading: 'Course reading',
   openLearningJourney: 'Open learning journey', learningJourneyBody: 'Explore this course’s units and lessons, then return to this task.', backTask: 'Back to this task',
   coursePreparation: 'Course preparation', coursePreparationBody: 'Choose one unit, lesson or activity to review its content and prepare the next change.',
   courseContextReview: 'Course or class context needs school record review. Refresh the current choices before preparing this task.', courseChoicesLoading: 'Load complete current course, class and subject choices before preparing a task.', rubricChoicesReview: 'Matching or incomplete rubric names and versions need school record review before selection.',
@@ -57,6 +60,9 @@ export const learningEn = { retiredCourseNote:'This curriculum source is retired
   createQuiz: 'Create quiz version', publishQuiz: 'Publish quiz version', quizVersion: 'Quiz version', quizQuestions: 'Quiz questions', questionKey: 'Question key', questionPrompt: 'Question prompt', optionKey: 'Option key', optionLabel: 'Option label', correctOption: 'Correct option key', question: 'Question', option: 'Option', addQuestion: 'Add question', addOption: 'Add option', submitQuiz: 'Check my answers', checkedNotGraded: 'Answers checked — not graded', quizNote: 'Checking compares the selected answers with the teacher-defined key. It does not release an academic grade.', correct: 'Correct', incorrect: 'Incorrect', noQuiz: 'No published quiz is available.', authorQuiz: 'Quiz versions', quizPublishNote: 'Review the immutable questions and answer keys before publishing. Learner views never receive raw answer keys.',
 };
 export const learningAr: typeof learningEn = {
+  backToStructure: 'العودة إلى بنية المقرر',
+  readAssessmentDirectory: 'اختر تقييمًا واحدًا لقراءة تعليماته الحالية ومواده المصرّح بها.',
+  courseReading: 'قراءة المقرر',
   openLearningJourney: 'فتح رحلة التعلّم', learningJourneyBody: 'استكشف وحدات هذا المقرر ودروسه، ثم عُد إلى هذه المهمة.', backTask: 'العودة إلى هذه المهمة',
   coursePreparation: 'إعداد المقرر', coursePreparationBody: 'اختر وحدة أو درسًا أو نشاطًا لمراجعة محتواه وإعداد التغيير التالي.',
   courseContextReview: 'يحتاج سياق المقرر أو الصف إلى مراجعة سجلات المدرسة. حدّث الخيارات الحالية قبل إعداد هذه المهمة.', courseChoicesLoading: 'حمّل خيارات المقرر والصف والمادة الحالية كاملة قبل إعداد المهمة.', rubricChoicesReview: 'تحتاج أسماء سلالم التقدير وإصداراتها المتطابقة أو الناقصة إلى مراجعة سجلات المدرسة قبل الاختيار.',

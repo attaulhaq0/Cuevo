@@ -1,3 +1,4 @@
+import { openCurrentResult } from './result-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -33,10 +34,10 @@ test('teacher reviews and releases native result; student follows source evidenc
   await markForm.getByLabel('Score (0–10)').fill('0'); await markForm.getByLabel('Teacher feedback').fill('Review this source evidence and try again.'); await markForm.getByRole('button', { name: 'Save marking draft', exact: true }).click();
   await expect(page.locator('.mark-review').getByText('Marking draft — review before release', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Release result', exact: true }).click();
-  const release = page.getByRole('region', { name: 'Release result', exact: true }); await expect(release.getByRole('checkbox')).not.toBeChecked(); await release.getByRole('button', { name: 'Release result', exact: true }).click();
+  const release = page.getByRole('region', { name: 'Release result', exact: true }); await expect(release.getByRole('checkbox')).not.toBeChecked(); const releasedResponse=page.waitForResponse(response=>/^\/v1\/results\/[^/]+\/release$/.test(new URL(response.url()).pathname)&&response.request().method()==='POST');await release.getByRole('button', { name: 'Release result', exact: true }).click();const released=await releasedResponse;expect(released.ok()).toBe(true);const releasedReceipt=await released.json() as {id:string};
   await expect(page.locator('.mark-review').getByText('Released', { exact: true })).toBeVisible();
   await signOutTrailWorkspace(page); await signIn(student);
-  const result = page.locator('.academic-row').filter({ hasText: title }); await expect(result.locator('.native-score strong')).toHaveText('0'); await result.getByRole('button', { name: 'View evidence', exact: true }).click();
+  const result = await openCurrentResult(page,releasedReceipt.id); await expect(result.locator('.native-score strong')).toHaveText('0'); await result.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(result.locator('.evidence-provenance')).toContainText('Submission');
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); expect(axe.violations).toEqual([]);

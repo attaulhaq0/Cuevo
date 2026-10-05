@@ -68,6 +68,8 @@ export type WorkspaceChromeContext = {
   navigation: WorkspaceNavigationItem[];
   selectedId: string;
   navigationLabel: string;
+  mode?: 'home' | 'focused';
+  currentWorkspace?: WorkspaceNavigationItem;
   schoolName: string | null;
   personName: string | null;
   roleLabel: string | null;

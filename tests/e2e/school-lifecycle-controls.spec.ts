@@ -1,3 +1,4 @@
+import { openCurrentResult } from './result-reader';
 import { expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -184,6 +185,7 @@ test('administrator revokes and restores current teacher, learner and guardian s
     if (visible) {
       await context.selectNamed(child, context.selected.student.actorId, context.selected.student.displayName);
       await context.allPages(page.locator('.academic-workspace'));
+      await openCurrentResult(page,String(result.id));
       await expect(page.locator(`[data-result-id="${result.id}"]`).getByRole('heading', { name: taskTitle, exact: true })).toBeVisible();
     } else {
       await expect(own).toHaveCount(0);

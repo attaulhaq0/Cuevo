@@ -1,3 +1,5 @@
+import { openCurrentPractice } from './practice-reader';
+import { openCurrentProposal } from './proposal-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -111,7 +113,7 @@ test('teacher rejects one proposal and approves exact edited instructions throug
     expect(proposal).toMatchObject({ baselineResultId: baseline.id, generationMode: 'FIXTURE', status: 'AWAITING_HUMAN' });
     expect(proposal.intelligenceRunId).toEqual(expect.any(String));
     const row = page.locator(`[data-recommendation-id="${proposal.id}"]`);
-    await loadTarget(row);
+    await openCurrentProposal(page, proposal.id);
     await expect(row.getByText('Demonstration analysis', { exact: true })).toBeVisible();
     await expect(row.getByRole('region', { name: 'Why this appeared', exact: true })).toBeVisible();
     return { proposal, row };
@@ -207,7 +209,7 @@ test('teacher rejects one proposal and approves exact edited instructions throug
     expect(studentSource.status()).toBe(200);
     expect(await studentSource.text()).not.toContain(privateReason);
     const task = page.locator(`[data-intervention-id="${approval.interventionId}"]`);
-    await loadTarget(task);
+    await openCurrentPractice(page, approval.interventionId!);
     await expect(task.getByRole('heading', { name: editedTitle, exact: true })).toBeVisible();
     await expect(task.getByText(editedInstructions, { exact: true })).toBeVisible();
     await expect(task).not.toContainText(privateReason);

@@ -1,3 +1,4 @@
+import { openCurrentProposal, currentProposalChoice } from './proposal-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator, type Request } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -94,14 +95,6 @@ test('customer performance: production browser navigation, private bytes, fixtur
     if (!choice) throw Error('A current authorized human choice is unavailable.');
     expect(choice.label).not.toMatch(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}/i); return choice;
   }
-  async function loadTarget(target: Locator, container: Locator) {
-    await settled(page);
-    for (let attempt = 0; attempt < 30 && !await target.count(); attempt++) {
-      const more = container.getByRole('button', { name: 'Load more', exact: true }).first(); if (!await more.count()) break;
-      await more.click(); await settled(page);
-    }
-    await expect(target).toBeVisible();
-  }
   async function responseFor(target: Page, path: RegExp, method = 'POST') {
     return target.waitForResponse(response => path.test(new URL(response.url()).pathname) && response.request().method() === method);
   }
@@ -164,19 +157,20 @@ test('customer performance: production browser navigation, private bytes, fixtur
       const form = page.getByRole('region', { name: 'Request analysis', exact: true }); const choice = await selectedHumanChoice(form.getByLabel('Released baseline result', { exact: true }));
       await form.getByLabel('Released baseline result', { exact: true }).selectOption(choice.value);
       let proposalId = '';
-      await measure('fixture-analysis-to-visible-proposal', async () => {
+      await measure('fixture-analysis-to-visible-proposal-directory', async () => {
         const pendingResponse = responseFor(page, /^\/v1\/intelligence\/analyze$/); await form.getByRole('button', { name: 'Request analysis', exact: true }).click();
         const response = await pendingResponse; expect(response.status()).toBe(200); const receipt = await response.json() as { id: string; generationMode: string; status: string };
         expect(receipt.generationMode).toBe('FIXTURE'); expect(receipt.status).toBe('AWAITING_HUMAN'); proposalId = receipt.id;
-        await loadTarget(page.locator(`[data-recommendation-id="${proposalId}"]`), page.locator('.improvement-workspace'));
+        await expect(await currentProposalChoice(page, proposalId)).toBeVisible();
       });
+      await measure('open-current-proposal-reader', async () => { await openCurrentProposal(page, proposalId); });
       const proposal = page.locator(`[data-recommendation-id="${proposalId}"]`); await expect(proposal.getByText('Demonstration analysis', { exact: true })).toBeVisible();
       if (repeat === 0) await capture('07-fixture-human-review');
       await proposal.getByRole('button', { name: 'Reject proposal', exact: true }).click();
       const rejection = proposal.getByRole('region', { name: 'Reject proposal', exact: true }); await rejection.getByLabel('Decision reason', { exact: true }).fill('Performance verification complete; no practice assigned.');
       const rejected = responseFor(page, /\/decision$/); await rejection.getByRole('button', { name: 'Reject proposal', exact: true }).click(); expect((await rejected).status()).toBe(200); await settled(page);
     }
-    firstUse.push({ scenario: 'request-fixture-proposal', navigationActions: 2, fieldSelections: 1, confirmationActions: 1, result: 'Explicit fixture label, pending human decision and rejection control visible.' });
+    firstUse.push({ scenario: 'request-fixture-proposal', navigationActions: 3, fieldSelections: 1, confirmationActions: 1, result: 'Explicit directory selection, fixture label, pending human decision and rejection control visible.' });
     checkpoint = 'private-file'; await signOutTrailWorkspace(page); await signIn(page, student); await navigate('Portfolio');
     const fileBytes = Buffer.alloc(256 * 1024, 65);
     for (let repeat = 0; repeat < repetitions; repeat++) {

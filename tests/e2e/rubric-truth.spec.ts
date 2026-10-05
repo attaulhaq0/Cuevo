@@ -1,3 +1,4 @@
+import { openCurrentResult, openCurrentRubric } from './result-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -102,6 +103,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await editor.getByRole('button', { name: 'Save', exact: true }).click();
   const rubricResponse = await created; expect(rubricResponse.ok()).toBe(true);
   const rubric = await rubricResponse.json() as { id: string; version: string };
+  await openCurrentRubric(page,rubric.id);
   await expect(page.locator(`[data-rubric-id="${rubric.id}"]`)).toContainText('Secure explanation');
   await page.getByRole('button', { name: 'Configure assessment rubric', exact: true }).click();
   await loadChoice(page.getByLabel('Assessment', { exact: true }), assessment.id);
@@ -138,7 +140,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await signIn(parent);
   const child=page.getByLabel('Child',{exact:true});await expect(child).toBeVisible();await expect(child.locator('option[value="20000000-0000-4000-8000-000000000012"]')).toHaveText(/^Lina Al-Kuwari(?: ·|$)/);await expect(child.locator('option[value="20000000-0000-4000-8000-000000000012"]')).toContainText('Year 1 · Cedar');await expect(child.locator('option[value="20000000-0000-4000-8000-000000000012"]')).toContainText('2026–2027');await child.selectOption('20000000-0000-4000-8000-000000000012');
   const parentResult = page.locator(`[data-result-id="${first.id}"]`);
-  await loadRow(parentResult);
+  await openCurrentResult(page,first.id);
   await expect(parentResult).toContainText('Developing explanation');
   await expect(parentResult.locator('.native-score')).toHaveCount(0);
   await parentResult.getByRole('button', { name: 'View evidence', exact: true }).click();
@@ -169,7 +171,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
 
   await signIn(student);
   const studentResult = page.locator(`[data-result-id="${correction.id}"]`);
-  await loadRow(studentResult);
+  await openCurrentResult(page,correction.id);
   await expect(studentResult).toContainText('Secure explanation');
   await expect(studentResult).toContainText(rubric.version);
   await expect(studentResult.locator('.native-score')).toHaveCount(0);

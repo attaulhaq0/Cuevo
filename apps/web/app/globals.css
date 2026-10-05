@@ -51,7 +51,7 @@ html[lang="ar"] .eyebrow { letter-spacing: 0; font-size: var(--type-sm); }
 .access-state > p:not(.eyebrow) { color: var(--color-text-secondary); margin-block-start: var(--space-5); }
 .access-state__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center; margin-block-start: var(--space-8); }
 .support-reference { font-size: var(--type-xs); overflow-wrap: anywhere; }
-.workspace .support-reference > summary { min-block-size: 2.75rem; padding: var(--space-3) var(--space-2); cursor: pointer; }
+.support-reference > summary { min-block-size: var(--control-min-size, 2.75rem); min-inline-size: var(--control-min-size, 2.75rem); padding: var(--space-3) var(--space-2); cursor: pointer; align-content: center; }
 .loading-line { inline-size: 8rem; block-size: .25rem; background: var(--color-border); border-radius: var(--radius-pill); overflow: hidden; margin: var(--space-8) auto 0; }
 .loading-line::after { content: ''; display: block; inline-size: 50%; block-size: 100%; background: var(--color-accent); border-radius: inherit; animation: loading 1.3s ease-in-out infinite alternate; }
 @keyframes loading { from { transform: translateX(-20%); } to { transform: translateX(120%); } }

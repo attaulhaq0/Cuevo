@@ -1,7 +1,11 @@
-import { LearningApiError } from '../../shared/api/client.ts';
+import { LearningApiError, type Command } from '../../shared/api/client.ts';
 import { thinkingFocusResponseSchema, submissionArtifactSchema, submissionInputSchema, submissionWorkDraftResponseSchema, submissionWorkSourceSchema, type SubmissionArtifact, type ThinkingFocusResponse } from '@cuevo/contracts';
 
 export type Choice = { id: string; name: string;yearGroupName?:string;academicYearName?:string };
+/** Current owner navigation cannot hide any unresolved Learning mutation. */
+export function learningNavigationLocked(commands: readonly Command[]): boolean {
+  return commands.some(command => /^\/v1\/(?:courses|units|lessons|activities|assessments|submissions|learning-content|learning-resources|thinking-focus)(?:\/|$)/.test(command.path));
+}
 /** In-memory editor intent never authorizes work or crosses a source revision. */
 export function currentTeacherSubmissionEditor(value: unknown, source: { id: string; revision: number; status: string }): 'return' | 'close' | null {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !['SUBMITTED','RESUBMITTED'].includes(source.status)) return null;

@@ -13,7 +13,7 @@ import { parseCourse, parseAssessment } from '../../learning/model';
 import { schoolAr, schoolEn } from '../messages';
 import { currentSupportSelection, parseSupportSelection, publishedSupportCourses, supportApprovalBody, supportAssessmentCurrent, supportChoices, supportDraftKey, supportPath, supportRecovery, validateSupportReceipt, type SupportInput, type SupportSelection } from '../support-review-model';
 
-export function ApprovedSchoolContext() {
+export function ApprovedSchoolContext({ pageHeading = false }: { pageHeading?: boolean } = {}) {
   const { locale, membership, formDrafts, commandJournal, apiUrl, accessToken, online, accessGeneration } = useApp();
   const t = locale === 'ar' ? schoolAr : schoolEn;
   useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
@@ -83,7 +83,7 @@ export function ApprovedSchoolContext() {
     return [{ name: 'assessmentId', label: t.supportAssessment, type: 'select', options: assessmentChoices.filter(choice => !choice.requiresReview).map(({ value, label }) => ({ value, label })) }, { name: 'title', label: t.supportTitle, required: true }, { name: 'instructions', label: t.supportInstructions, type: 'textarea', required: true, maxLength: 4000 }, { name: 'effectiveFrom', label: t.supportFrom, type: 'date', required: true }, { name: 'effectiveTo', label: t.supportTo, type: 'date', required: true }, { name: 'studentVisible', label: t.shareSupportStudent, type: 'checkbox' }, { name: 'parentVisible', label: t.shareSupportParent, type: 'checkbox' }, { name: 'reason', label: t.schoolApprovalReason, type: 'textarea', required: true }, { name: 'confirmApproval', label: t.confirmSupport, type: 'checkbox', required: true }];
   }
   return <section aria-label={t.approvedContext}>
-    <header className="cuevo-section-header"><div className="cuevo-section-header__context"><h2>{t.approvedContext}</h2><p>{t.supportMetadataNote}</p></div><div className="learning-actions">
+    <header className="cuevo-section-header"><div className="cuevo-section-header__context">{pageHeading ? null : <h2>{t.approvedContext}</h2>}<p>{t.supportMetadataNote}</p></div><div className="learning-actions">
     <Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button>
     {admin ? <Button type="button" disabled={sourceLocked || campusLocked} onClick={() => setCreating('campus')}>{t.createCampus}</Button> : null}
     {approve ? <Button type="button" variant="secondary" disabled={campusLocked} onClick={() => setCreating('support')}>{t.approveLearningSupport}</Button> : null}

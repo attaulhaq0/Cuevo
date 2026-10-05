@@ -25,9 +25,36 @@ export async function expectTrailWorkspace(page: Page, role?: string): Promise<v
     const [en, ar] = roles[role as TrailRole];
     await expect(currentRole).toHaveText((await workspace.getAttribute('lang')) === 'ar' ? ar : en);
   }
-  const navigation = workspace.locator('.workspace-chrome__navigation');
-  await expect(navigation).toBeVisible();
-  await expect(navigation.locator('button[data-workspace-destination][aria-current="page"]')).toHaveCount(1);
+  const mode = await workspace.getAttribute('data-navigation-mode');
+  if (mode === 'home') {
+    const navigation = workspace.locator('.workspace-chrome__navigation');
+    await expect(navigation).toBeVisible();
+    await expect(workspace.locator('.workspace-chrome__focused-navigation')).toHaveCount(0);
+    await expect(navigation.locator('button[data-workspace-destination][aria-current="page"]')).toHaveCount(1);
+  } else {
+    expect(mode, 'Current Chrome must declare Home or focused navigation').toBe('focused');
+    const navigation = workspace.locator('.workspace-chrome__focused-navigation');
+    await expect(navigation).toBeVisible();
+    await expect(workspace.locator('.workspace-chrome__navigation')).toHaveCount(0);
+    const trigger = navigation.locator('.workspace-chrome__workspace-choice');
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toBeEnabled();
+    await expect(navigation.locator('.workspace-chrome__back')).toBeVisible();
+    const current = navigation.locator('.workspace-chrome__switcher button[data-workspace-destination][aria-current="page"]');
+    if (await current.count()) {
+      await expect(current).toHaveCount(1);
+      await expect(current).toBeEnabled();
+      await expect(trigger.locator('span')).toHaveText((await current.locator('span').textContent())!);
+    } else {
+      // Account/Access are Profile destinations, intentionally outside this
+      // product-workspace chooser; their exact URL/context still must agree.
+      const view = new URL(page.url()).searchParams.get('view');
+      expect(['account', 'access']).toContain(view);
+      const locale = await workspace.getAttribute('lang');
+      const title = view === 'account' ? (locale === 'ar' ? 'الحساب' : 'Account') : (locale === 'ar' ? 'تفاصيل الوصول' : 'Access details');
+      await expect(trigger.locator('span')).toHaveText(title);
+    }
+  }
   const main = workspace.getByRole('main');
   await expect(main).toHaveCount(1); await expect(main).toBeVisible();
   await expect(main.getByRole('heading', { level: 1 })).toHaveCount(1);
@@ -49,6 +76,16 @@ export async function trailWorkspaceAction(page: Page, label: string): Promise<L
     await openVisibleTrailProfile(page);
     const current = label === 'Access details' ? 'Access settings' : label === 'تفاصيل الوصول' ? 'إعدادات الوصول' : label;
     return page.locator('.workspace-chrome__profile').getByRole('button', { name: current, exact: true });
+  }
+  if (await page.locator('.workspace-chrome').getAttribute('data-navigation-mode') === 'focused') {
+    const trigger = page.locator('.workspace-chrome__workspace-choice');
+    await trigger.scrollIntoViewIfNeeded();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(trigger).toBeVisible(); await expect(trigger).toBeEnabled();
+    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+    const chooser = page.locator('.workspace-chrome__switcher');
+    await expect(chooser).toBeVisible();
+    return chooser.getByRole('button', { name: label, exact: true });
   }
   return page.locator('.workspace-chrome__navigation').getByRole('button', { name: label, exact: true });
 }

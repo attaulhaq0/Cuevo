@@ -2,13 +2,57 @@ import type { Assessment, Submission } from '../learning/model.ts';
 import type { ReleasedResult } from '../academic/model.ts';
 import type { Intervention } from '../improvement/model.ts';
 import type { Achievement, Ledger, LearnerGoal, Period, Summary } from '../development/model.ts';
-import type { LearningApiError } from '../../shared/api/client.ts';
+import { LearningApiError } from '../../shared/api/client.ts';
+import { parsePortfolioItemForLearner, portfolioWorkChoices, type PortfolioItem } from '../portfolio/model.ts';
+import { parentHomeSourceUsable, type ParentHomeSourceDenial } from './parent-home-binding-model.ts';
 import { pendingWork } from './model.ts';
 import type { NavigationIntent } from '../../shared/session/navigation-intent.ts';
 import type { StudentTrailContext } from './trail-model.ts';
 
 export type HomeSourcePage<T> = { data: T[]; loaded: boolean; loading: boolean; nextCursor: string | null; error: LearningApiError | null; moreError: LearningApiError | null };
 export type StudentHomeItem = { title: string; description: string; course: string | null; dueAt: string | null; kind: 'practice' | 'revision' | 'assessment' | 'submitted' | 'submitted-unresolved'; destination: NavigationIntent };
+export type StudentHomePortfolioSource = PortfolioItem & { homeScope: string };
+export type StudentHomePortfolioPreview = Pick<NonNullable<StudentTrailContext['portfolio']>, 'state' | 'items'>;
+export type StudentHomeDenial = { scope: string; error: LearningApiError };
+/** A private read frame is not presentation preference identity. */
+export function studentHomeReadFrame(app: { apiUrl: string; accessToken: string | null; membership: { schoolId: string; userId: string; role: string } | null; accessGeneration: number; status: string; online: boolean }): string {
+  return JSON.stringify([app.apiUrl, app.accessToken, app.membership?.schoolId, app.membership?.userId, app.membership?.role, app.accessGeneration, app.status, app.online]);
+}
+/** Clearing a retry error does not renew the refused current source authority. */
+export function currentStudentHomeDenial(previous: StudentHomeDenial | null, scope: string, sources: { error: LearningApiError | null; moreError?: LearningApiError | null }[]): StudentHomeDenial | null {
+  const error = sources.flatMap(source => [source.error, source.moreError]).find(error => error?.kind === 'denied' || error?.kind === 'unauthorized');
+  if (error) return previous?.scope === scope && previous.error === error ? previous : { scope, error };
+  return previous?.scope === scope ? previous : null;
+}
+
+/** The Portfolio owner validates native/source identity and exact self scope. */
+export function parseStudentHomePortfolio(value: unknown, learnerId: string, scope: string | null): StudentHomePortfolioSource {
+  if (!scope) throw new LearningApiError('invalid');
+  return { ...parsePortfolioItemForLearner(value, learnerId, false), homeScope: scope };
+}
+
+/** A new request frame cannot adopt a preceding hook response or its refusal. */
+export function currentStudentHomePortfolioPage<T extends HomeSourcePage<StudentHomePortfolioSource>>(source: T, scope: string | null, readScope: string | null): T {
+  return scope && readScope === scope ? source : { ...source, data: [], loaded: false, loading: !!scope, error: null, moreError: null, nextCursor: null };
+}
+
+/** A small current preview never becomes a second Portfolio editor or history. */
+export function studentHomePortfolio(source: HomeSourcePage<StudentHomePortfolioSource>, scope: string | null, learnerId: string, locale: 'en' | 'ar', denial: ParentHomeSourceDenial | null): StudentHomePortfolioPreview {
+  const unavailable: StudentHomePortfolioPreview = { state: 'unavailable', items: [] };
+  if (!scope || denial || source.error || source.moreError?.kind === 'invalid') return unavailable;
+  if (source.loading || !source.loaded) return { state: 'loading', items: [] };
+  if (source.data.some(item => item.homeScope !== scope)) return { state: 'loading', items: [] };
+  if (!parentHomeSourceUsable(source, denial) || source.data.some(item => item.learnerId !== learnerId)) return unavailable;
+  const human = (value: string | null) => !!value?.trim() && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+  const choices = portfolioWorkChoices(source.data, locale);
+  const admitted = source.data.flatMap(item => {
+    const choice = choices.find(choice => choice.value === item.id);
+    if (!choice || choice.ambiguous || choice.unavailable || !human(item.title) || ![item.identity.learnerName, item.identity.className, item.identity.yearGroupName, item.identity.academicYearName, item.identity.courseTitle, item.identity.assessmentTitle, item.referenceTitle].every(human)) return [];
+    return [{ title: item.title, reflection: item.reflection, contextLabel: choice.label, reviewed: item.approvalState === 'REVIEWED', dateLabel: `${new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(item.createdAt))} · UTC` }];
+  });
+  const partial = !!source.nextCursor || !!source.moreError || admitted.length !== source.data.length;
+  return { state: !source.data.length ? partial ? 'partial' : 'empty' : !admitted.length ? 'unavailable' : partial ? 'partial' : 'ready', items: admitted.slice(0, 2) };
+}
 const current = <T,>(page: HomeSourcePage<T>) => page.loaded && !page.loading && !page.error && !page.moreError;
 const complete = <T,>(page: HomeSourcePage<T>) => current(page) && !page.nextCursor;
 

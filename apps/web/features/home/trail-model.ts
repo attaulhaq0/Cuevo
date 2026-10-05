@@ -67,6 +67,11 @@ export type StudentTrailContext = {
     action: StudentTrailAction | null;
     viewAll?: StudentTrailAction;
   } | null;
+  portfolio?: {
+    state: 'ready' | 'empty' | 'loading' | 'partial' | 'unavailable';
+    items: { title: string; reflection: string; contextLabel: string | null; reviewed: boolean; dateLabel: string | null }[];
+    action?: StudentTrailAction;
+  };
   recognition: {
     status: 'recorded' | 'processing' | 'disabled' | 'unavailable' | 'requires-review';
     totalPoints: number | null;

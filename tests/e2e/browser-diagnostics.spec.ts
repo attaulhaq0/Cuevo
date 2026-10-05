@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
@@ -48,7 +48,7 @@ test('authorized synthetic browser diagnostics are minimized across errors, pars
     await owner.query("set app.runtime_env='local'"); activationChanged = true;
     await owner.query('select internal.configure_posthog_school($1,false,\'QA\',1)', [school]);
     // A real administrator approves the existing analytics policy in the supported UI.
-    await signIn(page, admin); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click();
+    await signIn(page, admin); await openTrailWorkspace(page, 'School');
     await page.getByRole('button', { name: 'Policies', exact: true }).click(); await page.getByRole('button', { name: 'Approve school policy', exact: true }).click();
     const form = page.getByRole('region', { name: 'Approve school policy', exact: true });
     await form.getByLabel('Enable policy-approved analytics', { exact: true }).check();
@@ -69,14 +69,14 @@ test('authorized synthetic browser diagnostics are minimized across errors, pars
     await page.route('**/v1/courses?*', async route => {
       await route.fulfill({ status: responseMode === 'invalid' ? 200 : 503, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(responseMode === 'invalid' ? { items: [{ private: 'student answer cannot enter analytics' }], nextCursor: null } : { code: 'REQUEST_UNAVAILABLE', message: 'private pupil answer and request', requestId: 'private-request' }) });
     });
-    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click();
+    await openTrailWorkspace(page, 'Learning');
     await expect.poll(() => observed.some(request => request.postDataJSON()?.category === 'response_invalid')).toBe(true);
     await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
     responseMode = 'unavailable';
     await page.evaluate(() => window.dispatchEvent(new ErrorEvent('error', { message: 'Hydration failed because the server rendered HTML private learner name' })));
     await expect.poll(() => observed.some(request => request.postDataJSON()?.category === 'hydration_error' && request.postDataJSON()?.locale === 'ar' && request.postDataJSON()?.viewport === 'mobile')).toBe(true);
-    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'المدرسة', exact: true }).click();
-    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'التعلّم', exact: true }).click();
+    await openTrailWorkspace(page, 'المدرسة');
+    await openTrailWorkspace(page, 'التعلّم');
     await expect.poll(() => observed.some(request => request.postDataJSON()?.category === 'api_error' && request.postDataJSON()?.status === 'unavailable')).toBe(true);
     for (const request of observed) {
       const payload = request.postDataJSON(); expect(browserDiagnosticSchema.safeParse(payload).success).toBe(true);
@@ -85,7 +85,7 @@ test('authorized synthetic browser diagnostics are minimized across errors, pars
       expect(JSON.stringify(payload)).not.toMatch(/private|answer|student|learner|20000000|10000000|token|stack|http/i);
     }
     expect(remote).toEqual([]);
-    await page.getByRole('button', { name: 'تسجيل الخروج', exact: true }).last().click();
+    await signOutTrailWorkspace(page);
     await expect(page.getByRole('button', { name: 'تسجيل الدخول', exact: true })).toBeVisible();
     const count = observed.length;
     await page.evaluate(() => { window.dispatchEvent(new ErrorEvent('error', { message: 'Hydration failed private signed-out actor' })); window.dispatchEvent(new Event('unhandledrejection')); });

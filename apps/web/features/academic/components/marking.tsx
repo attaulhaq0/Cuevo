@@ -18,14 +18,20 @@ import { validateAcademicReleaseReceipt } from '../receipt-model';
 import { LearningApiError } from '../../../shared/api/client';
 import { MarkingChoices, MarkingWorkbench } from './marking-workbench';
 import { MarkingDraftForm } from './marking-draft';
+import { markingNavigationLocked } from '../marking-navigation-model';
+import { markingNavigationCopy } from '../marking-navigation-copy';
 
-export function MarkingQueue({ items, onChanged, selected, onSelected, exact = false }: { items: MarkingItem[]; onChanged: () => void; selected: string | null; onSelected: (id: string) => void; exact?: boolean }) {
+export function MarkingQueue({ items, onChanged, selected, onSelected, exact = false, pageHeading = false }: { items: MarkingItem[]; onChanged: () => void; selected: string | null; onSelected: (id: string) => void; exact?: boolean; pageHeading?: boolean }) {
   const { locale, commandJournal, membership, accessToken, accessGeneration } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
   useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
-  const locked = commandJournal.pending().some(command => /^\/v1\/(?:submissions\/[^/]+\/results|results\/[^/]+\/release)$/.test(command.path));
+  const locked = markingNavigationLocked(commandJournal.pending());
   const heading = useRef<HTMLHeadingElement>(null), intent = useRef<{ id: string; opener: HTMLElement; scope: string } | null>(null);
   const scope = `${membership?.schoolId}:${membership?.userId}:${accessToken}:${accessGeneration}`;
-  const item = items.find((value) => value.id === selected);
+  const currentItems=items.filter(value=>value.id===selected);
+  const item = currentItems.length===1?currentItems[0]:null;
+  const root=useRef<HTMLDivElement>(null),browseId=useRef<string|null>(null),returnToBrowse=useRef(false);
+  function backToDirectory() { if(exact||!item||markingNavigationLocked(commandJournal.pending()))return;browseId.current=item.id;returnToBrowse.current=true;onSelected(''); }
+  useEffect(()=>{if(!returnToBrowse.current||item)return;const frame=requestAnimationFrame(()=>{returnToBrowse.current=false;const target=root.current?.querySelector<HTMLElement>(`[data-marking-choice="${browseId.current}"]`)??root.current?.querySelector<HTMLElement>('.marking-queue h2,.marking-queue summary');target?.focus({preventScroll:true});target?.scrollIntoView({block:'nearest',behavior:'instant'});});return()=>cancelAnimationFrame(frame);},[item]);
   useEffect(() => {
     const pending = intent.current;
     if (!pending) return;
@@ -34,14 +40,16 @@ export function MarkingQueue({ items, onChanged, selected, onSelected, exact = f
     if (heading.current && (active === pending.opener || active === document.body || active === document.documentElement)) { intent.current = null; heading.current.focus({ preventScroll: true }); heading.current.scrollIntoView({ block: 'start', behavior: 'instant' }); }
     else intent.current = null;
   }, [item?.id, scope]);
-  return <div className={`marking-workspace${exact ? ' marking-workspace--exact' : item ? ' marking-workspace--selected' : ''}`}>{!exact ? <MarkingChoices items={items} selected={selected} disabled={locked} onSelected={(id, opener) => { if (locked) return; intent.current = opener ? { id, opener, scope } : null; onSelected(id); }} /> : null}{item ? <MarkingDetail key={`${item.id}-${item.policyVersion}-${item.currentResult?.revision ?? 0}-${item.currentResult?.status ?? 'none'}`} headingRef={heading} item={item} onChanged={onChanged} /> : exact ? <p className="learning-empty">{t.chooseSubmission}</p> : null}</div>;
+  return <div ref={root} className={`marking-workspace${exact ? ' marking-workspace--exact' : item ? ' marking-workspace--selected' : ''}`}>{!exact ? <MarkingChoices pageHeading={pageHeading} items={items} selected={selected} disabled={locked} onSelected={(id, opener) => { if (markingNavigationLocked(commandJournal.pending())) return; intent.current = opener ? { id, opener, scope } : null; onSelected(id); }} /> : null}{!exact&&item?<Button type="button" variant="quiet" className="marking-back-to-directory" disabled={locked} onClick={backToDirectory}>{markingNavigationCopy[locale].back}</Button>:null}{item ? <MarkingDetail key={`${item.id}-${item.policyVersion}-${item.currentResult?.revision ?? 0}-${item.currentResult?.status ?? 'none'}`} headingRef={heading} item={item} onChanged={onChanged} /> : exact ? <p className="learning-empty">{t.chooseSubmission}</p> : null}</div>;
 }
 
 export function MarkingDetail({ item, onChanged, headingRef }: { item: MarkingItem; onChanged: () => void; headingRef?: Ref<HTMLHeadingElement> }) {
-  const { locale, membership, formDrafts, apiUrl, accessToken, accessGeneration, online } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
+  const { locale, membership, formDrafts, apiUrl, accessToken, accessGeneration, online, commandJournal } = useApp(); const t = locale === 'ar' ? academicAr : academicEn;
+  useSyncExternalStore(commandJournal.subscribe,commandJournal.getSnapshot,commandJournal.getSnapshot);
   const prefix = `${membership?.schoolId}:${membership?.userId}:`;
-  const [editing, setEditing] = useState(!item.currentResult || !!formDrafts.get(`${prefix}/v1/submissions/${item.id}/results`));
-  const [releasing, setReleasing] = useState(!!item.currentResult && !!formDrafts.get(`${prefix}/v1/results/${item.currentResult.id}/release`));
+  const [editing, setEditing] = useState(!item.currentResult || !!commandJournal.get(`/v1/submissions/${item.id}/results`) || !!formDrafts.get(`${prefix}/v1/submissions/${item.id}/results`));
+  const [releasing, setReleasing] = useState(!!item.currentResult && (!!commandJournal.get(`/v1/results/${item.currentResult.id}/release`) || !!formDrafts.get(`${prefix}/v1/results/${item.currentResult.id}/release`)));
+  const modesLocked=markingNavigationLocked(commandJournal.pending());
   const choices=usePaginatedLearningQuery(!item.referenceId?`/v1/assessments/${item.assessmentId}/academic-references?limit=100`:null,parseReference,item.policyVersion);
   const scope = `${apiUrl}:${membership?.schoolId}:${membership?.userId}:${membership?.role}:${accessToken}:${online}:${accessGeneration}:${item.id}:${item.assessmentId}:${item.referenceId}:${item.policyVersion}`;
   const parseCurrentReference = useCallback((value: unknown) => {
@@ -63,7 +71,7 @@ export function MarkingDetail({ item, onChanged, headingRef }: { item: MarkingIt
     {item.submissionStatus==='CLOSED'&&reference?.status==='APPROVED'?<ClosedCorrection item={item} onChanged={onChanged}/>:null}
     {!canMark ? <p className="notice" role="status">{item.submissionStatus === 'RETURNED' || item.submissionStatus === 'CLOSED' ? t.sourceUnavailable : t.referenceMissing}</p> : editing ? <MarkingDraftForm item={item} onChanged={onChanged} onCancel={current ? () => setEditing(false) : undefined} /> : current ? <>
       <section className={`mark-review ${current.status === 'RELEASED' ? 'mark-review--released' : ''}`}><Status tone={current.status === 'RELEASED' ? 'positive' : 'warning'}>{current.status === 'RELEASED' ? t.published : t.review}</Status><NativeResultView result={current.model === 'numeric' ? { type: 'numeric', score: current.score, maxScore: current.maxScore, policyVersion: item.policyVersion } : current.nativeResult} /><p>{current.feedback}</p><p className="learning-form__note">{t.revision}: {current.revision} · {current.status === 'RELEASED' ? t.historyNote : rubric ? t.rubricReviewBody : t.reviewBody}</p></section>
-      <div className="learning-actions"><Button type="button" variant="secondary" onClick={() => setEditing(true)}>{t.correctMark}</Button>{current.status === 'REVIEW' && reference?.status === 'APPROVED' ? <Button type="button" onClick={() => setReleasing(true)}>{t.release}</Button> : null}</div>{current.status === 'REVIEW' && reference?.status !== 'APPROVED' ? <p className="notice">{t.referenceMissing}</p> : null}
+      <div className="learning-actions"><Button type="button" variant="secondary" disabled={modesLocked} onClick={() => { if(!markingNavigationLocked(commandJournal.pending()))setEditing(true); }}>{t.correctMark}</Button>{current.status === 'REVIEW' && reference?.status === 'APPROVED' ? <Button type="button" disabled={modesLocked} onClick={() => { if(!markingNavigationLocked(commandJournal.pending()))setReleasing(true); }}>{t.release}</Button> : null}</div>{current.status === 'REVIEW' && reference?.status !== 'APPROVED' ? <p className="notice">{t.referenceMissing}</p> : null}
       {releasing && current.status === 'REVIEW' ? <CommandForm title={t.release} path={`/v1/results/${current.id}/release`} fields={[{ name: 'parentVisible', label: t.parentVisible, type: 'checkbox' }]} body={(values) => ({ expectedRevision: current.revision, parentVisible: values.get('parentVisible') === 'on' })} validateReceipt={(receipt, originalCommand) => { validateAcademicReleaseReceipt(receipt, originalCommand, item, current); }} onSaved={onChanged} onCancel={() => setReleasing(false)} actionLabel={t.release} note={`${t.releaseNote} ${t.parentNote}`} /> : null}
     </> : null}
   </>} />;

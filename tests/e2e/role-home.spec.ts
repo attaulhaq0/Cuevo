@@ -10,7 +10,7 @@ test('five roles have meaningful home actions and current-role navigation in Eng
     await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(homeHeadings[role]); await expect(page.getByText('Coming next', { exact: true })).toHaveCount(0); if (role === 'parent') await expect(page.getByRole('button', { name: 'Development', exact: true })).toHaveCount(0); await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]); await page.getByRole('button', { name: 'English', exact: true }).click(); await signOutTrailWorkspace(page); }
 });
 
-test('Student responsive task scene reserves artwork space below the introduction', async ({ page }) => {
+test('Student Learning Desk keeps task-first work and contained artwork clear of headings and actions', async ({ page }) => {
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
   const account = accounts.find(row => row.role === 'student')!;
   await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
@@ -21,14 +21,15 @@ test('Student responsive task scene reserves artwork space below the introductio
     for (const locale of ['English', 'العربية']) {
       await page.getByRole('button', { name: locale, exact: true }).click();
       await expect(page.locator('.student-trail__task-art')).toBeVisible();
-      await expect.poll(async () => page.locator('.student-trail').evaluate((root, viewportWidth) => {
+      await expect.poll(async () => page.locator('.student-trail').evaluate((root) => {
         const intro = root.querySelector('.student-trail__intro')!.getBoundingClientRect();
         const scene = root.querySelector('.student-trail__task-art')!.getBoundingClientRect();
         const task = root.querySelector('.student-trail__task')!.getBoundingClientRect();
         const art = Array.from(root.querySelectorAll('.student-trail__work-subject,.student-trail__foxi-crop')).filter(element => element.getClientRects().length > 0).map(element => element.getBoundingClientRect());
         const intersectsIntro = (rect: DOMRect) => rect.left < intro.right - 1 && rect.right > intro.left + 1 && rect.top < intro.bottom - 1 && rect.bottom > intro.top + 1;
-        return { clearOfIntro: art.every(rect => !intersectsIntro(rect)), responsiveSceneFits: viewportWidth > 1100 || art.every(rect => rect.top >= scene.top - 1 && rect.bottom <= scene.bottom + 1), taskAfterScene: viewportWidth > 1000 || task.top >= scene.bottom - 1, pageFits: document.documentElement.scrollWidth <= innerWidth + 1 };
-      }, width), `${locale}/${width}: artwork has its own flow space and cannot cover the greeting or task`).toEqual({ clearOfIntro: true, responsiveSceneFits: true, taskAfterScene: true, pageFits: true });
+        const intersectsTask = (rect: DOMRect) => rect.left < task.right - 1 && rect.right > task.left + 1 && rect.top < task.bottom - 1 && rect.bottom > task.top + 1;
+        return { clearOfIntro: art.every(rect => !intersectsIntro(rect)), responsiveSceneFits: art.every(rect => rect.top >= scene.top - 1 && rect.bottom <= scene.bottom + 1), taskClearOfArt: art.every(rect => !intersectsTask(rect)), taskFirst: root.querySelector('.student-trail__task')!.compareDocumentPosition(root.querySelector('.student-trail__task-art')!) === Node.DOCUMENT_POSITION_FOLLOWING, pageFits: document.documentElement.scrollWidth <= innerWidth + 1 };
+      }), `${locale}/${width}: artwork has reserved space and cannot cover the greeting or current work`).toEqual({ clearOfIntro: true, responsiveSceneFits: true, taskClearOfArt: true, taskFirst: true, pageFits: true });
     }
   }
   await signOutTrailWorkspace(page);

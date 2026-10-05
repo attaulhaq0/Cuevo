@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, type Ref } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type Ref } from 'react';
 import { Button } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { canOpenWorkspace } from '../../../shared/session/capabilities';
@@ -15,12 +15,14 @@ import { NativeResultView } from '../../academic/ui';
 import { parseIntervention } from '../../improvement/model';
 import { parseAnnouncement } from '../../community/model';
 import { parseSchedule } from '../../school/model';
+import { portfolioReadScope } from '../../portfolio/model';
 import { developmentPeriodChoices, parseAchievement, parseLearnerGoal, parseLedger, parsePeriod, parseSummary } from '../../development/model';
 import { developmentAr, developmentEn } from '../../development/copy';
 import { homeAr, homeEn } from '../messages';
 import { studentHomeAr, studentHomeEn } from '../student-home-messages';
 import { type HomeDestination, type HomeTarget } from '../model';
-import { currentNativeFeedbackDisclosure, currentStudentHomeSummary, selectStudentHomeSources, studentRecognition, type NativeFeedbackDisclosure, type StudentHomeItem, type HomeSourcePage } from '../student-home-model';
+import { currentNativeFeedbackDisclosure, currentStudentHomeDenial, currentStudentHomePortfolioPage, currentStudentHomeSummary, parseStudentHomePortfolio, selectStudentHomeSources, studentHomePortfolio, studentHomeReadFrame, studentRecognition, type StudentHomeDenial, type NativeFeedbackDisclosure, type StudentHomeItem, type HomeSourcePage } from '../student-home-model';
+import { parentHomeSourceDenial, type ParentHomeSourceDenial } from '../parent-home-binding-model';
 import type { StudentTrailAction, StudentTrailContext } from '../trail-model';
 import { StudentTrailView } from './student-trail';
 
@@ -35,12 +37,13 @@ export function StudentTrailHome({ onNavigate, headingRef }: { onNavigate: (targ
 }
 
 function StudentHomePresentation({ onNavigate, headingRef }: { onNavigate: (target: HomeDestination) => void; headingRef?: Ref<HTMLHeadingElement> }) {
+  const app = useApp();
   const [refresh, setRefresh] = useState(0);
   const [periodId, setPeriodId] = useState('');
   const [presentation, setPresentation] = useState<'standard' | 'quiet' | 'hidden'>('standard');
   const [nativeDisclosure, setNativeDisclosure] = useState<NativeFeedbackDisclosure | null>(null);
   const clearPresentation = useCallback(() => { setPeriodId(''); setPresentation('standard'); setNativeDisclosure(null); }, []);
-  return <CurrentStudentTrailHome onNavigate={onNavigate} headingRef={headingRef} refresh={refresh} reload={() => setRefresh(value => value + 1)} periodId={periodId} setPeriodId={value => { setPeriodId(value); setNativeDisclosure(null); }} presentation={presentation} setPresentation={setPresentation} clearPresentation={clearPresentation} nativeDisclosure={nativeDisclosure} setNativeDisclosure={setNativeDisclosure} />;
+  return <CurrentStudentTrailHome key={studentHomeReadFrame(app)} onNavigate={onNavigate} headingRef={headingRef} refresh={refresh} reload={() => setRefresh(value => value + 1)} periodId={periodId} setPeriodId={value => { setPeriodId(value); setNativeDisclosure(null); }} presentation={presentation} setPresentation={setPresentation} clearPresentation={clearPresentation} nativeDisclosure={nativeDisclosure} setNativeDisclosure={setNativeDisclosure} />;
 }
 
 function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, periodId, setPeriodId, presentation, setPresentation, clearPresentation, nativeDisclosure, setNativeDisclosure }: {
@@ -50,7 +53,7 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, peri
   clearPresentation: () => void;
   nativeDisclosure: NativeFeedbackDisclosure | null; setNativeDisclosure: (value: NativeFeedbackDisclosure | null) => void;
 }) {
-  const { membership, locale, online, status, accessGeneration } = useApp();
+  const app = useApp(); const { membership, locale, online, status, accessGeneration } = app;
   const t = locale === 'ar' ? studentHomeAr : studentHomeEn; const home = locale === 'ar' ? homeAr : homeEn;
   const [now, setNow] = useState<number | null>(null);
   const id = useId(); const learnerId = membership?.userId ?? '';
@@ -66,18 +69,32 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, peri
   const periods = usePaginatedLearningQuery(canDevelop ? '/v1/development/periods?limit=100' : null, parsePeriod, refresh);
   const calendar = usePaginatedLearningQuery(can('school') ? '/v1/school/calendar?limit=25' : null, parseSchedule, refresh);
   const announcements = usePaginatedLearningQuery(can('community') ? '/v1/community/announcements?limit=25' : null, parseAnnouncement, refresh);
+  const portfolioPath = can('portfolio') ? '/v1/portfolio/items?limit=25' : null;
+  const portfolioScope = portfolioReadScope(app, portfolioPath, refresh);
+  const parsePortfolio = useCallback((value: unknown) => parseStudentHomePortfolio(value, learnerId, portfolioScope), [learnerId, portfolioScope]);
+  const portfolioRead = usePaginatedLearningQuery(portfolioScope ? portfolioPath : null, parsePortfolio, refresh);
+  const portfolioReadScopeRef = useRef(portfolioScope);
+  const portfolio = currentStudentHomePortfolioPage(portfolioRead, portfolioScope, portfolioReadScopeRef.current);
+  useEffect(() => { portfolioReadScopeRef.current = portfolioScope; }, [portfolioScope]);
+  const [portfolioDenial, setPortfolioDenial] = useState<ParentHomeSourceDenial | null>(null);
+  const currentPortfolioDenial = parentHomeSourceDenial(portfolioDenial, portfolioScope, portfolio);
+  if (currentPortfolioDenial !== portfolioDenial) setPortfolioDenial(currentPortfolioDenial);
+  const portfolioPreview = studentHomePortfolio(portfolio, portfolioScope, learnerId, locale, currentPortfolioDenial);
   const periodChoices = developmentPeriodChoices(periods.data, locale);
   const selectedPeriodChoice = periodChoices.find(choice => choice.value === periodId && !choice.requiresReview);
   const activePeriod = canDevelop && selectedPeriodChoice && periods.loaded && !periods.loading && !periods.error && !periods.moreError ? periods.data.find(item => item.id === periodId) ?? null : null;
   const filter = activePeriod ? `&learnerId=${encodeURIComponent(learnerId)}&periodId=${encodeURIComponent(activePeriod.id)}` : '';
-  const summaryScope = `${membership?.schoolId}:${learnerId}:${activePeriod?.id}:${accessGeneration}:${refresh}`;
+  const summaryScope = JSON.stringify([app.apiUrl, app.accessToken, membership?.schoolId, learnerId, membership?.role, activePeriod?.id, accessGeneration, status, online, refresh]);
   const parseCurrentSummary = useCallback((value: unknown) => ({ scope: summaryScope, summary: parseSummary(value) }), [summaryScope]);
   const summaryRead = useApiQuery(activePeriod ? `/v1/development/summary?limit=100${filter}` : null, parseCurrentSummary, refresh);
   const summary = { ...summaryRead, data: currentStudentHomeSummary(summaryRead.data, summaryScope) };
   const ledger = usePaginatedLearningQuery(activePeriod ? `/v1/development/ledger?limit=100${filter}` : null, parseLedger, refresh);
   const achievements = usePaginatedLearningQuery(activePeriod ? `/v1/development/achievements?limit=100${filter}` : null, parseAchievement, refresh);
   const queries = [assessments, ...(submissionsNeeded ? [submissions] : []), results, interventions, goals, periods, calendar, announcements, summary, ledger, achievements];
-  const denied = queries.some(query => query.error?.kind === 'denied' || query.error?.kind === 'unauthorized' || 'moreError' in query && (query.moreError?.kind === 'denied' || query.moreError?.kind === 'unauthorized'));
+  const [homeDenial, setHomeDenial] = useState<StudentHomeDenial | null>(null);
+  const currentHomeDenial = currentStudentHomeDenial(homeDenial, `${studentHomeReadFrame(app)}:${refresh}`, queries);
+  if (currentHomeDenial !== homeDenial) setHomeDenial(currentHomeDenial);
+  const denied = !!currentHomeDenial;
   useEffect(() => { if (denied) clearPresentation(); }, [denied, clearPresentation]);
   const available = online && status === 'ready' && membership?.role === 'student' && !denied;
   const selected = selectStudentHomeSources({ learnerId, now: now ?? 0, assessments: canLearn ? assessments : disabledPage, submissions, interventions: canImprove ? interventions : disabledPage, results, goals });
@@ -105,17 +122,23 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, peri
       { key: 'grow', title: t.grow, description: t.growBody, state: recognition.status === 'recorded' ? 'available' : 'unknown', action: canDevelop ? action(t.recognition, 'development') : undefined },
     ],
     feedback: result ? { teacherName: null, teacherContext: result.assessmentTitle || null, dateLabel: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(result.createdAt)), text: result.feedback, action: action(home.evidence, { view: 'academic', source: 'result', id: result.id }) } : null,
+    portfolio: can('portfolio') ? { ...portfolioPreview, action: action(t.portfolio, 'portfolio') } : undefined,
     upcoming: next ? { title: next.title, description: next.description, availabilityLabel: next.dueAt ? `${t.due} · ${new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(next.dueAt))}` : null, action: action(actionLabel(next, t), next.destination), viewAll: action(t.tasks, 'learning') } : null,
     recognition, classChallenge: canDevelop && activePeriod && !summary.loading && !summary.error && summary.data?.learnerId === learnerId && summary.data?.periodId === activePeriod.id && summary.data.leaderboardEnabled ? { title: t.challenge, description: t.challengeBody, periodLabel: activePeriod.title, alias: null, participating: null, participationLabel: t.challengeUnknown, action: action(t.recognition, 'development') } : null,
     help: null, companion: { visible: available && presentation !== 'hidden', name: 'Foxi', hideAction: available ? { label: presentation === 'hidden' ? t.show : t.hide, onClick: () => setPresentation(value => value === 'hidden' ? 'standard' : 'hidden') } : undefined },
   };
+  const periodControl = available && canDevelop ? <div className="field"><label htmlFor={`${id}-period-choice`}>{t.period}</label><select id={`${id}-period-choice`} value={activePeriod?.id ?? ''} onChange={event => setPeriodId(event.currentTarget.value)}><option value="">{t.choosePeriod}</option>{!periods.error && !periods.moreError ? periodChoices.map(period => <option key={period.value} value={period.value} disabled={period.requiresReview}>{period.label}</option>) : null}</select><p>{t.periodNeeded}</p>{periodChoices.some(choice => choice.requiresReview) ? <p className="notice">{(locale === 'ar' ? developmentAr : developmentEn).ambiguousPeriods}</p> : null}{periods.nextCursor || periods.moreError ? <LoadMore query={periods} label={t.periods} /> : null}</div> : null;
+  const portfolioFailure = currentPortfolioDenial?.error ?? portfolio.error ?? (portfolio.moreError?.kind === 'invalid' ? portfolio.moreError : null);
+  const portfolioControls = available && can('portfolio') ? <>{portfolioFailure ? <><LearningError error={portfolioFailure} /><Button type="button" variant="quiet" onClick={reload}>{t.refresh}</Button></> : portfolio.nextCursor || portfolio.moreError ? <LoadMore query={portfolio} label={t.portfolio} /> : null}</> : null;
+  const continuingSources = [{query:results,label:t.feedback},{query:interventions,label:t.practice},{query:goals,label:t.goals},{query:calendar,label:home.upcoming},{query:announcements,label:home.communication},{query:ledger,label:t.ledger},{query:achievements,label:t.achievements},...(submissionsNeeded?[{query:submissions,label:t.tasks}]:[])].filter(({query})=>query.nextCursor||query.moreError);
+  const failedContinuations = continuingSources.filter(({query})=>query.moreError);
+  const additionalSources = continuingSources.filter(({query})=>!query.moreError);
   return <div className="student-home" data-presentation={presentation}>
-    <StudentTrailView context={context} assets={trailAssets} locale={locale} headingRef={headingRef} nativeFeedback={result && nativeSource ? <details className="student-home__native" open={currentNativeFeedbackDisclosure(nativeDisclosure, nativeSource)} onToggle={event => setNativeDisclosure({ resultId: nativeSource, open: event.currentTarget.open })}><summary>{t.nativeFeedback}</summary><NativeResultView result={result.nativeResult} /></details> : null} />
+    <StudentTrailView context={context} assets={trailAssets} locale={locale} headingRef={headingRef} periodControl={periodControl} portfolioControls={portfolioControls} upcomingControls={available && (assessments.nextCursor || assessments.moreError) ? <LoadMore query={assessments} label={t.tasks} /> : null} presentationAction={available ? { label: presentation === 'quiet' ? t.standard : t.quiet, onClick: () => setPresentation(value => value === 'quiet' ? 'standard' : 'quiet') } : undefined} nativeFeedback={result && nativeSource ? <details className="student-home__native" open={currentNativeFeedbackDisclosure(nativeDisclosure, nativeSource)} onToggle={event => setNativeDisclosure({ resultId: nativeSource, open: event.currentTarget.open })}><summary>{t.nativeFeedback}</summary><NativeResultView result={result.nativeResult} /></details> : null} />
     {available ? <div className="student-home__records">
-      {canDevelop ? <section className="student-home__section" aria-labelledby={`${id}-period`}><h2 id={`${id}-period`}>{t.period}</h2><p>{t.periodNeeded}</p><div className="field"><label htmlFor={`${id}-period-choice`}>{t.period}</label><select id={`${id}-period-choice`} value={activePeriod?.id ?? ''} onChange={event => setPeriodId(event.currentTarget.value)}><option value="">{t.choosePeriod}</option>{!periods.error && !periods.moreError ? periodChoices.map(period => <option key={period.value} value={period.value} disabled={period.requiresReview}>{period.label}</option>) : null}</select></div>{periodChoices.some(choice => choice.requiresReview) ? <p className="notice">{(locale === 'ar' ? developmentAr : developmentEn).ambiguousPeriods}</p> : null}{periods.nextCursor || periods.moreError ? <LoadMore query={periods} label={t.periods} /> : null}</section> : null}
-      <div className="home-overview-destinations">{can('school') ? <Button type="button" variant="quiet" onClick={() => onNavigate('school')}>{home.upcoming}</Button> : null}{can('community') ? <Button type="button" variant="quiet" onClick={() => onNavigate('community')}>{t.community}</Button> : null}</div><div className="home-overview-continuations">{[{query:assessments,label:t.tasks},{query:results,label:t.feedback},{query:interventions,label:t.practice},{query:goals,label:t.goals},{query:calendar,label:home.upcoming},{query:announcements,label:home.communication},{query:ledger,label:t.ledger},{query:achievements,label:t.achievements},...(submissionsNeeded?[{query:submissions,label:t.tasks}]:[])].map(({query,label},index)=>query.nextCursor||query.moreError?<LoadMore key={index} query={query} label={label}/>:null)}</div>
+      {failedContinuations.length ? <div className="home-overview-continuations student-home__source-recovery">{failedContinuations.map(({query,label},index)=><section key={index} aria-label={label}><h2>{label}</h2><LoadMore query={query} label={label}/></section>)}</div> : null}
+      {additionalSources.length ? <details className="student-home__source-continuations"><summary>{t.summarySources}</summary><p>{t.summarySourcesBody}</p><div className="home-overview-continuations">{additionalSources.map(({query,label},index)=><LoadMore key={index} query={query} label={label}/>)}</div></details> : null}
       {queries.filter(query => query.error).map((query, index) => <LearningError key={index} error={query.error!} />)}
-      <div className="student-home__presentation"><Button type="button" variant="quiet" onClick={() => setPresentation(value => value === 'quiet' ? 'standard' : 'quiet')}>{presentation === 'quiet' ? t.standard : t.quiet}</Button><Button type="button" variant="quiet" onClick={recovery.onClick}>{t.refresh}</Button></div>
     </div> : null}
   </div>;
 }

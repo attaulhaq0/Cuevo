@@ -10,6 +10,15 @@ import { studentJourneyAr, studentJourneyEn } from '../student-journey-messages.
 Object.assign(globalThis, { React });
 const lesson: Lesson = { id: 'lesson', title: 'Check the method', sequence: 1, body: 'Read the example.', status: 'PUBLISHED', activities: [{ id: 'activity', title: 'Explain your choice', kind: 'practice', instructions: 'Use the method and explain one step.', sequence: 1, completion: null }] };
 
+test('content-first lesson and activity reading do not repeat the title already supplied by the current page', () => {
+  for(const activityId of [null,'activity']){
+    const html=renderToStaticMarkup(createElement(Providers,{initialLocale:'en',config:{apiUrl:'',supabaseUrl:'',supabasePublishableKey:''},children:createElement(StudentLearningJourney,{lesson,courseId:'course',activityId,pageHeading:true,onSelect(){},renderWork(){return null;}})}));
+    assert.doesNotMatch(html,/<h2[^>]*>(Check the method|Explain your choice)<\/h2>/);
+    assert.match(html,/Your learning journey/);
+    assert.match(html,activityId?/Use the method and explain one step/:/Read the example/);
+  }
+});
+
 test('lesson and selected activity panels follow the workspace heading without skipped levels in both languages', () => {
   for (const locale of ['en', 'ar'] as const) {
     const t = locale === 'ar' ? studentJourneyAr : studentJourneyEn;

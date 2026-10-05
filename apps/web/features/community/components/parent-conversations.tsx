@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Ref } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
@@ -17,17 +17,17 @@ import { parseConversationIntent, conversationChildCurrent, conversationChildMat
 import { conversationReadingKey } from '../conversation-reading-focus';
 import { useConversationReadingFocus } from './use-conversation-reading-focus';
 
-export function ParentConversations() {
+export function ParentConversations({ pageHeading = false }: { pageHeading?: boolean } = {}) {
   const app = useApp();
   if (!conversationReadScope(app, '/v1/community/conversations', 0)) return null;
-  return <CurrentParentConversations key={`${app.apiUrl}:${app.membership?.schoolId}:${app.membership?.userId}:${app.membership?.role}`} />;
+  return <CurrentParentConversations pageHeading={pageHeading} key={`${app.apiUrl}:${app.membership?.schoolId}:${app.membership?.userId}:${app.membership?.role}`} />;
 }
-function CurrentParentConversations() {
+function CurrentParentConversations({ pageHeading }: { pageHeading: boolean }) {
   const app = useApp(); const { membership, locale, formDrafts, commandJournal } = app;
   const t = locale === 'ar' ? conversationAr : conversationEn;
   const actorId = membership!.userId, role = membership!.role, prefix = `${membership!.schoolId}:${actorId}:`;
   const path = '/v1/community/conversations', selectedSlot = `${prefix}conversation-selected`, createSlot = `${prefix}${path}`;
-  const heading = useRef<HTMLHeadingElement | null>(null), returnFocus = useRef(false);
+  const heading = useRef<HTMLElement | null>(null), returnFocus = useRef(false);
   const root = useRef<HTMLElement | null>(null);
   const focusContext = useRef('');
   const focused = useRef<{ context: string; element: HTMLElement; form: string | null; name: string | null } | null>(null);
@@ -92,10 +92,10 @@ function CurrentParentConversations() {
   useEffect(()=>{if(policyQuery.error||!policyQuery.loading&&policy&&!policy.enabled||childMismatch||createMismatch)readingFocus.cancel();},[policyQuery.error,policyQuery.loading,policy,childMismatch,createMismatch,readingFocus.cancel]);
   function directory(){return <section className="parent-conversation-directory" aria-label={t.directory}><h2>{t.directory}</h2>{threads.loading?<p role="status">{t.loading}</p>:threads.error||threads.moreError?<LearningError error={threads.error??threads.moreError!}/>:rows.length?<ul>{rows.map(thread=><li key={thread.id}><Button type="button" variant="quiet" disabled={blocked&&!sourceReviewOnly} aria-pressed={selected?.id===thread.id} onClick={event=>open(thread,event.currentTarget)}><CuevoIcon name="feedback" size={24}/><span><strong><bdi>{thread.title}</bdi></strong><small><bdi>{thread.teacherName} · {thread.className} · {thread.subjectName}</bdi></small></span></Button></li>)}</ul>:threads.loaded?<p>{t.empty}</p>:null}<LoadMore query={threads}/></section>;}
   return <section ref={root} onFocusCapture={event => { const element = event.target as HTMLElement; if (element.matches('input,textarea,select')) focused.current = { context: focusContext.current, element, form: element.closest('section[aria-label]')?.getAttribute('aria-label') ?? null, name: element.getAttribute('name') }; }} className={`conversation-workspace${parent?' conversation-workspace--parent':''}`} aria-label={t.heading}>
-    {parent?<div className="parent-conversation-child"><ChildSelector context={childContext}/><Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh"/>{t.refresh}</Button></div>:null}
+    {parent?<div className="parent-conversation-child"><ChildSelector context={childContext}/>{!pageHeading ? <Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh"/>{t.refresh}</Button> : null}</div>:null}
     {parent&&!child?<p role="status">{t.chooseChild}</p>:null}
     {childMismatch||createMismatch?<section className="parent-conversation-recovery"><h2>{t.originalChildContext}</h2><p>{t.returnOriginalChild}</p>{selected?<Button type="button" variant="secondary" disabled={blocked&&!sourceReviewOnly} onClick={back}>{t.back}</Button>:null}</section>:parent&&!child?null:selected ? policyQuery.loading || !policy && !policyQuery.error ? <p role="status">{t.loading}</p> : policyQuery.error ? <section><LearningError error={policyQuery.error}/><Button type="button" disabled={blocked&&!sourceReviewOnly} onClick={back}>{t.back}</Button><Button type="button" onClick={reload}>{t.refresh}</Button></section> : policy?.enabled ? <div className={parent?'parent-conversation-selected':''}>{parent?directory():null}<ConversationThread key={selected.id} intent={selected} onBack={back} onReadingState={readingFocus.receive} /></div> : <section><p className="notice">{t.disabled}</p><Button type="button" disabled={blocked&&!sourceReviewOnly} onClick={back}>{t.back}</Button></section> : <>
-      <header className="conversation-heading"><div><h2 ref={heading} tabIndex={-1}>{t.heading}</h2><p>{t.note}</p></div><Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" />{t.refresh}</Button></header>
+      <header className="conversation-heading"><div>{pageHeading ? <p ref={heading as Ref<HTMLParagraphElement>} tabIndex={-1} className="conversation-reading-return">{t.note}</p> : <h2 ref={heading as Ref<HTMLHeadingElement>} tabIndex={-1}>{t.heading}</h2>}{!pageHeading ? <p>{t.note}</p> : null}</div><Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" />{t.refresh}</Button></header>
       {policyQuery.loading || !policy && !policyQuery.error ? <p role="status">{t.loading}</p> : policyQuery.error ? <LearningError error={policyQuery.error} /> : policy ? <>
         {role === 'admin' ? <section className="conversation-policy"><CommandForm title={t.policy} path={policyPath} fields={[{ name: 'enabled', label: t.enabled, type: 'checkbox', defaultChecked: policy.enabled }, { name: 'reason', label: t.reason, type: 'textarea', required: true, maxLength: 1000 }, { name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ enabled: values.get('enabled') === 'on', reason: String(values.get('reason')), confirmApproval: values.get('confirmApproval') === 'on', expectedVersion: policy.version })} validateReceipt={validate} onLockedChange={onPolicyLock} onSaved={reload} actionLabel={t.approve} /></section> : null}
         {!policy.enabled ? <p className="notice">{t.disabled}</p> : <>

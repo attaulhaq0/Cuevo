@@ -70,7 +70,8 @@ async function settled(page: Page) {
 
 async function semanticSmoke(page: Page) {
   await expect(page.getByRole('main')).toHaveCount(1);
-  await expect(page.getByRole('navigation', { name: /^(Workspace navigation|التنقّل في مساحة العمل)$/ })).toHaveCount(1);
+  const navigation = page.locator('.workspace-chrome__navigation,.workspace-chrome__focused-navigation');
+  await expect(navigation).toHaveCount(1); await expect(navigation).toBeVisible();
   await expect(page.locator('main h1')).toHaveCount(1); await expect(page.locator('main h1')).not.toBeEmpty();
   const snapshot = await page.getByRole('main').ariaSnapshot();
   expect(snapshot).toMatch(/heading ".+" \[level=1\]/);
@@ -140,10 +141,10 @@ for (const role of roles) {
       }
       await layoutMatrix(page, role, surface);
       await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
-      const tabs = page.locator('main .learning-tabs').getByRole('button'); const tabNames = await tabs.allTextContents();
+      const tabs = page.locator('[data-workspace-sections] .learning-tabs').getByRole('button'); const tabNames = await tabs.allTextContents();
       for (const tabName of tabNames) {
         await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
-        const tab = page.locator('main .learning-tabs').getByRole('button', { name: tabName.trim(), exact: true });
+        const tab = page.locator('[data-workspace-sections] .learning-tabs').getByRole('button', { name: tabName.trim(), exact: true });
         await keyboardActivate(page, tab); await expect(tab).toHaveAttribute('aria-pressed', 'true'); await settled(page);
         await layoutMatrix(page, role, `${surface}-${tabName.trim().toLowerCase().replace(/[^a-z]+/g, '-')}`);
       }

@@ -98,6 +98,11 @@
 @media(max-width:1023px){.progress-review-layout[data-selected="true"]{grid-template-columns:minmax(0,1fr)}.progress-workspace[data-role="coordinator"] .progress-chapters{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:var(--space-2)}.progress-workspace[data-role="coordinator"] .progress-chapters a{padding:var(--space-2)}}
 @media(max-width:767px){.progress-review-layout[data-selected="true"] > .progress-review-reading{order:-1}}
 @media(max-width:767px){
+ .progress-review-layout[data-selected="true"] > .class-learning-summary { display:none; }
+ .progress-review-layout[data-selected="true"] > .progress-review-reading > .progress-toolbar { display:none; }
+ .progress-back-to-learners { margin-block-end:var(--space-3); }
+}
+@media(max-width:767px){
  .progress-workspace .progress-intro { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; }
  .progress-workspace .progress-intro__actions { max-inline-size:11rem; }
  .progress-workspace .progress-intro__actions { min-inline-size:0; }

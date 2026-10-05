@@ -1,4 +1,6 @@
+import { openCurrentPractice, currentPracticeChoice } from './practice-reader';
 import { test, expect, type Page } from '@playwright/test';
+import { currentProposalChoice, openCurrentProposal } from './proposal-reader';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
@@ -105,12 +107,17 @@ test.describe('isolated current Coordinator review', () => {
     await tabs.getByRole('button', { name: viewport.locale === 'en' ? 'Practice tasks' : 'مهام التدريب', exact: true }).click();
     for (const source of practices) {
       const learner = people.find(row => row.userId === source.learnerId)!; expect(learner).toBeDefined();
+      await expect(await currentPracticeChoice(page, source.id)).toContainText(learner.displayName);
+      await openCurrentPractice(page, source.id);
       const row = work.locator(`[data-intervention-id="${source.id}"]`); await expect(row).toContainText(learner.displayName); await expect(row).toContainText(learner.classLabels[0]); await expect(row).toContainText(source.instructions);
       await expect(row.locator('form')).toHaveCount(0);
     }
     await health(page); await page.screenshot({ path: info.outputPath('named-practice.png'), fullPage: false });
     await tabs.getByRole('button', { name: viewport.locale === 'en' ? 'Proposals' : 'المقترحات', exact: true }).click();
-    for (const source of proposals) { const learner = people.find(row => row.userId === source.learnerId)!; await expect(work.locator(`[data-recommendation-id="${source.id}"]`)).toContainText(learner.displayName); }
+    for (const source of proposals) { const learner = people.find(row => row.userId === source.learnerId)!; await expect(await currentProposalChoice(page, source.id)).toContainText(learner.displayName); }
+    const reviewedProposal = proposals.find(source => people.some(person => person.userId === source.learnerId));
+    expect(reviewedProposal, 'A current proposal with independently read learner context is required').toBeTruthy();
+    await openCurrentProposal(page, reviewedProposal!.id); await expect(work.locator('[data-recommendation-id]')).toHaveCount(1);
     await expect(work.locator('form')).toHaveCount(0); await health(page);
     await tabs.getByRole('button', { name: viewport.locale === 'en' ? 'Outcomes' : 'النتائج', exact: true }).click();
     const directory = work.locator('.coordinator-outcome-directory'); await expect(directory.locator('li')).toHaveCount(outcomes.length);
@@ -128,17 +135,17 @@ test.describe('isolated current Coordinator review', () => {
       await page.route('**/v1/people?*', route=>peopleStatus==='actual'?route.continue():route.fulfill({status:peopleStatus,contentType:'application/json',body:JSON.stringify({code:peopleStatus===403?'FORBIDDEN':'REQUEST_UNAVAILABLE',requestId:'isolated-current-identity-read'})}));
       await work.locator(':scope > .learning-toolbar').getByRole('button',{name:'Refresh next steps',exact:true}).click();
       await expect(work.getByRole('alert')).toBeVisible();
-      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(work.locator(`[data-recommendation-id="${source.id}"]`)).not.toContainText(learner.displayName);}
+      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(await currentProposalChoice(page,source.id)).not.toContainText(learner.displayName);}
       peopleStatus='actual';
       await work.locator(':scope > .learning-toolbar').getByRole('button',{name:'Refresh next steps',exact:true}).click();
-      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(work.locator(`[data-recommendation-id="${source.id}"]`)).toContainText(learner.displayName);}
+      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(await currentProposalChoice(page,source.id)).toContainText(learner.displayName);}
       peopleStatus=503;
       await work.locator(':scope > .learning-toolbar').getByRole('button',{name:'Refresh next steps',exact:true}).click();
       await expect(work.getByRole('alert')).toBeVisible();
-      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(work.locator(`[data-recommendation-id="${source.id}"]`)).not.toContainText(learner.displayName);}
+      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(await currentProposalChoice(page,source.id)).not.toContainText(learner.displayName);}
       peopleStatus='actual';
       await work.locator(':scope > .learning-toolbar').getByRole('button',{name:'Refresh next steps',exact:true}).click();
-      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(work.locator(`[data-recommendation-id="${source.id}"]`)).toContainText(learner.displayName);}
+      for(const source of proposals){const learner=people.find(row=>row.userId===source.learnerId)!;await expect(await currentProposalChoice(page,source.id)).toContainText(learner.displayName);}
       await page.unroute('**/v1/people?*');
     }
     expect(errors.filter(value=>!value.includes('status of 403')&&!value.includes('status of 503'))).toEqual([]); expect(warnings).toEqual([]); expect(blocked).toEqual([]);

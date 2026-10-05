@@ -1,4 +1,4 @@
-import { academicReportSchema, conversationResponseSchema } from '@cuevo/contracts';
+import { academicReportSchema, conversationPolicySchema, conversationResponseSchema } from '@cuevo/contracts';
 import { LearningApiError } from '../../shared/api/client.ts';
 export type ParentHomeReadContext={apiUrl:string;membership:{schoolId:string;userId:string;role:string}|null;accessToken:string|null;accessGeneration:number;online:boolean;status:string};
 export type ParentHomeRead<T>={scope:string|null;value:T};
@@ -7,6 +7,16 @@ export function parentHomeReadScope(context:ParentHomeReadContext,childId:string
  return JSON.stringify([context.apiUrl,context.membership.schoolId,context.membership.userId,context.membership.role,context.accessToken,context.accessGeneration,childId,path,refresh]);
 }
 export function currentParentHomeRead<T>(response:ParentHomeRead<T>|null|undefined,scope:string|null):T|null{return scope&&response?.scope===scope?response.value:null;}
+export function parseParentHomeConversationPolicy(value:unknown) {
+ const parsed=conversationPolicySchema.safeParse(value);if(!parsed.success)throw new LearningApiError('invalid');return parsed.data;
+}
+export type ParentHomeConversationPolicy={state:'enabled';policy:ReturnType<typeof parseParentHomeConversationPolicy>}|{state:'disabled';policy:ReturnType<typeof parseParentHomeConversationPolicy>}|{state:'loading';error:LearningApiError|null}|{state:'unavailable';error:LearningApiError|null};
+export function parentHomeConversationPolicy(read:ParentHomeRead<ReturnType<typeof parseParentHomeConversationPolicy>>|null|undefined,scope:string|null,loading:boolean,error:LearningApiError|null):ParentHomeConversationPolicy {
+ if(error)return{state:'unavailable',error};if(loading)return{state:'loading',error:null};const policy=currentParentHomeRead(read,scope);return policy?{state:policy.enabled?'enabled':'disabled',policy}:{state:'unavailable',error:null};
+}
+export function parentHomeConversationPath(current:ParentHomeConversationPolicy,childId:string|null):string|null {
+ return current.state==='enabled'&&childId?`/v1/community/conversations?limit=25&learnerId=${childId}`:null;
+}
 export function parseParentHomeReport(value:unknown,schoolId:string,childId:string) {
  const parsed=academicReportSchema.safeParse(value);if(!parsed.success||parsed.data.scope!=='CURRENT_RELEASED_PAGE'||parsed.data.schoolId!==schoolId||parsed.data.learnerId!==childId||parsed.data.items.some(item=>item.learnerId!==childId||item.parentVisible!==true))throw new LearningApiError('invalid');return parsed.data;
 }

@@ -11,12 +11,12 @@
 .learning-directory__heading { padding-inline: var(--space-2); }
 .learning-directory__heading h2 { font-size: var(--type-xl); }
 .learning-directory__heading p { color: var(--color-text-secondary); margin-block-start: var(--space-2); }
-.course-list { list-style: none; margin: var(--space-5) 0 0; padding: 0; }
+.course-list { list-style: none; margin: 0; padding: 0; }
 .course-list > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-6); padding: var(--space-6) var(--space-2); border-block-start: 1px solid var(--color-border); }
 .course-list__art { display: grid; place-items: center; inline-size: 6rem; block-size: 6rem; border-radius: var(--radius-xl); background: var(--color-learning-surface); }
 .course-list__art img { inline-size: 5.5rem; block-size: 5.5rem; object-fit: contain; }
 .course-list__body { min-inline-size: 0; }
-.course-list h3 { margin-block: var(--space-3) var(--space-2); font-size: var(--type-subheading); overflow-wrap: anywhere; }
+.course-list :is(h2,h3) { margin-block: var(--space-3) var(--space-2); font-size: var(--type-subheading); overflow-wrap: anywhere; }
 .course-list p { color: var(--color-text-secondary); font-size: var(--type-sm); }
 .learning-empty { padding-block: var(--space-8); color: var(--color-text-secondary); font-size: var(--type-sm); }
 .course-view__toolbar { display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; margin-block-end: var(--space-5); }
@@ -270,10 +270,20 @@
   .lesson-section { padding-inline: var(--space-4); }
 }
 .submission-history-row { padding-block: var(--space-5); border-block-end: 1px solid var(--color-border); }
+.workspace .submission-list > .submission-section { min-inline-size:0; margin-block:var(--space-3); padding:var(--space-4); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-material-reading); }
+.workspace .submission-list > .submission-section .lesson-content { max-inline-size:var(--reading-width); overflow-wrap:anywhere; }
 
 .learning-preparation-layout, .learning-staff-workspace { display: grid; grid-template-columns: minmax(14rem, .9fr) minmax(0, 2.1fr); align-items: start; gap: var(--space-6); margin-block: var(--space-5); }
+.learning-staff-workspace[data-selected="false"] { grid-template-columns:minmax(0,1fr); }
+.learning-back-to-structure { display:none; }
+.learning-preparation-layout[data-readonly="true"][data-selected="false"] { grid-template-columns:minmax(0,1fr); }
+.learning-preparation-layout[data-readonly="true"][data-selected="false"] > .learning-preparation-main { display:none; }
+.learning-preparation-layout[data-readonly="true"] .learning-back-to-structure { display:inline-flex; }
+@media(max-width:767px) { .learning-preparation-layout[data-reader="true"] > div { display:none; } .learning-preparation-layout[data-reader="false"] > .learning-preparation-main { display:none; } .learning-back-to-structure { display:inline-flex; } }
+.learning-staff-workspace[data-selected="false"] .learning-staff-choice-list { max-block-size:none;overflow:visible; }
+@media(max-width:767px) { .learning-staff-workspace[data-selected="true"] > .learning-staff-directory { display:none; } }
 .learning-preparation-outline, .learning-preparation-main, .learning-staff-directory, .learning-selection-empty { background: var(--color-material-reading); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: var(--space-5); box-shadow: var(--elevation-subtle); min-inline-size: 0; }
-.learning-preparation-outline h3, .learning-staff-directory h2 { font-size: var(--type-lg); margin-block-end: var(--space-4); }
+.learning-preparation-outline :is(h2,h3), .learning-staff-directory h2 { font-size: var(--type-lg); margin-block-end: var(--space-4); }
 .learning-preparation-main > h2 { font-size: var(--type-subheading); overflow-wrap: anywhere; margin-block: var(--space-3) var(--space-5); }
 .learning-preparation-outline ul, .learning-staff-directory ul { list-style: none; padding: 0; margin: 0; }
 .learning-preparation-outline ul ul { border-inline-start: 1px solid var(--color-border); padding-inline-start: var(--space-3); margin-inline-start: var(--space-3); }

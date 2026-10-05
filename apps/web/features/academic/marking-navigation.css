@@ -1,0 +1,6 @@
+.marking-back-to-directory { display:none; }
+@media(max-width:767px) {
+  .marking-back-to-directory { display:inline-flex; }
+  .marking-workspace--selected > .marking-queue { display:none; }
+  .gradebook-course[data-detail="true"] > :not(.gradebook-detail) { display:none; }
+}

@@ -111,3 +111,36 @@ test('confirmed empty work does not receive submitted or unknown task status', (
   value.task = { title: 'No new work is waiting', description: 'Current available records are complete.', course: null, unit: null, state: 'empty', primaryAction: null };
   const html = render(value); assert.match(html, /No new work is waiting/); assert.doesNotMatch(html, /student-trail__record-state|Submitted for review/);
 });
+
+test('selected work shows the learner reflection and review state without repeating native grades or claiming family publication', () => {
+  const value = context();
+  value.portfolio = { state: 'ready', items: [{ title: 'My selected explanation', reflection: 'I checked the reason for each step.', contextLabel: 'Reasoning · Cedar class · Year 6', reviewed: false, dateLabel: '4 Oct 2026' }], action: { label: 'Open my portfolio', onClick() {} } };
+  const html = render(value);
+  assert.match(html, /My selected work/); assert.match(html, /I checked the reason for each step/); assert.match(html, /Waiting for review/); assert.match(html, /Open my portfolio/);
+  assert.match(html, /<p class="student-trail__reflection" dir="auto">I checked the reason/); assert.doesNotMatch(html, /<details class="student-trail__reflection"/);
+  assert.doesNotMatch(html, /Parent approved|score|<textarea/);
+  value.availability = 'denied'; assert.doesNotMatch(render(value), /My selected explanation|I checked the reason/);
+});
+
+test('portfolio empty and loading are distinct and do not remove independent current work', () => {
+  const value = context(); value.task = { title: 'Current authorized task', description: 'Explain one idea', course: null, unit: null, state: 'available', primaryAction: null };
+  value.portfolio = { state: 'empty', items: [] };
+  assert.match(render(value), /Choose released work/);
+  value.portfolio.state = 'loading'; const html = render(value); assert.match(html, /Checking your selected work/); assert.doesNotMatch(html, /Choose released work/); assert.match(html, /Current authorized task/);
+});
+
+test('the period picker and quiet action have one supplied owner within the desk composition', () => {
+  const value = context();
+  const html = renderToStaticMarkup(createElement(StudentTrailView, { context: value, assets, locale: 'en', periodControl: createElement('select', { 'aria-label': 'Recognition period' }, createElement('option', null, 'Choose a period')), presentationAction: { label: 'Use quiet presentation', onClick() {} } }));
+  assert.equal((html.match(/aria-label="Recognition period"/g) || []).length, 1); assert.equal((html.match(/Use quiet presentation/g) || []).length, 1);
+  assert.match(html, /student-trail__desk/);
+});
+
+test('Student task continuation stays with its current task panel and no repeated footer navigation appears', () => {
+  const value = context();
+  const html = renderToStaticMarkup(createElement(StudentTrailView, { context:value, assets, upcomingControls:createElement('button',null,'Load current tasks') }));
+  assert.equal((html.match(/Load current tasks/g) ?? []).length,1);
+  const upcoming = html.slice(html.indexOf('student-trail__upcoming '),html.indexOf('student-trail__bottom-row'));
+  assert.match(upcoming,/Load current tasks/);
+  assert.doesNotMatch(html,/<footer|student-trail__footer|Upcoming school events|Open class community/);
+});

@@ -217,11 +217,11 @@ test('editing a suspended identity preserves its existing lifecycle and effectiv
 test('browser back and forward retain the selected authorized workspace', async ({ page }) => {
   await signIn(page, (await accounts()).find(row => row.role === 'admin')!);
   await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
-  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Learning', exact: true }).click(); await settled(page);
+  await openTrailWorkspace(page, 'Learning'); await settled(page);
   await capture(page, '06-learning-before-browser-back.png');
   await page.goBack(); await capture(page, '07-browser-back-result.png');
-  await expect(page.locator('main h1')).toHaveText('School');
-  await page.goForward(); await expect(page.locator('main h1')).toHaveText('Learning');
+  await expect(page.locator('main h1')).toHaveText('Setup');
+  await page.goForward(); await expect(page.locator('main h1')).toHaveText('Your courses');
 });
 
 test('school context temporary failure can be retried from the feature', async ({ page }) => {

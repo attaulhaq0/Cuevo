@@ -308,6 +308,9 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 }
 .workspace .field textarea { resize: vertical; line-height: var(--line-height-reading); }
 .workspace .field--wide { grid-column: 1 / -1; }
+.workspace .checkbox-field { display:flex; align-items:flex-start; gap:var(--space-3); }
+.workspace .checkbox-field input[type="checkbox"] { inline-size:1.25rem; block-size:1.25rem; min-block-size:0; flex:none; padding:0; margin-block-start:.2rem; border-radius:0; box-shadow:none; accent-color:var(--color-accent); }
+.workspace .checkbox-field label { line-height:1.6; }
 .workspace .learning-form { margin-block: var(--space-3); padding: var(--density-padding); background: var(--color-material-reading); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
 .workspace .learning-form h3 { font-size: var(--type-lg); }
 .workspace .learning-form__note { color: var(--color-text-muted); font-size: var(--type-sm); margin-block: var(--space-3); }
@@ -403,6 +406,18 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 @media (prefers-reduced-motion: reduce) {
   .workspace { --motion-fast: 0ms; --motion-normal: 0ms; --motion-feedback: 0ms; }
 }
+.workspace .workspace-page-heading { display:flex;align-items:start;gap:var(--space-3);flex-wrap:wrap;margin-block-end:var(--space-3); }
+.workspace .workspace-page-heading__content { flex:1;min-inline-size:min(100%,12rem); }
+.workspace .workspace-page-heading h1 { margin:0;font-size:var(--type-xl);line-height:1.3;overflow-wrap:anywhere; }
+.workspace .workspace-page-heading__caption { margin:0 0 var(--space-1);font-size:var(--type-sm);color:var(--color-text-secondary);overflow-wrap:anywhere; }
+.workspace .workspace-page-heading__description { margin-block-start:var(--space-1);font-size:var(--type-sm);color:var(--color-text-secondary);overflow-wrap:anywhere; }
+.workspace .workspace-page-heading__description > p { margin:0; }
+.workspace .workspace-page-heading__actions { display:flex;align-items:start;gap:var(--space-2);flex-wrap:wrap;margin-inline-start:auto; }
+.workspace .workspace-page-help { inline-size:fit-content;max-inline-size:100%;margin-block-start:var(--space-3);margin-inline-start:auto;font-size:var(--type-sm); }
+.workspace .workspace-page-help > summary { min-block-size:var(--control-min-size);align-content:center;cursor:pointer;color:var(--color-link);padding-inline:var(--space-2); }
+.workspace .workspace-page-help[open] { padding:var(--space-2);border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-material-reading); }
+@media (max-width:600px) { .workspace .workspace-page-heading__content { flex-basis:100%; } .workspace .workspace-page-heading__actions { margin-inline-start:0; } }
+
 @media (forced-colors: active) {
   .workspace .button { border-color: ButtonText; background: ButtonFace; color: ButtonText; box-shadow: none; }
   .workspace .button:disabled { color: GrayText; border-color: GrayText; }

@@ -2,7 +2,7 @@
 
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
+import { Button, CuevoIcon, Status, WorkspacePageHeading, type CuevoIconName } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { currentLearnerState, parseLearnerState, parseLearnerObservation, parseLearnerSignal, progressLearnerChoices, type LearnerState, type Observation, type Signal, type LearnerStateSource } from '../model';
 import { LearningApiError } from '../../../shared/api/client';
@@ -29,8 +29,8 @@ import { LearningObservationPolicyPanel } from './observation-policy';
 export function ProgressWorkspace() {
   const { membership, status, online, locale } = useApp();
   const t = locale === 'ar' ? progressAr : progressEn;
-  if (!online) return <p className="notice" role="status">{t.offline}</p>;
-  if (status !== 'ready' || !membership || !canOpenWorkspace('progress', membership.entitlements, membership.role)) return null;
+  if (!online) return <><WorkspacePageHeading title={t.progress} /><p className="notice" role="status">{t.offline}</p></>;
+  if (status !== 'ready' || !membership || !canOpenWorkspace('progress', membership.entitlements, membership.role)) return <WorkspacePageHeading title={t.progress} />;
   return <CurrentProgressWorkspace key={`${membership.schoolId}:${membership.userId}:${membership.role}`} />;
 }
 
@@ -45,6 +45,7 @@ function CurrentProgressWorkspace() {
   const [classLearnerLabel, setClassLearnerLabel] = useState<{ id: string; label: string | null; context: string } | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [showCompanion, setShowCompanion] = useState(true);
+  const browseOpener = useRef<HTMLElement | null>(null), returnToBrowse = useRef(false);
   const childContext = useChildContext(refresh);
   const people = usePaginatedLearningQuery(own || parent ? null : '/v1/people?limit=100', parsePersonChoice, refresh);
   const peopleCurrent = people.loaded && !people.loading && !people.loadingMore && !people.error && !people.moreError && !people.nextCursor;
@@ -62,17 +63,37 @@ function CurrentProgressWorkspace() {
   }, []);
   const reviewLearner = (id: string, label?: string) => {
     if(id&&!label&&!choices.some(choice=>choice.value===id&&!choice.requiresReview))return;
+    if (id) browseOpener.current = label ? document.activeElement instanceof HTMLElement ? document.activeElement : null : document.getElementById('learner-selection');
     setLearnerId(id || null);
     const learner = learners.find(learner => learner.userId === id);
     if (id) setDetailSelection(previous => ({ id, label: label ?? (learner ? [learner.displayName, ...learner.classLabels].join(' · ') : t.learnerContextUnavailable), request: (previous?.request ?? 0) + 1, context: labelContext, source:label?'class':'directory' }));
   };
+  function backToLearners() { setLearnerId(null); setDetailSelection(null); setClassLearnerLabel(null); returnToBrowse.current = true; }
+  useEffect(() => {
+    if (!returnToBrowse.current || activeLearnerId) return;
+    const frame = requestAnimationFrame(() => {
+      returnToBrowse.current = false;
+      const previous = browseOpener.current;
+      const picker = document.getElementById('learner-selection') as HTMLSelectElement | null;
+      const target = previous?.isConnected && previous.matches('button,input,select,textarea,a,summary,[tabindex]') && previous.getClientRects().length && !previous.matches(':disabled') ? previous
+        : picker?.getClientRects().length && !picker.disabled ? picker : document.querySelector<HTMLElement>('.class-summary-heading');
+      target?.focus({ preventScroll: true });
+      const classHeading = document.querySelector<HTMLElement>('.class-summary-heading');
+      if (target && document.activeElement !== target) classHeading?.focus({ preventScroll: true });
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      focused?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeLearnerId]);
   return <section className="progress-workspace" data-role={membership?.role}>
+    <WorkspacePageHeading title={t.progress} />
     <header className="progress-intro"><details className="progress-intro__guide"><summary>{t.aboutProgress}</summary><p>{t.progressGuide}</p></details><div className="progress-intro__actions">{own ? <div className="progress-companion"><CompanionView registry={companionPoses} character="foxi" state="read" visible={showCompanion} /><Button type="button" variant="quiet" onClick={() => setShowCompanion(value => !value)}>{showCompanion ? t.hideCompanion : t.showCompanion}</Button></div> : null}<Button type="button" variant="secondary" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" size={16} />{t.refresh}</Button></div></header>
     {membership?.role === 'admin' ? <LearningObservationPolicyPanel /> : null}
     <ChildSelector context={childContext} />
     <div className={classReviewer?`progress-review-layout${coordinator?' coordinator-progress-layout':''}`:undefined} data-selected={classReviewer&&!!activeLearnerId}>
     {classReviewer ? <ClassLearningSummaryPanel refresh={refresh} onReviewLearner={reviewLearner} selectedLearnerId={coordinator?learnerId:activeLearnerId} labelContext={labelContext} onLearnerContext={receiveClassLearnerLabel} /> : null}
     <div className={classReviewer?`progress-review-reading${coordinator?' coordinator-progress-reading':''}`:undefined}>
+    {classReviewer && activeLearnerId ? <Button type="button" variant="quiet" className="progress-back-to-learners" onClick={backToLearners}><CuevoIcon name="arrow" size={18} className="directional-icon"/>{t.backToLearners}</Button> : null}
     <div className="progress-toolbar">{!own && !parent ? <div className="field"><label htmlFor="learner-selection">{t.learner}</label><select id="learner-selection" value={choices.some(choice=>choice.value===learnerId&&!choice.requiresReview)?learnerId??'':''} disabled={!peopleCurrent} onChange={(event) => reviewLearner(event.target.value)}><option value="">{t.chooseLearner}</option>{choices.map(choice=><option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={people} />{!people.error&&!people.loading&&(people.nextCursor||choices.some(choice=>choice.requiresReview))?<p className="notice">{t.learnerChoicesReview}</p>:null}</div> : null}</div>
     {people.error ? <LearningError error={people.error} /> : !own && !parent && people.loading ? <p role="status">{t.loading}</p> : !own && !parent && !learners.length ? <p className="learning-empty">{t.noLearners}</p> : null}
     {parent ? <p className="notice">{t.parentSafe}</p> : null}

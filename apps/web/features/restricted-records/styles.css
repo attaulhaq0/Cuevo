@@ -1,0 +1,13 @@
+.restricted-workspace { display: grid; gap: var(--space-4); min-inline-size: 0; }
+.restricted-workspace > .notice { margin-block-start: 0; }
+.restricted-directory { display: grid; gap: var(--space-3); inline-size: 100%; min-inline-size: 0; }
+.restricted-directory > button { justify-content: flex-start; text-align: start; inline-size: 100%; padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.restricted-directory > button > span { display: grid; gap: var(--space-2); min-inline-size: 0; overflow-wrap: anywhere; }
+.restricted-directory small { display: block; color: var(--color-text-secondary); }
+.restricted-reader { display: grid; gap: var(--space-4); min-inline-size: 0; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-material-reading); overflow-wrap: anywhere; }
+.restricted-reader .lesson-content { white-space: pre-wrap; }
+.restricted-reader section { display: grid; gap: var(--space-3); min-inline-size: 0; }
+.restricted-reader .learning-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.restricted-reader summary { min-block-size: var(--control-min-size, 2.75rem); padding-block: var(--space-2); cursor: pointer; }
+.restricted-reader :where(h2, h3, h4, p, bdi) { overflow-wrap: anywhere; }
+@media (max-width: 800px) { .restricted-reader { padding: var(--space-4); } .restricted-workspace .learning-actions > button { max-inline-size: 100%; white-space: normal; } }

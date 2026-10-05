@@ -1,3 +1,6 @@
+import { openCurrentResult } from './result-reader';
+import { openCurrentPractice } from './practice-reader';
+import { openCurrentProposal } from './proposal-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -168,7 +171,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('student'); await navigate('Academic');
     await expect(page.getByText('Read your released results, teacher feedback and the work behind them.', { exact: true })).toBeVisible();
     const feedback = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: baselineTitle, exact: true }) });
-    await loadTarget(feedback, page.locator('.academic-workspace')); await expect(feedback.locator('.native-score strong')).toHaveText('2');
+    await openCurrentResult(page,String(baseline.id)); await expect(feedback.locator('.native-score strong')).toHaveText('2');
     expect(await feedback.innerText()).not.toContain('synthetic-school-1');
     const evidenceRead = page.waitForResponse(response => response.url() === `${api}/v1/evidence/${baseline.evidenceId}` && response.request().method() === 'GET');
     await feedback.getByRole('button', { name: 'View evidence', exact: true }).click();
@@ -190,7 +193,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     const proposal = await visibleMutation('/v1/intelligence/analyze', () => analysisForm.getByRole('button', { name: 'Request analysis', exact: true }).click());
     expect(proposal).toMatchObject({ origin: 'AI_GENERATED', generationMode: 'FIXTURE', status: 'AWAITING_HUMAN', baselineResultId: baseline.id, learnerId: baselineSubmission.learnerId });
     const proposalRow = page.locator('.proposal-row').filter({ has: page.getByRole('heading', { name: String(proposal.recommendation), exact: true }) }).filter({ hasText: String(proposal.observation) });
-    const exactProposalRow = page.locator(`[data-recommendation-id="${proposal.id}"]`); await loadTarget(exactProposalRow, page.locator('.improvement-workspace')); expect(await proposalRow.count()).toBeGreaterThan(0);
+    const exactProposalRow = page.locator(`[data-recommendation-id="${proposal.id}"]`); await openCurrentProposal(page, String(proposal.id)); expect(await proposalRow.count()).toBeGreaterThan(0);
     const contextRead = page.waitForResponse(response => response.url() === `${api}/v1/intelligence/runs/${proposal.intelligenceRunId}/context` && response.request().method() === 'GET');
     await exactProposalRow.getByRole('button', { name: 'Show analysis source context', exact: true }).click(); const contextResponse = await contextRead; expect(contextResponse.status()).toBe(200); const context = (await contextResponse.json()).context;
     expect(context.recentResults.some((source: { resultId: string; evidenceId: string }) => source.resultId === baseline.id && source.evidenceId === baseline.evidenceId)).toBe(true);
@@ -202,7 +205,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     expect(decision.status).toBe('APPROVED'); const interventionId = String(decision.interventionId); await signOut();
 
     await signIn('student'); await navigate('Next steps'); const practice = page.locator(`[data-intervention-id="${interventionId}"]`);
-    await loadTarget(practice, page.locator('.improvement-workspace')); await expect(practice.getByRole('heading', { name: practiceTitle, exact: true })).toBeVisible();
+    await openCurrentPractice(page, interventionId); await expect(practice.getByRole('heading', { name: practiceTitle, exact: true })).toBeVisible();
     await practice.getByLabel('Reflection (optional)', { exact: true }).fill('I used the school example and checked each step.');
     const completed = await visibleMutation(`/v1/interventions/${interventionId}/complete`, () => practice.getByRole('button', { name: 'Complete practice', exact: true }).click());
     expect(completed.status).toBe('COMPLETED'); await capture('05-completed-reviewed-practice.png'); await signOut();
@@ -211,7 +214,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('student'); const followUpSubmission = await submitAssessment(followUpTitle, followUpAssessment.id, false); await signOut();
     await signIn('teacher'); const followUp = await markAndRelease(followUpTitle, followUpSubmission, 7);
     await navigate('Next steps'); await page.getByRole('button', { name: 'Practice tasks', exact: true }).click();
-    await loadTarget(practice, page.locator('.improvement-workspace')); await practice.getByRole('button', { name: 'Link follow-up assessment', exact: true }).click();
+    await openCurrentPractice(page, interventionId); await practice.getByRole('button', { name: 'Link follow-up assessment', exact: true }).click();
     const linkForm = practice.getByRole('region', { name: 'Link follow-up assessment', exact: true });
     await selectHumanLabel(linkForm.getByLabel('Published follow-up assessment', { exact: true }), `${followUpTitle} (10)`, page.locator('.improvement-workspace'));
     const linked = await visibleMutation(`/v1/interventions/${interventionId}/reassessment`, () => linkForm.getByRole('button', { name: 'Link follow-up assessment', exact: true }).click()); expect(linked.followUpAssessmentId).toBe(followUpAssessment.id);
@@ -250,7 +253,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('parent'); await navigate('Academic'); const childSelect = page.getByLabel('Child', { exact: true });
     await expect(page.getByText('Read your child’s released results, teacher feedback and approved evidence.', { exact: true })).toBeVisible();
     await selectHumanLabel(childSelect,new RegExp(`${escapeRegExp(studentName)}.*Year 1.*Cedar`));const parentResult = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: followUpTitle, exact: true }) });
-    await loadTarget(parentResult, page.locator('.academic-workspace')); await expect(parentResult.locator('.native-score strong')).toHaveText('7'); await expect(page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
+    await openCurrentResult(page,String(followUp.id)); await expect(parentResult.locator('.native-score strong')).toHaveText('7'); await expect(page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Next steps', exact: true })).toHaveCount(0);
     await capture('09-parent-approved-native-result.png');
     await signOut();await signIn('student');await navigate('Portfolio');await page.getByRole('button',{name:'Select released work',exact:true}).click();
     const selectWork=page.getByRole('region',{name:'Select released work',exact:true});const releasedChoices=page.locator('.portfolio-workspace > .notice').filter({has:page.getByText('Released source evidence',{exact:true})});const selectedWork=await selectHumanLabel(selectWork.getByLabel('Released source evidence',{exact:true}),humanContextLabel(followUpTitle),releasedChoices,String(followUp.evidenceId));expect(selectedWork).toContain('Objective: Synthetic school-authored explanation objective');expect(selectedWork).toContain('Result revision: 1');expect(selectedWork).toContain('Released:');

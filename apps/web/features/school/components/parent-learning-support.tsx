@@ -12,7 +12,7 @@ import { schoolAr, schoolEn } from '../messages';
 import { currentSchoolRead, parseCurrentLearnerProfile } from '../model';
 import { parentSupportCourses, parentSupportMatches, parentSupportPath, parseParentLearningSupport } from '../parent-support-model';
 
-export function ParentLearningSupport({ learnerId, learnerName, refresh }: { learnerId: string; learnerName: string; refresh: number }) {
+export function ParentLearningSupport({ learnerId, learnerName, refresh, pageHeading = false }: { learnerId: string; learnerName: string; refresh: number; pageHeading?: boolean }) {
   const { locale, membership, apiUrl, accessGeneration, accessToken, status, online } = useApp();
   const t = locale === 'ar' ? schoolAr : schoolEn;
   const [courseId, setCourseId] = useState('');
@@ -31,7 +31,7 @@ export function ParentLearningSupport({ learnerId, learnerName, refresh }: { lea
   if (!permitted) return null;
   return <section className="school-section school-day-panel" aria-label={t.parentSupport}>
     <header className="cuevo-section-header parent-support-heading">
-      <div className="cuevo-section-header__context"><div className="school-day-heading"><CuevoIcon name="help" size={28} /><h2>{t.parentSupport}</h2></div><p><bdi>{learnerName}</bdi> · {t.parentSupportNote}</p></div>
+      <div className="cuevo-section-header__context"><div className="school-day-heading"><CuevoIcon name="help" size={28} />{pageHeading ? null : <h2>{t.parentSupport}</h2>}</div><p><bdi>{learnerName}</bdi> · {t.parentSupportNote}</p></div>
       <div className="learning-actions"><Button type="button" variant="quiet" onClick={() => setRetry(value => value + 1)}><CuevoIcon name="refresh" />{t.refreshParentSupport}</Button></div>
     </header>
     {profile.loading ? <p role="status">{t.loadingParentSupport}</p> : profile.error ? <LearningError error={profile.error} /> : !currentProfile ? <LearningError error={new LearningApiError('invalid')} /> : !choices.length ? <p>{t.noParentSupportCourses}</p> : <>

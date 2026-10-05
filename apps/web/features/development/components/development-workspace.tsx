@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react';
-import { Button, CuevoIcon } from '@cuevo/ui';
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { Button, CuevoIcon, WorkspacePageHeading } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
@@ -52,6 +52,8 @@ function CurrentDevelopmentWorkspace() {
   const [configure, setConfigure] = useState<'policy' | 'period' | null>(null);
   const [presentation, setPresentation] = useState<'standard' | 'quiet' | 'hidden'>('standard');
   const [commandLocked, setCommandLocked] = useState(false);
+  const learnerPicker = useRef<HTMLSelectElement>(null), learnerHeading = useRef<HTMLHeadingElement>(null), contextPanel = useRef<HTMLDivElement>(null);
+  const focusSelectedLearner = useRef<string | null>(null), returnToLearners = useRef(false);
   const id = useId();
   const periods = usePaginatedLearningQuery(permitted ? '/v1/development/periods?limit=100' : null, parsePeriod, refresh);
   const policies = usePaginatedLearningQuery(permitted && admin ? '/v1/development/policies?limit=100' : null, parsePolicy, refresh);
@@ -98,6 +100,20 @@ function CurrentDevelopmentWorkspace() {
   const retainedPeriodCommand = commandJournal.get('/v1/development/leaderboard/participation') || commandJournal.get('/v1/development/periods/backfill');
   const periodLocked = commandLocked || !!retainedPeriodCommand;
   const configurationLocked = commandLocked || !!commandJournal.get('/v1/development/policies') || !!commandJournal.get('/v1/development/periods');
+  const learnerNavigationLocked = periodLocked || configurationLocked;
+  const staffSelected = !student && !!activeLearnerId && !!selectedLearner;
+  const policyFormVisible = admin && configure === 'policy' && policyCurrent;
+  const periodFormVisible = admin && configure === 'period' && policies.loaded && !policies.error && !policies.moreError && classes.loaded && !classes.error && !classes.moreError;
+  const backfillCommand = commandJournal.get('/v1/development/periods/backfill');
+  const participationCommand = commandJournal.get('/v1/development/leaderboard/participation');
+  const backfillFormVisible = admin && !!activePeriod && (!backfillCommand || backfillCommand.body.periodId === activePeriod.id);
+  const participationFormVisible = student && !!activeLearnerId && !!activePeriod && !!summary && (!participationCommand || participationCommand.body.periodId === activePeriod.id);
+  const recoveryCommand = [
+    { path: '/v1/development/policies', allowed: admin, visible: policyFormVisible, title: t.approvePolicy },
+    { path: '/v1/development/periods', allowed: admin, visible: periodFormVisible, title: t.createPeriod },
+    { path: '/v1/development/periods/backfill', allowed: admin, visible: backfillFormVisible, title: t.backfill },
+    { path: '/v1/development/leaderboard/participation', allowed: student, visible: participationFormVisible, title: t.participate },
+  ].find(owner => owner.allowed && !owner.visible && commandJournal.get(owner.path));
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value));
   const onLockedChange = useCallback((locked: boolean) => setCommandLocked(locked), []);
@@ -105,17 +121,46 @@ function CurrentDevelopmentWorkspace() {
   useEffect(() => {
     if (readFailed) formDrafts.clearRead(`${membership?.schoolId}:${membership?.userId}:`, '/v1/development/summary');
   }, [readFailed, formDrafts, membership?.schoolId, membership?.userId]);
+  useEffect(() => {
+    if (!staffSelected || focusSelectedLearner.current !== activeLearnerId) { focusSelectedLearner.current = null; return; }
+    const frame = requestAnimationFrame(() => {
+      focusSelectedLearner.current = null;
+      if (document.activeElement !== document.body && document.activeElement !== learnerPicker.current) return;
+      learnerHeading.current?.focus({ preventScroll: true });
+      learnerHeading.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [staffSelected, activeLearnerId]);
+  useEffect(() => {
+    if (!returnToLearners.current || staffSelected) return;
+    const frame = requestAnimationFrame(() => {
+      returnToLearners.current = false;
+      const picker = learnerPicker.current;
+      const target = picker?.isConnected && picker.getClientRects().length && !picker.disabled ? picker : contextPanel.current;
+      target?.focus({ preventScroll: true });
+      if (target && document.activeElement !== target) contextPanel.current?.focus({ preventScroll: true });
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      focused?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [staffSelected]);
+  function backToLearners() {
+    if (learnerNavigationLocked || ['/v1/development/policies', '/v1/development/periods', '/v1/development/periods/backfill', '/v1/development/leaderboard/participation'].some(path => commandJournal.get(path))) return;
+    focusSelectedLearner.current = null; returnToLearners.current = true; setLearnerId('');
+  }
   function reload() { setRefresh(value => value + 1); }
   function saved() { setConfigure(null); reload(); }
-  if (parent) return <p className="notice">{t.parentDenied}</p>;
-  if (!permitted) return null;
+  if (parent) return <><WorkspacePageHeading title={t.development} /><p className="notice">{t.parentDenied}</p></>;
+  if (!permitted) return <WorkspacePageHeading title={t.development} />;
   const recordFailure = !!ledger.error || !!ledger.moreError || !!achievements.error || !!achievements.moreError;
   const currentRecords = !!activeLearnerId && !!activePeriod && !!summary && summary.status !== 'DISABLED' && !summaryRead.error;
-  return <div className={`development-workspace ${student ? 'development-workspace--student' : 'development-workspace--staff'}`}>
-    {student ? <header className="development-intro"><div><h2>{t.journeyTitle}</h2><p>{t.journeyBody}</p></div></header> : null}
-    <div className="development-context development-panel">
+  return <div className={`development-workspace ${student ? 'development-workspace--student' : 'development-workspace--staff'}`} data-staff-selected={staffSelected}>
+    <WorkspacePageHeading title={t.development} />
+    {recoveryCommand ? <div className="development-command-recovery"><CommandForm key={commandJournal.get(recoveryCommand.path)!.key} title={recoveryCommand.title} path={recoveryCommand.path} fields={[]} body={() => { throw new LearningApiError('conflict', true); }} note={t.originalCommandRecovery} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={recoveryCommand.path === '/v1/development/policies' || recoveryCommand.path === '/v1/development/periods' ? saved : reload} onLockedChange={onLockedChange} /></div> : null}
+    {staffSelected ? <header className="development-selected-context"><h2 className="development-selected-heading" ref={learnerHeading} tabIndex={-1}><bdi>{selectedLearner.label}</bdi></h2><Button type="button" variant="quiet" className="development-back-to-learners" disabled={learnerNavigationLocked} onClick={backToLearners}><CuevoIcon name="arrow" size={18} className="directional-icon" />{t.backToLearners}</Button></header> : null}
+    <div className="development-context development-panel" ref={contextPanel} tabIndex={-1}>
       <div className="development-selectors">
-        {!student ? <div className="field"><label htmlFor={`${id}-learner`}>{t.learner}</label><select id={`${id}-learner`} value={learnerId} disabled={periodLocked} onChange={event => setLearnerId(event.target.value)}><option value="">{t.chooseLearner}</option>{learners.map(learner => <option key={learner.value} value={learner.value} disabled={learner.requiresReview}>{learner.label}</option>)}</select>{people.nextCursor || people.moreError ? <LoadMore query={people} label={t.learner} /> : null}{people.loading ? <p role="status">{t.loading}</p> : !learners.length && !people.error ? <p>{t.noLearners}</p> : null}{people.nextCursor ? <p className="development-meta">{t.completeLearnerChoices}</p> : null}{learners.some(learner => learner.requiresReview) ? <p className="notice">{t.ambiguousLearners}</p> : null}</div> : null}
+        {!student ? <div className="field development-learner-picker"><label htmlFor={`${id}-learner`}>{t.learner}</label><select ref={learnerPicker} id={`${id}-learner`} value={learnerId} disabled={periodLocked} onChange={event => { focusSelectedLearner.current = event.target.value || null; setLearnerId(event.target.value); }}><option value="">{t.chooseLearner}</option>{learners.map(learner => <option key={learner.value} value={learner.value} disabled={learner.requiresReview}>{learner.label}</option>)}</select>{people.nextCursor || people.moreError ? <LoadMore query={people} label={t.learner} /> : null}{people.loading ? <p role="status">{t.loading}</p> : !learners.length && !people.error ? <p>{t.noLearners}</p> : null}{people.nextCursor ? <p className="development-meta">{t.completeLearnerChoices}</p> : null}{learners.some(learner => learner.requiresReview) ? <p className="notice">{t.ambiguousLearners}</p> : null}</div> : null}
         <div className="field"><label htmlFor={`${id}-period`}>{t.period}</label><select id={`${id}-period`} disabled={periodLocked} value={periodId} onChange={event => setPeriodId(event.target.value)}><option value="">{t.choosePeriod}</option>{periodChoices.map(period => <option key={period.value} value={period.value} disabled={period.requiresReview}>{period.label}</option>)}</select></div>
       </div>
       <Button type="button" variant="quiet" onClick={reload}><CuevoIcon name="refresh" />{t.refresh}</Button>
@@ -125,16 +170,16 @@ function CurrentDevelopmentWorkspace() {
     {admin ? <div className="development-configuration">
       <section className="development-panel development-policy" aria-label={t.policies}><header className="cuevo-section-header"><div className="cuevo-section-header__context"><div className="development-subheading"><CuevoIcon name="shield" variant="filled" /><h2>{t.policies}</h2></div><p>{t.policyNote}</p>{latestPolicy ? <p>{t.expectedPolicyVersion}: {number(latestPolicy.version)}</p> : policyCurrent ? <p>{t.noPolicy}</p> : null}</div><Button type="button" disabled={!policyCurrent || configurationLocked} onClick={() => setConfigure('policy')}>{t.approvePolicy}</Button></header>
       {latestPolicy ? <DevelopmentPolicyReading policy={latestPolicy} locale={locale} /> : policies.loading ? <p role="status">{t.loading}</p> : null}
-      {configure === 'policy' && policyCurrent ? <CommandForm title={t.approvePolicy} path="/v1/development/policies" note={t.policyNote} fields={[{ name: 'practice', label: t.practice, type: 'number', min: 0, max: 1000, required: true }, { name: 'revision', label: t.revision, type: 'number', min: 0, max: 1000, required: true }, { name: 'reflection', label: t.reflection, type: 'number', min: 0, max: 1000, required: true }, { name: 'milestoneTitle', label: t.milestoneTitle, maxLength: 200 }, { name: 'minimumPoints', label: t.milestonePoints, type: 'number', min: 1, max: 100000 }, { name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ expectedVersion: latestPolicy?.version ?? 0, points: Object.fromEntries(['practice', 'revision', 'reflection'].map(key => [key, Number(values.get(key))])), milestones: values.get('milestoneTitle') ? [{ key: 'milestone', title: String(values.get('milestoneTitle')), minimumPoints: Number(values.get('minimumPoints')) }] : [], confirmApproval: values.get('confirmApproval') === 'on' })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={saved} onCancel={() => setConfigure(null)} onLockedChange={onLockedChange} /> : null}
+      {policyFormVisible ? <CommandForm title={t.approvePolicy} path="/v1/development/policies" note={t.policyNote} fields={[{ name: 'practice', label: t.practice, type: 'number', min: 0, max: 1000, required: true }, { name: 'revision', label: t.revision, type: 'number', min: 0, max: 1000, required: true }, { name: 'reflection', label: t.reflection, type: 'number', min: 0, max: 1000, required: true }, { name: 'milestoneTitle', label: t.milestoneTitle, maxLength: 200 }, { name: 'minimumPoints', label: t.milestonePoints, type: 'number', min: 1, max: 100000 }, { name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ expectedVersion: latestPolicy?.version ?? 0, points: Object.fromEntries(['practice', 'revision', 'reflection'].map(key => [key, Number(values.get(key))])), milestones: values.get('milestoneTitle') ? [{ key: 'milestone', title: String(values.get('milestoneTitle')), minimumPoints: Number(values.get('minimumPoints')) }] : [], confirmApproval: values.get('confirmApproval') === 'on' })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={saved} onCancel={() => setConfigure(null)} onLockedChange={onLockedChange} /> : null}
       {policies.error ? <LearningError error={policies.error} /> : null}{policies.nextCursor || policies.moreError ? <LoadMore query={policies} label={t.policies} /> : null}
       </section>
       <section className="development-panel development-period" aria-label={t.period}><header className="cuevo-section-header"><div className="cuevo-section-header__context"><div className="development-subheading"><CuevoIcon name="calendar" variant="filled" /><h2>{t.period}</h2></div><p>{t.createPeriodNote}</p></div><Button type="button" disabled={configurationLocked || !policies.loaded || !!policies.error || !!policies.moreError || !policies.data.length} onClick={() => setConfigure('period')}>{t.createPeriod}</Button></header>
       {activePeriod ? <div className="development-period-reading"><h3><bdi>{activePeriod.title}</bdi></h3><p><time dateTime={activePeriod.startsAt}><bdi>{date(activePeriod.startsAt)}</bdi></time> – <time dateTime={activePeriod.endsAt}><bdi>{date(activePeriod.endsAt)}</bdi></time> · UTC</p><p>{t.periodPolicyVersion}: {periodPolicy ? number(periodPolicy.version) : t.unknown}</p></div> : <p className="development-meta">{t.selectedPeriodRequired}</p>}
-{configure === 'period' && policies.loaded && !policies.error && !policies.moreError && classes.loaded && !classes.error && !classes.moreError ? <CommandForm title={t.createPeriod} path="/v1/development/periods" note={t.createPeriodNote} fields={[{ name: 'classId', label: t.class, type: 'select', required: true, options: classes.data.map(row => ({ value: row.id, label: choiceLabel(row) })) }, { name: 'policyId', label: t.policy, type: 'select', required: true, options: policies.data.map(policy => ({ value: policy.id, label: `${t.policy} · ${number(policy.version)} · ${date(policy.approvedAt)}` })) }, { name: 'title', label: t.title, required: true, maxLength: 200 }, { name: 'startsAt', label: t.startsAt, type: 'datetime-local', required: true }, { name: 'endsAt', label: t.endsAt, type: 'datetime-local', required: true }, { name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ classId: String(values.get('classId')), policyId: String(values.get('policyId')), title: String(values.get('title')), startsAt: new Date(String(values.get('startsAt'))).toISOString(), endsAt: new Date(String(values.get('endsAt'))).toISOString(), confirmApproval: values.get('confirmApproval') === 'on' })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={saved} onCancel={() => setConfigure(null)} onLockedChange={onLockedChange} /> : null}
+{periodFormVisible ? <CommandForm title={t.createPeriod} path="/v1/development/periods" note={t.createPeriodNote} fields={[{ name: 'classId', label: t.class, type: 'select', required: true, options: classes.data.map(row => ({ value: row.id, label: choiceLabel(row) })) }, { name: 'policyId', label: t.policy, type: 'select', required: true, options: policies.data.map(policy => ({ value: policy.id, label: `${t.policy} · ${number(policy.version)} · ${date(policy.approvedAt)}` })) }, { name: 'title', label: t.title, required: true, maxLength: 200 }, { name: 'startsAt', label: t.startsAt, type: 'datetime-local', required: true }, { name: 'endsAt', label: t.endsAt, type: 'datetime-local', required: true }, { name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ classId: String(values.get('classId')), policyId: String(values.get('policyId')), title: String(values.get('title')), startsAt: new Date(String(values.get('startsAt'))).toISOString(), endsAt: new Date(String(values.get('endsAt'))).toISOString(), confirmApproval: values.get('confirmApproval') === 'on' })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={saved} onCancel={() => setConfigure(null)} onLockedChange={onLockedChange} /> : null}
 
       {configure === 'period' ? <>{classes.nextCursor || classes.moreError ? <LoadMore query={classes} label={t.class} /> : null}{classes.error ? <LearningError error={classes.error} /> : null}</> : null}
 
-      {activePeriod ? <CommandForm key={`backfill:${activePeriod.id}`} title={t.backfill} path="/v1/development/periods/backfill" note={t.backfillNote} fields={[{ name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ periodId: activePeriod.id, confirmApproval: values.get('confirmApproval') === 'on' })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={reload} onLockedChange={onLockedChange} /> : null}
+      {backfillFormVisible ? <CommandForm key={`backfill:${activePeriod.id}`} title={t.backfill} path="/v1/development/periods/backfill" note={t.backfillNote} fields={[{ name: 'confirmApproval', label: t.confirm, type: 'checkbox', required: true }]} body={values => ({ periodId: activePeriod.id, confirmApproval: values.get('confirmApproval') === 'on' })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={reload} onLockedChange={onLockedChange} /> : null}
 
       </section>
     </div> : null}
@@ -161,7 +206,7 @@ function CurrentDevelopmentWorkspace() {
           {achievements.nextCursor ? <p className="development-meta">{t.partialRecords}</p> : null}<LoadMore query={achievements} label={t.achievements} />
         </section>
         {activeLearnerId && activePeriod && summary ? <section className="development-panel development-board" aria-label={t.leaderboard}><div className="development-subheading"><CuevoIcon name="community" variant="filled" /><h2>{t.leaderboard}</h2></div><p>{t.noRanking}</p>
-          {student ? <CommandForm key={`participation:${activePeriod.id}`} draftKey={`leaderboard-participation:${activePeriod.id}`} title={t.participate} path="/v1/development/leaderboard/participation" fields={[...(summary.leaderboardEnabled ? [{ name: 'optIn', label: t.optIn, type: 'checkbox' as const, defaultChecked: false }] : []), { name: 'alias', label: t.alias, maxLength: 50 }]} body={values => ({ periodId: activePeriod.id, optIn: summary.leaderboardEnabled && values.get('optIn') === 'on', alias: String(values.get('alias') ?? '') })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={reload} onLockedChange={onLockedChange} note={summary.leaderboardEnabled ? t.noRanking : t.boardUnavailable} /> : null}
+          {participationFormVisible ? <CommandForm key={`participation:${activePeriod.id}`} draftKey={`leaderboard-participation:${activePeriod.id}`} title={t.participate} path="/v1/development/leaderboard/participation" fields={[...(summary.leaderboardEnabled ? [{ name: 'optIn', label: t.optIn, type: 'checkbox' as const, defaultChecked: false }] : []), { name: 'alias', label: t.alias, maxLength: 50 }]} body={values => ({ periodId: activePeriod.id, optIn: summary.leaderboardEnabled && values.get('optIn') === 'on', alias: String(values.get('alias') ?? '') })} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={reload} onLockedChange={onLockedChange} note={summary.leaderboardEnabled ? t.noRanking : t.boardUnavailable} /> : null}
           {boardRead.loading ? <p role="status">{t.loading}</p> : boardRead.error ? <LearningError error={boardRead.error} /> : board ? board.items.length ? <ol className="development-board-list">{board.items.map(item => <li key={`${item.rank}:${item.alias}`}><bdi>{item.alias}</bdi><span>{t.points}: {number(item.points)} · {t.rank}: {number(item.rank)}</span></li>)}</ol> : <p>{t.boardEmpty}</p> : !summary.leaderboardEnabled && !student ? <p>{t.boardUnavailable}</p> : null}
         </section> : null}
         <section className="development-panel development-about"><div className="development-subheading"><CuevoIcon name="help" /><h2>{t.about}</h2></div><p>{t.recordedOnly}</p>{recordFailure ? <p className="development-meta">{t.partialRecords}</p> : null}</section>

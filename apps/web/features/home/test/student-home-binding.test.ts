@@ -4,7 +4,7 @@ import { LearningApiError } from '../../../shared/api/client.ts';
 import { parseAssessment, parseSubmission } from '../../learning/model.ts';
 import { parseReleasedResult } from '../../academic/model.ts';
 import { parseLearnerGoal } from '../../development/model.ts';
-import { selectStudentHomeSources, studentRecognition, currentStudentHomeSummary, currentNativeFeedbackDisclosure, type HomeSourcePage } from '../student-home-model.ts';
+import { selectStudentHomeSources, studentRecognition, currentStudentHomeSummary, currentNativeFeedbackDisclosure, currentStudentHomeDenial, studentHomeReadFrame, type HomeSourcePage } from '../student-home-model.ts';
 import type { LearnerGoal } from '../../development/model.ts';
 
 const learnerId = '00000000-0000-4000-8000-000000000001';
@@ -12,6 +12,21 @@ const assessment = { id: 'task', courseId: 'course', courseTitle: 'Methods · Ye
 const submission = { id: 'submission', assessmentId: 'task', learnerId, content: 'My work', status: 'SUBMITTED', revision: 1, submittedAt: '2026-10-01T00:00:00Z', assessmentTitle: 'Compare explanations', learnerName: 'Learner' };
 const page = <T,>(data: T[]): HomeSourcePage<T> => ({ data, loaded: true, loading: false, nextCursor: null, error: null, moreError: null });
 const sources = () => ({ learnerId, now: Date.parse('2026-10-03T00:00:00Z'), assessments: page([parseAssessment({ ...assessment, currentSubmission: null })]), submissions: page<ReturnType<typeof parseSubmission>>([]), interventions: page([]), results: page<ReturnType<typeof parseReleasedResult>>([]), goals: page<ReturnType<typeof parseLearnerGoal>>([]) });
+
+test('Student current read frame changes immediately on token API actor role and access changes without clearing presentation preference identity', () => {
+  const app = { apiUrl: 'https://api.invalid', accessToken: 'one', membership: { schoolId: 'school', userId: learnerId, role: 'student' }, accessGeneration: 1, status: 'ready', online: true };
+  const current = studentHomeReadFrame(app);
+  for (const next of [{ ...app, accessToken: 'two' }, { ...app, apiUrl: 'https://other.invalid' }, { ...app, accessGeneration: 2 }, { ...app, membership: { ...app.membership, userId: 'other' } }, { ...app, online: false }]) assert.notEqual(studentHomeReadFrame(next), current);
+});
+
+test('Student Home denial stays refused when a continuation retry clears its error until fresh current read', () => {
+  const source = { error: null, moreError: new LearningApiError('denied') };
+  const refused = currentStudentHomeDenial(null, 'source:0', [source]);
+  assert.ok(refused);
+  assert.equal(currentStudentHomeDenial(refused, 'source:0', [{ error: null, moreError: null }]), refused);
+  assert.equal(currentStudentHomeDenial(refused, 'source:1', [{ error: null, moreError: null }]), null);
+  assert.equal(currentStudentHomeDenial(null, 'source:0', [{ error: null, moreError: new LearningApiError('unavailable') }]), null);
+});
 
 test('exact own submitted source prevents an unsubmitted action even outside the independent queue', () => {
   const input = sources(); input.assessments.data[0] = parseAssessment({ ...assessment, currentSubmission: submission });

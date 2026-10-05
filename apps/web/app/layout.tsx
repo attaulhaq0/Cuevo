@@ -15,6 +15,7 @@ import '../features/community/styles.css';
 import '../features/portfolio/styles.css';
 import '../features/development/styles.css';
 import '../features/curriculum/styles.css';
+import '../features/restricted-records/styles.css';
 import '../features/home/styles.css';
 import '../shared/characters/styles.css';
 

@@ -1,3 +1,5 @@
+import { openCurrentPractice } from './practice-reader';
+import { openCurrentProposal } from './proposal-reader';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type APIResponse } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -68,15 +70,6 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   };
   const mutation = (path: string) => page.waitForResponse(response => response.url() === `${apiUrl}${path}` && response.request().method() === 'POST');
-  const loadRow = async (row: ReturnType<typeof page.locator>) => {
-    await expect(page.getByText('Loading next steps…', { exact: true })).toHaveCount(0);
-    while (!await row.count()) {
-      const more = page.getByRole('button', { name: 'Load more', exact: true });
-      expect(await more.count()).toBeGreaterThan(0);
-      await more.first().click();
-      await expect(page.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0);
-    }
-  };
   let visualIndex = 0;
   const visualCheck = async (target: ReturnType<typeof page.locator>) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -114,7 +107,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   expect(proposal).toMatchObject({ origin: 'AI_GENERATED', generationMode: 'FIXTURE', status: 'AWAITING_HUMAN', baselineResultId: baseline.id });
   expect(proposal.intelligenceRunId).toEqual(expect.any(String));
   const proposalRow = page.locator(`[data-recommendation-id="${proposal.id}"]`);
-  await loadRow(proposalRow);
+  await openCurrentProposal(page, String(proposal.id));
   await expect(proposalRow.getByText('Demonstration analysis', { exact: true })).toBeVisible();
   await expect(proposalRow).toContainText('prepared example output');
   await expect(proposalRow.getByText('Live model analysis', { exact: true })).toHaveCount(0);
@@ -143,7 +136,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await signIn(student);
   await page.getByRole('button', { name: 'Next steps', exact: true }).click();
   const practice = page.locator(`[data-intervention-id="${interventionId}"]`);
-  await loadRow(practice);
+  await openCurrentPractice(page, interventionId);
   await expect(practice.getByRole('heading', { name: `${title} approved practice`, exact: true })).toBeVisible();
   await practice.getByLabel('Reflection (optional)').fill('I tried the approved example and explained each step.');
   const completion = mutation(`/v1/interventions/${interventionId}/complete`);
@@ -156,7 +149,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await signIn(teacher);
   await page.getByRole('button', { name: 'Next steps', exact: true }).click();
   await page.getByRole('button', { name: 'Practice tasks', exact: true }).click();
-  await loadRow(practice);
+  await openCurrentPractice(page, interventionId);
   await practice.getByRole('button', { name: 'Link follow-up assessment', exact: true }).click();
   const followUpForm = practice.getByRole('region', { name: 'Link follow-up assessment', exact: true });
   const assessmentPages=page.getByRole('region',{name:'Published follow-up assessment',exact:true});
@@ -174,6 +167,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   expect((await receipt(await linked)).followUpAssessmentId).toBe(followUpAssessment.id);
   const followUp = await release(followUpAssessment.id, 3);
   await page.getByRole('button', { name: 'Refresh next steps', exact: true }).click();
+  await openCurrentPractice(page, interventionId);
   await practice.getByRole('button', { name: 'Measure observed change', exact: true }).click();
   const measureForm = practice.getByRole('region', { name: 'Measure observed change', exact: true });
   await measureForm.getByLabel('Released follow-up result').selectOption(followUp.id);
@@ -182,6 +176,8 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await measureForm.getByRole('button', { name: 'Measure observed change', exact: true }).click();
   const outcome = await receipt(await measured);
   expect(outcome).toMatchObject({ status: 'improved', difference: 3, baseline: { score: 0, maxScore: 10 }, followUp: { score: 3, maxScore: 10 }, limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF' });
+  expect(typeof outcome.measuredAt).toBe('string');
+  expect(Number.isFinite(Date.parse(String(outcome.measuredAt)))).toBe(true);
   await signOut();
 
   await signIn(student);
@@ -197,15 +193,26 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
     }
     expect(response.ok(), `Learner state HTTP ${response.status()} ${errorCode}`).toBe(true);
     await expect(page.getByText('Loading learner state…', { exact: true })).toHaveCount(0);
-    return page.locator(`[data-outcome-id="${outcome.id}"]`).count();
+    const current = await response.json() as { learnerId: string; impact: { outcomes: { id: string; interventionId: string; baselineResultId: string; followUpResultId: string }[] } };
+    expect(current.learnerId).toBe('20000000-0000-4000-8000-000000000012');
+    return current.impact.outcomes.filter(record => record.id === outcome.id && record.interventionId === interventionId && record.baselineResultId === baseline.id && record.followUpResultId === followUp.id).length;
   }, { timeout: 15_000 }).toBe(1);
   const progressSupport = page.locator(`.progress-workspace [data-intervention-id="${interventionId}"]`);
   await expect(progressSupport.getByText('Measured', { exact: true })).toBeVisible();
+  const measuredLabel = await page.evaluate(value => new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value)), String(outcome.measuredAt));
+  const observedChange = page.locator('.progress-workspace .support-outcome-disclosure > button').filter({ hasText: `Observed change · ${measuredLabel}` });
+  await expect(observedChange, 'One recorded measured date must identify the current outcome before its private sources open').toHaveCount(1);
+  await expect(page.locator(`.progress-workspace [data-outcome-id="${outcome.id}"]`)).toHaveCount(0);
+  const currentIntervention = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/interventions/${interventionId}` && response.request().method() === 'GET');
+  await observedChange.click();
+  const interventionResponse = await currentIntervention; expect(interventionResponse.ok()).toBe(true);
+  expect(await interventionResponse.json()).toMatchObject({ id: interventionId, learnerId: '20000000-0000-4000-8000-000000000012', baselineResultId: baseline.id, status: 'MEASURED' });
   const progressOutcome = page.locator(`.progress-workspace [data-outcome-id="${outcome.id}"]`);
+  await expect(progressOutcome).toBeVisible();
   await expect(progressOutcome).toContainText('0 / 10');
   await expect(progressOutcome).toContainText('3 / 10');
   await expect(progressOutcome).toContainText('Observed change is not proof that the practice caused the outcome.');
-  await progressOutcome.getByText('Cited evidence', { exact: true }).click();
+  await progressOutcome.locator('details > summary').filter({ hasText: 'Technical details' }).click();
   await expect(progressOutcome).toContainText(baseline.id);
   await expect(progressOutcome).toContainText(followUp.id);
   await visualCheck(progressOutcome);

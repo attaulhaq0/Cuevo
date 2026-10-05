@@ -47,7 +47,10 @@
 .curriculum-course-review__heading,.curriculum-programme-learners__heading,.curriculum-planning__heading { display: flex; justify-content: space-between; align-items: start; gap: var(--space-3); }
 .curriculum-course-review__heading>div,.curriculum-programme-learners__heading>div { display: flex; gap: var(--space-2); align-items: start; }
 .curriculum-course-review__context,.curriculum-programme-learners__context,.curriculum-planning__context { padding: var(--space-3); background: var(--color-surface-muted); border-radius: var(--radius-md); }
-.curriculum-course-review__layout { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: var(--space-4); align-items: start; }
+.curriculum-course-review__layout { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-4); align-items: start; }
+.curriculum-course-review__layout[data-selected="true"] { grid-template-columns: minmax(15rem,.7fr) minmax(0,1.5fr); }
+.curriculum-course-review__layout[data-selected="true"] > .curriculum-course-review__list { max-block-size:min(34rem,65dvh);overflow:auto;overscroll-behavior:contain;scroll-padding-block:var(--space-2); }
+.curriculum-course-review__objective[data-selected="true"] { border-color:var(--color-selection-border);background:var(--color-selection-surface); }
 .curriculum-course-review__list,.curriculum-programme-learners__list { display: grid; gap: var(--space-3); min-inline-size: 0; }
 .curriculum-course-review__objective,.curriculum-programme-learners__assignment,.curriculum-planning__plan { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--color-material-reading); min-inline-size: 0; }
 .curriculum-course-review__objective header,.curriculum-programme-learners__assignment header { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
@@ -75,6 +78,8 @@
  .curriculum-workspace__editor { padding: var(--space-3); }
  .curriculum-workspace__editor-heading,.curriculum-record__heading,.curriculum-source-review__heading,.curriculum-course-review__heading,.curriculum-programme-learners__heading,.curriculum-planning__heading { flex-wrap: wrap; }
  .curriculum-source-review__selectors,.curriculum-planning__selectors,.curriculum-course-review__layout { grid-template-columns:minmax(0,1fr); }
+ .curriculum-course-review__layout[data-selected="true"] { grid-template-columns:minmax(0,1fr); }
+ .curriculum-course-review__layout[data-selected="true"] > .curriculum-course-review__list { display:none; }
  .curriculum-source-review__content { padding: var(--space-3); }
  .curriculum-record__reviews { display: grid; grid-template-columns: minmax(0,1fr); }
  .curriculum-course-review__objective,.curriculum-programme-learners__assignment,.curriculum-planning__plan { padding: var(--space-3); }

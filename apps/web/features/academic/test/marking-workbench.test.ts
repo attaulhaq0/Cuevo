@@ -6,6 +6,7 @@ import { Providers } from '../../../shared/session/providers.tsx';
 import { currentMarkingReference, type AcademicReference, type MarkingItem } from '../model.ts';
 import { MarkingWorkbench, MarkingChoices } from '../components/marking-workbench.tsx';
 import { createRequire } from 'node:module';
+import { WorkspacePageHeading } from '@cuevo/ui';
 type RenderedElement = { textContent: string; querySelector(selector: string): RenderedElement | null; querySelectorAll(selector: string): RenderedElement[] };
 const { parse } = createRequire(import.meta.url)('next/dist/compiled/node-html-parser') as { parse(html: string): RenderedElement };
 
@@ -25,6 +26,11 @@ test('the selected workbench keeps original work and objective description befor
   assert.ok(html.indexOf(item.content) < html.indexOf('Save marking draft'));
   assert.ok(html.indexOf(reference.description) < html.indexOf('Save marking draft'));
   assert.doesNotMatch(html, /value="0"|Noor|School checking course/);
+});
+
+test('content-first marking page omits only the repeated directory title and keeps current submitted work choices', () => {
+  const html = render(createElement(React.Fragment, null, createElement(WorkspacePageHeading, { title: 'Marking' }), createElement(MarkingChoices, { items: [item], selected: null, onSelected() {}, pageHeading: true })));
+  assert.equal((html.match(/>Marking<\//g) ?? []).length, 1); assert.match(html, /Explain a checking step/); assert.match(html, /Alex Reed/); assert.match(html, /Select submitted work/);
 });
 test('rubric review shows every native criterion and allowed descriptor without a numeric substitute', () => {
   const rubric: MarkingItem = { ...item, model: 'rubric', rubric: { id, title: 'School explanation rubric', version: 'school-v1', criteria: [{ key: 'explanation', title: 'Explanation', levels: [{ key: 'developing', label: 'Developing', description: 'Explain a relevant step.' }, { key: 'secure', label: 'Secure', description: 'Explain connected steps.' }] }, { key: 'checking', title: 'Checking', levels: [{ key: 'shown', label: 'Shown', description: 'Show a relevant check.' }] }] } };

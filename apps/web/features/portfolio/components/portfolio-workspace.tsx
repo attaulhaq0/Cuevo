@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, CuevoIcon, Status } from '@cuevo/ui';
+import { Button, CuevoIcon, Status, WorkspacePageHeading } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
 import { CommandForm } from '../../../shared/components/command-form';
@@ -22,8 +22,8 @@ import { trailAssets } from '../../../shared/characters/assets';
 export function PortfolioWorkspace() {
   const app = useApp();
   const trail = app.locale === 'ar' ? portfolioTrailAr : portfolioTrailEn;
-  if (!app.online) return <p className="notice" role="status">{trail.offline}</p>;
-  if (app.status !== 'ready') return null;
+  if (!app.online) return <><WorkspacePageHeading title={app.locale==='ar'?portfolioAr.portfolio:portfolioEn.portfolio}/><p className="notice" role="status">{trail.offline}</p></>;
+  if (app.status !== 'ready') return <WorkspacePageHeading title={app.locale==='ar'?portfolioAr.portfolio:portfolioEn.portfolio}/>;
   return <CurrentPortfolioWorkspace key={`${app.apiUrl}:${app.membership?.schoolId}:${app.membership?.userId}:${app.membership?.role}`} />;
 }
 
@@ -33,6 +33,7 @@ function CurrentPortfolioWorkspace() {
   const trail = locale === 'ar' ? portfolioTrailAr : portfolioTrailEn;
   const student = membership?.role === 'student';
   const parent = membership?.role === 'parent';
+  const coordinator = membership?.role === 'coordinator';
   const reviewer = membership?.role === 'teacher' || membership?.role === 'admin';
   const [refresh, setRefresh] = useState(0);
   const prefix = `${membership?.schoolId}:${membership?.userId}:/v1/portfolio/items`;
@@ -116,7 +117,7 @@ function CurrentPortfolioWorkspace() {
     <ChildSelector context={childContext} />
     <header className="portfolio-journey-heading">
       <img src={creating ? trailAssets.owl : trailAssets.portfolio} width={88} height={88} alt="" aria-hidden="true" />
-      <div><h2>{creating ? trail.reflectionTitle : student ? trail.journeyTitle : parent ? trail.parentTitle : trail.reviewTitle}</h2><p>{creating ? trail.reflectionSubtitle : student ? trail.journeyBody : parent ? trail.parentBody : trail.reviewBody}</p></div>
+      <WorkspacePageHeading title={creating ? trail.reflectionTitle : student ? trail.journeyTitle : parent ? trail.parentTitle : trail.reviewTitle} caption={parent ? childContext.child?.displayName : undefined} description={creating ? trail.reflectionSubtitle : student ? trail.journeyBody : parent ? trail.parentBody : coordinator ? trail.coordinatorBody : trail.reviewBody}/>
       {student ? <Button type="button" disabled={results.loading || !!results.error || !availableChoices.length} onClick={() => { focusTarget.current = 'create'; setCreating(true); }}><CuevoIcon name="reflection" size={20} />{t.selectWork}</Button> : null}
     </header>
     <div className="portfolio-toolbar"><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" size={18} />{t.refresh}</Button>{parent ? <p className="portfolio-privacy-note"><CuevoIcon name="shield" size={18} />{t.parentNote}</p> : null}</div>
@@ -151,10 +152,10 @@ function CurrentPortfolioWorkspace() {
         {historyId === item.id && !parent ? <section className="portfolio-history" aria-label={t.history}><h3>{t.history}</h3>{history.loading ? <p role="status">{t.loading}</p> : history.error ? <LearningError error={history.error} /> : history.data.map(row => <article key={row.revisionId}><h4>{t.revision} {number.format(row.revision)}</h4><p dir="auto">{row.reflection}</p></article>)}<LoadMore query={history} /></section> : null}
       </article>;
     })}</div>}
-    {items.loaded && !items.loading && !items.error && !items.data.length ? <section className="portfolio-empty"><img src={trailAssets.reflect} width={88} height={88} alt="" aria-hidden="true" /><h3>{parent ? trail.parentEmptyTitle : trail.emptyTitle}</h3><p>{parent ? trail.parentEmptyBody : student ? trail.emptyBody : t.noItems}</p>{student && !results.loading && !results.error && !results.data.length ? <p>{t.noSources}</p> : null}</section> : null}
+    {items.loaded && !items.loading && !items.error && !items.data.length ? <section className="portfolio-empty"><img src={trailAssets.reflect} width={88} height={88} alt="" aria-hidden="true" /><h2>{parent ? trail.parentEmptyTitle : coordinator ? trail.coordinatorEmptyTitle : trail.emptyTitle}</h2><p>{parent ? trail.parentEmptyBody : student ? trail.emptyBody : t.noItems}</p>{student && !results.loading && !results.error && !results.data.length ? <p>{t.noSources}</p> : null}</section> : null}
     {!parent || childContext.child ? <LoadMore query={items} /> : null}
     {student && results.nextCursor ? <div className="notice"><p>{t.evidence}</p><LoadMore query={results} /></div> : null}
-    {(student || reviewer) ? <PortfolioOrganization items={items.loading || items.error ? [] : items.data} refresh={refresh} onChanged={saved} /> : null}
+    {(student || reviewer) ? <PortfolioOrganization items={items.loading || items.error ? [] : items.data} refresh={refresh} onChanged={saved} reviewPathOwned={action?.type==='review'?`/v1/portfolio/items/${action.id}/review`:undefined} /> : null}
     {student ? <div className="portfolio-private-files"><PrivateFiles /></div> : null}
   </div>;
 }

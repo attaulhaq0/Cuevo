@@ -27,6 +27,7 @@ function render(role = 'admin', policyState: Record<string, unknown> = {}) {
 
 test('administrator configuration reads exact approved values before a learner is selected and mounts no personal record panels', () => {
   const html = render();
+  assert.equal((html.match(/<h1/g) ?? []).length, 1); assert.match(html, /<h1[^>]*>Development<\/h1>/);
   assert.match(html, /development-configuration/);
   assert.match(html, /Practice points<\/dt><dd>0/);
   assert.match(html, /Current approved recognition policy: 4/);
@@ -43,6 +44,7 @@ test('an incomplete policy page cannot show a previous policy as current or appr
 
 test('a failed policy read keeps recovery visible and withholds previous approved values', () => {
   const html = render('admin', { error: new LearningApiError('denied') });
+  assert.equal((html.match(/<h1/g) ?? []).length, 1);
   assert.match(html, /role="alert"/);
   assert.match(html, /Refresh development/);
   assert.doesNotMatch(html, /Practice points<\/dt>|Current approved recognition policy: 4|Approved on/);

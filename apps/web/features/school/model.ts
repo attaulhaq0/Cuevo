@@ -91,3 +91,5 @@ export function parseSchedule(value: unknown): ScheduleRow {
   if (!object(value) || !text(value.id) || !(value.classId === null || text(value.classId)) || !date(value.startsAt) || !date(value.endsAt) || Date.parse(String(value.endsAt)) <= Date.parse(String(value.startsAt))) throw new LearningApiError('invalid');
   return value as ScheduleRow;
 }
+
+export { readBoundAccountPage, parseBoundDelivery, validateAccountReceipt, parseAccountSelection, type AccountSelection } from './account-model.ts';

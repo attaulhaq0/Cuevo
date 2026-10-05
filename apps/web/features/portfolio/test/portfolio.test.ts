@@ -3,7 +3,7 @@ import test from 'node:test';
 import { parsePortfolioItem, parsePortfolioRevision, parsePrivateAsset, parsePortfolioSourceWork, parsePortfolioRequestedReview, parsePortfolioFeedbackRequest,portfolioWorkChoices } from '../model.ts';
 import { LearningApiError } from '../../../shared/api/client.ts';
 import * as portfolio from '../model.ts';
-import { CommandJournal, confirmCommandReceipt } from '../../../shared/api/client.ts';
+import { CommandJournal, confirmCommandReceipt, captureCommandReceiptValidator } from '../../../shared/api/client.ts';
 const item = { id: 'p', revisionId: 'pr1', revision: 1, learnerId: 'l', sourceModel: 'numeric', title: 'Selected explanation', reflection: 'I explained the source.', createdAt: '2026-10-01T00:00:00Z', feedback: null, featured: false, approvalState: 'AWAITING_REVIEW', parentVisible: false, reviewedAt: null, evidenceId: 'e', resultId: 'r', submissionId: 's', referenceId: 'ref', referenceVersion: 'v1', policyVersion: 2, nativeResult: { type: 'numeric', score: 0, maxScore: 10, policyVersion: 2 }, assessmentTitle: 'School task', referenceTitle: 'Objective' };
 test('selected work preserves zero and source/native revision without inheriting parent approval', () => {
   const result = parsePortfolioItem(item); assert.equal(result.parentVisible, false);
@@ -143,4 +143,47 @@ test('portfolio history verifies the immutable item source before using revision
  const row=portfolio.parsePortfolioHistoryForItem(older,exactItem);
  assert.equal(row.id,otherId);assert.equal(row.revision,2);assert.equal(row.parentVisible,true);assert.equal(row.artifactCount,0);
  for(const changed of [{...older,id:otherId},{...older,learnerId:otherId},{...older,evidenceId:otherId},{...older,resultId:otherId},{...older,submissionId:otherId},{...older,referenceId:otherId},{...older,referenceVersion:'v2'},{...older,policyVersion:3,nativeResult:{...older.nativeResult,policyVersion:3}}])assert.throws(()=>portfolio.parsePortfolioHistoryForItem(changed,exactItem),LearningApiError);
+});
+
+
+test('organization receipts validate the new row and exact original placement revision before journal settlement',()=>{
+ const parse=(portfolio as unknown as {parsePortfolioOrganizationReceipt:(value:unknown,command:'collection.create'|'placement.create'|'feedback.request',expectedRevision?:number)=>{id:string;revision:number}}).parsePortfolioOrganizationReceipt;
+ assert.equal(typeof parse,'function');
+ for(const example of [
+  {kind:'collection.create' as const,path:'/v1/portfolio/collections',body:{title:'My explanations',description:'Selected school work'},revision:1},
+  {kind:'feedback.request' as const,path:`/v1/portfolio/items/${sourceId}/feedback-request`,body:{revisionId:sourceId,expectedRevision:4,message:'Review this reflection',confirmRequest:true},revision:1},
+  {kind:'placement.create' as const,path:`/v1/portfolio/items/${sourceId}/placement`,body:{collectionId:sourceId,expectedRevision:4,position:2},revision:5},
+ ]){
+  const journal=new CommandJournal();const command=journal.prepare(example.path,example.path,example.body);let effects=0;
+  const validate=captureCommandReceiptValidator(command,(receipt,original)=>{parse(receipt,example.kind,example.kind==='placement.create'?Number(original.body.expectedRevision):undefined);});
+  for(const receipt of [null,[],{}, {id:otherId}, {id:'not-a-row',revision:example.revision}, {id:otherId,revision:0}, {id:otherId,revision:1.5}, {id:otherId,revision:example.revision+1}, {id:otherId,revision:Number.MAX_SAFE_INTEGER+1}]){
+   assert.throws(()=>confirmCommandReceipt(journal,example.path,command.key,receipt,()=>{effects++;},validate),error=>error instanceof LearningApiError&&error.kind==='invalid'&&error.uncertain);
+   assert.equal(journal.get(example.path)?.key,command.key);assert.equal(effects,0);
+  }
+  // Placement returns a new placement-row ID, not the selected item ID.
+  assert.deepEqual(parse({id:otherId,revision:example.revision},example.kind,example.kind==='placement.create'?4:undefined),{id:otherId,revision:example.revision});
+  assert.equal(confirmCommandReceipt(journal,example.path,command.key,{id:otherId,revision:example.revision},()=>{effects++;},validate),true);
+  assert.equal(effects,1);assert.equal(journal.get(example.path),undefined);
+ }
+});
+
+test('organization placement receipt capture cannot follow a changed revision or accept an unknown expected basis',()=>{
+ const parse=(portfolio as unknown as {parsePortfolioOrganizationReceipt:(value:unknown,command:'placement.create',expectedRevision?:number)=>{id:string;revision:number}}).parsePortfolioOrganizationReceipt;
+ assert.equal(typeof parse,'function');
+ const journal=new CommandJournal();const path=`/v1/portfolio/items/${sourceId}/placement`;const original=journal.prepare(path,path,{collectionId:null,expectedRevision:0,position:1});
+ const validate=captureCommandReceiptValidator(original,(receipt,command)=>{parse(receipt,'placement.create',Number(command.body.expectedRevision));});
+ original.body.expectedRevision=9;
+ assert.throws(()=>confirmCommandReceipt(journal,path,original.key,{id:otherId,revision:10},undefined,validate),error=>error instanceof LearningApiError&&error.uncertain);
+ assert.equal(journal.get(path)?.key,original.key);
+ assert.equal(confirmCommandReceipt(journal,path,original.key,{id:otherId,revision:1},undefined,validate),true);
+ for(const basis of [undefined,-1,1.5,Number.MAX_SAFE_INTEGER,Number.NaN])assert.throws(()=>parse({id:otherId,revision:1},'placement.create',basis),error=>error instanceof LearningApiError&&error.uncertain);
+});
+
+
+test('organization selection restoration accepts only exact local IDs and revision basis',()=>{
+ const parse=(portfolio as unknown as {parsePortfolioOrganizationSelection:(value:unknown)=>unknown}).parsePortfolioOrganizationSelection;
+ assert.equal(typeof parse,'function');
+ const examples=[{kind:'create'},{kind:'placement',itemId:sourceId,revisionId:otherId,revision:2,placementRevision:0},{kind:'feedback-request',itemId:sourceId,revisionId:otherId,revision:2},{kind:'review',requestId:otherId,itemId:sourceId,revisionId:otherId}];
+ for(const selection of examples)assert.deepEqual(parse(selection),selection);
+ for(const value of [null,[],{}, {kind:'other'},{kind:'create',title:'Protected work'},{...examples[1],reflection:'Protected response'}, {...examples[2],itemId:'unknown'}, {...examples[2],revisionId:''}, {...examples[2],revision:0}, {...examples[2],revision:1.5}, {...examples[2],revision:Number.MAX_SAFE_INTEGER+1}, {...examples[1],placementRevision:-1}, {...examples[1],placementRevision:1.5}, {...examples[3],requestId:'unknown'},{...examples[3],revision:1}])assert.throws(()=>parse(value),LearningApiError);
 });

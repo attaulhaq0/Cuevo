@@ -129,3 +129,41 @@ export function parsePortfolioCommandReceipt(value:unknown,command:'create'|'ref
   }
   return {id:receipt.id,revisionId:receipt.revisionId,revision:Number(receipt.revision),status};
 }
+
+
+export type PortfolioOrganizationCommand='collection.create'|'placement.create'|'feedback.request';
+export type PortfolioOrganizationReceipt={id:string;revision:number};
+/** Organization SQL returns a new row ID; only placement revisions follow the original expected basis. */
+export function parsePortfolioOrganizationReceipt(value:unknown,command:PortfolioOrganizationCommand,expectedRevision?:number):PortfolioOrganizationReceipt {
+ const invalid=():never=>{throw new LearningApiError('invalid',true);};
+ if(!value||typeof value!=='object'||Array.isArray(value))return invalid();
+ const receipt=value as Record<string,unknown>;const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ if(typeof receipt.id!=='string'||!uuid.test(receipt.id)||!Number.isSafeInteger(receipt.revision)||Number(receipt.revision)<1)return invalid();
+ if(!['collection.create','placement.create','feedback.request'].includes(command))return invalid();
+ if(command==='placement.create'&&(!Number.isSafeInteger(expectedRevision)||expectedRevision!<0||expectedRevision!>=Number.MAX_SAFE_INTEGER))return invalid();
+ const revision=command==='placement.create'?expectedRevision!+1:1;
+ if(receipt.revision!==revision)return invalid();
+ return{id:receipt.id,revision};
+}
+
+
+export type PortfolioOrganizationSelection=
+ |{kind:'create'}
+ |{kind:'placement';itemId:string;revisionId:string;revision:number;placementRevision:number}
+ |{kind:'feedback-request';itemId:string;revisionId:string;revision:number}
+ |{kind:'review';requestId:string;itemId:string;revisionId:string};
+/** In-memory navigation intent only: never restore query content or grant current source authority. */
+export function parsePortfolioOrganizationSelection(value:unknown):PortfolioOrganizationSelection {
+ const invalid=():never=>{throw new LearningApiError('invalid');};
+ if(!value||typeof value!=='object'||Array.isArray(value))return invalid();
+ const row=value as Record<string,unknown>;const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ const kind=row.kind;
+ const keys=kind==='create'?['kind']:kind==='placement'?['kind','itemId','revisionId','revision','placementRevision']:kind==='feedback-request'?['kind','itemId','revisionId','revision']:kind==='review'?['kind','requestId','itemId','revisionId']:null;
+ if(!keys||Object.keys(row).length!==keys.length||keys.some(key=>!(key in row)))return invalid();
+ if(kind==='create')return{kind};
+ if(['itemId','revisionId',...(kind==='review'?['requestId']:[])].some(key=>typeof row[key]!=='string'||!uuid.test(String(row[key]))))return invalid();
+ if(kind==='review')return{kind,requestId:String(row.requestId),itemId:String(row.itemId),revisionId:String(row.revisionId)};
+ if(!Number.isSafeInteger(row.revision)||Number(row.revision)<1||kind==='placement'&&(!Number.isSafeInteger(row.placementRevision)||Number(row.placementRevision)<0))return invalid();
+ if(kind==='placement')return{kind,itemId:String(row.itemId),revisionId:String(row.revisionId),revision:Number(row.revision),placementRevision:Number(row.placementRevision)};
+ return{kind:'feedback-request',itemId:String(row.itemId),revisionId:String(row.revisionId),revision:Number(row.revision)};
+}
