@@ -7,6 +7,7 @@
 .coordinator-trail__content { max-inline-size: var(--content-width); margin-inline: auto; padding: var(--space-3) var(--space-3) var(--space-5); }
 .coordinator-trail__intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: start; gap: var(--space-4); margin-block: 0 var(--space-4); }
 .coordinator-trail__intro h1 { font-size: clamp(1.75rem, 2vw, 2.125rem); font-weight: var(--font-weight-bold); line-height: 1.25; letter-spacing: var(--tracking-heading); margin: 0; }
+.coordinator-trail__intro h1 { overflow-wrap:anywhere; }
 .coordinator-trail__intro > div > p { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font-size: var(--type-sm); }
 .coordinator-trail__intro-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
 .coordinator-trail__intro-actions > .button { grid-column: 1; grid-row: 1; justify-self: start; }

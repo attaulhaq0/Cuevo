@@ -28,7 +28,7 @@ test('switching language clears the previous-language saved action notice', asyn
   await page.getByRole('button', { name: 'العربية', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(notice).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'المجتمع', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'غرف الصف والمجموعات', level:1, exact: true })).toBeVisible();
 });
 
 test('class review brings the current named learner detail into keyboard focus and preserves refresh focus', async ({ page }) => {
@@ -41,8 +41,9 @@ test('class review brings the current named learner detail into keyboard focus a
   const refresh = page.getByRole('button', { name: 'Refresh learner state', exact: true }); await refresh.click(); await settled(page); await expect(refresh).toBeFocused();
   await page.emulateMedia({ reducedMotion: 'reduce' }); await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await page.getByRole('button',{name:'العودة إلى الطلاب',exact:true}).click();
   await row.getByRole('button', { name: 'مراجعة هذا الطالب', exact: true }).focus(); await page.keyboard.press('Enter');
-  const arabic = page.getByRole('heading').filter({ hasText: /^شواهد الطالب الحالي · Lina Al-Kuwari/ }); await expect(arabic).toBeFocused(); await expect(arabic).toBeInViewport();
+  const arabic = page.getByRole('heading',{level:2,name:/^شواهد الطالب الحالي · Lina Al-Kuwari(?: ·|$)/}); await expect(arabic).toBeFocused(); await expect(arabic).toBeInViewport();
 });
 
 test('class review announces the named denied or unknown detail and class choices retain exact year context', async ({ page }) => {
@@ -62,5 +63,6 @@ test('class review announces the named denied or unknown detail and class choice
   const detail = page.getByRole('region', { name: /^Current learner evidence · Lina Al-Kuwari/ }); await expect(detail.getByRole('alert')).toBeVisible();
   await page.unroute(route);
   await page.route(route, intercepted => intercepted.fulfill({ contentType: 'application/json', body: JSON.stringify({ learnerId: '20000000-0000-4000-8000-000000000012', status: 'UNKNOWN', generatedAt: null, version: null, academic: [], development: { practice: { count: null, observationIds: [] }, revision: { count: null, observationIds: [] }, reflection: { count: null, observationIds: [] }, windowStart: null, windowEnd: null }, engagement: { completedActivityCount: null, lastCompletedAt: null }, support: { activeInterventionIds: [], items: [] }, impact: { status: 'unmeasured', measurementIds: [], outcomes: [] }, sourceEventIds: [] }) }));
+  await page.getByRole('button',{name:'Back to learners',exact:true}).click();
   await row.getByRole('button', { name: 'Review this learner', exact: true }).click(); await expect(heading).toBeFocused(); await expect(detail.getByText('Not yet measured', { exact: true }).first()).toBeVisible();
 });

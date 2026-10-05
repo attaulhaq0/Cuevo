@@ -46,6 +46,7 @@
 .admin-trail__people li > span { display: grid; place-items: center; inline-size: 2.75rem; block-size: 2.75rem; border-radius: var(--radius-pill); background: var(--color-learning-surface); color: var(--color-accent); flex: none; }
 .admin-trail__people li > div { flex: 1; min-inline-size: 0; }
 .admin-trail__people h3 { font-size: var(--type-sm); margin: 0; }
+.admin-trail__people :is(h3,p),.admin-trail__panel h2 { overflow-wrap:anywhere; }
 .admin-trail__people p { font-size: var(--type-xs); margin: 0; color: var(--color-text-secondary); }
 .admin-trail__people .button { padding-inline: var(--space-1); }
 .admin-trail__configuration h2 { font-size: var(--type-lead); }
@@ -77,3 +78,5 @@
 @media (max-width: 1100px) { .admin-trail__areas { grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr)); } .admin-trail__grid { grid-template-columns: minmax(0, 1fr); } .admin-trail__left { grid-template-columns: repeat(2, minmax(0, 1fr)); } .admin-trail__right { grid-column: 1; } }
 @media (max-width: 900px) { .admin-trail__intro { flex-direction: column; align-items: start; } .admin-trail__school { flex: none; padding: var(--space-3) var(--space-4); } .admin-trail__intro > div > p { font-size: var(--type-body); } .admin-trail__left, .admin-trail__right { grid-column: 1; grid-row: auto; } }
 @media (max-width: 550px) { .admin-trail__content { padding: var(--space-2) 0 var(--space-3); } .admin-trail__intro { padding-inline: 0; gap: var(--space-3); } .admin-trail__intro h1 { font-size: 1.75rem; } .admin-trail__areas { display: flex; overflow-x: auto; padding: var(--space-1); margin-inline: calc(-1 * var(--space-1)); gap: var(--space-2); } .admin-trail__areas button { flex: 0 0 8rem; min-block-size: 5.5rem; } .admin-trail__grid, .admin-trail__left, .admin-trail__right { grid-template-columns: minmax(0, 1fr); } .admin-trail__policies, .admin-trail__governance, .admin-trail__execution, .admin-trail__audit { grid-column: 1; grid-row: auto; } .admin-trail__heading { flex-wrap: wrap; } .admin-trail__configuration li { flex-wrap: wrap; } .admin-trail__configuration li .button { margin-inline-start: 3.5rem; } .admin-trail__people li .button { padding-inline: var(--space-1); } }
+@media(max-width:550px) { .admin-trail__context dl > div { grid-template-columns:minmax(0,1fr); } .admin-trail__context dd { text-align:start; } .admin-trail__people li { flex-wrap:wrap; } .admin-trail__people li > div { flex:1 1 8rem; } .admin-trail__heading > .button,.admin-trail__people li .button { max-inline-size:100%; min-inline-size:0; white-space:normal; overflow-wrap:anywhere; } }
+@media(max-width:550px) { .admin-trail__panel > .button { max-inline-size:100%; min-inline-size:0; white-space:normal; overflow-wrap:anywhere; } }

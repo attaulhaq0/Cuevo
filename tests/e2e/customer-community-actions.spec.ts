@@ -40,7 +40,7 @@ test('teacher-led group membership, peer replies, moderation and family notifica
     await postForm.getByLabel('Message', { exact: true }).fill('A second example checks each step in another order.');
     const secondPost = await mutate('student creates a second source for distinct reply drafts', /\/posts$/, () => postForm.getByRole('button', { name: 'Post to room', exact: true }).click());
     let postRow = page.locator(`[data-post-id="${post.id}"]`); await target(page, postRow);
-    await expect(postRow.getByRole('region',{name:'Helpful 0',exact:true})).toBeVisible();await expect(postRow.getByRole('button',{name:'Helpful',exact:true})).toBeEnabled();
+    await expect(postRow.getByRole('heading',{name:'Helpful · 0',exact:true})).toBeVisible();await expect(postRow.getByRole('button',{name:'Helpful · 0',exact:true})).toBeEnabled();
     let releaseReaction!: () => void; const heldReaction = new Promise<void>(resolve => { releaseReaction = resolve; }); let reactionCommitted!: () => void; const committedReaction = new Promise<void>(resolve => { reactionCommitted = resolve; }); let reactionHandled!: () => void; const handledReaction = new Promise<void>(resolve => { reactionHandled = resolve; });
     const reactionPath = `/v1/community/posts/${post.id}/reactions`; let holdFirstReaction = true; const reactionKeys: string[] = [];
     await page.route('**' + reactionPath, async route => {
@@ -51,20 +51,20 @@ test('teacher-led group membership, peer replies, moderation and family notifica
       try { await route.fulfill({ response }); } finally { reactionHandled(); }
     });
     try {
-      await postRow.getByRole('button', { name: 'Helpful', exact: true }).click(); await committedReaction;
+      await postRow.getByRole('button', { name: 'Helpful · 0', exact: true }).click(); await committedReaction;
       await page.getByRole('button', { name: 'Refresh community', exact: true }).click(); await settled(page);
-      await expect(postRow.getByRole('region', { name: 'Helpful 1', exact: true })).toBeVisible();
+      await expect(postRow.getByRole('heading', { name: 'Helpful · 1', exact: true })).toBeVisible();
       await expect(postRow.getByRole('button', { name: 'Retry the same action', exact: true })).toHaveCount(3);
       const returnedReaction = page.waitForResponse(response => new URL(response.url()).pathname === reactionPath && response.request().method() === 'POST');
       releaseReaction(); await handledReaction; const response = await returnedReaction; expect(response.ok()).toBe(true); const reactionReceipt = await response.json() as { id: string }; writes.push({ action: 'student adds helpful reaction across source refresh', status: response.status(), id: reactionReceipt.id });
       await expect(postRow.getByRole('button', { name: 'Retry the same action', exact: true })).toHaveCount(0);
-      await expect(postRow.getByRole('button', { name: 'Helpful', exact: true })).toBeEnabled(); expect(reactionKeys).toHaveLength(1);
+      await expect(postRow.getByRole('button', { name: 'Helpful · 1', exact: true })).toBeEnabled(); expect(reactionKeys).toHaveLength(1);
     } finally { releaseReaction(); }
-    await expect(postRow.getByRole('region',{name:'Helpful 1',exact:true})).toBeVisible();await expect(postRow.getByRole('button',{name:'Helpful',exact:true})).toBeEnabled();
-    await mutate('student removes same reaction', /\/reactions$/, () => postRow.getByRole('button', { name: 'Helpful', exact: true }).click());
+    await expect(postRow.getByRole('heading',{name:'Helpful · 1',exact:true})).toBeVisible();await expect(postRow.getByRole('button',{name:'Helpful · 1',exact:true})).toBeEnabled();
+    await mutate('student removes same reaction', /\/reactions$/, () => postRow.getByRole('button', { name: 'Helpful · 1', exact: true }).click());
     expect(reactionKeys).toHaveLength(2); expect(reactionKeys[1]).not.toBe(reactionKeys[0]);
     await page.unroute('**' + reactionPath);
-    await expect(postRow.getByRole('region',{name:'Helpful 0',exact:true})).toBeVisible();
+    await expect(postRow.getByRole('heading',{name:'Helpful · 0',exact:true})).toBeVisible();
     await postRow.getByRole('button', { name: 'Reply', exact: true }).click(); const reply = page.getByRole('region', { name: 'Reply', exact: true }); await reply.getByLabel('Message', { exact: true }).fill('My checking step uses the same school example.');
     const secondPostRow = page.locator(`[data-post-id="${secondPost.id}"]`); await secondPostRow.getByRole('button', { name: 'Reply', exact: true }).click();
     await expect(reply.getByLabel('Message', { exact: true })).toHaveValue('');

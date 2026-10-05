@@ -1,7 +1,7 @@
 import { openCurrentResult } from './result-reader';
 import { openCurrentPractice } from './practice-reader';
 import { openCurrentProposal } from './proposal-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -11,6 +11,23 @@ import { humanContextLabel, selectHumanChoice } from './human-choice';
 type Account = { role: string; email: string; password: string };
 type Receipt = { id: string; [field: string]: unknown };
 const api = 'http://localhost:4000';
+async function selectLoopPreparation(page:Page,title:string,source:{courseId:string;resource:'course'|'unit'|'lesson';id:string}){
+  const outline=page.getByRole('navigation',{name:'Course structure',exact:true});
+  if(!await outline.isVisible()){const back=page.getByRole('button',{name:'Back to course structure',exact:true});await expect(back).toHaveCount(1);await expect(back).toBeEnabled();await back.click();}
+  const choice=outline.getByRole('button',{name:title,exact:true});await expect(choice).toHaveCount(1);await expect(choice).toBeEnabled();
+  const requested=page.waitForResponse(response=>new URL(response.url()).pathname===`/v1/learning-content/${source.resource}/${source.id}`&&response.request().method()==='GET');
+  await choice.click();await expect(choice).toHaveAttribute('aria-current','page');const current=await requested;expect(current.ok()).toBe(true);expect(await current.json()).toMatchObject({courseId:source.courseId,sourceId:source.id,resource:source.resource,title});
+  await expect(page.locator('.course-view').getByRole('heading',{name:title,level:1,exact:true})).toBeVisible();return page.getByRole('region',{name:'Course preparation',exact:true});
+}
+
+test('adapter: full-loop preparation binds the visible source to its independent current receipt',async({page})=>{
+ const courseId='e8000000-0000-4000-8000-000000000001',id='e8000000-0000-4000-8000-000000000002',title='Checking unit';
+ for(const sourceId of[id,'e8000000-0000-4000-8000-000000000003']){
+  await page.route('https://fixture.invalid/v1/learning-content/unit/*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({courseId,sourceId,resource:'unit',title})}));
+  await page.setContent(`<div class="course-view"><h1>Checking course</h1><nav aria-label="Course structure"><button>${title}</button></nav><section aria-label="Course preparation"></section></div><script>document.querySelector('button').onclick=async event=>{event.currentTarget.setAttribute('aria-current','page');await fetch('https://fixture.invalid/v1/learning-content/unit/${id}');document.querySelector('h1').textContent='${title}';};</script>`);
+  if(sourceId===id)await selectLoopPreparation(page,title,{courseId,resource:'unit',id});else await expect(selectLoopPreparation(page,title,{courseId,resource:'unit',id})).rejects.toThrow();await page.unrouteAll({behavior:'wait'});
+ }
+});
 
 /** Every domain write in this test is a visible form/button action. No API setup or mutation helper. */
 test('a teacher and learner operate the entire evidence, analysis and measured support loop through the UI', async ({ page }) => {
@@ -43,7 +60,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await expectTrailWorkspace(page, role);
   }
   async function signOut() { await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
-  async function navigate(name: string) { await page.locator('.workspace-chrome__navigation').getByRole('button', { name, exact: true }).click(); await settled(page); }
+  async function navigate(name: string) { await openTrailWorkspace(page,name); await settled(page); }
   async function capture(name: string) { await page.screenshot({ path: resolve(directory, name), fullPage: true }); }
   async function visibleMutation(path: string, action: () => Promise<void>): Promise<Receipt> {
     const pending = page.waitForResponse(response => response.url() === `${api}${path}` && response.request().method() === 'POST');
@@ -80,12 +97,12 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await navigate('Learning');const back=page.getByRole('button',{name:'Back to courses',exact:true});if(await back.count())await back.click();await page.getByRole('button', { name: 'Assessments', exact: true }).click();
     await page.getByRole('button', { name: 'Create assessment', exact: true }).click();
     const form = page.getByRole('region', { name: 'Create assessment', exact: true });
-    await selectHumanLabel(form.getByLabel('Course', { exact: true }), title, page.locator('.learning-workspace'));
+    await selectHumanLabel(form.getByLabel('Course', { exact: true }), `${title} · Year 1 · Cedar · Year 1 · 2026–2027 · Mathematics`, undefined, learningCourseId);
     await form.getByLabel('Title', { exact: true }).fill(label);
     await form.getByLabel('Maximum score', { exact: true }).fill('10');
     await form.getByLabel('Instructions', { exact: true }).fill('Explain the school-authored example and describe a checking step.');
     const result = await visibleMutation('/v1/assessments', () => form.getByRole('button', { name: 'Save', exact: true }).click());
-    const row=page.locator('.assessment-section').filter({has:page.getByRole('heading',{name:label,exact:true})});await expect(row).toBeVisible();
+    const choice=page.locator(`.learning-staff-directory [data-assessment-choice="${result.id}"]`);await loadTarget(choice,page.locator('.learning-workspace > .pagination-actions'));await expect(choice).toHaveCount(1);await expect(choice.locator('strong')).toHaveText(label);const selected=page.waitForResponse(response=>new URL(response.url()).pathname===`/v1/assessments/${result.id}`&&response.request().method()==='GET');await choice.getByRole('button').click();const current=await selected;expect(current.ok()).toBe(true);expect(await current.json()).toMatchObject({id:result.id,title:label});const row=page.locator(`.assessment-section[data-assessment-id="${result.id}"]`);await expect(row.getByRole('heading',{name:label,level:2,exact:true})).toBeVisible();
     const preparation=row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Edit task preparation',exact:true})}).last();await selectHumanLabel(preparation.getByLabel('Approved learning objective',{exact:true}),humanContextLabel('Synthetic school-authored explanation objective'),undefined,'61000000-0000-4000-8000-000000000001');const prepared=await visibleMutation(`/v1/assessments/${result.id}/preparation`,()=>preparation.getByRole('button',{name:'Save preparation',exact:true}).click());expect(prepared.referenceId).toBe('61000000-0000-4000-8000-000000000001');
     await visibleMutation(`/v1/assessments/${result.id}/publish`,()=>row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Publish prepared assessment',exact:true})}).last().getByRole('button',{name:'Publish prepared assessment',exact:true}).click());return result;
   }
@@ -150,21 +167,21 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
       await page.getByRole('button', { name: 'Add unit', exact: true }).click(); form = page.getByRole('region', { name: 'Add unit', exact: true });
       await form.getByLabel('Title', { exact: true }).fill('Explain and check');
       const unit = await visibleMutation(`/v1/courses/${course.id}/units`, () => form.getByRole('button', { name: 'Save', exact: true }).click());
-      await page.getByRole('button', { name: 'Add lesson', exact: true }).click(); form = page.getByRole('region', { name: 'Add lesson', exact: true });
+      await selectLoopPreparation(page,'Explain and check',{courseId:course.id,resource:'unit',id:unit.id});await page.getByRole('region',{name:'Course preparation',exact:true}).getByRole('button', { name: 'Add lesson', exact: true }).click(); form = page.getByRole('region', { name: 'Add lesson', exact: true });
       await form.getByLabel('Title', { exact: true }).fill('Our school example'); await form.getByLabel('Lesson content', { exact: true }).fill('Read the school example, explain a step and check your reasoning.');
       const lesson = await visibleMutation(`/v1/units/${unit.id}/lessons`, () => form.getByRole('button', { name: 'Save', exact: true }).click());
-      await page.getByRole('button', { name: 'Add activity', exact: true }).click(); form = page.getByRole('region', { name: 'Add activity', exact: true });
+      await selectLoopPreparation(page,'Our school example',{courseId:course.id,resource:'lesson',id:lesson.id});await page.getByRole('region',{name:'Course preparation',exact:true}).getByRole('button', { name: 'Add activity', exact: true }).click(); form = page.getByRole('region', { name: 'Add activity', exact: true });
       await form.getByLabel('Title', { exact: true }).fill('Explain a checking step'); await form.getByLabel('Activity type', { exact: true }).selectOption({ label: 'Practice' }); await form.getByLabel('Instructions', { exact: true }).fill('Use the teacher example, explain a step, and show one check.');
       const activity=await visibleMutation(`/v1/lessons/${lesson.id}/activities`, () => form.getByRole('button', { name: 'Save', exact: true }).click());learningActivityId=activity.id;
-      await page.getByRole('button', { name: 'Publish course', exact: true }).click(); form = page.getByRole('region', { name: 'Publish course', exact: true });
+      await selectLoopPreparation(page,title,{courseId:course.id,resource:'course',id:course.id});await page.getByRole('button', { name: 'Publish course', exact: true }).click(); form = page.getByRole('region', { name: 'Publish course', exact: true });
       await visibleMutation(`/v1/courses/${course.id}/publish`, () => form.getByRole('button', { name: 'Publish course', exact: true }).click());
       await capture('01-teacher-learning-plan.png');
     });
     const baselineAssessment = await createAssessment(baselineTitle); await signOut();
     await signIn('student');
-    await navigate('Learning');const learningCourse=page.locator('.course-list > li').filter({has:page.getByRole('heading',{name:title,exact:true})});await loadTarget(learningCourse,page.locator('.learning-workspace'));await learningCourse.getByRole('button',{name:'Open course',exact:true}).click();await expect(page.getByText('Read the school example, explain a step and check your reasoning.',{exact:true})).toBeVisible();
+    await navigate('Learning');const learningCourse=page.locator('.course-list > li').filter({has:page.getByRole('heading',{name:title,exact:true})});await loadTarget(learningCourse,page.locator('.learning-workspace'));await learningCourse.getByRole('button',{name:'Open course',exact:true}).click();await page.getByRole('button',{name:'Open lesson: Our school example',exact:true}).click();await expect(page.getByText('Read the school example, explain a step and check your reasoning.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Open activity: Explain a checking step',exact:true}).click();await page.locator('.student-learning-journey').getByRole('button',{name:'Open this task',exact:true}).click();
     const activityRow=page.locator('.activity-section').filter({has:page.getByRole('heading',{name:'Explain a checking step',exact:true})});await activityRow.getByLabel('Reflection (optional)',{exact:true}).fill('I read the example and explained a checking step.');const learningCompletion=await visibleMutation(`/v1/activities/${learningActivityId}/complete`,()=>activityRow.getByRole('button',{name:'Complete activity',exact:true}).click());learningCompletionId=learningCompletion.id;
-    await page.getByRole('button',{name:'Back to courses',exact:true}).click();await learningCourse.getByRole('button',{name:'Open course',exact:true}).click();await expect(activityRow.getByText('Activity completion confirmed.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Back to courses',exact:true}).click();
+    await page.getByRole('button',{name:'Back to courses',exact:true}).click();await learningCourse.getByRole('button',{name:'Open course',exact:true}).click();await page.getByRole('button',{name:'Open lesson: Our school example',exact:true}).click();await page.getByRole('button',{name:'Open activity: Explain a checking step',exact:true}).click();await page.locator('.student-learning-journey').getByRole('button',{name:'Open this task',exact:true}).click();await expect(activityRow.getByText('Activity completion confirmed.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Back to courses',exact:true}).click();
     const baselineSubmission = await submitAssessment(baselineTitle, baselineAssessment.id, true); await capture('02-learner-submitted-work.png'); await signOut();
     await signIn('teacher'); const baseline = await markAndRelease(baselineTitle, baselineSubmission, 2); await capture('03-reviewed-native-result.png'); await signOut();
 

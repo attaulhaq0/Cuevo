@@ -5,8 +5,10 @@ import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { humanContextLabel, selectHumanChoice } from './human-choice';
 type Account = { role: string; email: string; password: string };
-async function selectPreparation(page: Page, title: string) {
-  const choice=page.getByRole('navigation',{name:'Course structure',exact:true}).getByRole('button',{name:title,exact:true});
+async function selectPreparation(page: Page, title: string, kind?: 'Practice') {
+  const outline=page.getByRole('navigation',{name:'Course structure',exact:true});
+  if(!await outline.isVisible()){const back=page.getByRole('button',{name:'Back to course structure',exact:true});await expect(back).toHaveCount(1);await expect(back).toBeEnabled();await back.click();}
+  const choice=outline.getByRole('button',{name:kind?`${title} ${kind}`:title,exact:true});
   await expect(choice,'One current named source must identify the intended preparation target').toHaveCount(1); await expect(choice).toBeEnabled(); await choice.click();
   await expect(choice).toHaveAttribute('aria-current','page'); await expect(page.locator('.course-view h1')).toHaveText(title);
   return page.getByRole('region',{name:'Course preparation',exact:true});
@@ -40,7 +42,7 @@ test('teacher publishes a lesson and assessment; student completes and submits',
   await publishSelectedContent(page, await selectPreparation(page, 'A short learning task'));
   await page.getByRole('region', { name: 'Course preparation', exact: true }).getByRole('button', { name: 'Add activity', exact: true }).click();
   form = page.getByRole('region', { name: 'Add activity', exact: true }); await form.getByLabel('Title').fill('Try the practice'); await form.getByLabel('Activity type').selectOption('practice'); await form.getByLabel('Instructions').fill('Write one sentence explaining the example.'); await form.getByRole('button', { name: 'Save', exact: true }).click();
-  await publishSelectedContent(page, await selectPreparation(page, 'Try the practice'));
+  await publishSelectedContent(page, await selectPreparation(page, 'Try the practice', 'Practice'));
   await selectPreparation(page, title);
   await page.getByRole('button', { name: 'Publish course', exact: true }).click();
   form = page.getByRole('region', { name: 'Publish course', exact: true }); await form.getByRole('button', { name: 'Publish course', exact: true }).click(); await expect(page.getByText('Published', { exact: true })).toBeVisible();
@@ -55,6 +57,7 @@ test('teacher publishes a lesson and assessment; student completes and submits',
   await page.getByRole('button', { name: 'Open activity: Try the practice', exact: true }).click();
   await expect(page.locator('.course-view h1')).toHaveText('Try the practice');
   await expect(page.locator('.course-view h1')).toBeFocused();
+  await page.locator('.student-learning-journey').getByRole('button',{name:'Open this task',exact:true}).click();
   await page.getByRole('button', { name: 'Complete activity', exact: true }).click(); await expect(page.getByText('Activity completion confirmed.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Back to courses' }).click(); await page.getByRole('button', { name: 'Assessments', exact: true }).click();
   const assessment = page.locator('.assessment-section').filter({ has:page.getByRole('heading',{name:title+' assessment',exact:true}) });await expect.poll(async()=>await assessment.count()>0||await page.getByRole('button',{name:'Load more',exact:true}).count()>0).toBe(true);for(let pageNumber=0;pageNumber<30&&!await assessment.count();pageNumber++){await page.getByRole('button',{name:'Load more',exact:true}).first().click();await expect(page.getByRole('button',{name:'Loading more…',exact:true})).toHaveCount(0);}await expect(assessment).toBeVisible();await assessment.getByRole('button',{name:'Open task',exact:true}).click();await assessment.getByLabel('Your response').fill('This is my synthetic response.'); await assessment.getByRole('button', { name: 'Submit work', exact: true }).click(); await expect(assessment.getByText('Your work was submitted.', { exact: true })).toBeVisible();

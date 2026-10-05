@@ -40,6 +40,7 @@ import{createRestrictedRecordsController}from'../../src/modules/restricted-recor
 import{createSchoolAutomationController}from'../../src/modules/school/automation.controller';
 import { createBrowserDiagnosticsController } from '../../src/platform/telemetry/browser-diagnostics.controller';
 import { withFixtureCleanup } from './fixture-cleanup';
+import { scaleDiagnosticClient, type ScaleQueryFailure } from './scale-query-diagnostics';
 
 export type JsonRow = Record<string, unknown> & { id: string };
 export const customerActor = (index: number) => `20000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -49,7 +50,7 @@ export const customerRoles = { admin: 1, coordinator: 2, teacher: 4, otherTeache
 export type CustomerRole = keyof typeof customerRoles;
 
 /** Real Auth/production controllers in a private tenant. observationPolicy:false omits only a fresh fixture's policy; default keeps its historical14-day setup. */
-export async function createCustomerContext(options: { committed?: boolean; liveIntelligence?: boolean;observationPolicy?:boolean;portfolioStorage?:(storage:AssetStoragePort)=>AssetStoragePort } = {}) {
+export async function createCustomerContext(options: { committed?: boolean; liveIntelligence?: boolean;observationPolicy?:boolean;portfolioStorage?:(storage:AssetStoragePort)=>AssetStoragePort;scaleQueryFailure?:(failure:ScaleQueryFailure)=>void } = {}) {
   const config = parseServerConfig({ ...process.env, ...(options.liveIntelligence ? {
     NODE_ENV: 'test', AI_GENERATION_MODE: 'LIVE', AI_FIXTURE_ENABLED: 'false', AI_PROVIDER: 'azure-foundry', AI_MODEL: 'gpt-6.1-sol',
     AI_BASE_URL: 'https://edeviser-sweden-resource.services.ai.azure.com/openai/v1', AI_DATA_POLICY_STATUS: 'SYNTHETIC_ONLY',
@@ -95,7 +96,7 @@ export async function createCustomerContext(options: { committed?: boolean; live
   await client.query('insert into app.intelligence_policies(school_id,version,fixture_enabled,approved_by)values($1,1,true,$2)', [school, customerActor(1)]);
   const rollbackDatabase = { actorTransaction: async <T>(actor: string, selectedSchool: string | undefined, run: (connection: PoolClient) => Promise<T>) => {
     await client.query('SAVEPOINT customer_request'); await client.query('set local role cuevo_api');
-    try { await client.query("set local statement_timeout='5s'"); await client.query("select set_config('app.actor_id',$1,true),set_config('app.school_id',$2,true)", [actor, selectedSchool ?? '']); const result = await run(client); await client.query('reset role'); await client.query("set local statement_timeout='0'"); await client.query('RELEASE SAVEPOINT customer_request'); return result; }
+    try { await client.query("set local statement_timeout='5s'"); await client.query("select set_config('app.actor_id',$1,true),set_config('app.school_id',$2,true)", [actor, selectedSchool ?? '']); const result = await run(scaleDiagnosticClient(client,options.scaleQueryFailure)); await client.query('reset role'); await client.query("set local statement_timeout='0'"); await client.query('RELEASE SAVEPOINT customer_request'); return result; }
     catch (error) { await client.query('ROLLBACK TO SAVEPOINT customer_request'); await client.query('reset role'); await client.query('RELEASE SAVEPOINT customer_request'); throw error; }
   } } as unknown as Database;
   if (options.committed) await client.query('COMMIT');
