@@ -20,12 +20,22 @@ test('unknown or malformed editor intent cannot expose a submission command',()=
 });
 test('source-read denial clears editor intent and input only in its current actor scope',()=>{
   const drafts=new FormDrafts();
-  const slot='school:teacher:/v1/submissions/submission-one/editor-intent';
+  const slot='school:teacher:teacher-submission-editor:submission-one';
   drafts.saveModel(slot,{id:source.id,revision:1,action:'return'});
   drafts.save('school:teacher:/v1/submissions/submission-one/return',{feedback:'Private unsent feedback'},{expectedRevision:1});
-  drafts.saveModel('school:other:/v1/submissions/submission-one/editor-intent',{id:source.id,revision:1,action:'return'});
+  drafts.saveModel('school:other:teacher-submission-editor:submission-one',{id:source.id,revision:1,action:'return'});
   drafts.clearRead('school:teacher:','/v1/submissions?limit=25');
   assert.equal(drafts.model(slot),undefined);
   assert.equal(drafts.get('school:teacher:/v1/submissions/submission-one/return'),undefined);
-  assert.equal(learning.currentTeacherSubmissionEditor(drafts.model('school:other:/v1/submissions/submission-one/editor-intent'),source),'return');
+  assert.equal(learning.currentTeacherSubmissionEditor(drafts.model('school:other:teacher-submission-editor:submission-one'),source),'return');
+});
+test('a nested source-read failure clears private feedback without erasing exact editor navigation intent',()=>{
+  const drafts=new FormDrafts(),slot='school:teacher:teacher-submission-editor:submission-one';
+  drafts.saveModel(slot,{id:source.id,revision:1,action:'return'});
+  drafts.save('school:teacher:/v1/submissions/submission-one/return',{feedback:'Private unsent feedback'},{expectedRevision:1});
+  drafts.clearRead('school:teacher:','/v1/submissions/submission-one/source-work');
+  assert.equal(learning.currentTeacherSubmissionEditor(drafts.model(slot),source),'return');
+  assert.equal(drafts.get('school:teacher:/v1/submissions/submission-one/return'),undefined);
+  assert.equal(learning.currentTeacherSubmissionEditor(drafts.model(slot),{...source,revision:2}),null);
+  drafts.clear();assert.equal(drafts.model(slot),undefined);
 });

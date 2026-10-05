@@ -12,11 +12,12 @@ test('released evidence with matching task titles is distinguished by actual obj
   assert.equal(choices.every(choice => !choice.ambiguous && !choice.unavailable), true);
   assert.match(choices[0].label, /Objective: Explain your evidence/);
   assert.match(choices[0].label, /Result revision: 2/);
-  assert.match(choices[0].label, /Released:/);
+  assert.match(choices[0].label, /Result recorded:/);
+  assert.doesNotMatch(choices[0].label, /Released:/);
   assert.equal(choices.some(choice => /another-evidence|revised-evidence|locked-reference-token/.test(choice.label)), false);
 });
 
-test('released evidence dates reflect the saved release time and identical context remains ambiguous', () => {
+test('released evidence dates retain the source revision creation time and identical context remains ambiguous', () => {
   const separate = portfolioEvidenceChoices([result, { ...result, evidenceId: 'other', createdAt: '2026-10-04T08:15:20Z' }], 'en');
   assert.equal(separate.every(choice => !choice.ambiguous), true);
   const duplicate = portfolioEvidenceChoices([result, { ...result, evidenceId: 'other' }], 'en');
@@ -30,11 +31,12 @@ test('missing released-source names show localized review instead of a technical
   assert.equal(choice.label.includes(id) || choice.label.includes('locked-reference-token'), false);
 });
 
-test('Arabic released source context names its objective, revision and release date', () => {
+test('Arabic released source context names its objective, revision and recorded source date', () => {
   const [choice] = portfolioEvidenceChoices([result], 'ar');
   assert.match(choice.label, /الهدف: Explain your evidence/);
   assert.match(choice.label, /مراجعة النتيجة:/);
-  assert.match(choice.label, /صدرت في:/);
+  assert.match(choice.label, /سُجّلت النتيجة في:/);
+  assert.doesNotMatch(choice.label, /صدرت في:/);
   assert.equal(choice.label.includes(id), false);
 });
 
@@ -78,7 +80,7 @@ test('missing selected-work context remains unavailable even when its reflection
   assert.equal(choice.label.includes(id), false);
 });
 
-test('unavailable release date does not become an invented time or a selectable source', () => {
+test('unavailable source revision date does not become an invented time or a selectable source', () => {
   const [choice] = portfolioEvidenceChoices([{ ...result, createdAt: 'unknown' }], 'en');
-  assert.equal(choice.unavailable, true); assert.match(choice.label, /Released: Context unavailable/);
+  assert.equal(choice.unavailable, true); assert.match(choice.label, /Result recorded: Context unavailable/);
 });

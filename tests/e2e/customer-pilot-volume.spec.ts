@@ -1,11 +1,12 @@
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord, openTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { pilotPortfolioSource } from './pilot-portfolio-source';
 import { requirePilotReceipt } from '../../scripts/database/browser-pilot-volume-rules';
 
 const root = resolve(import.meta.dirname, '../..');
-type Scope = { status: string; runId: string; actual: { students: number; classes: number; assessments: number; portfolios: number; messages: number; announcements: number }; totals: { schoolAssessments: number; learnerNativeResults: number; learnerPortfolioItems: number }; originalAuthAccounts: number; newAuthAccounts: number; schoolId: string; classId: string; learnerId: string; courseId: string; roomId: string };
+type Scope = { status: string; runId: string; actual: { students: number; classes: number; assessments: number; portfolios: number; messages: number; announcements: number }; totals: { schoolAssessments: number; learnerNativeResults: number; learnerPortfolioItems: number }; originalAuthAccounts: number; newAuthAccounts: number; schoolId: string; classId: string; learnerId: string; courseId: string; roomId: string; lastPortfolioId:string; records:{kind:string;id:string}[] };
 type Timing = { scenario: string; durationMs: number; renderedRows: number };
 
 test('pilot browser volume: current class/state, source learning, large community and parent-approved portfolios', async ({ page }, info) => {
@@ -35,10 +36,10 @@ test('pilot browser volume: current class/state, source learning, large communit
     await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, role); await settled();
   }
-  async function navigate(name: string) { await page.locator('.workspace-chrome__navigation').getByRole('button', { name, exact: true }).click(); if (name !== 'Overview') await expect(page.locator('main h1')).toHaveText(name); await settled(); }
+  async function navigate(name: string) { await openTrailWorkspace(page,name); await settled(); if(name !== 'Overview'){const heading=name==='Learning'?'Your courses':name==='Community'?(phase==='parent'?'Announcements':'Class rooms and groups'):name==='Portfolio'?(phase==='parent'?'School-approved learning story':'My learning story'):name;await expect(page.locator('main h1')).toHaveText(heading);} }
   async function measure(scenario: string, action: () => Promise<unknown>, rows: Locator) { const start = performance.now(); await action(); await settled(); timing.push({ scenario, durationMs: Math.round((performance.now() - start) * 100) / 100, renderedRows: await rows.count() }); }
   async function nextPages(container: Locator, rows: Locator, expectedAtLeast: number) {
-    const identities = () => rows.evaluateAll(elements => elements.map(element => element.getAttribute('data-post-id') ?? element.getAttribute('data-portfolio-id') ?? element.getAttribute('data-class-learner-id') ?? element.querySelector('h3')?.textContent?.trim() ?? ''));
+    const identities = () => rows.evaluateAll(elements => elements.map(element => element.getAttribute('data-post-id') ?? element.getAttribute('data-portfolio-choice') ?? element.getAttribute('data-portfolio-id') ?? element.getAttribute('data-class-learner-id') ?? element.querySelector('h3')?.textContent?.trim() ?? ''));
     for (let index = 0; index < 30 && await rows.count() < expectedAtLeast; index++) {
       const before = await rows.count(); const more = container.getByRole('button', { name: 'Load more', exact: true }).first();
       await expect(more).toBeVisible();
@@ -77,18 +78,18 @@ test('pilot browser volume: current class/state, source learning, large communit
       await measure('student-community-100-visible-messages', async () => { await page.locator(`[data-room-id="${scope.roomId}"]`).getByRole('button', { name: 'Open discussion', exact: true }).click(); }, page.locator('[data-post-id]'));
       expect(await page.locator('[data-post-id]').count()).toBe(100);
       await nextPages(page.locator('.community-discussion'), page.locator('[data-post-id]'), 200);
-      await navigate('Overview'); await measure('student-portfolio-large-first-page', () => navigate('Portfolio'), page.locator('[data-portfolio-id]'));
-      expect(await page.locator('[data-portfolio-id]').count()).toBe(100);
-      await nextPages(page.locator('.portfolio-workspace'), page.locator('[data-portfolio-id]'), scope.actual.portfolios);
+      await navigate('Overview'); await measure('student-portfolio-large-first-page', () => navigate('Portfolio'), page.locator('[data-portfolio-choice]'));
+      expect(await page.locator('[data-portfolio-choice]').count()).toBe(100);
+      await nextPages(page.locator('.portfolio-workspace'), page.locator('[data-portfolio-choice]'), scope.actual.portfolios);
     }
     await page.screenshot({ path: resolve(directory, 'student-large-portfolio.png') });
-    const ownItem = page.locator('[data-portfolio-id]').last(); await ownItem.getByRole('button', { name: 'Source work', exact: true }).click(); await expect(ownItem.getByRole('region', { name: 'Source work', exact: true })).toContainText('Synthetic explanation imported for browser pilot volume.');
+    const ownSource=pilotPortfolioSource(scope);const ownItem=await selectTrailPortfolioRecord(page,ownSource.id,ownSource.title); await ownItem.getByRole('button', { name: 'Source work', exact: true }).click(); await expect(ownItem.getByRole('region', { name: 'Source work', exact: true })).toContainText('Synthetic explanation imported for browser pilot volume.');
     await signOutTrailWorkspace(page); phase = 'parent'; await login('parent');
     for (let index = 0; index < 5; index++) {
       await navigate('Overview'); await measure('parent-notification-1000-history-first-page', async () => { await navigate('Community'); await page.getByRole('button', { name: 'Notifications', exact: true }).click(); }, page.locator('.community-post'));
       expect(await page.locator('.community-post').count()).toBe(100); await nextPages(page.locator('.community-workspace'), page.locator('.community-post'), 200);
-      await navigate('Overview'); await measure('parent-approved-large-portfolio', async () => { await navigate('Portfolio'); await expect(page.locator('[data-portfolio-id]')).toHaveCount(100); }, page.locator('[data-portfolio-id]'));
-      expect(await page.locator('[data-portfolio-id]').count()).toBe(100); await nextPages(page.locator('.portfolio-workspace'), page.locator('[data-portfolio-id]'), scope.actual.portfolios);
+      await navigate('Overview'); await measure('parent-approved-large-portfolio', async () => { await navigate('Portfolio');const child=page.getByLabel('Child',{exact:true});await child.selectOption(scope.learnerId);await expect(page.locator('.parent-portfolio-directory li')).toHaveCount(100); }, page.locator('.parent-portfolio-directory li'));
+      expect(await page.locator('.parent-portfolio-directory li').count()).toBe(100); await nextPages(page.locator('.portfolio-workspace'), page.locator('.parent-portfolio-directory li'), scope.actual.portfolios);
       expect(await page.getByRole('button', { name: 'Create reflection revision', exact: true }).count()).toBe(0);
     }
     await page.screenshot({ path: resolve(directory, 'parent-approved-portfolio.png') });

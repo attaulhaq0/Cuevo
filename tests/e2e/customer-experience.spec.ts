@@ -99,8 +99,14 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
   }
   if (name === 'Overview') {
     await expectTrailWorkspace(page, role);
-    const required: Record<CustomerRole, string> = { admin: 'سياق المدرسة', coordinator: 'شواهد الصف', teacher: 'مساحات عملك', student: 'خطوتك التالية في التعلّم', parent: 'كيف يمكنك المساعدة' };
+    const required: Record<CustomerRole, string> = { admin: 'سياق المدرسة', coordinator: 'شواهد الصف', teacher: 'مساحات عملك', student: 'هدفي في التعلّم', parent: 'كيف يمكنك المساعدة' };
     await expect(main.getByRole('heading', { name: required[role], exact: true })).toBeVisible();
+    if(role==='student') {
+      await expect(main.locator('.student-trail__intro p')).toHaveText('خطوتك التالية في التعلّم');
+      await expect(main.locator('.student-trail__task').getByRole('heading',{level:2})).toHaveCount(1);
+      await expect(main.locator('.student-trail__task').getByRole('heading',{level:2})).not.toBeEmpty();
+      await expect(main.getByRole('heading',{name:'ملاحظات المعلّم',exact:true})).toBeVisible();
+    }
   } else if (name === 'School') {
     const expected = role === 'admin' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'الحسابات والدعوات', 'سجل تدقيق المدرسة', 'مراجعة الأتمتة', 'فترة ملاحظات التعلّم', 'العمليات اليومية']
       : role === 'coordinator' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'العمليات اليومية']
@@ -284,7 +290,7 @@ test('parent explicitly selects the child for approved results and the same chil
     const accessRead = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); expect((await accessRead).ok()).toBe(true); await settled(page);
     await expect(page.getByLabel('Child', { exact: true })).toHaveValue('');
-    await expect(page.locator('.portfolio-item')).toHaveCount(0);
+    await expect(page.locator('[data-portfolio-id], [data-portfolio-choice], [data-parent-portfolio-id], .parent-portfolio-directory li')).toHaveCount(0);
   } catch (error) {
     verificationFailures.push(error);
   } finally {

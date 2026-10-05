@@ -15,7 +15,7 @@ function connection(options: { admitted?: boolean; health?: boolean; processingF
     if (sql.includes('worker_health')) return { rows: [{ health: { ready: options.health ?? true } }] };
     if (sql.includes('begin_worker_wake')) return { rows: [{ wake: options.admitted ?? true }] };
     if (sql.includes('claim_outbox')) { if (options.claimFailure) throw new Error('private database password'); if (claimed) return { rows: [] }; claimed = true; return { rows: [{ id: 'event', lease_token: 'lease' }] }; }
-    if (sql.includes('process_learner_event') && options.processingFailure) throw new Error('private pupil answer');
+    if (sql.includes('process_learner_event')) { if (options.processingFailure) throw new Error('private pupil answer'); return { rows: [{ process_learner_event: { status: 'ACKNOWLEDGED' } }] }; }
     if (sql.includes('fail_outbox')) return { rows: [{ acknowledged: !options.retryUnknown }] };
     if (sql.includes('finish_worker_wake') && options.finishFailure) throw new Error('private wake credential');
     return { rows: [{ receipt: !options.finishDenied }] };
@@ -25,6 +25,69 @@ function connection(options: { admitted?: boolean; health?: boolean; processingF
 }
 
 describe('authenticated bounded Edge worker', () => {
+  it.each([
+    { name: 'missing row', rows: [] },
+    { name: 'missing column', rows: [{}] },
+    { name: 'multiple rows', rows: [{ process_learner_event: { status: 'ACKNOWLEDGED' } }, { process_learner_event: { status: 'ACKNOWLEDGED' } }] },
+    { name: 'extra column', rows: [{ process_learner_event: { status: 'ACKNOWLEDGED' }, content: 'sensitive fixture sentinel' }] },
+    ...[null, true, [], 'PROCESSED', {}, { status: 'NOT_CONFIRMED' }, { status: 'PROCESSED' }, { status: 'PROCESSED', learnerId: 'bad' }, { status: 'AWARDED', awards: -1 }, { status: 'AWARDED', awards: 1.5 }, { status: 'ACKNOWLEDGED_DISABLED', awards: 1 }, { status: 'WAITING', content: 'sensitive fixture sentinel' }].map((receipt, index) => ({ name: `malformed JSON ${index}`, rows: [{ process_learner_event: receipt }] })),
+  ])('a resolved $name processing receipt finishes review and returns explicit sanitized uncertainty', async ({ rows }) => {
+    const db = connection(); const normal = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async sql => sql.includes('process_learner_event') ? { rows } : normal(sql));
+    const response = await createWorkerHandler(config, async () => db)(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: 'WORKER_UNAVAILABLE', failurePhase: 'DOMAIN', processingReceiptUnknown: true });
+    const calls = db.query.mock.calls as unknown as [string, unknown[]][];
+    expect(calls.find(([sql]) => sql.includes('finish_worker_wake'))?.[1]).toEqual([wakeId, 'REQUIRES_REVIEW', 0]);
+    expect(calls.filter(([sql]) => sql.includes('claim_outbox'))).toHaveLength(1);
+    expect(calls.some(([sql]) => sql.includes('fail_outbox') || sql.includes('complete_outbox'))).toBe(false);
+    expect(JSON.stringify(calls)).not.toContain('sensitive fixture sentinel');
+    expect(db.close).toHaveBeenCalledOnce();
+  });
+  it('processing receipt uncertainty skips destination work and emits only a fixed machine failure', async () => {
+    const live = { mode: 'LIVE_SYNTHETIC' as const, projectId: 393668 as const, host: 'https://us.i.posthog.com' as const, projectKey: 'capture-test-only', pseudonymKey: secret, keyVersion: 1, environment: 'QA' as const };
+    const db = connection(); const normal = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async sql => sql.includes('process_learner_event') ? { rows: [{ process_learner_event: { status: 'ACKNOWLEDGED', content: 'sensitive fixture sentinel' } }] } : normal(sql));
+    const logs: string[] = []; const consoleError = vi.spyOn(console, 'error').mockImplementation(value => logs.push(String(value)));
+    try {
+      const response = await createWorkerHandler({ ...config, analytics: live }, async () => db, Date.now, async () => { throw new Error('Destination must not be called.'); })(request());
+      expect(response.status).toBe(503);
+      expect(db.query.mock.calls.some(([sql]) => sql.includes('posthog'))).toBe(false);
+      expect(logs).toEqual([JSON.stringify({ service: 'cuevo-worker', event: 'wake.unavailable', failurePhase: 'DOMAIN', processingReceiptUnknown: true })]);
+    } finally { consoleError.mockRestore(); }
+  });
+  it.each([undefined, null, {}, { rows: null }, { rows: {} }])('a resolved malformed query envelope cannot become a processing exception retry', async reply => {
+    const db = connection(); const normal = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async sql => sql.includes('process_learner_event') ? reply as Awaited<ReturnType<typeof db.query>> : normal(sql));
+    const response = await createWorkerHandler(config, async () => db)(request());
+    expect(response.status).toBe(503); expect(await response.json()).toEqual({ code: 'WORKER_UNAVAILABLE', failurePhase: 'DOMAIN', processingReceiptUnknown: true });
+    const calls = db.query.mock.calls as unknown as [string, unknown[]][];
+    expect(calls.some(([sql]) => sql.includes('fail_outbox'))).toBe(false);
+    expect(calls.find(([sql]) => sql.includes('finish_worker_wake'))?.[1]).toEqual([wakeId, 'REQUIRES_REVIEW', 0]);
+  });
+  it.each([
+    { receipt: { status: 'ACKNOWLEDGED' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'DUPLICATE' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'DUPLICATE_SOURCE' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'PROCESSED', learnerId: wakeId }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'COMPLETED' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'AWARDED', awards: 1 }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'ACKNOWLEDGED_DISABLED', awards: 0 }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'PLANNED' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'REFRESHED' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'NO_SOURCE' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'SUPERSEDED' }, state: 'COMPLETED', processed: 1 },
+    { receipt: { status: 'WAITING' }, state: 'COMPLETED', processed: 0 },
+    { receipt: { status: 'REQUIRES_REVIEW' }, state: 'REQUIRES_REVIEW', processed: 0 },
+  ])('preserves canonical $receipt.status wake progress without treating it as receipt uncertainty', async ({ receipt, state, processed }) => {
+    const db = connection(); const normal = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async sql => sql.includes('process_learner_event') ? { rows: [{ process_learner_event: receipt }] } : normal(sql));
+    const response = await createWorkerHandler(config, async () => db)(request());
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ status: state, processed });
+    const calls = db.query.mock.calls as unknown as [string, unknown[]][];
+    expect(calls.find(([sql]) => sql.includes('finish_worker_wake'))?.[1]).toEqual([wakeId, state, processed]);
+    expect(calls.some(([sql]) => sql.includes('fail_outbox'))).toBe(false);
+  });
   it('analytics-only work records confirmed acceptance in the wake receipt after domain drain', async () => {
     const live = { mode: 'LIVE_SYNTHETIC' as const, projectId: 393668 as const, host: 'https://us.i.posthog.com' as const, projectKey: 'capture-test-only', pseudonymKey: secret, keyVersion: 1, environment: 'QA' as const };
     const db = connection(); let analyticsClaimed = false; const normal = db.query.getMockImplementation()!;

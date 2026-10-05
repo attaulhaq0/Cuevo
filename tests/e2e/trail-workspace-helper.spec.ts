@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, selectTrailSchoolRecord } from './trail-workspace';
 
 const fixture = `<div class="workspace-chrome" lang="en" data-navigation-mode="home"><header class="workspace-chrome__header"><div class="workspace-chrome__school"><bdi>Reference school</bdi></div><div class="workspace-chrome__person"><button aria-label="Profile and settings" aria-expanded="false" popovertarget="profile"><strong>Lina Hassan</strong><small>Student</small></button><div id="profile" popover="auto" class="workspace-chrome__profile"><button data-open-access>Access settings</button><button data-signout>Sign out</button></div></div></header><nav class="workspace-chrome__navigation" aria-label="Workspace navigation"><button data-workspace-destination="overview" aria-current="page">Overview</button><button data-workspace-destination="learning">Learning</button></nav><main><h1>Hello, Lina Hassan!</h1></main></div><script>const trigger=document.querySelector('[popovertarget]');document.querySelector('#profile').addEventListener('toggle',e=>trigger.setAttribute('aria-expanded',String(e.newState==='open')));document.querySelector('[data-open-access]').onclick=()=>{document.querySelector('main').innerHTML='<h1>Your school access</h1>';document.querySelector('#profile').hidePopover();};document.querySelector('[data-signout]').onclick=()=>{document.querySelector('.workspace-chrome').remove();document.body.innerHTML='<form class="auth-form"><label>School email<input type="email"></label><label>Password<input type="password"></label><button type="submit">Sign in</button></form>';};</script>`;
 
@@ -74,4 +74,16 @@ test('sign-out reaches an offscreen native profile after its document scroll has
   await signOutTrailWorkspace(page);
   await expect(page.getByLabel('School email', { exact: true })).toBeVisible();
   await expect(page.locator('.workspace-chrome')).toHaveCount(0);
+});
+
+test('School helper reaches one exact record beyond a bounded page using the visible current continuation', async ({ page }) => {
+  await page.setContent(`<section class="school-access-directory"><button>People</button><ul><li><button>Current learner 1 · Cedar</button></li></ul><nav class="school-access-pagination"><button disabled>Previous</button><button data-next>Next</button></nav></section><section role="region" aria-label="Selected current record" hidden></section><script>let pageNumber=1;const directory=document.querySelector('.school-access-directory');document.querySelector('[data-next]').onclick=()=>{pageNumber++;const button=document.querySelector('[data-next]');button.disabled=true;setTimeout(()=>{directory.querySelector('ul').innerHTML='<li><button>Current learner 26 · Pine</button></li>';directory.querySelector('li button').onclick=()=>{const selected=document.querySelector('[aria-label="Selected current record"]');selected.hidden=false;selected.textContent='Current learner 26 · Pine';};button.disabled=true;},100);};</script>`);
+  const selected = await selectTrailSchoolRecord(page, 'person', 'Current learner 26');
+  await expect(selected).toContainText('Pine');
+});
+
+test('School helper refuses ambiguity and does not choose a first matching record', async ({ page }) => {
+  await page.setContent('<section class="school-access-directory"><button>People</button><ul><li><button>Lina · Cedar</button></li><li><button>Lina · Cedar</button></li></ul><nav class="school-access-pagination"><button>Next</button></nav></section>');
+  await expect(selectTrailSchoolRecord(page, 'person', 'Lina')).rejects.toThrow();
+  await expect(page.locator('[aria-label="Selected current record"]')).toHaveCount(0);
 });

@@ -41,6 +41,11 @@ export class FormDrafts {
     if (endpoint.startsWith('/v1/development/')) for (const slot of this.drafts.keys()) {
       if (slot.startsWith(`${scope}leaderboard-participation:`)) this.drafts.delete(slot);
     }
+    // Queue loss invalidates the source selection; a nested read failure still clears
+    // private feedback above, but cannot erase an IDs-only editor navigation choice.
+    if (endpoint === '/v1/submissions') for (const slot of this.drafts.keys()) {
+      if (slot.startsWith(`${scope}teacher-submission-editor:`)) this.drafts.delete(slot);
+    }
   }
   clear() { this.drafts.clear(); }
 }

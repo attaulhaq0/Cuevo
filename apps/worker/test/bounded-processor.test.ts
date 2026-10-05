@@ -9,7 +9,7 @@ describe('bounded outbox execution', () => {
   });
   it('claims one at a time and stops at the event cap without a leftover batch lease', async () => {
     let count = 0;
-    const query = vi.fn(async (sql: string) => sql.includes('claim_outbox') ? { rows: [{ id: `event${++count}`, lease_token: 'lease' }] } : { rows: [{ receipt: true }] });
+    const query = vi.fn(async (sql: string) => sql.includes('claim_outbox') ? { rows: [{ id: `event${++count}`, lease_token: 'lease' }] } : { rows: [{ process_learner_event: { status: 'ACKNOWLEDGED' } }] });
     const result = await new OutboxProcessor({ query }).process({ maxEvents: 2, deadline: 20_000, now: () => 0 });
     expect(result).toMatchObject({ processed: 2, attempted: 2, reviewRequired: false });
     expect(count).toBe(2); expect(query.mock.calls.filter(([sql]) => sql.includes('process_learner_event'))).toHaveLength(2);
@@ -28,7 +28,7 @@ describe('bounded outbox execution', () => {
     let now = 0; let claims = 0;
     const query = vi.fn(async (sql: string) => {
       if (sql.includes('claim_outbox')) { claims++; return { rows: [{ id: 'event', lease_token: 'lease' }] }; }
-      now = 6_000; return { rows: [{ receipt: true }] };
+      now = 6_000; return { rows: [{ process_learner_event: { status: 'ACKNOWLEDGED' } }] };
     });
     const result = await new OutboxProcessor({ query }).process({ maxEvents: 10, deadline: 20_000, now: () => now });
     expect(claims).toBe(1); expect(result).toMatchObject({ processed: 1, attempted: 1, deadlineReached: true });

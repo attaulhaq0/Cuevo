@@ -10,6 +10,16 @@
 .portfolio-privacy-note { display: flex; align-items: start; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--type-sm); line-height: var(--line-height-body); }
 .portfolio-privacy-note > svg { flex: none; margin-block-start: var(--space-1); color: var(--color-learning-symbol); }
 .portfolio-work-list { display: grid; gap: var(--space-4); }
+.portfolio-reading-layout { display:grid;grid-template-columns:minmax(14rem,.8fr) minmax(0,2.2fr);gap:var(--space-4);align-items:start; }
+.portfolio-reading-layout[data-selected="false"] { grid-template-columns:minmax(0,1fr); }
+.portfolio-reading-directory,.portfolio-reading-detail { min-inline-size:0; }
+.portfolio-reading-directory { padding:var(--space-4);background:var(--color-material-reading);border:1px solid var(--color-border);border-radius:var(--radius-xl); }
+.portfolio-reading-directory h2 { font-size:var(--type-subheading);margin-block-end:var(--space-3); }
+.portfolio-reading-directory ul { list-style:none;padding:0;margin:0;display:grid;gap:var(--space-3); }
+.portfolio-reading-directory li>.button { inline-size:100%;display:flex;flex-direction:column;align-items:start;text-align:start;gap:var(--space-2);white-space:normal; }
+.portfolio-reading-directory span { font-size:var(--type-sm);font-weight:var(--font-weight-normal); }
+.portfolio-reading-recovery { padding:var(--space-4);background:var(--color-material-reading);border:1px solid var(--color-border);border-radius:var(--radius-xl); }
+@media(max-width:767px){.portfolio-reading-layout{grid-template-columns:minmax(0,1fr)}.portfolio-reading-layout[data-selected="true"]>.portfolio-reading-directory{display:none}}
 .portfolio-item, .portfolio-create, .portfolio-organization, .portfolio-empty { background:var(--color-material-reading); border:1px solid var(--color-border); border-radius:var(--radius-xl); box-shadow:var(--elevation-subtle); padding:var(--space-4); min-inline-size:0; }
 .portfolio-item-heading { display:flex; align-items:center; flex-wrap:wrap; gap:var(--space-3); margin-block-end:var(--space-3); }
 .portfolio-item-heading > svg { color: var(--color-learning-symbol); flex: none; }
@@ -26,6 +36,7 @@
 .portfolio-task-card { background: var(--color-learning-surface); border-radius: var(--radius-lg); padding: var(--space-4); margin-block-end: var(--space-5); }
 .portfolio-task-card .eyebrow { color: var(--color-link); font-size: var(--type-sm); margin-block-end: var(--space-2); }
 .portfolio-task-card h4 { font-size: var(--type-lg); line-height: var(--line-height-tight); }
+.portfolio-create .portfolio-task-card h3 { font-size: var(--type-lg); line-height: var(--line-height-tight); }
 .portfolio-task-card p:not(.eyebrow) { color: var(--color-text-secondary); font-size: var(--type-sm); margin-block: var(--space-3); }
 .portfolio-task-card > .button { margin-block-start: var(--space-3); }
 .portfolio-work-context > h4 { font-size: var(--type-body); margin-block: var(--space-4) var(--space-3); }
@@ -46,10 +57,10 @@
 .portfolio-review-actions { display: flex; flex-direction: column; align-items: start; gap: var(--space-3); margin-block-start: var(--space-4); }
 .portfolio-create { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .85fr) minmax(0, 1fr); gap: var(--space-4); margin-block: var(--space-5); padding: 0; border: 0; background: transparent; box-shadow: none; }
 .portfolio-create > section, .portfolio-create-reflection { padding: var(--space-5); background: var(--color-material-reading); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--elevation-subtle); min-inline-size: 0; }
-.portfolio-create h3 { display: flex; align-items: center; gap: var(--space-3); font-size: var(--type-subheading); line-height: var(--line-height-tight); }
-.portfolio-create h3 > svg { flex: none; color: var(--color-learning-symbol); }
-.portfolio-create-reflection h3 > svg { color: var(--color-practice-symbol); }
-.portfolio-create h4 { font-size: var(--type-body); line-height: var(--line-height-body); margin-block-start: var(--space-4); overflow-wrap: anywhere; }
+.portfolio-create h2 { display: flex; align-items: center; gap: var(--space-3); font-size: var(--type-subheading); line-height: var(--line-height-tight); }
+.portfolio-create h2 > svg { flex: none; color: var(--color-learning-symbol); }
+.portfolio-create-reflection h2 > svg { color: var(--color-practice-symbol); }
+.portfolio-create h3 { font-size: var(--type-body); line-height: var(--line-height-body); margin-block-start: var(--space-4); overflow-wrap: anywhere; }
 .portfolio-create > section > p, .portfolio-create-reflection > p:not(.notice) { color: var(--color-text-secondary); line-height: var(--line-height-body); margin-block: var(--space-3) var(--space-5); }
 .portfolio-create-picker .field { margin-block: var(--space-5); }
 .portfolio-create-picker .portfolio-task-card { margin-block-start: var(--space-5); }
@@ -61,7 +72,7 @@
 .portfolio-create-reflection textarea { min-block-size: 13rem; }
 .portfolio-create-reflection .learning-form__actions { flex-direction: column; align-items: stretch; }
 .portfolio-source-preview { background: var(--color-surface-muted); border-radius: var(--radius-lg); margin-block-start: var(--space-5); padding: var(--space-4); }
-.portfolio-source-preview h4 { font-size: var(--type-lg); overflow-wrap: anywhere; }
+.portfolio-source-preview h3 { font-size: var(--type-lg); overflow-wrap: anywhere; }
 .portfolio-source-preview p { color: var(--color-text-secondary); font-size: var(--type-sm); }
 .portfolio-source-preview > .button { margin-block-start: var(--space-5); }
 .portfolio-preview-provenance { margin-block-start: var(--space-5); border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-3); }

@@ -1,4 +1,5 @@
 export const portfolioEn = {
+  readingDirectory:'Selected work directory',backToWork:'Back to selected work',readingUnavailable:'Selected work unavailable',readingSourceChanged:'The selected reflection is not confirmed in the current records. Refresh or load more work, then open its current revision.',previousItemAction:'Check previous selected-work action',
   identityUnknown: 'Learner or submitted work context is unavailable. Review school records, then refresh before reviewing or changing sharing.',
   unknownLearner: 'Learner name unavailable',
   unknownSource: 'Submitted work context unavailable',
@@ -86,12 +87,13 @@ export const portfolioEn = {
   assessmentLabel: 'Assessment',
   objectiveLabel: 'Objective',
   resultRevision: 'Result revision',
-  releasedOn: 'Released',
+  resultRecordedOn: 'Result recorded',
   contextUnavailable: 'Context unavailable',
   sourceChoicesReview: 'Some released work needs clearer school context. Review the assessment and objective, then refresh before selecting it.',
   collectionChoicesReview: 'Some collections have the same name and description. Create a collection with a distinct name, then refresh before placing work.'
 };
 export const portfolioAr: typeof portfolioEn = {
+  readingDirectory:'دليل الأعمال المختارة',backToWork:'العودة إلى الأعمال المختارة',readingUnavailable:'العمل المختار غير متاح',readingSourceChanged:'لم يُؤكّد التأمّل المحدد في السجلات الحالية. حدّث الصفحة أو حمّل مزيدًا من الأعمال، ثم افتح مراجعته الحالية.',previousItemAction:'التحقّق من إجراء العمل المختار السابق',
   identityUnknown: 'سياق الطالب أو العمل المسلّم غير متاح. راجع سجلات المدرسة ثم حدّث الحافظة قبل المراجعة أو تغيير المشاركة.',
   unknownLearner: 'اسم الطالب غير متاح',
   unknownSource: 'سياق العمل المسلّم غير متاح',
@@ -179,7 +181,7 @@ export const portfolioAr: typeof portfolioEn = {
   assessmentLabel: 'التقييم',
   objectiveLabel: 'الهدف',
   resultRevision: 'مراجعة النتيجة',
-  releasedOn: 'صدرت في',
+  resultRecordedOn: 'سُجّلت النتيجة في',
   contextUnavailable: 'السياق غير متاح',
   sourceChoicesReview: 'تحتاج بعض الأعمال الصادرة إلى سياق مدرسي أوضح. راجع التقييم والهدف ثم حدّث قبل الاختيار.',
   collectionChoicesReview: 'تتشابه أسماء بعض المجموعات وأوصافها. أنشئ مجموعة باسم مميز ثم حدّث قبل وضع العمل.'
@@ -194,7 +196,7 @@ export const portfolioTrailEn = {
   feedbackWaiting: 'Your teacher’s feedback will appear here after review. Ask for the feedback that would help you most.',
   noFeedback: 'Teacher feedback is not available for this revision.', collectionStory: 'Keep your work together',
   privateFilesPurpose: 'Keep supporting files private. Selecting a file here does not add it to your portfolio or share it with a parent.',
-  sourceTitleUnavailable: 'Work title unavailable', releasedOn: 'Released', resultRevision: 'Result version',
+  sourceTitleUnavailable: 'Work title unavailable', resultRecordedOn: 'Result recorded', resultRevision: 'Result version',
   sourceChoicesReview: 'Some released work needs a clearer title or source context. Ask your teacher to check it, then refresh.',
   emptyTitle: 'Start with a piece of work', emptyBody: 'Select a released task and write what you learned. Your reflection starts private and awaits teacher review.',
   parentEmptyTitle: 'No approved work is available', parentEmptyBody: 'The school-approved work for this child will appear here after review.',
@@ -216,7 +218,7 @@ export const portfolioTrailAr: typeof portfolioTrailEn = {
   feedbackWaiting: 'تظهر ملاحظات معلّمك هنا بعد المراجعة. اطلب الملاحظات التي ستساعدك أكثر.',
   noFeedback: 'لا تتاح ملاحظات المعلّم لهذا الإصدار.', collectionStory: 'اجمع أعمالك معًا',
   privateFilesPurpose: 'احتفظ بالملفات الداعمة بشكل خاص. اختيار ملف هنا لا يضيفه إلى ملف تعلّمك ولا يشاركه مع ولي الأمر.',
-  sourceTitleUnavailable: 'عنوان العمل غير متاح', releasedOn: 'صدر في', resultRevision: 'إصدار النتيجة',
+  sourceTitleUnavailable: 'عنوان العمل غير متاح', resultRecordedOn: 'سُجّلت النتيجة في', resultRevision: 'إصدار النتيجة',
   sourceChoicesReview: 'تحتاج بعض الأعمال الصادرة إلى عنوان أو سياق أوضح. اطلب من معلّمك مراجعتها ثم حدّث الصفحة.',
   emptyTitle: 'ابدأ بعمل اخترته', emptyBody: 'اختر مهمة صادرة واكتب ما تعلمته. يبدأ تأملك خاصًا وبانتظار مراجعة المعلّم.',
   parentEmptyTitle: 'لا يتاح عمل معتمد', parentEmptyBody: 'تظهر هنا أعمال هذا الطفل التي اعتمدتها المدرسة بعد المراجعة.',

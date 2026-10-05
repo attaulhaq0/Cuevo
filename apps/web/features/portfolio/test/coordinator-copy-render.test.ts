@@ -39,10 +39,11 @@ test('Coordinator empty Portfolio uses read-only guidance and no author or shari
   }
 });
 
-test('Coordinator populated Portfolio retains human/native/feedback source context without author, review or private-work controls', () => {
+test('Coordinator populated Portfolio starts with a named directory and withholds private reading until explicit selection', () => {
   const html = render('en', [item]);
-  for (const label of ['My explanation', 'Alex Reed', 'Cedar', 'Year 4', '2026–2027', 'Reasoning', 'Explain a method', 'I checked each step.', 'Explain the check.']) assert.ok(html.includes(label), label);
-  assert.match(html, /<strong>0<\/strong>/);
+  for (const label of ['My explanation', 'Alex Reed', 'Cedar', 'Year 4', '2026–2027']) assert.ok(html.includes(label), label);
+  assert.match(html,/portfolio-reading-directory/);
+  assert.doesNotMatch(html,/I checked each step\.|Explain the check\.|portfolio-item-layout/);
   assert.match(html, /Read the permitted selected work and learner reflections\./);
   assert.doesNotMatch(html, /portfolio-review-actions|portfolio-organization|portfolio-private-files|before deciding what to share/);
   assert.doesNotMatch(html, />Read submitted work<|>Edit reflection<|>Review selected work<|>Revoke parent sharing</);

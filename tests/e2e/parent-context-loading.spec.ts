@@ -137,5 +137,5 @@ test('parent work stays unresolved during child verification and the selected ch
 async function assertUnresolved(page: Page, destination: string) {
   const main = page.getByRole('main');
   for (const message of falseEmpty) await expect(main.getByText(message, { exact: true }), `${destination} cannot infer an empty result before child verification`).toHaveCount(0);
-  await expect(main.locator('.portfolio-item, .academic-row, .learner-detail-heading, .native-score'), `${destination} withholds child content until current directory verification`).toHaveCount(0);
+  await expect(main.locator('[data-portfolio-id], [data-portfolio-choice], [data-parent-portfolio-id], .parent-portfolio-directory li, .academic-row, .learner-detail-heading, .native-score'), `${destination} withholds child content until current directory verification`).toHaveCount(0);
 }

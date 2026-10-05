@@ -1,4 +1,18 @@
 import { LearningApiError } from '../../shared/api/client.ts';
+import type { Command, CommandJournal } from '../../shared/api/client.ts';
+export type PortfolioReadingSelection={itemId:string;revisionId:string;revision:number};
+/** Current-session intent only; protected item content is never persisted here. */
+export function parsePortfolioReadingSelection(value:unknown):PortfolioReadingSelection|null {
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ const row=value as Record<string,unknown>,uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ if(Object.keys(row).length!==3||typeof row.itemId!=='string'||!uuid.test(row.itemId)||typeof row.revisionId!=='string'||!uuid.test(row.revisionId)||!Number.isSafeInteger(row.revision)||Number(row.revision)<1)return null;
+ return{itemId:row.itemId,revisionId:row.revisionId,revision:Number(row.revision)};
+}
+export function currentPortfolioReading<T extends{id:string;revisionId:string;revision:number}>(rows:T[],selection:PortfolioReadingSelection|null,current:boolean):T|null {if(!current||!selection)return null;const matches=rows.filter(row=>row.id===selection.itemId&&row.revisionId===selection.revisionId&&row.revision===selection.revision);return matches.length===1?matches[0]:null;}
+export function portfolioNavigationLocked(commands:readonly Command[]):boolean{return commands.some(command=>/^\/v1\/(?:portfolio(?:\/|$)|assets(?:\/|$)|submissions\/[^/]+\/artifacts(?:\/|$))/.test(command.path));}
+const pendingReadingContexts=new WeakMap<CommandJournal,{actor:string;items:Map<string,PortfolioReadingSelection>}>();
+/** Exact receipt context lives only as long as its existing session command journal. */
+export function portfolioPendingReadingContexts(journal:CommandJournal,actor:string):Map<string,PortfolioReadingSelection>{let entry=pendingReadingContexts.get(journal);if(!entry||entry.actor!==actor){entry={actor,items:new Map()};pendingReadingContexts.set(journal,entry);}const keys=new Set(journal.pending().map(command=>command.key));for(const key of entry.items.keys())if(!keys.has(key))entry.items.delete(key);return entry.items;}
 export type PortfolioCollection={id:string;title:string;description:string};
 export type PortfolioPlacement={id:string;collectionId:string|null;position:number;revision:number};
 export type PortfolioFeedbackRequest={id:string;itemId:string;revisionId:string;learnerId:string;learnerName:string;title:string;message:string;state:'PENDING';requestedAt:string};
@@ -33,7 +47,7 @@ export function portfolioIdentityLabel(identity: PortfolioIdentity, locale: 'en'
 }
 export function portfolioEvidenceChoices(results: ReleasedResult[], locale: 'en' | 'ar'): PortfolioChoice[] {
   const t = choiceText(locale); const numbers = new Intl.NumberFormat(locale);
-  return distinctChoices(results.map(result => ({ value: result.evidenceId, unavailable: !result.assessmentTitle?.trim() || !result.referenceTitle?.trim() || !Number.isFinite(Date.parse(result.createdAt)), label: [result.assessmentTitle?.trim() || t.contextUnavailable, ...(result.learnerName?.trim() ? [result.learnerName] : []), `${t.objectiveLabel}: ${result.referenceTitle?.trim() || t.contextUnavailable}`, `${t.resultRevision}: ${numbers.format(result.revision)}`, `${t.releasedOn}: ${savedDate(result.createdAt, locale)}`].join(' · ') })), locale);
+  return distinctChoices(results.map(result => ({ value: result.evidenceId, unavailable: !result.assessmentTitle?.trim() || !result.referenceTitle?.trim() || !Number.isFinite(Date.parse(result.createdAt)), label: [result.assessmentTitle?.trim() || t.contextUnavailable, ...(result.learnerName?.trim() ? [result.learnerName] : []), `${t.objectiveLabel}: ${result.referenceTitle?.trim() || t.contextUnavailable}`, `${t.resultRevision}: ${numbers.format(result.revision)}`, `${t.resultRecordedOn}: ${savedDate(result.createdAt, locale)}`].join(' · ') })), locale);
 }
 export function portfolioCollectionChoices(collections: PortfolioCollection[], locale: 'en' | 'ar'): PortfolioChoice[] {
   const t = choiceText(locale);

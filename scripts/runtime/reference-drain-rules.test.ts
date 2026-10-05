@@ -5,7 +5,7 @@ import { requireReferenceWorkerTarget, referenceManifest, requireReferenceSnapsh
 const worker = 'postgresql://cuevo_worker:fixture@127.0.0.1:56322/postgres';
 const snapshot = (pendingCount = 0) => ({ database: 'postgres', port: 5432, sessionUser: 'postgres', readOnly: true, referenceActive: true, populationMatches: true, dispatchDisabled: true, pendingCount, processingCount: 0, failedCount: 0, unsafeCount: 0, nonWorkerCount: 0, nonCompletedCount: pendingCount });
 const health = (pendingCount = 0) => ({ scope: 'WORKER', ready: true, pendingCount, failedCount: 0 });
-const progress = { processed: 1, attempted: 1, reviewRequired: false, failureReceiptUnknown: false, executionUnavailable: false, deadlineReached: false };
+const progress = { processed: 1, attempted: 1, reviewRequired: false, failureReceiptUnknown: false, processingReceiptUnknown: false, executionUnavailable: false, deadlineReached: false };
 
 test('reference worker target rejects PostgreSQL query overrides, owner and foreign targets', () => {
   assert.equal(requireReferenceWorkerTarget(worker), worker);
@@ -80,4 +80,9 @@ test('drain refuses an expired execution window and caps repeated confirmed work
   assert.equal(calls, 0);
   await assert.rejects(() => drainReference({ inspect: async () => snapshot(1), health: async () => health(1), process: async () => { calls++; return progress; }, now: () => 0 }));
   assert.equal(calls, 100);
+});
+
+test('reference restoration refuses unknown processing receipts even when reported counters appear complete', () => {
+  for (const processingReceiptUnknown of [true, undefined, null, 'false']) assert.throws(() => requireReferenceProgress({ ...progress, processingReceiptUnknown }));
+  assert.equal(requireReferenceProgress(progress), 1);
 });

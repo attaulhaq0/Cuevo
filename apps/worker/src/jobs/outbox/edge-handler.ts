@@ -46,7 +46,7 @@ export function createWorkerHandler(config: WorkerEdgeConfig, factory: WorkerCon
     try { wake = await wakeBody(request); } catch { return response(400, { code: 'INVALID_WAKE' }); }
     if (!wake) return response(400, { code: 'INVALID_WAKE' });
     if (!await authentic(request, config.purposeKey, wake.wakeId, now())) return response(401, { code: 'WORKER_AUTH_REQUIRED' });
-    let connection: WorkerConnection | undefined; let admitted = false; let failed = false; let phase: FailurePhase = 'CONNECTION'; let failurePhase: FailurePhase | undefined;
+    let connection: WorkerConnection | undefined; let admitted = false; let failed = false; let processingReceiptUnknown = false; let phase: FailurePhase = 'CONNECTION'; let failurePhase: FailurePhase | undefined;
     let state: 'COMPLETED' | 'REQUIRES_REVIEW' | 'FAILURE_RECEIPT_UNKNOWN' = 'REQUIRES_REVIEW'; let processed = 0; let analyticsAccepted = 0; let duplicate = false;
     try {
       connection = await factory(config);
@@ -62,10 +62,10 @@ export function createWorkerHandler(config: WorkerEdgeConfig, factory: WorkerCon
         const started = now();
         phase = 'DOMAIN';
         const result = await new OutboxProcessor(connection).process({ maxEvents: 10, deadline: started + 20_000, now });
-        processed = result.processed; failed = result.executionUnavailable;
-        if (result.executionUnavailable) failurePhase = 'DOMAIN';
+        processed = result.processed; processingReceiptUnknown = result.processingReceiptUnknown; failed = result.executionUnavailable || processingReceiptUnknown;
+        if (failed) failurePhase = 'DOMAIN';
         state = result.failureReceiptUnknown ? 'FAILURE_RECEIPT_UNKNOWN' : result.reviewRequired ? 'REQUIRES_REVIEW' : 'COMPLETED';
-        if (config.analytics?.mode === 'LIVE_SYNTHETIC' && !result.executionUnavailable) {
+        if (config.analytics?.mode === 'LIVE_SYNTHETIC' && !failed) {
           phase = 'ANALYTICS';
           // Domain source progression gets the first batch; network capture adds at most one
           // effect to a domain-bearing wake, while analytics-only recovery can drain up to ten.
@@ -80,7 +80,7 @@ export function createWorkerHandler(config: WorkerEdgeConfig, factory: WorkerCon
       if (finished.rows[0]?.receipt !== true) { failed = true; failurePhase ??= 'FINISH'; }
     } catch { failed = true; failurePhase ??= 'FINISH'; }
     if (connection) try { await connection.close(); } catch { failed = true; failurePhase ??= 'CLOSE'; }
-    if (failed) { const safePhase = failurePhase ?? phase; console.error(JSON.stringify({ service: 'cuevo-worker', event: 'wake.unavailable', failurePhase: safePhase })); return response(503, { code: 'WORKER_UNAVAILABLE', failurePhase: safePhase }); }
+    if (failed) { const safePhase = failurePhase ?? phase; const unknown = processingReceiptUnknown ? { processingReceiptUnknown: true } : {}; console.error(JSON.stringify({ service: 'cuevo-worker', event: 'wake.unavailable', failurePhase: safePhase, ...unknown })); return response(503, { code: 'WORKER_UNAVAILABLE', failurePhase: safePhase, ...unknown }); }
     if (duplicate) return response(202, { status: 'NOT_ADMITTED' });
     return response(200, { status: state, processed, ...(config.analytics?.mode === 'LIVE_SYNTHETIC' ? { analyticsAccepted } : {}) });
   };

@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -20,16 +20,6 @@ async function signOut(page: Page) {
   await page.getByRole('button', { name: 'English', exact: true }).click();
   await signOutTrailWorkspace(page);
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-}
-async function findWork(page: Page, row: Locator) {
-  await expect(page.locator('main [role="status"]').filter({ hasText: /^Loading/ })).toHaveCount(0);
-  for (let count = 0; count < 30 && !await row.count(); count++) {
-    const more = page.getByRole('button', { name: 'Load more', exact: true }).first();
-    if (!await more.count()) break;
-    await more.click();
-    await expect(page.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0);
-  }
-  await expect(row).toBeVisible();
 }
 async function save(page: Page, form: Locator, path: string) {
   const pending = page.waitForResponse(response => new URL(response.url()).pathname === path && response.request().method() === 'POST');
@@ -93,12 +83,12 @@ test('revoked selected work explains learner recovery and requires a fresh exact
   await form.getByLabel('Portfolio title').fill(title);
   await form.getByLabel('What I learned').fill('My first reflection for family.');
   const original = await save(page, form, '/v1/portfolio/items');
-  const row = page.locator(`[data-portfolio-id="${original.id}"]`);
+  let row = page.locator(`[data-portfolio-id="${original.id}"], [data-parent-portfolio-id="${original.id}"]`);
   await signOut(page);
 
   async function review(revision: number, reflection: string) {
     await signIn(page, teacher);
-    await findWork(page, row);
+    row = await selectTrailPortfolioRecord(page,original.id,title);
     await expect(row).toContainText(reflection);
     await row.getByRole('button', { name: 'Review selected work', exact: true }).click();
     await expect(row.getByText(sourceText, { exact: true })).toBeVisible();
@@ -110,30 +100,30 @@ test('revoked selected work explains learner recovery and requires a fresh exact
     await form.getByLabel('Share this exact revision with current parents / guardians').check();
     await form.getByLabel('I approve parent sharing of this reviewed revision').check();
     const receipt = await save(page, form, `/v1/portfolio/items/${original.id}/review`);
-    expect(receipt.revision).toBe(revision);
+    expect(receipt.revision).toBe(revision);await expect(row).toHaveCount(0);row=await selectTrailPortfolioRecord(page,receipt.id,title);
     await expect(row.getByText('Teacher reviewed', { exact: true })).toBeVisible();
   }
   await review(1, 'My first reflection for family.');
   await signOut(page);
   await signIn(page, parent);
   await page.getByLabel('Child', { exact: true }).selectOption(learner);
-  await findWork(page, row);
+  row = await selectTrailPortfolioRecord(page,original.id,title);
   await expect(row).toContainText('My first reflection for family.');
   await signOut(page);
 
   await signIn(page, teacher);
-  await findWork(page, row);
+  row = await selectTrailPortfolioRecord(page,original.id,title);
   await row.getByRole('button', { name: 'Revoke parent sharing', exact: true }).click();
   form = row.getByRole('region', { name: 'Revoke parent sharing', exact: true });
   await form.getByLabel('Reason').fill('Pause sharing pending an updated reflection and fresh school review.');
   await save(page, form, `/v1/portfolio/items/${original.id}/parent-revoke`);
-  await expect(row.getByText('Sharing is off. To share updated work, ask the learner to create a new reflection and review that version.', { exact: true })).toBeVisible();
+  await expect(row).toHaveCount(0);row=await selectTrailPortfolioRecord(page,original.id,title);await expect(row.getByText('Sharing is off. To share updated work, ask the learner to create a new reflection and review that version.', { exact: true })).toBeVisible();
   await expect(row.getByRole('button', { name: 'Review selected work', exact: true })).toHaveCount(0);
   await signOut(page);
   await deniedSource(original.revisionId, original.id);
 
   await signIn(page, student);
-  await findWork(page, row);
+  row = await selectTrailPortfolioRecord(page,original.id,title);
   await expect(row.getByText('Family sharing is off for this reflection. Create a new reflection, then ask your teacher to review it before sharing.', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'العربية', exact: true }).click();
@@ -147,7 +137,7 @@ test('revoked selected work explains learner recovery and requires a fresh exact
   await form.getByLabel('What I learned').fill('I checked my explanation again and added what helped me.');
   const revised = await save(page, form, `/v1/portfolio/items/${original.id}/reflection`);
   expect(revised.revision).toBe(2);
-  expect(revised.revisionId).not.toBe(original.revisionId);
+  expect(revised.revisionId).not.toBe(original.revisionId);await expect(row).toHaveCount(0);row=await selectTrailPortfolioRecord(page,revised.id,title);
   await expect(row.getByText('Awaiting teacher review', { exact: true })).toBeVisible();
   await deniedSource(revised.revisionId, original.id);
   await signOut(page);
@@ -155,7 +145,7 @@ test('revoked selected work explains learner recovery and requires a fresh exact
   await signOut(page);
   await signIn(page, parent);
   await page.getByLabel('Child', { exact: true }).selectOption(learner);
-  await findWork(page, row);
+  row = await selectTrailPortfolioRecord(page,original.id,title);
   await expect(row).toContainText('I checked my explanation again and added what helped me.');
   await expect(row).not.toContainText('My first reflection for family.');
   await row.getByRole('button', { name: 'Source work', exact: true }).click();

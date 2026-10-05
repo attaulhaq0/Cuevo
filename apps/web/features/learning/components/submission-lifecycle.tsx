@@ -62,7 +62,7 @@ export function TeacherSubmissionActions({ submission, onChanged }: { submission
   const { t } = useLearningApi();
   const { membership, formDrafts } = useApp();
   const { journal } = useApi();
-  const intentSlot=`${membership?.schoolId}:${membership?.userId}:/v1/submissions/${submission.id}/editor-intent`;
+  const intentSlot=`${membership?.schoolId}:${membership?.userId}:teacher-submission-editor:${submission.id}`;
   const [action, setAction] = useState<'return' | 'close' | null>(() => journal.get(`/v1/submissions/${submission.id}/return`) ? 'return' : journal.get(`/v1/submissions/${submission.id}/close`) ? 'close' : currentTeacherSubmissionEditor(formDrafts.model(intentSlot),submission));
   function chooseAction(value:'return'|'close'|null) {
     setAction(value);

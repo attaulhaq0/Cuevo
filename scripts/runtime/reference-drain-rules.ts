@@ -36,7 +36,7 @@ export function requireReferenceHealth(value: unknown, pendingCount: number) {
 
 export function requireReferenceProgress(value: unknown) {
   const source = row(value); const attempted = count(source.attempted); const processed = count(source.processed);
-  if (attempted < 1 || attempted > 10 || processed !== attempted || source.reviewRequired !== false || source.failureReceiptUnknown !== false || source.executionUnavailable !== false || typeof source.deadlineReached !== 'boolean') throw Error('Reference processing did not confirm every bounded receipt.');
+  if (attempted < 1 || attempted > 10 || processed !== attempted || source.reviewRequired !== false || source.failureReceiptUnknown !== false || source.processingReceiptUnknown !== false || source.executionUnavailable !== false || typeof source.deadlineReached !== 'boolean') throw Error('Reference processing did not confirm every bounded receipt.');
   return processed;
 }
 
