@@ -56,3 +56,5 @@ Product sources are grouped under product; source identities/facts/versions rema
 Current [approved Trail colors and background](design/2026-10-03-approved-trail-colors-and-background.md) govern the shared palette and media.
 
 The separate pilot measurement window and its guarded cleanup/evidence owners are documented in [the measurement decision](decisions/2026-10-05-isolated-pilot-measurement-window.md). It is source-prepared until the actual manual/defaultbranch exact-run gate passes.
+
+The [populated source and workspace repair checkpoint](reports/2026-10-05-populated-source-and-workspace-repairs.md) records scratch-only Portfolio, Community and Goal API proofs, current-source/retry repairs and remaining all-role/CI/hosted pilot gates.

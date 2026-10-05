@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as edgeDiagnostics from './edge-worker';
 import { assertEdgeWorkerLocal, assertIdleWorkerDispatch, assertStartedEdgeRuntime, edgeRuntimeConnected, requireOwnedGatewayReload, assertOwnedWorkerEvents, assertOpaqueWake, signedWakeHeaders, ownedCronUnscheduleSql, requireCronRemoval, edgeVerificationFailure, safeEdgeFailureCode, readEdgeInventory, edgeWorkerEvidence, requireEdgeArtifactSource, requireNoAnalyticsActivation, inspectUnsignedWorkerResponse } from './edge-worker';
 const status = { API_URL: 'http://127.0.0.1:56321', DB_URL: 'postgresql://postgres:fixture@127.0.0.1:56322/postgres' };
 const worker = 'postgresql://cuevo_worker:fixture@127.0.0.1:56322/postgres';
@@ -123,4 +124,18 @@ test('Docker inventory retries only transient read races and stops after three a
   attempts = 0;
   await assert.rejects(readEdgeInventory(async () => { attempts++; throw edgeVerificationFailure('COMMAND_UNAVAILABLE'); }), error => safeEdgeFailureCode(error) === 'COMMAND_UNAVAILABLE');
   assert.equal(attempts, 1);
+});
+test('failed Edge final diagnostics retain exact safe check and cleanup phase while never becoming verified',()=>{
+ const summarize=(edgeDiagnostics as unknown as {edgeVerificationSummary:(checks:unknown,failures:unknown,hash:string)=>Record<string,unknown>}).edgeVerificationSummary;
+ assert.equal(typeof summarize,'function');
+ const value=summarize([{name:'restricted-worker-session',passed:true},{name:'empty-due-queue',passed:false,count:1},{name:'phase-setup',passed:false},{name:'owned-cleanup-and-container-preservation',passed:false}],[{phase:'SETUP',code:'SQL_42501'},{phase:'RESTORE_CONTAINER_PRESERVATION',code:'VERIFICATION_UNAVAILABLE'}],'a'.repeat(64));
+ assert.equal(value.status,'FAILED');assert.deepEqual(value.failures,[{phase:'SETUP',code:'SQL_42501'},{phase:'RESTORE_CONTAINER_PRESERVATION',code:'VERIFICATION_UNAVAILABLE'}]);assert.deepEqual(value.checks,[{name:'restricted-worker-session',passed:true},{name:'empty-due-queue',passed:false,count:1},{name:'phase-setup',passed:false},{name:'owned-cleanup-and-container-preservation',passed:false}]);assert.equal(value.hostedAcceptance,false);
+ assert.equal(summarize([{name:'owned-cleanup-and-container-preservation',passed:true}],[{phase:'AUTH',code:'WAIT_EXPIRED'}],'a'.repeat(64)).status,'FAILED');
+});
+test('Edge final diagnostics refuse arbitrary phase check extras raw content and malformed scalar counters',()=>{
+ const summarize=(edgeDiagnostics as unknown as {edgeVerificationSummary:(checks:unknown,failures:unknown,hash:string)=>Record<string,unknown>}).edgeVerificationSummary;
+ assert.equal(typeof summarize,'function');
+ for(const checks of [[{name:'private-learner-content',passed:false}],[{name:'transport-private',passed:true,raw:'private'}],[{name:'transport-private',passed:'true'}],[{name:'transport-private',passed:true,durationMs:Infinity}],[{name:'transport-private',passed:true,count:-1}],[{name:'transport-private',passed:true,count:1.5}],[{name:'transport-private',passed:true},{name:'transport-private',passed:true}]])assert.throws(()=>summarize(checks,[],'a'.repeat(64)));
+ for(const failures of [[{phase:'PRIVATE_CREDENTIAL',code:'WAIT_EXPIRED'}],[{phase:'AUTH',code:'private body'}],[{phase:'AUTH',code:'SQL_SECRET'}],[{phase:'AUTH',code:'WAIT_EXPIRED',message:'private content'}]])assert.throws(()=>summarize([{name:'phase-auth',passed:false}],failures,'a'.repeat(64)));
+ assert.throws(()=>summarize([],[],'private source identity'));assert.equal(summarize([],[],'a'.repeat(64)).status,'FAILED');
 });

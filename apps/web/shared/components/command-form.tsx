@@ -11,7 +11,7 @@ import { commandFieldValue } from './command-field-value';
 
 export type FormField = { name: string; label: string; type?: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'datetime-local' | 'select' | 'checkbox'; required?: boolean; options?: { value: string; label: string }[]; defaultValue?: string | number; defaultChecked?: boolean; maxLength?: number; min?: number; max?: number; step?: number | 'any' };
 
-export function CommandForm({ title, regionLabel, asRegion=true, path, fields, body, onSaved, validateReceipt, onCancel, note, actionLabel, draftKey, onValuesChange, onLockedChange }: { title: string; regionLabel?:string; asRegion?:boolean; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; onSaved: (result: unknown) => void; validateReceipt?: CommandReceiptValidator; onCancel?: () => void; note?: string; actionLabel?: string; draftKey?: string; onValuesChange?: (values: FormData) => void; onLockedChange?: (locked: boolean) => void }) {
+export function CommandForm({ title, regionLabel, asRegion=true, showHeading=true, path, fields, body, onSaved, validateReceipt, onCancel, note, actionLabel, draftKey, onValuesChange, onLockedChange }: { title: string; regionLabel?:string; asRegion?:boolean; showHeading?:boolean; path: string; fields: FormField[]; body: (values: FormData) => Record<string, unknown>; onSaved: (result: unknown) => void; validateReceipt?: CommandReceiptValidator; onCancel?: () => void; note?: string; actionLabel?: string; draftKey?: string; onValuesChange?: (values: FormData) => void; onLockedChange?: (locked: boolean) => void }) {
   const { request, journal, t } = useApi();
   const journalRevision = useSyncExternalStore(journal.subscribe, journal.getSnapshot, journal.getSnapshot);
   const { membership, formDrafts, announce, accessToken, online, apiUrl, accessGeneration } = useApp();
@@ -78,7 +78,7 @@ export function CommandForm({ title, regionLabel, asRegion=true, path, fields, b
     setInputRevision(value => value + 1);
     onValuesChange?.(values);
   }
-  return <section className="learning-form" aria-label={asRegion?regionLabel??title:undefined}><h3>{title}</h3>{note ? <p className="learning-form__note">{note}</p> : null}<form key={formRevision} onSubmit={submit} onChange={event => remember(event.currentTarget)} aria-busy={pending}><fieldset disabled={locked}><div className="learning-form__fields">{fields.map((field) => {
+  return <section className="learning-form" aria-label={asRegion?regionLabel??title:undefined}>{showHeading?<h3>{title}</h3>:null}{note ? <p className="learning-form__note">{note}</p> : null}<form key={formRevision} onSubmit={submit} onChange={event => remember(event.currentTarget)} aria-busy={pending}><fieldset disabled={locked}><div className="learning-form__fields">{fields.map((field) => {
     const id = `${idPrefix}-${field.name}`;
     const retainedValue = retained?.body[field.name];
     const workingValue = working?.values[field.name];

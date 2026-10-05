@@ -1,12 +1,36 @@
 import { z } from 'zod';
 import { courseObjectiveApprovalSchema, type CurriculumProgramme, type ProgrammeLearnerPage } from '@cuevo/contracts';
-import { LearningApiError, type Command } from '../../shared/api/client.ts';
+import { LearningApiError, type Command, type CommandJournal } from '../../shared/api/client.ts';
 import { parseCourseDetail, type CourseDetail } from '../learning/model.ts';
 import { parseProgrammeLearnerPage } from './model.ts';
 export { curriculumReadScope as courseReviewScope, currentCurriculumRead as currentCourseReview } from './workspace-model.ts';
 const uuid=z.uuid(),text=z.string().trim().min(1).max(200);
 const bindingSchema=z.object({version:z.number().int().positive(),programmeId:uuid,referenceId:uuid}).strict();
+const unboundSchema=z.object({version:z.number().int().positive(),programmeId:z.null(),referenceId:z.null()}).strict();
 export type BoundReviewCourse=CourseDetail&{curriculumContext:z.infer<typeof bindingSchema>};
+export type ReviewCourse={state:'BOUND';course:BoundReviewCourse}|{state:'UNBOUND';course:CourseDetail&{curriculumContext:z.infer<typeof unboundSchema>}};
+export function parseReviewCourse(value:unknown,courseId:string):ReviewCourse{
+ const course=parseCourseDetail(value),unbound=unboundSchema.safeParse(course.curriculumContext);
+ if(unbound.success){
+  if(course.id!==courseId||![course.id,course.classId,course.subjectId].every(id=>uuid.safeParse(id).success)||!course.title.trim())throw new LearningApiError('invalid');
+  return{state:'UNBOUND',course:{...course,curriculumContext:unbound.data}};
+ }
+ return{state:'BOUND',course:parseBoundReviewCourse(value,courseId)};
+}
+/** Refusal only: a session-owned original command cannot regain retry merely
+ * because its owner remounted while a confirmed unbound source is unavailable. */
+const unboundOriginals=new WeakMap<CommandJournal,Map<string,string>>();
+export function objectiveOriginalRefusalScope(context:Pick<import('./workspace-model.ts').CurriculumReadContext,'apiUrl'|'membership'>,courseId:string):string{
+ return JSON.stringify([context.apiUrl,context.membership?.schoolId,context.membership?.userId,context.membership?.role,courseId]);
+}
+export function objectiveOriginalUnbound(journal:CommandJournal,scope:string,path:string):boolean{
+ const original=journal.get(path);return !!original&&unboundOriginals.get(journal)?.get(scope)===original.key;
+}
+export function rememberObjectiveOriginalBinding(journal:CommandJournal,scope:string,path:string,source:ReviewCourse|null):void{
+ const current=unboundOriginals.get(journal),original=journal.get(path);
+ if(!original||source?.state==='BOUND'){current?.delete(scope);return;}
+ if(source?.state==='UNBOUND'){const next=current??new Map<string,string>();next.set(scope,original.key);if(!current)unboundOriginals.set(journal,next);}
+}
 export function parseBoundReviewCourse(value:unknown,courseId:string):BoundReviewCourse{
  const course=parseCourseDetail(value),binding=bindingSchema.safeParse(course.curriculumContext);
  if(course.id!==courseId||![course.id,course.classId,course.subjectId].every(id=>uuid.safeParse(id).success)||!course.title.trim()||!binding.success)throw new LearningApiError('invalid');

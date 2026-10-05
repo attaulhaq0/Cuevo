@@ -329,18 +329,24 @@
 .thinking-focus-summary details p { margin-block:var(--space-2); max-inline-size:var(--reading-width); }
 .thinking-focus-editor,.thinking-focus-queue,.thinking-focus-snapshot { min-inline-size:0; margin-block:var(--space-3); }
 .thinking-focus-editor:has(> .cuevo-section-header) { padding:var(--space-4); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-material-reading); }
-.thinking-focus-editor h3,.thinking-focus-queue h3,.thinking-focus-snapshot h4 { font-size:var(--type-body); overflow-wrap:anywhere; }
+.thinking-focus-editor h2,.thinking-focus-editor h3,.thinking-focus-queue h2,.thinking-focus-queue h3,.thinking-focus-snapshot h4 { font-size:var(--type-body); overflow-wrap:anywhere; }
 .thinking-focus-source { margin-block:var(--space-3); padding:var(--space-3) var(--space-4); background:var(--color-surface-muted); border-radius:var(--radius-md); }
 .thinking-focus-source p { margin-block:var(--space-3); overflow-wrap:anywhere; }
 .thinking-focus-queue__items,.thinking-focus-snapshot ul { list-style:none; margin:var(--space-3) 0; padding:0; }
 .thinking-focus-queue__items > li { display:flex; align-items:start; justify-content:space-between; gap:var(--space-4); padding-block:var(--space-4); border-block-start:1px solid var(--color-border); }
 .thinking-focus-queue__items > li > div { min-inline-size:0; }
+.thinking-focus-review-layout { display:grid;grid-template-columns:minmax(14rem,.85fr) minmax(0,2.15fr);gap:var(--space-4);align-items:start; }
+.thinking-focus-review-layout[data-selected="false"] { grid-template-columns:minmax(0,1fr); }
+.thinking-focus-review-directory,.thinking-focus-review-reader { min-inline-size:0; }
+.thinking-focus-review-directory { padding:var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-material-reading); }
+.thinking-focus-review-layout[data-selected="true"] .thinking-focus-queue__items { max-block-size:30rem;overflow:auto; }
+@media(max-width:767px){.thinking-focus-review-layout{grid-template-columns:minmax(0,1fr)}.thinking-focus-review-layout[data-selected="true"]>.thinking-focus-review-directory{display:none}}
 .thinking-focus-snapshot li { padding-block:var(--space-3); border-block-start:1px solid var(--color-border); }
 .thinking-focus-criteria { min-inline-size:0; margin-block:var(--space-3); }
 .thinking-focus-criteria > article { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding-block:var(--space-3); border-block-start:1px solid var(--color-border); }
 .thinking-focus-criteria h4 { font-size:var(--type-body); overflow-wrap:anywhere; margin:0; }
 .thinking-focus-materials { margin-block:var(--space-3); min-inline-size:0; }
-.thinking-focus-materials h4 { font-size:var(--type-body); }
+.thinking-focus-materials h3,.thinking-focus-materials h4 { font-size:var(--type-body); }
 .thinking-focus-materials ul { list-style:none; padding:0; margin:0; }
 .thinking-focus-materials li { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding-block:var(--space-3); border-block-start:1px solid var(--color-border); }
 .thinking-focus-materials p { margin-block:var(--space-2); overflow-wrap:anywhere; }

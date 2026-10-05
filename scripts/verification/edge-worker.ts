@@ -105,6 +105,32 @@ export function edgeWorkerEvidence(checks: Check[], artifactSha256: string) {
   return { status: checks.length > 0 && checks.every(check => check.passed) ? 'VERIFIED' : 'FAILED', execution: 'LOCAL_SYNTHETIC_SUPABASE_EDGE', artifactSha256, checks: checks.map(({ name, passed, durationMs, count }) => ({ name, passed, ...(durationMs === undefined ? {} : { durationMs }), ...(count === undefined ? {} : { count }) })), hostedAcceptance: false, latencyGuarantee: false };
 }
 
+const diagnosticPhases = ['SETUP','AUTH','GATEWAY_INITIAL','COMMITTED_WAKE','BURST','ROLLBACK','LOST_WAKE','LOST_HTTP','RESTART','GATEWAY_RELOAD','RECOVERY','PRIVACY','RESTORE','RESTORE_DISPATCH_PAUSE','RESTORE_CRON','RESTORE_PROCESS','RESTORE_EDGE_CONTAINER','RESTORE_FUNCTIONS_DIRECTORY','RESTORE_SOURCE_AND_SECRET','RESTORE_LOCK','RESTORE_WORKER_POOL','RESTORE_OWNER_POOL','RESTORE_ENV_FILE','RESTORE_CONTAINER_PRESERVATION'] as const;
+const diagnosticChecks = new Set([
+  'transport-private','restricted-worker-session','reference-source','empty-due-queue','no-active-recovery-owner','owned-edge-runtime','initial-local-gateway-reload','initial-internal-gateway-auth-ready','restart-local-gateway-reload','restart-internal-gateway-auth-ready','wrong-signature-denied','extra-scope-denied','auth-denial-preserves-control','committed-generation-requested','opaque-signed-queue-no-reusable-key','signed-committed-source-processed','consumed-generation-not-admitted','burst-all-sources-processed','burst-coalesced-bounded-waves','rollback-no-source-no-generation','lost-wake-retains-source','actual-cron-lost-wake-recovery','actual-cron-success-receipt','lost-wake-recovery-new-generation','old-generation-denied-after-recovery','transport-still-private','health-private-and-idle','owned-cleanup-and-container-preservation',
+  ...diagnosticPhases.map(phase => 'phase-' + phase.toLowerCase().replaceAll('_','-')),
+]);
+/** Emit only exact current verifier metadata; raw operations and response bodies never enter CI stdout. */
+export function edgeVerificationSummary(checks: unknown, failures: unknown, artifactSha256: string) {
+  const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+  const invalid = (): never => { throw Error('Sanitized Edge final diagnostic fields required.'); };
+  if (!Array.isArray(checks) || checks.length > 64 || !Array.isArray(failures) || failures.length > 32 || !/^[a-f0-9]{64}$/.test(artifactSha256)) return invalid();
+  const names = new Set<string>();
+  const safeChecks: Check[] = checks.map(value => {
+    if (!object(value) || Object.keys(value).some(key => !['name','passed','durationMs','count'].includes(key)) || typeof value.name !== 'string' || !diagnosticChecks.has(value.name) || names.has(value.name) || typeof value.passed !== 'boolean'
+      || value.durationMs !== undefined && (typeof value.durationMs !== 'number' || !Number.isFinite(value.durationMs) || value.durationMs < 0 || value.durationMs > 3_600_000)
+      || value.count !== undefined && (typeof value.count !== 'number' || !Number.isSafeInteger(value.count) || value.count < 0 || value.count > 1_000_000)) return invalid();
+    names.add(value.name); return { name: value.name, passed: value.passed, ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs as number }), ...(value.count === undefined ? {} : { count: value.count as number }) };
+  });
+  const safeFailures = failures.map(value => {
+    if (!object(value) || Object.keys(value).sort().join('|') !== 'code|phase' || typeof value.phase !== 'string' || !diagnosticPhases.includes(value.phase as typeof diagnosticPhases[number]) || typeof value.code !== 'string'
+      || ![...verificationFailureCodes,'TYPE_ERROR','TRANSPORT_TIMEOUT','VERIFICATION_UNAVAILABLE'].includes(value.code as VerificationFailureCode) && !/^SQL_[A-Z0-9]{5}$/.test(value.code)) return invalid();
+    return { phase: value.phase, code: value.code };
+  });
+  const evidence = edgeWorkerEvidence(safeChecks, artifactSha256);
+  return { ...evidence, status: safeFailures.length ? 'FAILED' : evidence.status, failures: safeFailures };
+}
+
 async function main() {
   process.loadEnvFile(resolve('.env.local'));
   await readFile('supabase/config.toml', 'utf8').then(assertCuevoLocalConfig);
@@ -285,6 +311,8 @@ async function main() {
     await cleanup('CONTAINER_PRESERVATION', async () => { const after = await containers(); if (!sameContainerIdentities(unrelated, after) || !sameUnrelatedContainers(unrelated, after)) throw Error('Unrelated container state changed.'); });
     checks.push({ name: 'owned-cleanup-and-container-preservation', passed: clean });
     process.off('SIGINT', cancel); process.off('SIGTERM', cancel);
+    const finalDiagnostics = edgeVerificationSummary(checks, failures, createHash('sha256').update(artifactBytes).digest('hex'));
+    process.stdout.write('Edge final verification observation: ' + JSON.stringify(finalDiagnostics) + '\n');
     await writeFile(resolve(directory, 'evidence.json'), JSON.stringify(edgeWorkerEvidence(checks, createHash('sha256').update(artifactBytes).digest('hex')), null, 2) + '\n');
     await writeFile(resolve(directory, 'owned-identities.json'), JSON.stringify({ eventIds: ids, generationIds: [...generationIds], probeRequestIds }, null, 2) + '\n', { mode: 0o600 });
     await writeFile(resolve(directory, 'failure-phases.json'), JSON.stringify({ failures }, null, 2) + '\n', { mode: 0o600 });

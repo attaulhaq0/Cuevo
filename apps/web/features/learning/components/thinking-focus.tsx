@@ -1,25 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, CuevoIcon } from '@cuevo/ui';
 import { COGNITIVE_PROCESSES, thinkingFocusResponseSchema, thinkingFocusReviewInputSchema, type CognitiveProcess, type ThinkingFocusResponse, type LearningResource } from '@cuevo/contracts';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { CommandForm, type FormField } from '../../../shared/components/command-form';
 import { LearningError } from '../../../shared/components/feedback';
-import { buildThinkingFocusDraft, currentThinkingFocusRead, parseThinkingFocusCatalogue, parseThinkingFocusQueue, parseThinkingFocusRead, parseThinkingFocusSnapshot, parseThinkingFocusRubric, parseThinkingFocusMaterials, thinkingFocusMaterialsPath, thinkingFocusActionAvailable, thinkingFocusPath, thinkingFocusTarget, validateThinkingFocusReceipt, type ThinkingFocusKind } from '../thinking-focus-model';
+import { buildThinkingFocusDraft, currentThinkingFocusRead, parseThinkingFocusCatalogue, parseThinkingFocusQueue, parseThinkingFocusRead, parseThinkingFocusSnapshot, parseThinkingFocusRubric, parseThinkingFocusMaterials, thinkingFocusMaterialsPath, thinkingFocusActionAvailable, thinkingFocusPath, thinkingFocusTarget, validateThinkingFocusReceipt, parseThinkingFocusSelection, currentThinkingFocusSelection, type ThinkingFocusSelection, type ThinkingFocusKind } from '../thinking-focus-model';
 import type { Assessment } from '../model';
-import { LearningApiError } from '../../../shared/api/client';
+import { LearningApiError,type Command,type CommandJournal } from '../../../shared/api/client';
 import { thinkingFocusAr, thinkingFocusEn } from '../thinking-focus-messages';
 
-type EditorProps = { kind: ThinkingFocusKind; id: string; criterionKey?: string; courseId: string; expectedRubricVersion?: string; onChanged?: () => void; initiallyOpen?: boolean };
+type EditorProps = { kind: ThinkingFocusKind; id: string; criterionKey?: string; courseId: string; expectedRubricVersion?: string;expectedSourceVersion?:string;expectedRevision?:number;queueCursor?:string|null;headingLevel?:2|3;onReaderReady?:(heading:HTMLHeadingElement)=>void;onReaderDetached?:(heading:HTMLHeadingElement)=>void;onReaderUnavailable?:()=>void; onChanged?: () => void; initiallyOpen?: boolean; onClose?:()=>void; closeLabel?:string; onLockedChange?:(locked:boolean)=>void; sourceAvailable?:boolean };
+type ThinkingCommandContext={actor:string;sourceVersion:string;courseId:string;selection:ThinkingFocusSelection;validate:(receipt:unknown,command:Command)=>void};
+const thinkingCommandContexts=new WeakMap<CommandJournal,Map<string,ThinkingCommandContext>>();
 function useReadScope(path: string | null, refresh = 0) {
   const app = useApp();
   const ready = app.status === 'ready' && app.online && !!app.accessToken && !!app.membership;
   return { app, scope: ready && path ? JSON.stringify([app.apiUrl, app.membership?.schoolId, app.membership?.userId, app.membership?.role, app.accessToken, app.accessGeneration, app.selectedChildId, app.locale, path, refresh]) : null };
 }
 
-function ThinkingFocusMaterials({ source, readScope, onReady }: { source: ThinkingFocusResponse; readScope: string | null; onReady: (value: string | null) => void }) {
+function ThinkingFocusMaterials({ source, readScope, onReady,onLockedChange,headingLevel=4 }: { source: ThinkingFocusResponse; readScope: string | null; onReady: (value: string | null) => void;onLockedChange?:(value:boolean)=>void;headingLevel?:3|4 }) {
   const [refresh, setRefresh] = useState(0);
   const path = thinkingFocusMaterialsPath(source.target, source.sourceVersion);
   const { app, scope } = useReadScope(path, refresh); const t = app.locale === 'ar' ? thinkingFocusAr : thinkingFocusEn;
@@ -30,6 +32,7 @@ function ThinkingFocusMaterials({ source, readScope, onReady }: { source: Thinki
   const controller = useRef<AbortController | null>(null), mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); }; }, []);
   useEffect(() => { onReady(manifest && !query.error && !error ? readScope : null); return () => onReady(null); }, [manifest, query.error, error, readScope, onReady]);
+  useEffect(()=>{onLockedChange?.(!!pending);return()=>onLockedChange?.(false);},[pending,onLockedChange]);
   async function download(resource: LearningResource) {
     if (!manifest || !app.accessToken || !app.membership || pending) return;
     const abort = new AbortController(); controller.current?.abort(); controller.current = abort; setPending(resource.id); setError(null);
@@ -44,7 +47,8 @@ function ThinkingFocusMaterials({ source, readScope, onReady }: { source: Thinki
     } catch (failure) { if (mounted.current && !abort.signal.aborted) setError(failure instanceof LearningApiError ? failure : new LearningApiError('unavailable')); }
     finally { if (mounted.current && !abort.signal.aborted) setPending(null); }
   }
-  return <section className="thinking-focus-materials"><h4>{t.materials}</h4>{query.loading ? <p role="status">{t.loading}</p> : query.error ? <LearningError error={query.error}/> : manifest ? manifest.items.length ? <ul>{manifest.items.map(resource => <li key={`${resource.id}:${resource.revisionId}`}><div><p>{resource.title}</p><small><bdi>{resource.name}</bdi></small></div><Button type="button" variant="quiet" disabled={!!pending} onClick={() => void download(resource)}>{pending === resource.id ? t.openingMaterial : t.openMaterial}</Button></li>)}</ul> : <p>{t.noMaterials}</p> : <p role="status">{t.materialUnknown}</p>}{error ? <LearningError error={error}/> : null}{query.error || error ? <Button type="button" variant="quiet" onClick={() => { setError(null); setRefresh(value => value + 1); }}>{t.retry}</Button> : null}</section>;
+  const Heading=headingLevel===3?'h3':'h4';
+  return <section className="thinking-focus-materials"><Heading>{t.materials}</Heading>{query.loading ? <p role="status">{t.loading}</p> : query.error ? <LearningError error={query.error}/> : manifest ? manifest.items.length ? <ul>{manifest.items.map(resource => <li key={`${resource.id}:${resource.revisionId}`}><div><p>{resource.title}</p><small><bdi>{resource.name}</bdi></small></div><Button type="button" variant="quiet" disabled={!!pending} onClick={() => void download(resource)}>{pending === resource.id ? t.openingMaterial : t.openMaterial}</Button></li>)}</ul> : <p>{t.noMaterials}</p> : <p role="status">{t.materialUnknown}</p>}{error ? <LearningError error={error}/> : null}{query.error || error ? <Button type="button" variant="quiet" onClick={() => { setError(null); setRefresh(value => value + 1); }}>{t.retry}</Button> : null}</section>;
 }
 
 export function ThinkingFocusSummary({ value, locale = 'en' }: { value: ThinkingFocusResponse | null | undefined; locale?: 'en' | 'ar' }) {
@@ -61,14 +65,16 @@ export function ThinkingFocusEditor(props: EditorProps) {
   return <CurrentThinkingFocusEditor key={`${membership?.schoolId}:${membership?.userId}:${props.courseId}:${props.kind}:${props.id}:${props.criterionKey ?? ''}`} {...props} />;
 }
 
-function CurrentThinkingFocusEditor({ kind, id, criterionKey, courseId, expectedRubricVersion, onChanged, initiallyOpen = false }: EditorProps) {
+function CurrentThinkingFocusEditor({ kind, id, criterionKey, courseId, expectedRubricVersion,expectedSourceVersion,expectedRevision,queueCursor=null,headingLevel=3,onReaderReady,onReaderDetached,onReaderUnavailable, onChanged, initiallyOpen = false,onClose,closeLabel,onLockedChange,sourceAvailable=true }: EditorProps) {
   const owner = useApp();
+  useSyncExternalStore(owner.commandJournal.subscribe,owner.commandJournal.getSnapshot,owner.commandJournal.getSnapshot);
   const restoredAction = (['draft', 'review'] as const).find(value => owner.commandJournal.get(thinkingFocusPath(kind, id, criterionKey, value)) || owner.formDrafts.model(`${owner.membership?.schoolId}:${owner.membership?.userId}:thinking-focus-basis:${thinkingFocusPath(kind, id, criterionKey, value)}`));
   const [open, setOpen] = useState(initiallyOpen || !!restoredAction);
   const [refresh, setRefresh] = useState(0);
   const [action, setAction] = useState<'draft' | 'review' | null>(restoredAction ?? null);
   const [basis, setBasis] = useState<{ scope: string; value: ThinkingFocusResponse } | null>(null);
   const [locked, setLocked] = useState(false);
+  const [materialLocked,setMaterialLocked]=useState(false);
   const [primary, setPrimary] = useState<CognitiveProcess | null>(null);
   const [materialsReady, setMaterialsReady] = useState<string | null>(null);
   const path = thinkingFocusPath(kind, id, criterionKey);
@@ -77,7 +83,11 @@ function CurrentThinkingFocusEditor({ kind, id, criterionKey, courseId, expected
   const parser = useCallback((value: unknown) => ({ scope, value: parseThinkingFocusRead(value, thinkingFocusTarget(kind, id, criterionKey), courseId) }), [scope, kind, id, criterionKey, courseId]);
   const read = useApiQuery(scope ? path : null, parser, refresh);
   const latest = currentThinkingFocusRead(read.data, scope);
-  const current = latest && (!expectedRubricVersion || latest.source.rubricVersion === expectedRubricVersion) ? latest : null;
+  const current = sourceAvailable&&latest && (!expectedRubricVersion || latest.source.rubricVersion === expectedRubricVersion)&& (expectedSourceVersion===undefined||latest.sourceVersion===expectedSourceVersion)&&(expectedRevision===undefined||latest.revision===expectedRevision) ? latest : null;
+  const heading=useRef<HTMLHeadingElement|null>(null);
+  const trackHeading=useCallback((element:HTMLHeadingElement|null)=>{if(!element&&heading.current)onReaderDetached?.(heading.current);heading.current=element;},[onReaderDetached]);
+  useEffect(()=>{if(current&&!read.loading&&heading.current)onReaderReady?.(heading.current);},[current,read.loading,onReaderReady]);
+  useEffect(()=>{if(open&&!read.loading&&(read.error||!current))onReaderUnavailable?.();},[open,current,read.loading,read.error,onReaderUnavailable]);
   const catalogue = useApiQuery(scope ? '/v1/thinking-focus/catalogue' : null, parseThinkingFocusCatalogue, 0);
   const prefix = `${app.membership?.schoolId}:${app.membership?.userId}:`;
   const actionPath = action ? thinkingFocusPath(kind, id, criterionKey, action) : null;
@@ -89,6 +99,14 @@ function CurrentThinkingFocusEditor({ kind, id, criterionKey, courseId, expected
   const frozen = restoredBasis ?? (basis?.scope === basisScope ? basis.value : null);
   const currentPermission = thinkingFocusActionAvailable(current, action, frozen, !!actionPath && !!app.commandJournal.get(actionPath));
   const sourceMatches = !!current && !!frozen && current.sourceVersion === frozen.sourceVersion && current.revision === frozen.revision;
+  const commandContexts=thinkingCommandContexts.get(owner.commandJournal)??new Map<string,ThinkingCommandContext>();thinkingCommandContexts.set(owner.commandJournal,commandContexts);
+  const actorContext=JSON.stringify([owner.apiUrl,owner.membership?.schoolId,owner.membership?.userId,owner.membership?.role]);
+  const capture=useRef<{basis:ThinkingFocusResponse;action:'draft'|'review';path:string;actor:string;userId:string}|null>(null);
+  capture.current=frozen&&action&&actionPath&&owner.membership?{basis:frozen,action,path:actionPath,actor:actorContext,userId:owner.membership.userId}:null;
+  useEffect(()=>owner.commandJournal.subscribe(()=>{const keys=new Set(owner.commandJournal.pending().map(command=>command.key));for(const key of commandContexts.keys())if(!keys.has(key))commandContexts.delete(key);const value=capture.current;if(!value)return;const command=owner.commandJournal.get(value.path);if(command&&!commandContexts.has(command.key)){const basis=structuredClone(value.basis);commandContexts.set(command.key,{actor:value.actor,sourceVersion:basis.sourceVersion,courseId:basis.courseId,selection:{target:basis.target,sourceVersion:basis.sourceVersion,revision:basis.revision,cursor:queueCursor},validate:(receipt,original)=>validateThinkingFocusReceipt(receipt,original,basis,value.userId,value.action)});}}),[owner.commandJournal,commandContexts,queueCursor]);
+  const original=actionPath?owner.commandJournal.get(actionPath):undefined,originalContext=original?commandContexts.get(original.key):undefined;
+  const replayCurrent=sourceAvailable&&latest&&(!expectedRubricVersion||latest.source.rubricVersion===expectedRubricVersion)&&originalContext?.actor===actorContext&&originalContext.courseId===courseId&&originalContext.selection.target.kind===latest.target.kind&&originalContext.selection.target.id===latest.target.id&&originalContext.selection.target.criterionKey===latest.target.criterionKey&&originalContext.sourceVersion===latest.sourceVersion?latest:null;
+  const originalRecovery=!!original&&!!replayCurrent&&(!frozen||!current);
   function start(next: 'draft' | 'review') {
     if (!current || materialsReady !== scope) return;
     const commandPath = thinkingFocusPath(kind, id, criterionKey, next);
@@ -104,6 +122,8 @@ function CurrentThinkingFocusEditor({ kind, id, criterionKey, courseId, expected
   const retainedPrimary = actionPath ? app.commandJournal.get(actionPath)?.body.focus : undefined;
   const retainedFocus = retainedPrimary && typeof retainedPrimary === 'object' && 'primaryProcess' in retainedPrimary ? retainedPrimary.primaryProcess : undefined;
   const selectedPrimary = primary ?? (COGNITIVE_PROCESSES.includes(workingPrimary as CognitiveProcess) ? workingPrimary as CognitiveProcess : COGNITIVE_PROCESSES.includes(retainedFocus as CognitiveProcess) ? retainedFocus as CognitiveProcess : frozen?.classification?.focus.primaryProcess ?? null);
+  const navigationLocked=locked||materialLocked||!!owner.commandJournal.get(thinkingFocusPath(kind,id,criterionKey,'draft'))||!!owner.commandJournal.get(thinkingFocusPath(kind,id,criterionKey,'review'));
+  useEffect(()=>{onLockedChange?.(navigationLocked);return()=>onLockedChange?.(false);},[navigationLocked,onLockedChange]);
   const labels = catalogue.data?.processes ?? [];
   const fields: FormField[] = action === 'draft' ? [
     { name: 'primaryProcess', label: t.primary, type: 'select', required: true, defaultValue: selectedPrimary ?? '', options: labels.map(process => ({ value: process.process, label: process.label[app.locale] })) },
@@ -114,15 +134,17 @@ function CurrentThinkingFocusEditor({ kind, id, criterionKey, courseId, expected
     { name: 'reason', label: t.reason, type: 'textarea', required: true, maxLength: 2000 },
     { name: 'confirmReview', label: t.confirm, type: 'checkbox', required: true },
   ];
+  const Heading=headingLevel===2?'h2':'h3';
   return <section className="thinking-focus-editor">
-    <Button type="button" variant="quiet" disabled={locked} aria-expanded={open} onClick={() => setOpen(value => !value)}><CuevoIcon name="learning" size={20} />{open ? t.close : t.open}</Button>
+    <Button type="button" variant="quiet" disabled={navigationLocked} aria-expanded={open} onClick={() => {if(navigationLocked)return;if(open&&onClose)onClose();else setOpen(value => !value)}}><CuevoIcon name="learning" size={20} />{open ? closeLabel??t.close : t.open}</Button>
     {open ? <>{read.loading ? <p role="status">{t.loading}</p> : read.error ? <><LearningError error={read.error} /><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.retry}</Button></> : current ? <>
-      <header className="cuevo-section-header"><div className="cuevo-section-header__context"><h3>{current.targetTitle}</h3><ThinkingFocusSummary value={current} locale={app.locale} /></div><div className="learning-actions">{current.canAuthor ? <Button type="button" variant="secondary" disabled={locked || materialsReady !== scope} onClick={() => start('draft')}>{t.edit}</Button> : null}{current.canReview && current.classification ? <Button type="button" disabled={locked || materialsReady !== scope} onClick={() => start('review')}>{t.review}</Button> : null}</div></header>
+      <header className="cuevo-section-header"><div className="cuevo-section-header__context"><Heading ref={trackHeading} tabIndex={onReaderReady?-1:undefined}>{current.targetTitle}</Heading><ThinkingFocusSummary value={current} locale={app.locale} /></div><div className="learning-actions">{current.canAuthor ? <Button type="button" variant="secondary" disabled={navigationLocked || materialsReady !== scope} onClick={() => start('draft')}>{t.edit}</Button> : null}{current.canReview && current.classification ? <Button type="button" disabled={navigationLocked || materialsReady !== scope} onClick={() => start('review')}>{t.review}</Button> : null}</div></header>
       <details className="thinking-focus-source" open={action === 'review' ? true : undefined}><summary>{t.source}</summary><p className="lesson-content">{current.source.instructions || t.noInstructions}</p>{current.source.criterionTitle ? <p>{current.source.criterionTitle}</p> : null}{current.classification ? <p>{current.classification.rationale}</p> : null}</details>
-      <ThinkingFocusMaterials key={`${scope}:${current.sourceVersion}`} source={current} readScope={scope} onReady={setMaterialsReady}/>
+      <ThinkingFocusMaterials key={`${scope}:${current.sourceVersion}`} source={current} readScope={scope} onReady={setMaterialsReady} onLockedChange={setMaterialLocked} headingLevel={headingLevel===2?3:4}/>
       {catalogue.error ? <LearningError error={catalogue.error} /> : null}
       {action && frozen && actionPath && currentPermission ? sourceMatches || current?.sourceVersion === frozen.sourceVersion && app.commandJournal.get(actionPath) ? catalogue.loading ? <p role="status">{t.loading}</p> : catalogue.data ? <CommandForm key={`${actionPath}:${frozen.revision}:${frozen.sourceVersion}`} title={action === 'draft' ? t.edit : t.review} regionLabel={`${action === 'draft' ? t.edit : t.review}: ${frozen.targetTitle}`} path={actionPath} fields={fields} body={values => { if (materialsReady !== scope) throw new LearningApiError('conflict'); return action === 'draft' ? buildThinkingFocusDraft(values, frozen) : thinkingFocusReviewInputSchema.parse({ expectedRevision: frozen.revision, expectedSourceVersion: frozen.sourceVersion, decision: values.get('decision'), reason: values.get('reason'), confirmReview: values.get('confirmReview') === 'on' }); }} validateReceipt={(receipt, command) => validateThinkingFocusReceipt(receipt, command, frozen, app.membership!.userId, action)} onValuesChange={values => { if (action === 'draft' && COGNITIVE_PROCESSES.includes(values.get('primaryProcess') as CognitiveProcess)) setPrimary(values.get('primaryProcess') as CognitiveProcess); }} onSaved={saved} onCancel={cancel} onLockedChange={setLocked} actionLabel={action === 'draft' ? t.draft : t.review} note={t.reviewNote} /> : null : <p className="notice">{t.sourceChanged}</p> : null}
-    </> : latest ? <p role="status">{t.sourceChanged}</p> : null}</> : null}
+      {originalRecovery&&original&&originalContext?<CommandForm title={t.originalAction} path={original.path} fields={[]} body={()=>{throw new LearningApiError('conflict');}} validateReceipt={originalContext.validate} onSaved={saved} onLockedChange={setLocked} note={t.originalActionNote}/>:original&&!frozen?<p className="notice">{t.sourceChanged}</p>:null}
+    </> : latest ? <><p role="status">{t.sourceChanged}</p>{originalRecovery&&original&&originalContext?<CommandForm title={t.originalAction} path={original.path} fields={[]} body={()=>{throw new LearningApiError('conflict');}} validateReceipt={originalContext.validate} onSaved={saved} onLockedChange={setLocked} note={t.originalActionNote}/>:null}</> : null}</> : null}
   </section>;
 }
 
@@ -146,17 +168,45 @@ function CurrentAssessmentCriterionFocus({ assessment, onChanged }: { assessment
   return <section className="thinking-focus-criteria"><Button type="button" variant="quiet" aria-expanded={open} onClick={() => { setOpen(value => !value); setSelected(null); }}>{t.criteria}</Button>{open ? <>{query.loading || rubric.loading ? <p role="status">{t.loading}</p> : query.error || rubric.error ? <><LearningError error={query.error ?? rubric.error!}/><Button type="button" variant="quiet" onClick={changed}>{t.retry}</Button></> : !source || !criteria ? <p role="status">{t.rubricUnavailable}</p> : <><h3>{t.criteria}</h3><p>{t.chooseCriterion}</p>{criteria.map(criterion => <article key={criterion.key}><h4>{criterion.title}</h4><Button type="button" variant="secondary" onClick={() => setSelected(criterion.key)}>{t.openTask}</Button></article>)}{selectedKey ? <ThinkingFocusEditor key={`${source.sourceVersion}:${selectedKey}`} initiallyOpen kind="criterion" id={assessment.id} criterionKey={selectedKey} courseId={assessment.courseId} expectedRubricVersion={source.source.rubricVersion ?? undefined} onChanged={changed}/> : null}</>}</> : null}</section>;
 }
 
-export function CourseThinkingFocusReview({ courseId }: { courseId: string }) {
+export function CourseThinkingFocusReview({ courseId,sourceAvailable=true,sourceLoading=false,onLockedChange }: { courseId: string;sourceAvailable?:boolean;sourceLoading?:boolean;onLockedChange?:(locked:boolean)=>void }) {
   const { membership } = useApp();
-  return <CurrentCourseThinkingFocusReview key={`${membership?.schoolId}:${membership?.userId}:${courseId}`} courseId={courseId} />;
+  return <CurrentCourseThinkingFocusReview key={`${membership?.schoolId}:${membership?.userId}:${courseId}`} courseId={courseId} sourceAvailable={sourceAvailable} sourceLoading={sourceLoading} onLockedChange={onLockedChange} />;
 }
-function CurrentCourseThinkingFocusReview({ courseId }: { courseId: string }) {
-  const [open, setOpen] = useState(false), [cursor, setCursor] = useState<string | null>(null), [refresh, setRefresh] = useState(0), [selected, setSelected] = useState<ThinkingFocusResponse | null>(null);
+function CurrentCourseThinkingFocusReview({ courseId,sourceAvailable,sourceLoading,onLockedChange }: { courseId: string;sourceAvailable:boolean;sourceLoading:boolean;onLockedChange?:(locked:boolean)=>void }) {
+  const owner=useApp(),slot=`${owner.membership?.schoolId}:${owner.membership?.userId}:thinking-focus-queue:${courseId}`;
+  const actorContext=JSON.stringify([owner.apiUrl,owner.membership?.schoolId,owner.membership?.userId,owner.membership?.role]);
+  const restoredSelection=()=>{const contexts=owner.commandJournal.pending().flatMap(command=>{const context=thinkingCommandContexts.get(owner.commandJournal)?.get(command.key);return context?.actor===actorContext&&context.courseId===courseId?[context.selection]:[];});return contexts.length===1?contexts[0]:contexts.length>1?null:parseThinkingFocusSelection(owner.formDrafts.model(slot));};
+  const [open, setOpen] = useState(()=>!!restoredSelection()), [cursor, setCursor] = useState<string | null>(()=>restoredSelection()?.cursor??null), [refresh, setRefresh] = useState(0), [selected, setSelected] = useState<ThinkingFocusSelection | null>(restoredSelection),[editorLocked,setEditorLocked]=useState(false);
   const path = `/v1/thinking-focus/courses/${courseId}?limit=25${cursor ? `&cursor=${cursor}` : ''}`;
-  const { app, scope } = useReadScope(open ? path : null, refresh); const t = app.locale === 'ar' ? thinkingFocusAr : thinkingFocusEn;
+  const { app, scope } = useReadScope(open&&sourceAvailable ? path : null, refresh); const t = app.locale === 'ar' ? thinkingFocusAr : thinkingFocusEn;
   const parser = useCallback((value: unknown) => ({ scope, value: parseThinkingFocusQueue(value, courseId) }), [scope, courseId]);
   const query = useApiQuery(scope ? path : null, parser, refresh); const current = query.data?.scope === scope ? query.data.value : null;
-  return <section className="thinking-focus-queue"><Button type="button" variant="quiet" aria-expanded={open} onClick={() => { setOpen(value => !value); setSelected(null); }}>{t.reviewQueue}</Button>{open ? <>{query.loading ? <p role="status">{t.loading}</p> : query.error ? <><LearningError error={query.error} /><Button type="button" onClick={() => setRefresh(value => value + 1)}>{t.retry}</Button></> : current ? <>{current.items.length ? <ul className="thinking-focus-queue__items">{current.items.map(row => <li key={`${row.target.kind}:${row.target.id}:${row.target.criterionKey ?? ''}`}><div><h3>{row.targetTitle}</h3><ThinkingFocusSummary value={row} locale={app.locale} /></div><Button type="button" variant="secondary" onClick={() => setSelected(row)}>{t.openTask}</Button></li>)}</ul> : <p>{t.queueEmpty}</p>}{current.nextCursor ? <Button type="button" variant="quiet" onClick={() => { setCursor(current.nextCursor); setSelected(null); }}>{t.loadMore}</Button> : null}</> : null}{selected && current?.items.some(row => row.target.kind === selected.target.kind && row.target.id === selected.target.id && row.target.criterionKey === selected.target.criterionKey) ? <ThinkingFocusEditor initiallyOpen kind={selected.target.kind.toLowerCase() as ThinkingFocusKind} id={selected.target.id} criterionKey={selected.target.criterionKey ?? undefined} courseId={courseId} onChanged={() => setRefresh(value => value + 1)} /> : null}</> : null}</section>;
+  useSyncExternalStore(owner.commandJournal.subscribe,owner.commandJournal.getSnapshot,owner.commandJournal.getSnapshot);
+  const pending=owner.commandJournal.pending().some(command=>selected&&(['draft','review']as const).some(action=>command.path===thinkingFocusPath(selected.target.kind.toLowerCase()as ThinkingFocusKind,selected.target.id,selected.target.criterionKey??undefined,action))),navigationLocked=editorLocked||pending;
+  useEffect(()=>{onLockedChange?.(navigationLocked);return()=>onLockedChange?.(false);},[navigationLocked,onLockedChange]);
+  const selectedSource=currentThinkingFocusSelection(current?.items??[],selected,courseId,!!current&&!query.loading&&!query.error);
+  const replayRows=selected&&pending&&current&&!query.loading&&!query.error?current.items.filter(row=>row.courseId===courseId&&row.target.kind===selected.target.kind&&row.target.id===selected.target.id&&row.target.criterionKey===selected.target.criterionKey&&row.sourceVersion===selected.sourceVersion):[];
+  const replaySource=replayRows.length===1?replayRows[0]:null;
+  const root=useRef<HTMLElement|null>(null),openerTarget=useRef<string|null>(null);
+  const focusIntent=useRef<{kind:'open'|'back';scope:string;origin:Element|null}|null>(null);
+  const restoreFocus=useRef<{kind:'reader'|'choice';scope:string;selection:ThinkingFocusSelection}|null>(null);
+  const focusAuthority=owner.status==='ready'&&owner.online&&owner.accessToken&&owner.membership?JSON.stringify([owner.apiUrl,owner.membership?.schoolId,owner.membership?.userId,owner.membership?.role,owner.accessToken,owner.selectedChildId,owner.locale,path,refresh]):null;
+  const focusScope=useRef(focusAuthority);focusScope.current=focusAuthority;
+  if(focusIntent.current?.scope!==focusAuthority)focusIntent.current=null;
+  if(restoreFocus.current?.scope!==focusAuthority)restoreFocus.current=null;
+  const focusSelection=useRef(selected);focusSelection.current=selected;
+  const onEditorLocked=useCallback((value:boolean)=>setEditorLocked(value),[]);
+  const cancelFocus=useCallback(()=>{focusIntent.current=null;restoreFocus.current=null;},[]);
+  useEffect(()=>{if(!sourceLoading&&(!sourceAvailable||!query.loading&&(query.error||!current||selected&&!selectedSource)))cancelFocus();},[sourceAvailable,sourceLoading,query.loading,query.error,current,selected,selectedSource,cancelFocus]);
+  useEffect(()=>{const cancelOnFocus=(event:FocusEvent)=>{const intent=focusIntent.current;if(event.target!==document.body&&event.target!==document.documentElement){if(intent&&event.target!==intent.origin)focusIntent.current=null;restoreFocus.current=null;}};const cancelOnInput=()=>{focusIntent.current=null;restoreFocus.current=null;};document.addEventListener('focusin',cancelOnFocus);document.addEventListener('pointerdown',cancelOnInput);document.addEventListener('keydown',cancelOnInput);return()=>{document.removeEventListener('focusin',cancelOnFocus);document.removeEventListener('pointerdown',cancelOnInput);document.removeEventListener('keydown',cancelOnInput);focusIntent.current=null;restoreFocus.current=null;};},[]);
+  const detachReader=useCallback((target:HTMLHeadingElement)=>{if(document.activeElement===target&&selected&&focusAuthority)restoreFocus.current={kind:'reader',scope:focusAuthority,selection:selected};},[selected,focusAuthority]);
+  const focusReader=useCallback((target:HTMLHeadingElement)=>{const intent=focusIntent.current,restored=restoreFocus.current,selection=focusSelection.current;const active=document.activeElement;if(intent?.kind==='open'&&intent.scope===focusScope.current){focusIntent.current=null;restoreFocus.current=null;if(active!==intent.origin&&active!==document.body&&active!==document.documentElement)return;target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'instant'});return;}if(restored?.kind==='reader'&&restored.scope===focusScope.current&&selection&&JSON.stringify(restored.selection)===JSON.stringify(selection)){restoreFocus.current=null;if(active===document.body||active===document.documentElement)target.focus({preventScroll:true});}},[]);
+  useEffect(()=>{const restored=restoreFocus.current;if(restored?.kind!=='choice'||selected||query.loading||query.error||!current)return;const row=currentThinkingFocusSelection(current.items,restored.selection,courseId,true);restoreFocus.current=null;if(!row||restored.scope!==focusScope.current||document.activeElement!==document.body&&document.activeElement!==document.documentElement)return;root.current?.querySelector<HTMLElement>(`[data-thinking-focus-choice="${row.target.kind}:${row.target.id}:${row.target.criterionKey??''}"] button`)?.focus({preventScroll:true});},[selected,query.loading,query.error,current,courseId]);
+  function trackChoice(element:HTMLLIElement|null,row:ThinkingFocusResponse){if(element)return()=>{const active=document.activeElement;if(focusAuthority&&active instanceof HTMLButtonElement&&element.contains(active))restoreFocus.current={kind:'choice',scope:focusAuthority,selection:{target:row.target,sourceVersion:row.sourceVersion,revision:row.revision,cursor}};};}
+  useEffect(()=>{if(focusIntent.current?.kind!=='back'||selected||sourceLoading||!sourceAvailable||query.loading)return;const frame=requestAnimationFrame(()=>{const intent=focusIntent.current;if(intent?.kind!=='back'||intent.scope!==focusScope.current)return;const active=document.activeElement;if(active!==intent.origin&&active!==document.body&&active!==document.documentElement){focusIntent.current=null;return;}const sameChoice=root.current?.querySelector<HTMLElement>(`[data-thinking-focus-choice="${openerTarget.current}"] button`);const target=sameChoice??root.current?.querySelector<HTMLElement>('.thinking-focus-review-directory h2[tabindex="-1"]');if(!target)return;focusIntent.current=null;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest',behavior:'instant'});});return()=>cancelAnimationFrame(frame);},[selected,sourceAvailable,sourceLoading,query.loading,current]);
+  function closeSelected(){if(navigationLocked)return;focusIntent.current=focusAuthority?{kind:'back',scope:focusAuthority,origin:document.activeElement}:null;setSelected(null);owner.formDrafts.remove(slot);}
+  function choose(row:ThinkingFocusResponse,button:HTMLButtonElement){if(navigationLocked)return;const selection={target:row.target,sourceVersion:row.sourceVersion,revision:row.revision,cursor};focusIntent.current=focusAuthority?{kind:'open',scope:focusAuthority,origin:button}:null;openerTarget.current=`${row.target.kind}:${row.target.id}:${row.target.criterionKey??''}`;owner.formDrafts.saveModel(slot,selection);setSelected(selection);}
+  return <section ref={root} className="thinking-focus-queue"><Button type="button" variant="quiet" disabled={navigationLocked} aria-expanded={open} onClick={() => {if(navigationLocked)return;setOpen(value => !value);setSelected(null);owner.formDrafts.remove(slot);}}>{t.reviewQueue}</Button>{open?sourceAvailable?<div className="thinking-focus-review-layout" data-selected={!!selected}><div className="thinking-focus-review-directory"><h2 tabIndex={-1}>{t.taskReviews}</h2>{query.loading?<p role="status">{t.loading}</p>:query.error?<LearningError error={query.error}/>:current?current.items.length?<ul className="thinking-focus-queue__items">{current.items.map(row=><li ref={element=>trackChoice(element,row)} key={`${row.target.kind}:${row.target.id}:${row.target.criterionKey??''}`} data-thinking-focus-choice={`${row.target.kind}:${row.target.id}:${row.target.criterionKey??''}`}><div><h3>{row.targetTitle}</h3><ThinkingFocusSummary value={row} locale={app.locale}/></div><Button type="button" variant="secondary" disabled={navigationLocked} onClick={event=>choose(row,event.currentTarget)}>{t.openTask}</Button></li>)}</ul>:<p>{t.queueEmpty}</p>:null}<Button type="button" variant="quiet" onClick={()=>setRefresh(value=>value+1)}>{t.retry}</Button>{current?.nextCursor?<Button type="button" variant="quiet" disabled={navigationLocked} onClick={()=>{setCursor(current.nextCursor);closeSelected();}}>{t.loadMore}</Button>:null}</div>{selected?<div className="thinking-focus-review-reader">{selectedSource||pending?<ThinkingFocusEditor initiallyOpen kind={selected.target.kind.toLowerCase()as ThinkingFocusKind} id={selected.target.id} criterionKey={selected.target.criterionKey??undefined} courseId={courseId} sourceAvailable={!!selectedSource||!!replaySource} expectedSourceVersion={selected.sourceVersion} expectedRevision={selected.revision} queueCursor={selected.cursor} headingLevel={2} onReaderReady={focusReader} onReaderDetached={detachReader} onReaderUnavailable={cancelFocus} onClose={closeSelected} closeLabel={t.backToReviews} onLockedChange={onEditorLocked} onChanged={()=>setRefresh(value=>value+1)}/>:<section><Button type="button" variant="quiet" disabled={navigationLocked} onClick={closeSelected}>{t.backToReviews}</Button><p className="notice">{query.loading?t.loading:t.sourceChanged}</p><Button type="button" variant="quiet" onClick={()=>setRefresh(value=>value+1)}>{t.retry}</Button></section>}</div>:null}</div>:<p role="status">{sourceLoading?t.loading:t.sourceChanged}</p>:null}</section>;
 }
 
 export function ThinkingFocusSnapshot({ type, sourceId }: { type: 'completion' | 'submission' | 'result'; sourceId: string }) {

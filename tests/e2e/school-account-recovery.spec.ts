@@ -12,7 +12,22 @@ test('school administrator approves recovery and the member changes password, re
   const oldSignIn = await page.request.post('http://127.0.0.1:56321/auth/v1/token?grant_type=password', { headers: { apikey: pub }, data: { email: student.email, password: student.password } }); expect(oldSignIn.ok()).toBe(true); const oldTokens = await oldSignIn.json() as { access_token: string; refresh_token: string };
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.name)); page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning' && /hydrat/i.test(message.text())) errors.push(message.text()); });
   await page.goto('/'); await page.getByLabel('School email', { exact: true }).fill(admin.email); await page.getByLabel('Password', { exact: true }).fill(admin.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await page.getByRole('button', { name: 'Accounts and invitations', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'School accounts and invitations', exact: true }); await panel.getByRole('button', { name: 'Recover a school member account', exact: true }).click(); const recovery = panel.getByRole('region', { name: 'Recover a school member account', exact: true }); await recovery.getByRole('combobox', { name: 'Current member', exact: true }).selectOption(studentIdentity.actorId);
+  const panel = page.getByRole('region', { name: 'School accounts and invitations', exact: true }); await panel.getByRole('button', { name: 'Recover a school member account', exact: true }).click(); const recovery = panel.getByRole('region', { name: 'Recover a school member account', exact: true });
+  const currentMember = recovery.getByRole('combobox', { name: 'Current member', exact: true });
+  for (let part = 0; part < 30; part++) {
+    await expect.poll(async () => await currentMember.isEnabled().catch(() => false) || await recovery.getByRole('button', { name: 'Load more', exact: true }).isVisible().catch(() => false)).toBe(true);
+    if (await currentMember.isEnabled()) break;
+    const continuation = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/v1/school/people' && url.searchParams.has('cursor') && response.request().method() === 'GET'; });
+    await recovery.getByRole('button', { name: 'Load more', exact: true }).click();
+    const received = await continuation; expect(received.status()).toBe(200); const memberPage = await received.json() as { items: { id: string }[]; nextCursor: string | null };
+    expect(Array.isArray(memberPage.items) && memberPage.items.length <= 100).toBe(true); expect(memberPage.nextCursor === null || typeof memberPage.nextCursor === 'string').toBe(true);
+    await expect(recovery.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0);
+    for (const item of memberPage.items) await expect(currentMember.locator(`option[value="${item.id}"]`)).toHaveCount(1);
+    if (memberPage.nextCursor === null) await expect(currentMember).toBeEnabled();
+  }
+  await expect(currentMember).toBeEnabled();
+  const memberOption = currentMember.locator(`option[value="${studentIdentity.actorId}"]`); await expect(memberOption).toHaveCount(1); await expect(memberOption).toContainText(studentIdentity.displayName); await expect(memberOption).toBeEnabled();
+  await currentMember.selectOption(studentIdentity.actorId);
   const approve = recovery.getByRole('region', { name: 'Approve account recovery', exact: true }); await approve.getByLabel('School approval reason', { exact: true }).fill('Verified school-assisted synthetic account recovery.'); await approve.getByLabel('I reviewed this member identity and approve recovery', { exact: true }).check();
   const created = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/school/accounts/${studentIdentity.actorId}/recovery` && response.request().method() === 'POST'); await approve.getByRole('button', { name: 'Save', exact: true }).click(); const approved = await created; expect(approved.status()).toBe(200); const receipt = await approved.json() as { id: string };
   const select = panel.getByRole('combobox', { name: 'Select an invitation to review', exact: true }); await expect(select.locator(`option[value="${receipt.id}"]`)).toContainText('Account recovery'); await select.selectOption(receipt.id);

@@ -15,7 +15,7 @@ import { periodPlanningReadScope, currentPeriodPlanningRead, parseCurrentPeriodC
 import { curriculumAr, curriculumEn } from '../messages';
 import { periodPlanningRecovery } from '../period-planning-model';
 import { useCurriculumSourceDenial } from '../source-recovery';
-import { curriculumPageControlsVisible } from '../presentation-model';
+import { curriculumPageControlsVisible, curriculumPageConfirmedEmpty } from '../presentation-model';
 
 function usePlanningPage<T extends { id: string }>(path: string | null, parse: (value: unknown) => T, refresh: number) {
   const app = useApp(), scope = periodPlanningReadScope(app, path ?? '', refresh);
@@ -24,14 +24,15 @@ function usePlanningPage<T extends { id: string }>(path: string | null, parse: (
   return { ...query, sourceRead: { path: path ?? '', scope, loading: query.loading || query.loadingMore, ready: query.loaded && !query.loading && !query.loadingMore && !query.error && !query.moreError, error: query.error ?? query.moreError }, data: query.loading || query.error || query.moreError ? [] : query.data.flatMap(row => { const current = currentPeriodPlanningRead(row, scope); return current ? [current] : []; }) };
 }
 
-export function PeriodPlanning({ onLockedChange }: { onLockedChange?: (locked: boolean) => void } = {}) {
+export function PeriodPlanning({ onLockedChange, pageHeading=false }: { onLockedChange?: (locked: boolean) => void;pageHeading?:boolean } = {}) {
   const app = useApp();
   if (!periodPlanningReadScope(app, 'planning', 0)) return null;
-  return <CurrentPeriodPlanning key={`${app.apiUrl}:${app.membership!.schoolId}:${app.membership!.userId}:${app.membership!.role}`} onLockedChange={onLockedChange} />;
+  return <CurrentPeriodPlanning key={`${app.apiUrl}:${app.membership!.schoolId}:${app.membership!.userId}:${app.membership!.role}`} onLockedChange={onLockedChange} pageHeading={pageHeading} />;
 }
 
-function CurrentPeriodPlanning({ onLockedChange }: { onLockedChange?: (locked: boolean) => void }) {
+function CurrentPeriodPlanning({ onLockedChange,pageHeading }: { onLockedChange?: (locked: boolean) => void;pageHeading:boolean }) {
   const app = useApp(), { locale, membership, formDrafts } = app, t = locale === 'ar' ? curriculumAr : curriculumEn;
+  useSyncExternalStore(app.commandJournal.subscribe,app.commandJournal.getSnapshot,app.commandJournal.getSnapshot);
   const selectionSlot = `${membership!.schoolId}:${membership!.userId}:period-planning-selection`;
   const createRecovery = app.commandJournal.pending().flatMap(command => {
     const course = command.path.match(/^\/v1\/curriculum\/courses\/([^/]+)\/plans$/)?.[1];
@@ -40,6 +41,7 @@ function CurrentPeriodPlanning({ onLockedChange }: { onLockedChange?: (locked: b
   });
   const selection = parsePeriodPlanningSelection(formDrafts.model(selectionSlot)) ?? (createRecovery.length === 1 ? createRecovery[0] : null);
   const [courseId, setCourseId] = useState(selection?.courseId ?? ''), [periodId, setPeriodId] = useState(selection?.periodId ?? ''), [locked, setLocked] = useState(false), [refresh, setRefresh] = useState(0);
+  const originalCreate=app.commandJournal.get(`/v1/curriculum/courses/${courseId}/plans`),selectionLocked=locked||!!(originalCreate&&periodPlanningRecovery([originalCreate],courseId,periodId,[]));
   const selectionRef = useRef<{ courseId: string; periodId: string; revision: number } | null>(null);
   const courses = usePlanningPage('/v1/courses?limit=100', parseCourse, refresh), periods = usePlanningPage('/v1/school/report-periods?limit=100', parsePlanningPeriod, refresh);
   const classes = usePlanningPage('/v1/classes?limit=100', parseChoice, refresh), subjects = usePlanningPage('/v1/subjects?limit=100', parseChoice, refresh);
@@ -47,26 +49,29 @@ function CurrentPeriodPlanning({ onLockedChange }: { onLockedChange?: (locked: b
   const selectedCourse = courses.data.find(row => row.id === courseId && courseChoices.some(choice => choice.value === row.id && !choice.requiresReview));
   const selectedPeriod = periods.data.find(row => row.id === periodId && periodChoices.some(choice => choice.value === row.id && !choice.requiresReview));
   if (selectedCourse && selectedPeriod) selectionRef.current = { courseId, periodId, revision: selectedPeriod.revision };
-  const onLocked = useCallback((value: boolean) => { setLocked(value); onLockedChange?.(value); }, [onLockedChange]);
+  const onLocked = useCallback((value: boolean) => { setLocked(value); }, []);
   useEffect(() => () => onLockedChange?.(false), [onLockedChange]);
+  useEffect(()=>{onLockedChange?.(selectionLocked);},[selectionLocked,onLockedChange]);
   const queries = [courses, periods, classes, subjects], error = queries.find(query => query.error || query.moreError), loading = queries.some(query => query.loading), ready = queries.every(query => query.loaded && !query.error && !query.moreError);
-  const choose = (nextCourse: string, nextPeriod: string) => { if (locked) return; selectionRef.current = null; formDrafts.saveModel(selectionSlot, { courseId: nextCourse, periodId: nextPeriod }); setCourseId(nextCourse); setPeriodId(nextPeriod); };
+  const choose = (nextCourse: string, nextPeriod: string) => { if (selectionLocked) return; selectionRef.current = null; formDrafts.saveModel(selectionSlot, { courseId: nextCourse, periodId: nextPeriod }); setCourseId(nextCourse); setPeriodId(nextPeriod); };
   const sameSelection = selectionRef.current?.courseId === courseId && selectionRef.current.periodId === periodId ? selectionRef.current : null;
   const denied = useCurriculumSourceDenial(queries.map(query => query.sourceRead));
+  const periodsEmpty=ready&&!loading&&!denied&&curriculumPageConfirmedEmpty(periods);
   return <section className="curriculum-planning" aria-label={t.periodPlanning}>
-    <header className="curriculum-planning__heading"><div><CuevoIcon name="calendar" variant="filled" size={28} /><h2>{t.periodPlanning}</h2></div><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" />{t.refresh}</Button></header>
+    <header className="curriculum-planning__heading">{pageHeading?null:<div><CuevoIcon name="calendar" variant="filled" size={28} /><h2>{t.periodPlanning}</h2></div>}
+    <div className="curriculum-planning__context-controls">
     <div className="curriculum-planning__selectors">
-      <div className="field"><label htmlFor="planning-course">{t.course}</label><select disabled={locked || loading} id="planning-course" value={selectedCourse ? courseId : ''} onChange={event => choose(event.target.value, periodId)}><option value="">{t.course}</option>{courseChoices.map(course => <option key={course.value} value={course.value} disabled={course.requiresReview}>{course.label}</option>)}</select></div>
-      <div className="field"><label htmlFor="planning-period">{t.reportPeriod}</label><select disabled={locked || loading} id="planning-period" value={selectedPeriod ? periodId : ''} onChange={event => choose(courseId, event.target.value)}><option value="">{t.reportPeriod}</option>{periodChoices.map(period => <option key={period.value} value={period.value} disabled={period.requiresReview}>{period.label}</option>)}</select></div>
-    </div>
+      <div className="field"><label htmlFor="planning-course">{t.course}</label><select disabled={selectionLocked || loading} id="planning-course" value={selectedCourse ? courseId : ''} onChange={event => choose(event.target.value, periodId)}><option value="">{t.course}</option>{courseChoices.map(course => <option key={course.value} value={course.value} disabled={course.requiresReview}>{course.label}</option>)}</select></div>
+      <div className="field"><label htmlFor="planning-period">{t.reportPeriod}</label><select disabled={selectionLocked || loading} id="planning-period" value={selectedPeriod ? periodId : ''} onChange={event => choose(courseId, event.target.value)}><option value="">{t.reportPeriod}</option>{periodChoices.map(period => <option key={period.value} value={period.value} disabled={period.requiresReview}>{period.label}</option>)}</select></div>
+    </div><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" />{t.refresh}</Button></div></header>
     {error ? <LearningError error={(error.error ?? error.moreError)!} /> : loading ? <p role="status">{t.loading}</p> : null}
     {courseChoices.some(choice => choice.requiresReview) || periodChoices.some(choice => choice.requiresReview) ? <p className="notice">{t.planningChoiceReview}</p> : null}
-    {queries.some(curriculumPageControlsVisible) ? <fieldset className="curriculum-planning__pagination" disabled={locked}>{queries.map((query, index) => curriculumPageControlsVisible(query) ? <LoadMore key={index} query={query} label={[t.course, t.reportPeriod, t.class, t.subject][index]} /> : null)}</fieldset> : null}
-    {sameSelection && !denied ? <PlanningCourse key={`${courseId}:${periodId}`} courseId={courseId} periodId={periodId} periodRevision={sameSelection.revision} choicesReady={!!selectedCourse && !!selectedPeriod && ready} selectionRefresh={refresh} onLockedChange={onLocked} /> : <p role="status">{courseId || periodId ? t.planningContextUnavailable : t.planningChooseContext}</p>}
+    {queries.some(curriculumPageControlsVisible) ? <fieldset className="curriculum-planning__pagination" disabled={selectionLocked}>{queries.map((query, index) => curriculumPageControlsVisible(query) ? <LoadMore key={index} query={query} label={[t.course, t.reportPeriod, t.class, t.subject][index]} /> : null)}</fieldset> : null}
+    {periodsEmpty?<p role="status">{t.planningNoPeriods}</p>:sameSelection && !denied ? <PlanningCourse key={`${courseId}:${periodId}`} courseId={courseId} periodId={periodId} periodRevision={sameSelection.revision} choicesReady={!!selectedCourse && !!selectedPeriod && ready} selectionRefresh={refresh} onLockedChange={onLocked} pageHeading={pageHeading} /> : !error&&!loading?<p role="status">{courseId || periodId ? t.planningContextUnavailable : t.planningChooseContext}</p>:null}
   </section>;
 }
 
-function PlanningCourse({ courseId, periodId, periodRevision, choicesReady, selectionRefresh, onLockedChange }: { courseId: string; periodId: string; periodRevision: number; choicesReady: boolean; selectionRefresh: number; onLockedChange: (locked: boolean) => void }) {
+function PlanningCourse({ courseId, periodId, periodRevision, choicesReady, selectionRefresh, onLockedChange,pageHeading }: { courseId: string; periodId: string; periodRevision: number; choicesReady: boolean; selectionRefresh: number; onLockedChange: (locked: boolean) => void;pageHeading:boolean }) {
   const app = useApp(), { locale, membership, commandJournal, formDrafts } = app, t = locale === 'ar' ? curriculumAr : curriculumEn;
   const inputSlot = `${membership!.schoolId}:${membership!.userId}:/v1/curriculum/courses/${courseId}/plans:period:${periodId}:intent`;
   const [intent, setIntent] = useState<PeriodPlanningIntent>(() => {
@@ -76,6 +81,7 @@ function PlanningCourse({ courseId, periodId, periodRevision, choicesReady, sele
   });
   const [locked, setLocked] = useState(false), [refresh, setRefresh] = useState(0), [evidenceId, setEvidenceId] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null), editorRef = useRef<HTMLElement>(null), focusEditor = useRef(false), focusHeading = useRef(false), inputFocus = useRef<{ element: HTMLElement; name: string | null } | null>(null);
+  const SourceHeading=pageHeading?'h2':'h3';
   useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
   const editor = intent.editor, path = editor ? periodPlanningPath(courseId, editor) : null, retained = path ? commandJournal.get(path) : undefined;
   const pending = locked || periodPlanningPendingPaths(courseId, editor).some(slot => !!commandJournal.get(slot));
@@ -146,7 +152,7 @@ function PlanningCourse({ courseId, periodId, periodRevision, choicesReady, sele
   const formReady = !denied && !!editor && (retained || coverage && !error && !sourceLoading && (editor.kind !== 'assessment' || !!intent.assessmentId));
   const currentEvidence = evidenceId && coverage?.items.flatMap(plan => plan.evidence).some(record => record.id === evidenceId);
   return <section className="curriculum-planning__layout">
-    <header className="curriculum-planning__heading"><h3 ref={heading} tabIndex={-1}>{t.reportPeriod}</h3><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button></header>
+    <header className="curriculum-planning__heading"><SourceHeading className="curriculum-planning__source-title" ref={heading} tabIndex={-1}>{coverage?.periodName??t.reportPeriod}</SourceHeading><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button></header>
     {error ? <LearningError error={error} /> : coverageQuery.loading ? <p role="status">{t.loading}</p> : !coverage ? <p className="notice">{t.planningContextUnavailable}</p> : null}
     {coverage && !denied ? <>
       <section className="curriculum-planning__context"><h3><bdi>{coverage.courseTitle} · {coverage.className}</bdi></h3><p><bdi>{coverage.periodName} · {coverage.startsOn}–{coverage.endsOn}</bdi></p><p className="notice">{t.coverageLimit}</p><p>{t.plannedObjectives}: {coverage.plannedTotal === null ? t.unknown : new Intl.NumberFormat(locale).format(coverage.plannedTotal)} · {t.currentLearners}: {new Intl.NumberFormat(locale).format(coverage.learnerTotal)}</p>{coverage.planStatus === 'REQUIRES_REVIEW' ? <p className="notice">{t.periodChanged}</p> : null}{canPlan && coverage.planStatus !== 'REQUIRES_REVIEW' ? <Button type="button" disabled={pending || !!editor} onClick={() => choose({ kind: 'create', periodRevision: coverage.periodRevision })}>{t.planObjective}</Button> : null}</section>

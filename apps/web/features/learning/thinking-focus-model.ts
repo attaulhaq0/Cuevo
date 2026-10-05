@@ -3,6 +3,9 @@ import { LearningApiError, type Command } from '../../shared/api/client';
 import { parseRubric } from '../academic/model';
 
 export type ThinkingFocusKind = 'activity' | 'assessment' | 'criterion';
+export type ThinkingFocusSelection={target:ThinkingFocusTarget;sourceVersion:string;revision:number;cursor:string|null};
+export function parseThinkingFocusSelection(value:unknown):ThinkingFocusSelection|null{if(!value||typeof value!=='object'||Array.isArray(value))return null;const row=value as Record<string,unknown>,target=thinkingFocusTargetSchema.safeParse(row.target),cursor=typeof row.cursor==='string'?/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(row.cursor):row.cursor===null;return Object.keys(row).length===4&&target.success&&cursor&&typeof row.sourceVersion==='string'&&!!row.sourceVersion.trim()&&row.sourceVersion.length<=2000&&Number.isSafeInteger(row.revision)&&Number(row.revision)>=0?{target:target.data,sourceVersion:row.sourceVersion,revision:Number(row.revision),cursor:row.cursor as string|null}:null;}
+export function currentThinkingFocusSelection<T extends{target:ThinkingFocusTarget;courseId:string;sourceVersion:string;revision:number}>(rows:T[],selection:ThinkingFocusSelection|null,courseId:string,current:boolean):T|null{if(!selection||!current)return null;const matches=rows.filter(row=>row.courseId===courseId&&row.target.kind===selection.target.kind&&row.target.id===selection.target.id&&row.target.criterionKey===selection.target.criterionKey&&row.sourceVersion===selection.sourceVersion&&row.revision===selection.revision);return matches.length===1?matches[0]:null;}
 export function thinkingFocusTarget(kind: ThinkingFocusKind, id: string, criterionKey?: string): ThinkingFocusTarget {
   return thinkingFocusTargetSchema.parse({ kind: kind.toUpperCase(), id, criterionKey: criterionKey ?? null });
 }

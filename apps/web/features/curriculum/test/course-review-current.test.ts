@@ -20,6 +20,20 @@ test('bound course review requires requested course and immutable programme clas
  invalid(()=>review.parseBoundReviewCourse({...course,id:id(99)},courseId));invalid(()=>review.parseBoundReviewCourse({...course,curriculumContext:{...course.curriculumContext,programmeId:null}},courseId));
  invalid(()=>review.reviewProgramme(current,[{...programme,subjectId:id(99)}]));invalid(()=>review.reviewProgramme(current,[programme,{...programme,name:'Other title'}]));
 });
+test('course objective read distinguishes only an explicit complete unbound source from malformed bindings',()=>{
+ const bound=review.parseReviewCourse(course,courseId);assert.equal(bound.state,'BOUND');
+ const unbound=review.parseReviewCourse({...course,curriculumContext:{version:1,programmeId:null,referenceId:null}},courseId);
+ assert.equal(unbound.state,'UNBOUND');assert.equal(unbound.course.title,'School checking');
+ for(const curriculumContext of[undefined,{version:1,programmeId:null,referenceId:id(9)},{version:1,programmeId,referenceId:null},{version:1,programmeId:null},{version:0,programmeId:null,referenceId:null},{version:1,programmeId:null,referenceId:null,extra:'unknown'}])invalid(()=>review.parseReviewCourse({...course,curriculumContext},courseId));
+ for(const patch of[{id:id(99)},{classId:'unknown'},{subjectId:'unknown'},{title:' '}])invalid(()=>review.parseReviewCourse({...course,...patch,curriculumContext:{version:1,programmeId:null,referenceId:null}},courseId));
+});
+test('known unbound original-command refusal survives owner lifetime while remaining actor and command scoped',()=>{
+ const journal=new CommandJournal(),path=`/v1/curriculum/courses/${courseId}/objectives`,scope=review.objectiveOriginalRefusalScope(context,courseId),body={referenceId,expectedVersion:2,reason:'Original review',confirmConfiguration:true};journal.prepare(path,path,body);
+ const unbound=review.parseReviewCourse({...course,curriculumContext:{version:1,programmeId:null,referenceId:null}},courseId);review.rememberObjectiveOriginalBinding(journal,scope,path,unbound);assert.equal(review.objectiveOriginalUnbound(journal,scope,path),true);review.rememberObjectiveOriginalBinding(journal,scope,path,null);assert.equal(review.objectiveOriginalUnbound(journal,scope,path),true);
+ for(const other of[{...context,apiUrl:'https://other.invalid'},{...context,membership:{...context.membership,userId:id(99)}},{...context,membership:{...context.membership,schoolId:id(99)}},{...context,membership:{...context.membership,role:'admin'}}])assert.equal(review.objectiveOriginalUnbound(journal,review.objectiveOriginalRefusalScope(other,courseId),path),false);
+ assert.equal(review.objectiveOriginalUnbound(new CommandJournal(),scope,path),false);review.rememberObjectiveOriginalBinding(journal,scope,path,review.parseReviewCourse(course,courseId));assert.equal(review.objectiveOriginalUnbound(journal,scope,path),false);
+ review.rememberObjectiveOriginalBinding(journal,scope,path,unbound);journal.clear();assert.equal(review.objectiveOriginalUnbound(journal,scope,path),false);journal.prepare(path,path,body);assert.equal(review.objectiveOriginalUnbound(journal,scope,path),false);
+});
 test('objective pages bind human programme version context and exact bounded continuation',()=>{
  assert.equal(review.parseCurrentObjectivePage(page,course,programme,null).version,2);
  for(const patch of[{courseTitle:'Other course'},{programmeName:'Other programme'},{packVersion:'school-2'},{subjectName:'Other subject'},{items:[{...objective,version:'school-2'}]},{items:[objective,objective]},{nextCursor:id(99)}])invalid(()=>review.parseCurrentObjectivePage({...page,...patch},course,programme,null));
