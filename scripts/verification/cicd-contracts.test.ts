@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment } from './cicd-contracts';
+import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
 const manifest = () => ({
@@ -20,6 +20,93 @@ const manifest = () => ({
   publicConfig: { apiUrl: 'https://api.stage.example.com', supabaseUrl: 'https://stageproject.supabase.co', supabasePublishableKey: 'sb_publishable_public-only-value' },
 });
 const context = { sha, environment: 'staging', ciRunId: '42', now, migrations: [{ version: '20261002074258', sha256: digest }] };
+const trustedRun = () => ({ id: 42, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'owner/repo' } });
+const releaseControls = () => ({ environment: { name: 'production', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', reviewer: { id: 1 } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }, branches: { branch_policies: [{ name: 'main', type: 'branch' }] }, signatures: { enabled: true }, main: { enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: true, required_approving_review_count: 1 } } });
+test('release controls require existing protected environment and reviewed signed current main', () => {
+  validateReleaseControls(releaseControls(), { environment: 'production' });
+  for (const change of [
+    (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules = []; },
+    (v: ReturnType<typeof releaseControls>) => { v.environment.can_admins_bypass = true; },
+    (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules[0].prevent_self_review = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules[0].reviewers = []; },
+    (v: ReturnType<typeof releaseControls>) => { v.branches.branch_policies[0].name = '*'; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.enforce_admins.enabled = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.signatures.enabled = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.required_status_checks.contexts = []; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.require_code_owner_reviews = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.dismiss_stale_reviews = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.required_approving_review_count = 0; },
+  ]) { const value = releaseControls(); change(value); assert.throws(() => validateReleaseControls(value, { environment: 'production' })); }
+  assert.throws(() => validateReleaseControls({}, { environment: 'production' }));
+  const bypass = { ...releaseControls(), main: { ...releaseControls().main, required_pull_request_reviews: { ...releaseControls().main.required_pull_request_reviews, bypass_pull_request_allowances: { users: [{ id: 1 }], teams: [], apps: [] } } } };
+  assert.throws(() => validateReleaseControls(bypass, { environment: 'production' }));
+});
+test('automatic release context admits only successful canonical current-main push CI', () => {
+  const expected = { sha, ref: 'refs/heads/main', repository: 'owner/repo', eventName: 'workflow_run' };
+  assert.deepEqual(releaseContext({ workflow_run: trustedRun() }, expected), { sha, ciRunId: '42', environment: 'production' });
+  for (const fields of [{ event: 'pull_request' }, { conclusion: 'failure' }, { conclusion: 'cancelled' }, { status: 'in_progress' }, { head_branch: 'feature' }, { head_sha: 'c'.repeat(40) }, { path: '.github/workflows/other.yml' }, { repository: { full_name: 'fork/repo' } }, { id: null }]) {
+    assert.throws(() => releaseContext({ workflow_run: { ...trustedRun(), ...fields } }, expected));
+  }
+  for (const fields of [{ ref: 'refs/heads/feature' }, { eventName: 'pull_request' }, { repository: 'other/repo' }]) {
+    assert.throws(() => releaseContext({ workflow_run: trustedRun() }, { ...expected, ...fields }));
+  }
+  assert.throws(() => releaseContext({}, expected));
+});
+test('manual release context retains exact-main staging and production admission', () => {
+  const expected = { sha, ref: 'refs/heads/main', repository: 'owner/repo', eventName: 'workflow_dispatch' };
+  for (const environment of ['staging', 'production']) assert.deepEqual(releaseContext({ inputs: { environment, commit_sha: sha, ci_run_id: '42' } }, expected), { sha, ciRunId: '42', environment });
+  for (const fields of [{ environment: 'preview' }, { commit_sha: 'c'.repeat(40) }, { commit_sha: '$(command)' }, { ci_run_id: '42\nurl=untrusted' }]) {
+    assert.throws(() => releaseContext({ inputs: { environment: 'staging', commit_sha: sha, ci_run_id: '42', ...fields } }, expected));
+  }
+});
+test('actual release context writes only admitted outputs and rejects stale main before provider actions', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'cuevo-release-admission-'));
+  const eventPath = join(directory, 'event.json'); const outputPath = join(directory, 'outputs');
+  try {
+    await writeFile(eventPath, JSON.stringify({ workflow_run: trustedRun() }));
+    const expected = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, GITHUB_SHA: sha, GITHUB_REF: 'refs/heads/main', GITHUB_REPOSITORY: 'owner/repo', GITHUB_EVENT_NAME: 'workflow_run', GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath, RELEASE_SHA: sha, CI_RUN_ID: '42', GH_TOKEN: 'synthetic-token' };
+    const execute = (mode: 'context' | 'ci' | 'deploy' | 'controls', currentSha = sha, run = trustedRun(), checkoutSha = sha, protectedEnvironment = true) => spawnSync(process.execPath, ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href, '--input-type=module', '--eval', `
+      const childProcess = (await import('node:module')).createRequire(import.meta.url)('node:child_process');
+      childProcess.execFileSync = (command,args) => {
+        if (command === 'git' && JSON.stringify(args) === JSON.stringify(['rev-parse','HEAD'])) return ${JSON.stringify(checkoutSha + '\n')};
+        throw Error('Unexpected command action');
+      };
+      (await import('node:module')).syncBuiltinESMExports();
+      process.argv[2] = ${JSON.stringify(mode)};
+      globalThis.fetch = async input => {
+        const url = String(input); console.log('FETCH ' + url);
+        if (url === 'https://api.github.com/repos/owner/repo/actions/runs/42') return new Response(JSON.stringify(${JSON.stringify(run)}));
+        if (url === 'https://api.github.com/repos/owner/repo/git/ref/heads/main') return new Response(JSON.stringify({ object: { type: 'commit', sha: ${JSON.stringify(currentSha)} } }));
+        if (url === 'https://api.github.com/repos/owner/repo/environments/production') return new Response(JSON.stringify(${JSON.stringify(releaseControls().environment)}), { status: ${protectedEnvironment ? 200 : 404} });
+        if (url === 'https://api.github.com/repos/owner/repo/environments/production/deployment-branch-policies') return new Response(JSON.stringify(${JSON.stringify(releaseControls().branches)}));
+        if (url === 'https://api.github.com/repos/owner/repo/branches/main/protection') return new Response(JSON.stringify(${JSON.stringify(releaseControls().main)}));
+        if (url === 'https://api.github.com/repos/owner/repo/branches/main/protection/required_signatures') return new Response(JSON.stringify(${JSON.stringify(releaseControls().signatures)}));
+        throw Error('Unexpected network action');
+      };
+      await import(${JSON.stringify(pathToFileURL(resolve('scripts/verification/cicd-release.ts')).href)});
+    `], { cwd: directory, env: { ...expected, RELEASE_ENVIRONMENT: 'production' }, encoding: 'utf8', timeout: 20000 });
+    const contextResult = execute('context'); assert.equal(contextResult.status, 0, contextResult.stderr);
+    assert.equal(contextResult.stdout.includes('FETCH '), false);
+    assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nenvironment=production\n`);
+    assert.equal(execute('ci').status, 0);
+    const controls = execute('controls'); assert.equal(controls.status, 0, controls.stderr); assert.ok(controls.stdout.includes('/protection/required_signatures'));
+    const missing = execute('controls', sha, trustedRun(), sha, false); assert.equal(missing.status, 1); assert.ok(missing.stderr.includes('protection metadata'));
+    const stale = execute('ci', 'c'.repeat(40)); assert.equal(stale.status, 1);
+    assert.ok(stale.stderr.includes('Main changed'));
+    const staleUpload = execute('deploy', 'c'.repeat(40)); assert.equal(staleUpload.status, 1);
+    assert.ok(staleUpload.stderr.includes('Main changed'));
+    const wrongCheckout = execute('ci', sha, trustedRun(), 'c'.repeat(40)); assert.equal(wrongCheckout.status, 1);
+    assert.equal(wrongCheckout.stdout.includes('FETCH '), false); assert.ok(wrongCheckout.stderr.includes('checkout'));
+    const failed = execute('ci', sha, { ...trustedRun(), conclusion: 'failure' }); assert.equal(failed.status, 1);
+    assert.equal(failed.stdout.includes('/git/ref/heads/main'), false);
+    await writeFile(eventPath, JSON.stringify({ workflow_run: { ...trustedRun(), head_sha: 'c'.repeat(40) } }));
+    const refused = execute('context'); assert.equal(refused.status, 1);
+    assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nenvironment=production\n`);
+  } finally {
+    assert.equal(dirname(directory), resolve(tmpdir())); assert.ok(basename(directory).startsWith('cuevo-release-admission-'));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 const edgeManifest = () => ({
   ...manifest(),
   worker: { kind: 'supabase-edge', commitSha: sha, projectRef: 'stageproject', functionName: 'cuevo-worker', artifactSha256: digest, denoLockSha256: 'd'.repeat(64), authVerified: true, queueRecoveryVerified: true, roleGrantsVerified: true, transportPrivateVerified: true, evidenceUrl: 'https://github.com/owner/repo/actions/runs/41' },
@@ -253,5 +340,21 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(ci, release.replace("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));
   assert.ok(validateWorkflows(ci.replace('on: [push, pull_request, workflow_dispatch]', 'on: [pull_request_target]'), release).some(issue => issue.includes('Privileged')));
   assert.ok(validateWorkflows(ci, release.replace('needs: release-admission', 'needs: other-job')).some(issue => issue.includes('admission')));
-  assert.ok(validateWorkflows(ci, release.replace('name: ${{ inputs.environment }}', 'name: unprotected')).some(issue => issue.includes('environment')));
+  assert.ok(validateWorkflows(ci, release.replace('name: ${{ needs.release-admission.outputs.environment }}', 'name: unprotected')).some(issue => issue.includes('environment')));
+  assert.ok(validateWorkflows(ci, release.replace('branches: [main]', 'branches: [feature]')).some(issue => issue.includes('canonical main')));
+  assert.ok(validateWorkflows(ci, release.replace('workflows: [Cuevo verification]', 'workflows: [Other workflow]')).some(issue => issue.includes('canonical main')));
+  assert.ok(validateWorkflows(ci, release.replace("github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.conclusion != 'success'")).some(issue => issue.includes('main')));
+  assert.ok(validateWorkflows(ci, release.replace('id: context', 'id: unvalidated')).some(issue => issue.includes('context')));
+  assert.ok(validateWorkflows(ci, release.replace('RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}', 'RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}')).some(issue => issue.includes('validated')));
+  assert.ok(validateWorkflows(ci, release.replace('ref: ${{ needs.release-admission.outputs.sha }}', 'ref: main')).some(issue => issue.includes('checkout')));
+  assert.ok(validateWorkflows(ci, release.replaceAll('run: node --import tsx scripts/verification/cicd-release.ts ci', 'run: node --import tsx scripts/verification/cicd-release.ts ci-omitted')).some(issue => issue.includes('current main')));
+  assert.ok(validateWorkflows(ci, release + '\n      - uses: actions/download-artifact@' + 'a'.repeat(40) + '\n        with: { path: .vercel/output }\n').some(issue => issue.includes('artifacts')));
+  assert.ok(validateWorkflows(ci, release + '\n      - run: echo ${{ github.event.workflow_run.head_branch }}\n').some(issue => issue.includes('shell')));
+  assert.ok(validateWorkflows(ci, release + '\n      - uses: actions/checkout@' + 'a'.repeat(40) + '\n        with: { persist-credentials: false, ref: untrusted }\n').some(issue => issue.includes('checkout')));
+});
+test('web and API automatic Git builds cannot bypass reviewed Actions deployment', async () => {
+  for (const owner of ['web', 'api']) {
+    const config = JSON.parse(await readFile(`apps/${owner}/vercel.json`, 'utf8'));
+    assert.equal(config.git.deploymentEnabled, false);
+  }
 });

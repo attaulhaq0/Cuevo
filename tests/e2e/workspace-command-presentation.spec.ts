@@ -1,4 +1,4 @@
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -85,7 +85,7 @@ for (const [name, width, height, arabic] of [
     await expect(search).toBeFocused(); await search.fill('Learning');
     await page.locator('dialog [data-workspace-command="learning"]').click();
     await expect(page).toHaveURL(/view=learning/); await expect(page.locator('main h1')).toBeFocused();
-    await page.getByRole('button', { name: 'Overview', exact: true }).click();
+    await openTrailWorkspace(page, 'Overview'); await expect(page).toHaveURL(url => url.searchParams.get('view') === null);
     await expect(page.locator('.student-home')).toBeVisible();
     if (arabic) {
       await page.getByRole('button', { name: 'العربية', exact: true }).click();

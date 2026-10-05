@@ -44,9 +44,12 @@ async function signIn(page: Page, role: Role) {
   await keyboardActivate(page, page.getByRole('button', { name: 'Sign in', exact: true }));
   const current = await (await verified).json() as { displayName: string };
   if (role === 'student') {
-    await expect(page.locator('.student-trail__intro h1')).toContainText(current.displayName);
+    await expectTrailWorkspace(page, role);
+    await expect(page.locator('.student-trail__intro h1')).toHaveText(`Hello, ${current.displayName}!`);
     await expect(page.locator('.workspace-chrome__person')).toContainText('Student');
-    await expect(page.getByRole('heading', { name: 'Your next learning step', exact: true })).toBeVisible();
+    await expect(page.locator('.student-home .student-trail__task')).toBeVisible();
+    await expect(page.locator('.student-home .student-trail__task h2')).not.toBeEmpty();
+    await expect(page.locator('.student-home .student-trail__goal h2')).toHaveText('My learning goal');
   } else {
     await expectTrailWorkspace(page, role);
     await expect(page.locator('.workspace-chrome__person > button strong')).toHaveText(current.displayName);
@@ -126,7 +129,17 @@ for (const role of roles) {
     for (let index = 0; index < names.length; index++) {
       await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
       const target = await trailWorkspaceAction(page, names[index].trim());
-      await keyboardActivate(page, target); if (!['Access settings', 'Account'].includes(names[index].trim())) await expect(target).toHaveAttribute('aria-current', 'page');
+      const expectedView = await target.getAttribute('data-workspace-destination');
+      const profileView = names[index].trim() === 'Account' ? 'account' : names[index].trim() === 'Access settings' ? 'access' : null;
+      if (!profileView) expect(expectedView, 'Every current product workspace choice identifies its exact destination').not.toBeNull();
+      await keyboardActivate(page, target);
+      if (expectedView) {
+        await expect(page).toHaveURL(url => expectedView === 'overview' ? url.searchParams.get('view') === null : url.searchParams.get('view') === expectedView);
+        const workspace = page.locator('.workspace-chrome');
+        const current = expectedView === 'overview' ? workspace.locator(`.workspace-chrome__navigation [data-workspace-destination="${expectedView}"][aria-current="page"]`) : workspace.locator(`.workspace-chrome__switcher [data-workspace-destination="${expectedView}"][aria-current="page"]`);
+        await expect(current).toHaveCount(1);
+        if (expectedView !== 'overview') await expect(workspace.locator('.workspace-chrome__workspace-choice > span')).toHaveText(names[index].trim());
+      } else await expect(page).toHaveURL(url => url.searchParams.get('view') === profileView);
       await expect(page.locator('main h1')).toBeFocused(); await settled(page);
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
       // Staff/parent progress must select a real permitted learner before reviewing evidence.
@@ -162,7 +175,7 @@ test('protected content clears offline and only returns after current membership
   await page.screenshot({ path: resolve(evidence, 'student-offline-ar.png') });
   const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
   await context.setOffline(false); expect((await verified).ok()).toBe(true);
-  await expectTrailWorkspace(page, 'student'); await expect(page.getByRole('heading', { name: 'خطوتك التالية في التعلّم', exact: true })).toBeVisible();
+  await expectTrailWorkspace(page, 'student'); await expect(page.locator('.student-trail__intro h1')).toHaveText(`مرحبًا، ${displayName}!`); await expect(page.locator('.student-home .student-trail__task h2')).not.toBeEmpty(); await expect(page.locator('.student-home .student-trail__goal h2')).toHaveText('هدفي في التعلّم');
 });
 
 test('sign-in keyboard controls, validation errors and bilingual labels remain associated at narrow reflow', async ({ page }) => {
@@ -187,7 +200,7 @@ test('sign-in keyboard controls, validation errors and bilingual labels remain a
 
 test('command form refusal is associated with named fields and supports keyboard cancellation', async ({ page }) => {
   await signIn(page, 'admin');
-  await keyboardActivate(page, page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true })); await settled(page);
+  await keyboardActivate(page, await trailWorkspaceAction(page, 'School')); await settled(page);
   await keyboardActivate(page, page.getByRole('button', { name: 'Create academic year', exact: true }));
   const form = page.getByRole('region', { name: 'Create academic year', exact: true });
   await form.getByLabel('Name', { exact: true }).fill('Synthetic refusal case');

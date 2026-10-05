@@ -167,7 +167,7 @@ export async function selectTrailPortfolioRecord(page: Page, id: string, title?:
   const workspace=page.locator('.portfolio-workspace'); await expect(workspace).toHaveCount(1);
   const row=workspace.locator(`[data-portfolio-id="${id}"], [data-parent-portfolio-id="${id}"]`);
   await expect(workspace.getByRole('status').filter({hasText:/^(Loading|جارٍ تحميل)/})).toHaveCount(0);
-  if(await row.count()){await expect(row).toHaveCount(1);await expect(row).toBeVisible();if(title)await expect(row.getByRole('heading',{name:title,exact:true})).toBeVisible();return row;}
+  if(await row.count()){await expect(row).toHaveCount(1);await expect(row).toBeVisible();if(title)await expect(row.getByRole('heading',{name:title,level:2,exact:true})).toBeVisible();return row;}
   const other=workspace.locator('[data-portfolio-id]');if(await other.count()){await expect(other).toHaveCount(1);await other.getByRole('button',{name:/^(Back to selected work|العودة إلى الأعمال المختارة)$/,exact:true}).click();}
   const parent=await workspace.locator('.parent-portfolio-directory').count()>0;
   const otherParent=workspace.locator('[data-parent-portfolio-id]');if(parent&&await otherParent.count()){await expect(otherParent).toHaveCount(1);await otherParent.getByRole('button',{name:/^(Return to approved work|العودة إلى الأعمال المعتمدة)$/,exact:true}).click();}
@@ -192,5 +192,5 @@ export async function selectTrailPortfolioRecord(page: Page, id: string, title?:
   await expect(choice,'One exact current Portfolio summary must identify this source').toHaveCount(1);
   const action=parent?choice.getByRole('button',{name:/^(Open approved item|فتح العمل المعتمد)$/,exact:true}):choice.locator('button');await expect(action).toHaveCount(1);await expect(action).toBeVisible();await expect(action).toBeEnabled();
   if(parent)await expect(choice.getByRole('heading',{name:title!,exact:true})).toBeVisible();else{await expect(action.locator('strong')).not.toBeEmpty();await expect(action.locator('strong')).not.toHaveText(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);if(title)await expect(action.locator('strong')).toHaveText(title);}
-  await action.click();await expect(row).toHaveCount(1);await expect(row).toBeVisible();if(title)await expect(row.getByRole('heading',{name:title,exact:true})).toBeVisible();return row;
+  await action.click();await expect(row).toHaveCount(1);await expect(row).toBeVisible();if(title)await expect(row.getByRole('heading',{name:title,level:2,exact:true})).toBeVisible();return row;
 }

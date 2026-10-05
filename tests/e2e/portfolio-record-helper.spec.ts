@@ -23,3 +23,19 @@ test('Parent helper follows committed nonterminal approved pages before opening 
  let reads=0;await page.route('**/*',route=>route.request().url()==='http://localhost/parent-pages'?route.fulfill({contentType:'text/html',body:`<main><div class="portfolio-workspace"><div class="parent-portfolio-directory"><ul></ul></div><div class="pagination-actions"><button id="more">Load more</button></div><div id="reader"></div></div></main><script>let pending=false;document.querySelector('#more').onclick=async()=>{if(pending)return;pending=true;const r=await fetch('/v1/portfolio/items?cursor='+document.querySelectorAll('li').length);const page=await r.json();setTimeout(()=>{for(const item of page.items){const row=document.createElement('li');row.innerHTML='<h3>'+item.title+'</h3><button>Open approved item</button>';row.querySelector('button').onclick=()=>document.querySelector('#reader').innerHTML='<article data-parent-portfolio-id="'+item.id+'"><h2>'+item.title+'</h2></article>';document.querySelector('ul').append(row)}if(page.nextCursor===null)document.querySelector('#more').remove();pending=false},200)};</script>`}):new URL(route.request().url()).pathname==='/v1/portfolio/items'?(reads++,route.fulfill({contentType:'application/json',body:JSON.stringify({items:[{id:reads===1?other:id,title:reads===1?'Earlier approved reflection':'Last approved reflection'}],nextCursor:reads===1?other:null})})):route.abort());
  await page.goto('http://localhost/parent-pages');const row=await selectTrailPortfolioRecord(page,id,'Last approved reflection');await expect(row).toBeVisible();expect(reads).toBe(2);await expect(page.locator('.parent-portfolio-directory li')).toHaveCount(2);
 });
+
+test('the exact current reader keeps one primary title when its source work has the same human heading',async({page})=>{
+ for(const parent of[false,true]){
+  await page.setContent(`<main><div class="portfolio-workspace"><section class="${parent?'parent-portfolio-directory':'portfolio-reading-directory'}"><li ${parent?'':`data-portfolio-choice="${id}"`}>${parent?'<h3>Named current work</h3><button>Open approved item</button>':'<button><strong>Named current work</strong></button>'}</li></section><div id="reader"></div></div></main>`);
+  await page.locator('li button').evaluate((element,{target,parent})=>{(element as HTMLButtonElement).onclick=()=>{document.querySelector('#reader')!.innerHTML='<article '+(parent?'data-parent-portfolio-id':'data-portfolio-id')+'="'+target+'"><h2 data-portfolio-focus="'+target+'">Named current work</h2><section><h4>Named current work</h4><p>Exact immutable source work</p></section></article>';}},{target:id,parent});
+  const row=await selectTrailPortfolioRecord(page,id,'Named current work');await expect(row.getByRole('heading',{name:'Named current work',level:2,exact:true})).toHaveCount(1);await expect(row.getByRole('heading',{name:'Named current work',level:4,exact:true})).toHaveCount(1);
+  await selectTrailPortfolioRecord(page,id,'Named current work');await expect(row).toContainText('Exact immutable source work');
+ }
+});
+
+test('a matching source heading cannot substitute for the exact reader primary title',async({page})=>{
+ for(const parent of[false,true])for(const variant of['wrong-primary','duplicate-primary']){
+  await page.setContent(`<main><div class="portfolio-workspace"><article ${parent?'data-parent-portfolio-id':'data-portfolio-id'}="${id}"><h2>${variant==='wrong-primary'?'Another current work':'Named current work'}</h2>${variant==='duplicate-primary'?'<h2>Named current work</h2>':''}<h4>Named current work</h4></article></div></main>`);
+  await expect(selectTrailPortfolioRecord(page,id,'Named current work')).rejects.toThrow();await expect(page.locator(`[${parent?'data-parent-portfolio-id':'data-portfolio-id'}="${id}"]`)).toHaveCount(1);
+ }
+});

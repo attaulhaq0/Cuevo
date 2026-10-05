@@ -64,7 +64,7 @@ async function revalidate(page: Page) {
 
 test('a confirmed collection notice stays on Portfolio and is not shown as access feedback after navigation', async ({page}) => {
   const path='/v1/portfolio/collections';
-  const fixture=await fictionalWorkspace(page,'portfolio',async(route,url)=>url.pathname===path&&route.request().method()==='POST'?{id:'f9000000-0000-4000-8000-000000000001'}:undefined);
+  const fixture=await fictionalWorkspace(page,'portfolio',async(route,url)=>url.pathname===path&&route.request().method()==='POST'?{id:'f9000000-0000-4000-8000-000000000001',revision:1}:undefined);
   await page.getByRole('button',{name:'Create named collection',exact:true}).click();
   const form=page.getByRole('region',{name:'Create named collection',exact:true});
   await form.getByLabel('Collection name',{exact:true}).fill('My recorded explanations');
@@ -136,7 +136,7 @@ test('a still-mounted form clears saving after access refresh and a late valid r
   const held = deferred(), started = deferred();
   const path = '/v1/portfolio/collections';
   const fixture = await fictionalWorkspace(page, 'portfolio', async (route, url) => {
-    if (url.pathname === path && route.request().method() === 'POST') { started.resolve(); await held.promise; return { id: 'f9000000-0000-4000-8000-000000000001' }; }
+    if (url.pathname === path && route.request().method() === 'POST') { started.resolve(); await held.promise; return { id: 'f9000000-0000-4000-8000-000000000001', revision: 1 }; }
   });
   try {
     await page.getByRole('button', { name: 'Create named collection', exact: true }).click();

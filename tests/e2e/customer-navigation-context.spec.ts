@@ -1,4 +1,4 @@
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -16,7 +16,7 @@ async function settled(page: Page) { await expect(page.locator('main [role="stat
 
 test('switching language clears the previous-language saved action notice', async ({ page }) => {
   await login(page);
-  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Community', exact: true }).click();
+  await openTrailWorkspace(page, 'Community');
   await page.getByRole('button', { name: 'Create teacher-led room', exact: true }).click();
   const form = page.getByRole('region', { name: 'Create teacher-led room', exact: true });
   await form.getByLabel('Class', { exact: true }).selectOption({ label: 'Year 1 · Cedar · Year 1 · 2026–2027' });
@@ -32,7 +32,7 @@ test('switching language clears the previous-language saved action notice', asyn
 });
 
 test('class review brings the current named learner detail into keyboard focus and preserves refresh focus', async ({ page }) => {
-  await login(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Progress', exact: true }).click(); await settled(page);
+  await login(page); await openTrailWorkspace(page, 'Progress'); await settled(page);
   await page.getByLabel('Class', { exact: true }).selectOption({ label: 'Year 1 · Cedar · Year 1 · 2026–2027' });
   const row = page.locator('[data-class-learner-id]').filter({ has: page.getByRole('heading', { name: 'Lina Al-Kuwari', exact: true }) });
   await row.getByRole('button', { name: 'Review this learner', exact: true }).focus(); await page.keyboard.press('Enter');
@@ -46,13 +46,13 @@ test('class review brings the current named learner detail into keyboard focus a
 });
 
 test('class review announces the named denied or unknown detail and class choices retain exact year context', async ({ page }) => {
-  await login(page); await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click(); await settled(page);
+  await login(page); await openTrailWorkspace(page, 'School'); await settled(page);
   const classOption = 'Year 1 · Cedar · Year 1 · 2026–2027';
   const schoolClassOption = 'Class: Year 1 · Cedar · Year group: Year 1 · Academic year: 2026–2027';
   await selectHumanChoice(page.getByLabel('Daily class records', { exact: true }),schoolClassOption,'30000000-0000-4000-8000-000000000001');
   await page.getByRole('button', { name: 'Record attendance', exact: true }).click();
   await expect(page.getByRole('region',{name:'Review one attendance record',exact:true})).toContainText('Year 1 · Cedar');await expect(page.getByLabel('Daily class records',{exact:true})).toHaveValue('30000000-0000-4000-8000-000000000001');
-  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Progress', exact: true }).click(); await settled(page);
+  await openTrailWorkspace(page, 'Progress'); await settled(page);
   await page.getByLabel('Class', { exact: true }).selectOption({ label: classOption });
   const row = page.locator('[data-class-learner-id]').filter({ has: page.getByRole('heading', { name: 'Lina Al-Kuwari', exact: true }) });
   const route = '**/v1/learners/*/state';

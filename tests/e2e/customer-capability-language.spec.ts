@@ -18,7 +18,7 @@ test('account access and school policy lists use human feature names in English 
   await expect(page.locator('.workspace-access__capabilities > ul')).toContainText('تقدّم التعلّم');
   await expect(page.locator('.workspace-access__capabilities > ul')).toContainText('إدارة المدرسة');
   await page.getByRole('button', { name: 'English', exact: true }).click();
-  await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'School', exact: true }).click();
+  await openTrailWorkspace(page, 'School');
   await page.getByRole('button', { name: 'Policies', exact: true }).click(); await page.getByRole('button', { name: 'Approve school policy', exact: true }).click();
   const table = page.getByRole('table').filter({ hasText: 'Learning progress' });
   await expect(table).toContainText('Learning progress');

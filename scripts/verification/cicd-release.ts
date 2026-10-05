@@ -5,11 +5,15 @@ import { resolve, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse as parseEnv } from 'dotenv';
 import { z } from 'zod';
-import { validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment } from './cicd-contracts';
+import { validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
 import { runtimeEnvironment } from '../runtime/environment';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
+const assertCheckout = () => {
+  const actual = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: false }).trim();
+  if (actual !== required('RELEASE_SHA')) throw Error('Release checkout does not match the admitted commit.');
+};
 const parseJson = <T,>(text: string): T => { try { return JSON.parse(text) as T; } catch { throw Error('Release JSON is invalid; contents withheld.'); } };
 const json = async <T,>(path: string): Promise<T> => parseJson<T>(await readFile(path, 'utf8'));
 const publicPath = join(directory, 'public.json');
@@ -54,13 +58,35 @@ const inspectDeployment = async (identity: { teamId: string; projectId: string; 
   } catch { throw Error('Team-scoped Vercel deployment evidence is unavailable; response contents withheld.'); }
   validateVercelDeployment(inspected, { sha: required('RELEASE_SHA'), ...identity, target: vercelTarget(required('RELEASE_ENVIRONMENT')) });
 };
+const assertCurrentMain = async () => {
+  const releaseSha = required('RELEASE_SHA'); const repository = required('GITHUB_REPOSITORY');
+  const current = await fetch(`https://api.github.com/repos/${repository}/git/ref/heads/main`, { headers: { Authorization: `Bearer ${required('GH_TOKEN')}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, signal: AbortSignal.timeout(15000) });
+  if (!current.ok || z.object({ object: z.object({ type: z.literal('commit'), sha: z.literal(releaseSha) }) }).safeParse(await current.json()).success !== true) throw Error('Main changed or current branch evidence is unavailable; release requires fresh CI.');
+};
 const mode = process.argv[2];
-if (mode === 'ci') {
+if (mode === 'context') {
+  const context = releaseContext(await json<unknown>(required('GITHUB_EVENT_PATH')), { sha: required('GITHUB_SHA'), ref: required('GITHUB_REF'), repository: required('GITHUB_REPOSITORY'), eventName: required('GITHUB_EVENT_NAME') });
+  await writeFile(required('GITHUB_OUTPUT'), `sha=${context.sha}\nci-run-id=${context.ciRunId}\nenvironment=${context.environment}\n`, { flag: 'a' });
+  console.log('Release context bound to the current main checkout and canonical CI run.');
+} else if (mode === 'controls') {
+  const repository = required('GITHUB_REPOSITORY'); const environment = required('RELEASE_ENVIRONMENT');
+  if (!['staging', 'production'].includes(environment)) throw Error('Unknown release environment.');
+  const readControl = async (path: string) => {
+    const response = await fetch(`https://api.github.com/repos/${repository}/${path}`, { headers: { Authorization: `Bearer ${required('GH_TOKEN')}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw Error('Release protection metadata is unavailable; maintainer configuration or read access requires review.');
+    return response.json();
+  };
+  const [environmentControl, branches, main, signatures] = await Promise.all([readControl(`environments/${environment}`), readControl(`environments/${environment}/deployment-branch-policies`), readControl('branches/main/protection'), readControl('branches/main/protection/required_signatures')]);
+  validateReleaseControls({ environment: environmentControl, branches, main, signatures }, { environment });
+  console.log('Existing release environment and main review/signature/status protections verified.');
+} else if (mode === 'ci') {
   const releaseSha = required('RELEASE_SHA'); const runId = required('CI_RUN_ID'); const repository = required('GITHUB_REPOSITORY');
   if (!/^[a-f0-9]{40}$/.test(releaseSha) || !/^\d+$/.test(runId) || releaseSha !== required('GITHUB_SHA') || process.env.GITHUB_REF !== 'refs/heads/main') throw Error('Release must be dispatched from the exact verified main commit.');
+  assertCheckout();
   const response = await fetch(`https://api.github.com/repos/${repository}/actions/runs/${runId}`, { headers: { Authorization: `Bearer ${required('GH_TOKEN')}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw Error('Trusted CI evidence is unavailable.');
   validateCiRun(await response.json(), { sha: releaseSha, repository, ciRunId: runId });
+  await assertCurrentMain();
   console.log('Exact main commit has successful canonical CI evidence.');
 } else if (mode === 'manifest') {
   const manifest = parseJson<unknown>(required('RELEASE_MANIFEST')); const ciRunId = required('CI_RUN_ID');
@@ -82,6 +108,8 @@ if (mode === 'ci') {
   await writeFile(join(directory, 'artifact.sha256'), await artifactDigest());
   console.log('Prebuilt web output verified against public-only environment and deployment credential exclusion.');
 } else if (mode === 'deploy') {
+  assertCheckout();
+  await assertCurrentMain();
   if (await artifactDigest() !== await readFile(join(directory, 'artifact.sha256'), 'utf8')) throw Error('Prebuilt artifact changed after verification.');
   const target = vercelTarget(required('RELEASE_ENVIRONMENT')); const sourceSha = required('RELEASE_SHA');
   if (!/^[a-f0-9]{40}$/.test(sourceSha)) throw Error('Invalid release source commit.');
@@ -115,4 +143,4 @@ if (mode === 'ci') {
   } else {
     console.log('Vercel source SHA/team/project and web/API readiness verified. Edge worker security/queue evidence remains admitted attestations within 24 hours; artifact/lock hashes are operator evidence, with no fresh Edge network or source verification. Full staged actor/security/AI and domain promotion remain operator gates.');
   }
-} else throw Error('Expected ci, manifest, build, deploy or verify release operation.');
+} else throw Error('Expected context, ci, manifest, build, deploy or verify release operation.');

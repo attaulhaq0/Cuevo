@@ -1,5 +1,9 @@
 name: Cuevo reviewed web release
 on:
+  workflow_run:
+    workflows: [Cuevo verification]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -18,47 +22,67 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cuevo-release-${{ inputs.environment }}
+  group: cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}
   cancel-in-progress: false
 jobs:
   release-admission:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: { contents: read, actions: read }
+    outputs:
+      sha: ${{ steps.context.outputs.sha }}
+      ci-run-id: ${{ steps.context.outputs.ci-run-id }}
+      environment: ${{ steps.context.outputs.environment }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '24.16.0' }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
+      - name: Admit release event without evaluating event input as code
+        id: context
+        run: node --import tsx scripts/verification/cicd-release.ts context
       - name: Validate exact trusted CI commit
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ inputs.commit_sha }}
-          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          RELEASE_SHA: ${{ steps.context.outputs.sha }}
+          CI_RUN_ID: ${{ steps.context.outputs.ci-run-id }}
         run: node --import tsx scripts/verification/cicd-release.ts ci
+      - name: Require existing protected release environment and main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
+        run: node --import tsx scripts/verification/cicd-release.ts controls
   web-release:
     needs: release-admission
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      name: ${{ inputs.environment }}
+      name: ${{ needs.release-admission.outputs.environment }}
       url: ${{ steps.deploy.outputs.url }}
-    permissions: { contents: read }
+    permissions: { contents: read, actions: read }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          persist-credentials: false
+          ref: ${{ needs.release-admission.outputs.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '24.16.0', cache: npm }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
+      - name: Revalidate canonical CI and current main after environment approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+        run: node --import tsx scripts/verification/cicd-release.ts ci
       - name: Validate dependency release manifest
         env:
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
-          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
-          RELEASE_SHA: ${{ inputs.commit_sha }}
-          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
         run: node --import tsx scripts/verification/cicd-release.ts manifest
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@62.1.0 --ignore-scripts --no-audit --no-fund
@@ -67,7 +91,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
         run: node --import tsx scripts/verification/cicd-release.ts build
       - name: Deploy verified prebuilt artifact without domain promotion
         id: deploy
@@ -75,14 +99,16 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
-          RELEASE_SHA: ${{ inputs.commit_sha }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ github.token }}
         run: node --import tsx scripts/verification/cicd-release.ts deploy
       - name: Verify deployed artifact and dependency health
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          RELEASE_ENVIRONMENT: ${{ inputs.environment }}
-          RELEASE_SHA: ${{ inputs.commit_sha }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
         run: node --import tsx scripts/verification/cicd-release.ts verify

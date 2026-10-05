@@ -9,6 +9,7 @@ For product requirements start with [product context](product/README.md) and its
 | Expanded active redesign acceptance | [5 October goal acceptance](design/2026-10-05-redesign-goal-acceptance.md): all five roles, every admitted section/nested workflow, visual/functional/source/RTL/mobile/reflow QA and exact-source CI; incomplete/failed/manual/hosted gates stay open |
 | Current Student/focused QA evidence | [5 October bounded progress](reports/2026-10-05-student-focused-qa-progress.md): compact Student fit, guarded Portfolio source, focused navigation/Coordinator/Audit browser checks and remaining whole-role/source/CI gates |
 | Current scope, verified gates and blockers | [implementation-status.md](implementation-status.md) and [MVP gap audit](reports/mvp-gap-audit.md) |
+| Automatic trusted-main release | [CI-gated Vercel release](decisions/2026-10-05-ci-gated-vercel-release.md): automatic handoff after successful merged-source CI, protected review, existing projects, strict hosted evidence and remaining production promotion gates |
 | Source-of-truth product/domain/security requirements | [Product index](product/index.md), [context map](product/context-map.md) and [registry](product/registry.json) |
 | Architecture and trust boundaries | [Repository layout](architecture/repository-layout.md), [domain ERD](architecture/domain-erd.md), [foundation threat model](architecture/foundation-threat-model.md), [stack ADR](product/platform/68-FINAL-TECH-STACK-AND-ADR.md) |
 | Scalable event execution and full-app workflow progression | [Event-processing plan](architecture/scalable-event-processing.md) and [accepted worker direction](decisions/2026-10-02-event-triggered-worker.md); local execution verified, hosted/load gates pending |
@@ -58,3 +59,5 @@ Current [approved Trail colors and background](design/2026-10-03-approved-trail-
 The separate pilot measurement window and its guarded cleanup/evidence owners are documented in [the measurement decision](decisions/2026-10-05-isolated-pilot-measurement-window.md). It is source-prepared until the actual manual/defaultbranch exact-run gate passes.
 
 The [populated source and workspace repair checkpoint](reports/2026-10-05-populated-source-and-workspace-repairs.md) records scratch-only Portfolio, Community and Goal API proofs, current-source/retry repairs and remaining all-role/CI/hosted pilot gates.
+
+The [worker source and viewport-density continuation](reports/2026-10-05-worker-source-and-density-continuation.md) records the subsequent bounded processing/readback, five-role Progress proof, freshness limitation, current owner repairs and distinct CI failure.

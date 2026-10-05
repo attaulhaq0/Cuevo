@@ -2,6 +2,8 @@
 
 Owner: repository maintainer. This guide operates the existing [architecture](../product/platform/68-FINAL-TECH-STACK-AND-ADR.md) and [release decision](../decisions/2026-10-02-ci-cd-and-release-boundaries.md). The workflows are a foundation; deployment is unavailable until the exact external prerequisites are supplied and verified.
 
+The [automatic-release amendment](../decisions/2026-10-05-ci-gated-vercel-release.md) starts production admission only after successful canonical main-push verification following PR review/merge. Manual staging/production dispatch remains. It preserves protected environment approval, current-main rechecks and strict hosted evidence; the production domain is not promoted by this incomplete hosted foundation. App-local `git.deploymentEnabled: false` keeps Vercel Git builds from bypassing Actions. Fresh5October readback found no app deployments or configured GitHub release environments/secrets/variables; those external gates remain required.
+
 ## Repository controls
 
 Require `required` from Cuevo verification for the exact commit, human CODEOWNER review of sensitive changes, stale-review dismissal and signed commits. Protect main from direct agent pushes and bypass. Configure staging/production GitHub environments with main-only branch policy, independent required reviewers and no self-approval. These are GitHub settings; committing CODEOWNERS does not activate them. CI concurrency replaces obsolete branch runs. Release concurrency queues deployments per environment rather than interrupting a partially deployed release.
