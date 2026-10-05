@@ -131,6 +131,10 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     }
   }
   const ciJobs = mapping(ci.jobs); const technical = mapping(ciJobs['technical-mvp']); const steps = list(technical.steps).map(mapping);
+  for (const owner of ['fast-checks', 'technical-mvp']) {
+    const checkouts = list(mapping(ciJobs[owner]).steps).map(mapping).filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
+    if (checkouts.length !== 1 || mapping(checkouts[0]?.with)['fetch-depth'] !== 0 || checkouts[0]?.if !== undefined || checkouts[0]?.['continue-on-error'] !== undefined) issues.push(`${owner} verification requires one unconditional complete-history checkout for canonical source checks.`);
+  }
   if (typeof technical['timeout-minutes'] !== 'number' || technical['timeout-minutes'] < 90) issues.push('Technical verification budget is too short.');
   if (!steps.some(step => step.run === 'npx --no-install playwright install --with-deps chromium firefox webkit')) issues.push('All compatibility engines must be installed.');
   if (!steps.some(step => step.run === 'npm run verify:technical')) issues.push('Frozen technical gate is required.');

@@ -396,14 +396,38 @@ test('web and API automatic Git builds cannot bypass reviewed Actions deployment
 
 test('required CI includes a secret-free full-history scanner with strict success aggregation', async () => {
   const ci = await readFile('.github/workflows/ci.yml', 'utf8'); const release = await readFile('.github/workflows/release.yml', 'utf8');
+  const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): { jobs: Record<string, { steps: Record<string, unknown>[] }> }; dump(value: unknown): string };
+  const shallowSecret = yaml.load(ci); const secretCheckout = shallowSecret.jobs['secret-scan'].steps.find(step => String(step.uses ?? '').startsWith('actions/checkout@'))!; (secretCheckout.with as Record<string, unknown>)['fetch-depth'] = 1;
   assert.match(ci, /secret-scan:/);
   assert.match(ci, /fetch-depth: 0/);
   assert.match(ci, /node --import tsx scripts\/verification\/secret-scan.ts/);
   for (const changed of [
-    ci.replace('fetch-depth: 0', 'fetch-depth: 1'),
+    yaml.dump(shallowSecret),
     ci.replace('node --import tsx scripts/verification/secret-scan.ts', 'echo scan-omitted'),
     ci.replace('fast-checks, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, technical-mvp, dependency-review, codeql'),
     ci.replace('SECRET_SCAN: ${{ needs.secret-scan.result }}', 'SECRET_SCAN: success'),
     ci.replace('|| [ "$SECRET_SCAN" != success ]', ''),
   ]) assert.ok(validateWorkflows(changed, release).some(issue => issue.includes('secret')));
+});
+
+test('fast and technical verification require one unconditional complete-history checkout for canonical migration source checks', async () => {
+  const ci = await readFile('.github/workflows/ci.yml', 'utf8'), release = await readFile('.github/workflows/release.yml', 'utf8');
+  const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): { jobs: Record<string, { steps: Record<string, unknown>[] }> }; dump(value: unknown): string };
+  for (const owner of ['fast-checks', 'technical-mvp']) {
+    const current = yaml.load(ci), checkout = current.jobs[owner].steps.find(step => String(step.uses ?? '').startsWith('actions/checkout@'))!;
+    assert.equal((checkout.with as Record<string, unknown>)['fetch-depth'], 0, `${owner} must acquire complete history before source guards run`);
+    for (const mutate of [
+      (step: Record<string, unknown>) => { (step.with as Record<string, unknown>)['fetch-depth'] = 1; },
+      (step: Record<string, unknown>) => { delete (step.with as Record<string, unknown>)['fetch-depth']; },
+      (step: Record<string, unknown>) => { (step.with as Record<string, unknown>)['fetch-depth'] = '0'; },
+      (step: Record<string, unknown>) => { step.if = 'false'; },
+      (step: Record<string, unknown>) => { step['continue-on-error'] = true; },
+    ]) {
+      const changed = yaml.load(ci), step = changed.jobs[owner].steps.find(row => String(row.uses ?? '').startsWith('actions/checkout@'))!;
+      mutate(step); assert.ok(validateWorkflows(yaml.dump(changed), release).some(issue => issue.includes(owner) && issue.includes('history')));
+    }
+    const duplicate = yaml.load(ci), duplicateStep = duplicate.jobs[owner].steps.find(step => String(step.uses ?? '').startsWith('actions/checkout@'))!;
+    duplicate.jobs[owner].steps.unshift(structuredClone(duplicateStep)); assert.ok(validateWorkflows(yaml.dump(duplicate), release).some(issue => issue.includes(owner) && issue.includes('history')));
+    const absent = yaml.load(ci); absent.jobs[owner].steps = absent.jobs[owner].steps.filter(step => !String(step.uses ?? '').startsWith('actions/checkout@')); assert.ok(validateWorkflows(yaml.dump(absent), release).some(issue => issue.includes(owner) && issue.includes('history')));
+  }
 });
