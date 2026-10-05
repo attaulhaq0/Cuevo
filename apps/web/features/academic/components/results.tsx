@@ -27,10 +27,10 @@ export function ExactReleasedResult({ source, pageHeading = false }: { source: R
   const history = usePaginatedLearningQuery(`/v1/results/${source.id}/history?limit=25`, parse, 0);
   const exact = history.data.find(row => row.scope === scope && row.id === source.id);
   const matches = exact && exact.submissionId === source.submissionId && exact.learnerId === source.learnerId && exact.referenceId === source.referenceId && exact.referenceVersion === source.referenceVersion && exact.evidenceId === source.evidenceId && exact.revision === source.revision && exact.policyVersion === source.policyVersion && sameNativeResult(exact.nativeResult, source.nativeResult);
-  return <section aria-label={t.results}>{history.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : history.error ? <LearningError error={history.error} /> : exact ? matches ? <ReleasedResults exact pageHeading={pageHeading} results={[exact]} /> : <LearningError error={new LearningApiError('invalid')} /> : <><p className="notice">{t.learnerUnavailable}</p><NativeResultView result={source.nativeResult} /></>}<LoadMore query={history} label={t.resultHistory} /></section>;
+  return <section aria-label={t.results}>{history.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : history.error ? <LearningError error={history.error} /> : exact ? matches ? <ReleasedResults sourceComplete exact pageHeading={pageHeading} results={[exact]} /> : <LearningError error={new LearningApiError('invalid')} /> : <><WorkspaceState kind="unknown" icon="help" description={t.learnerUnavailable}/><NativeResultView result={source.nativeResult} /></>}<LoadMore query={history} label={t.resultHistory} /></section>;
 }
 
-export function ReleasedResults({ results, pageHeading = false, exact = false }: { results: ReleasedResult[]; pageHeading?: boolean; exact?: boolean }) {
+export function ReleasedResults({ results, pageHeading = false, exact = false, sourceComplete = false }: { results: ReleasedResult[]; pageHeading?: boolean; exact?: boolean; sourceComplete?:boolean }) {
   const { locale, membership, commandJournal, apiUrl, accessToken, online } = useApp();
   const t = locale === 'ar' ? academicAr : academicEn, r = locale === 'ar' ? academicReadingAr : academicReadingEn;
   useSyncExternalStore(commandJournal.subscribe, commandJournal.getSnapshot, commandJournal.getSnapshot);
@@ -48,8 +48,8 @@ export function ReleasedResults({ results, pageHeading = false, exact = false }:
   return <section className={`academic-result-workspace${selected || selection?.scope === scope ? ' academic-result-workspace--selected' : ''}`}>
     {pageHeading ? null : <h2>{t.results}</h2>}
     <div className="academic-reading-grid">
-      {!exact ? <section ref={directory} tabIndex={-1} className="academic-result-directory" aria-label={r.resultDirectory}>{results.length ? results.map(result => <Button key={result.id} type="button" variant="quiet" data-result-choice={result.id} disabled={!!pending} aria-pressed={selected?.id === result.id} onClick={event => { if (pending) return; opener.current = event.currentTarget; focusReader.current = true; setSelection({ scope, value: resultSelection(result) }); }}><CuevoIcon name="assessment" size={24} /><span><strong>{result.assessmentTitle ?? t.assessment}</strong>{membership && ['admin', 'teacher', 'coordinator'].includes(membership.role) ? <small>{result.learnerName ?? t.learnerUnavailable}</small> : null}<small>{result.referenceTitle ?? t.referenceMissing} · {t.revision} {new Intl.NumberFormat(locale).format(result.revision)} · <bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(result.createdAt))} UTC</bdi></small></span><Status tone="positive">{t.published}</Status></Button>) : <WorkspaceState kind="empty" icon="assessment" description={t.emptyResults}/>}</section> : null}
-      {selected || selection?.scope === scope ? <section className="academic-result-selected">{!exact ? <Button type="button" variant="quiet" disabled={!!pending} onClick={back}>{r.resultBack}</Button> : null}{selected ? <ReleasedResultReading key={`${selected.id}:${selected.revision}`} result={selected} pageHeading={pageHeading} headingRef={heading} /> : <p role="status">{r.resultChanged}</p>}</section> : null}
+      {!exact ? <section ref={directory} tabIndex={-1} className="academic-result-directory" aria-label={r.resultDirectory}>{results.length ? results.map(result => <Button key={result.id} type="button" variant="quiet" data-result-choice={result.id} disabled={!!pending} aria-pressed={selected?.id === result.id} onClick={event => { if (pending) return; opener.current = event.currentTarget; focusReader.current = true; setSelection({ scope, value: resultSelection(result) }); }}><CuevoIcon name="assessment" size={24} /><span><strong>{result.assessmentTitle ?? t.assessment}</strong>{membership && ['admin', 'teacher', 'coordinator'].includes(membership.role) ? <small>{result.learnerName ?? t.learnerUnavailable}</small> : null}<small>{result.referenceTitle ?? t.referenceMissing} · {t.revision} {new Intl.NumberFormat(locale).format(result.revision)} · <bdi>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(result.createdAt))} UTC</bdi></small></span><Status tone="positive">{t.published}</Status></Button>) : <WorkspaceState kind={sourceComplete?'empty':'unknown'} icon="assessment" description={sourceComplete?t.emptyResults:t.partialSources}/>}</section> : null}
+      {selected || selection?.scope === scope ? <section className="academic-result-selected">{!exact ? <Button type="button" variant="quiet" disabled={!!pending} onClick={back}>{r.resultBack}</Button> : null}{selected ? <ReleasedResultReading key={`${selected.id}:${selected.revision}`} result={selected} pageHeading={pageHeading} headingRef={heading} /> : <WorkspaceState kind="unavailable" icon="help" description={r.resultChanged} role="status"/>}</section> : null}
     </div>
     {pendingId && pendingId !== selected?.id ? <section><p>{r.original}</p><ResultPublication resultId={pendingId} /></section> : null}
   </section>;
@@ -71,9 +71,9 @@ export function EvidenceDetail({ evidenceId, learnerId }: { evidenceId: string; 
     return { scope, value: evidence };
   }, [scope, evidenceId, learnerId, membership?.role, membership?.userId]);
   const query = useApiQuery(`/v1/evidence/${evidenceId}`, parse, 0);
-  if (query.loading) return <p role="status">{t.evidence}…</p>;
+  if (query.loading) return <WorkspaceState kind="loading" icon="refresh" description={<p>{t.evidence}…</p>} role="status"/>;
   if (query.error) return <LearningError error={query.error} />;
-  if (!query.data || query.data.scope !== scope) return <p>{t.evidenceMissing}</p>;
+  if (!query.data || query.data.scope !== scope) return <WorkspaceState kind="unavailable" icon="assessment" description={t.evidenceMissing} role="status"/>;
   const evidence = query.data.value;
   return <EvidenceReading evidence={evidence} />;
 }

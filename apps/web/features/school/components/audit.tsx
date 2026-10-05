@@ -49,7 +49,7 @@ export function SchoolAuditView({ source, rows, locale, canPrevious, canNext, on
   const error = denied ?? source.error;
   return <section aria-label={t.audit}><header className="cuevo-section-header"><div className="cuevo-section-header__context">{pageHeading ? null : <h2>{t.audit}</h2>}<p>{t.auditNote}</p></div><Button type="button" variant="quiet" onClick={onRefresh}>{t.refresh}</Button></header>
     {source.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : error ? <LearningError error={error} /> : <>
-      <SchoolAuditReading pageHeading={pageHeading} rows={rows} locale={locale} />{!rows.length ? <p>{copy.emptyPage}</p> : null}
+      <SchoolAuditReading pageHeading={pageHeading} rows={rows} locale={locale} />{!rows.length ? <WorkspaceState kind={source.nextCursor || source.moreError ? "review" : "empty"} icon="shield" description={copy.emptyPage}/> : null}
       {source.moreError ? <LearningError error={source.moreError} /> : null}
       <nav className="school-audit-pagination pagination-actions" aria-label={copy.navigation}>
         <p role="status">{copy.loadedPage}</p>

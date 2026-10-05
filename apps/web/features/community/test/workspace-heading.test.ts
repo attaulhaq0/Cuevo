@@ -6,12 +6,12 @@ import { registerHooks } from 'node:module';
 import { CommandJournal, LearningApiError } from '../../../shared/api/client.ts';
 import { FormDrafts } from '../../../shared/session/form-drafts.ts';
 const room = { id: 'room', classId: 'class', ownerId: 'teacher', name: 'Checking explanations', type: 'CLASS' as const, status: 'ACTIVE' as const, canModerate: false, canPost: false, privateTopic: 'cuevo:school:room:room' };
-const fixture = { app: {} as Record<string, unknown>, loading: false, error: null as LearningApiError | null, room: false };
+const fixture = { app: {} as Record<string, unknown>, loading: false, error: null as LearningApiError | null, room: false, nextCursor: null as string|null };
 Object.assign(globalThis, { React, communityHeadingFixture: fixture });
 registerHooks({ load(url, context, nextLoad) {
   const path = url.replaceAll('\\', '/');
   if (path.endsWith('/shared/session/providers.tsx')) return { format: 'module', shortCircuit: true, source: 'export function useApp(){return globalThis.communityHeadingFixture.app}' };
-  if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: 'export function usePaginatedLearningQuery(path){const f=globalThis.communityHeadingFixture;return{data:f.room&&path?.endsWith("rooms?limit=100")?[globalThis.communityHeadingRoom]:[],loaded:!f.loading,loading:f.loading,loadingMore:false,error:f.error,moreError:null,nextCursor:null,context:"current",loadMore(){}}}' };
+  if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: 'export function usePaginatedLearningQuery(path){const f=globalThis.communityHeadingFixture;return{data:f.room&&path?.endsWith("rooms?limit=100")?[globalThis.communityHeadingRoom]:[],loaded:!f.loading,loading:f.loading,loadingMore:false,error:f.error,moreError:null,nextCursor:f.nextCursor,context:"current",loadMore(){}}}' };
   return nextLoad(url, context);
 } });
 const { CommunityWorkspace } = await import('../components/community-workspace.tsx');
@@ -41,3 +41,7 @@ test('denied selected room keeps one generic recovery h1 and withholds its priva
   assert.equal((html.match(/<h1/g) ?? []).length, 1); assert.match(html, /<h1[^>]*>Class discussion<\/h1>/);
   assert.doesNotMatch(html, /Checking explanations/); assert.match(html, /role="alert"/);
 });
+
+test('offline and missing room recovery use scoped state anatomy without leaking room context or changing commands',()=>{for(const locale of['en','ar']as const){app(locale);fixture.app.online=false;const offline=renderToStaticMarkup(createElement(CommunityWorkspace));assert.match(offline,/data-state="unavailable"/);assert.match(offline,/role="status"/);app(locale);fixture.loading=false;fixture.error=null;fixture.room=false;const missing=renderToStaticMarkup(createElement(RoomDiscussion,{room,onBack(){}}));assert.match(missing,/data-state="denied"/);assert.doesNotMatch(missing,/Checking explanations/);assert.equal((fixture.app.commandJournal as CommandJournal).pending().length,0);}});
+
+test('a community continuation cannot present the complete empty message',()=>{app();fixture.room=false;fixture.loading=false;fixture.error=null;fixture.nextCursor='remaining-page';const html=renderToStaticMarkup(createElement(CommunityWorkspace));assert.match(html,/data-state="unknown"/);assert.doesNotMatch(html,/No permitted community records are available/);fixture.nextCursor=null;});

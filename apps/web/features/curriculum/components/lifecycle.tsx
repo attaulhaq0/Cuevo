@@ -45,7 +45,7 @@ function CurrentLifecycle({version,versions,disabled,onLockedChange}:{version:Ve
  <dl className="curriculum-source-review__facts">{[[t.boundProgrammes,page.programmeCount],[t.boundCourses,page.courseCount],[t.openAcademicWork,page.openAssessmentCount]].map(([label,value])=><div key={String(label)}><dt>{label}</dt><dd>{new Intl.NumberFormat(locale).format(Number(value))}</dd></div>)}</dl>
  {canManage&&sourceReady&&(next.length||selected)?<div className="curriculum-source-review__editor">
  <div className="field"><label htmlFor={`${id}-state`}>{t.lifecycleNext}</label><select id={`${id}-state`} value={selected?.state??''} disabled={locked||disabled&&!selected} onChange={event=>change(event.target.value)}><option value="">{t.lifecycleNext}</option>{[...new Set([...next,...(selected?[selected.state]:[])])].map(value=><option key={value} value={value}>{t.lifecycleStates[value as keyof typeof t.lifecycleStates]}</option>)}</select></div>
- {stale?<p className="notice" role="status">{t.planningSourceChanged}</p>:null}
+ {stale?<WorkspaceState kind="review" icon="help" description={t.planningSourceChanged} role="status"/>:null}
  </div>:null}
  {!sourceReady?<p className="notice">{t.officialLifecycleReview}</p>:null}
  <details className="curriculum-source-review__history"><summary>{t.sourceLifecycle}</summary>{page.history.map(record=><article key={record.id}><h4>{t.lifecycleStates[record.state]}</h4><p>{new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(record.createdAt))}</p><p>{record.reason}</p></article>)}</details>

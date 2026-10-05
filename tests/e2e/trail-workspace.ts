@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { completeObservedSchoolSources, hasSchoolCurrentSources } from './school-current-sources';
 
 export type TrailRole = 'admin' | 'coordinator' | 'teacher' | 'student' | 'parent';
 const roles: Record<TrailRole, readonly [string, string]> = {
@@ -108,6 +109,7 @@ export async function selectTrailSchoolRecord(page: Page, kind: 'person' | 'enro
   const directory = page.locator('.school-access-directory');
   await expect(directory).toBeVisible();
   await directory.getByRole('button', { name: groups[kind], exact: true }).click();
+  if(kind!=='person'&&hasSchoolCurrentSources(page))await completeObservedSchoolSources(page,'people');
   const source = directory.locator('li button').filter({ hasText: label });
   const currentPage = () => directory.evaluate(element => {
     const rows=Array.from(element.querySelectorAll<HTMLButtonElement>('li button')).map(button=>[button.getAttribute('aria-label'),button.textContent?.trim()]);
@@ -138,6 +140,7 @@ export async function selectTrailSchoolRecord(page: Page, kind: 'person' | 'enro
 export async function prepareTrailSchoolRelationship(page: Page, kind: 'enrollment' | 'assignment' | 'guardian'): Promise<void> {
   const groups = { enrollment: 'Enrollments', assignment: 'Teacher assignments', guardian: 'Family relationships' };
   await page.locator('.school-access-directory').getByRole('button', { name: groups[kind], exact: true }).click();
+  if(hasSchoolCurrentSources(page))await completeObservedSchoolSources(page,'people');
   await page.getByRole('button', { name: 'Prepare a new relationship', exact: true }).click();
 }
 /** Select the saved UTC source date using the staff input or parent calendar. */

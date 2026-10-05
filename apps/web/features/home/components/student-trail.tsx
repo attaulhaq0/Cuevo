@@ -3,7 +3,7 @@
 import { TrailBackground } from '../../../shared/characters/ui';
 
 import { useId, type ReactNode, type Ref } from 'react';
-import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
+import { Button, CuevoIcon, Status, WorkspaceState, type CuevoIconName } from '@cuevo/ui';
 import type { StudentTrailAction, StudentTrailAssets, StudentTrailContext, StudentTrailStage } from '../trail-model';
 import { studentTrailAr, studentTrailEn } from '../messages';
 
@@ -34,7 +34,7 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
   const t = locale === 'ar' ? studentTrailAr : studentTrailEn;
   const challengeId = useId();
   const number = new Intl.NumberFormat(locale);
-  if (context.availability === 'denied' || context.availability === 'offline') return <section className="student-trail student-trail__denied" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{t.nextStep}</h1><p role="status">{context.notice || t[context.availability]}</p>{context.recovery ? <TrailAction action={context.recovery} /> : null}</section>;
+  if (context.availability === 'denied' || context.availability === 'offline') return <section className="student-trail student-trail__denied" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{t.nextStep}</h1><WorkspaceState kind={context.availability === 'denied' ? 'denied' : 'unavailable'} icon="learning" description={context.notice || t[context.availability]} role="status" actions={context.recovery ? <TrailAction action={context.recovery} /> : null}/></section>;
   const recognition = context.recognition;
   const knownPoints = recognition.status === 'recorded' && recognition.totalPoints !== null;
   const recognitionNote = recognition.status === 'disabled' ? t.recognitionDisabled : recognition.status === 'processing' ? t.recognitionProcessing : recognition.status === 'requires-review' ? t.recognitionReview : t.recognitionUnknown;
@@ -45,7 +45,7 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
 
       <div className="student-trail__intro-row">
         <header className="student-trail__intro"><h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>{context.displayName ? <>{t.hello}{locale === 'ar' ? '، ' : ', '}<bdi>{context.displayName}</bdi>!</> : t.helloUnknown}</h1><p>{t.nextStep}</p></header>
-        {availabilityNotice ? <div className="student-trail__notice" role={context.availability === 'error' ? 'alert' : 'status'}><p>{availabilityNotice}</p>{context.recovery ? <TrailQuietAction action={context.recovery} /> : null}</div> : null}
+        {availabilityNotice ? <WorkspaceState kind={context.availability === 'loading' ? 'loading' : context.availability === 'error' ? 'unavailable' : 'unknown'} description={availabilityNotice} role={context.availability === 'error' ? 'alert' : 'status'} actions={context.recovery ? <TrailQuietAction action={context.recovery} /> : null}/> : null}
       </div>
 
       <div className="student-trail__scene">
@@ -77,12 +77,12 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
 
         <section className="student-trail__feedback student-trail__panel" aria-labelledby={`${challengeId}-feedback`}>
           <div className="student-trail__panel-heading"><span className="student-trail__symbol student-trail__symbol--feedback"><CuevoIcon name="feedback" variant="filled" size={23} /></span><h2 id={`${challengeId}-feedback`}>{t.teacherFeedback}</h2></div>
-          {context.feedback ? <><div className="student-trail__teacher">{context.feedback.teacherImage ? <img src={context.feedback.teacherImage} alt="" className="student-trail__teacher-image" /> : null}<div><h3><bdi>{context.feedback.teacherName || t.teacherUnknown}</bdi></h3>{context.feedback.teacherContext ? <p><bdi>{context.feedback.teacherContext}</bdi></p> : null}</div><p className="student-trail__date"><bdi>{context.feedback.dateLabel || t.dateUnknown}</bdi></p></div><blockquote><span aria-hidden="true">“</span><p>{context.feedback.text}</p></blockquote><div className="student-trail__feedback-actions">{nativeFeedback}{context.feedback.action ? <TrailAction action={context.feedback.action} icon="feedback" /> : null}</div></> : <p className="student-trail__empty">{t.feedbackUnknown}</p>}
+          {context.feedback ? <><div className="student-trail__teacher">{context.feedback.teacherImage ? <img src={context.feedback.teacherImage} alt="" className="student-trail__teacher-image" /> : null}<div><h3><bdi>{context.feedback.teacherName || t.teacherUnknown}</bdi></h3>{context.feedback.teacherContext ? <p><bdi>{context.feedback.teacherContext}</bdi></p> : null}</div><p className="student-trail__date"><bdi>{context.feedback.dateLabel || t.dateUnknown}</bdi></p></div><blockquote><span aria-hidden="true">“</span><p>{context.feedback.text}</p></blockquote><div className="student-trail__feedback-actions">{nativeFeedback}{context.feedback.action ? <TrailAction action={context.feedback.action} icon="feedback" /> : null}</div></> : <WorkspaceState kind="unknown" description={t.feedbackUnknown}/>}
         </section>
 
         <section className="student-trail__upcoming student-trail__panel" aria-labelledby={`${challengeId}-upcoming`}>
           <div className="student-trail__panel-heading"><CuevoIcon name="calendar" variant="filled" size={26} /><h2 id={`${challengeId}-upcoming`}>{t.upcoming}</h2></div>
-          {context.upcoming ? <div className="student-trail__upcoming-task"><span className="student-trail__practice-icon"><CuevoIcon name="reflection" size={28} /></span><div><h3>{context.upcoming.title}</h3><p>{context.upcoming.description}</p>{context.upcoming.availabilityLabel ? <p className="student-trail__available"><CuevoIcon name="calendar" size={20} />{context.upcoming.availabilityLabel}</p> : null}</div>{context.upcoming.action ? <TrailAction action={context.upcoming.action} /> : null}</div> : <p className="student-trail__empty">{t.upcomingUnknown}</p>}<div className="student-trail__upcoming-controls">{context.upcoming?.viewAll ? <TrailQuietAction action={context.upcoming.viewAll} /> : null}{upcomingControls}</div>
+          {context.upcoming ? <div className="student-trail__upcoming-task"><span className="student-trail__practice-icon"><CuevoIcon name="reflection" size={28} /></span><div><h3>{context.upcoming.title}</h3><p>{context.upcoming.description}</p>{context.upcoming.availabilityLabel ? <p className="student-trail__available"><CuevoIcon name="calendar" size={20} />{context.upcoming.availabilityLabel}</p> : null}</div>{context.upcoming.action ? <TrailAction action={context.upcoming.action} /> : null}</div> : <WorkspaceState kind="unknown" description={t.upcomingUnknown}/>}<div className="student-trail__upcoming-controls">{context.upcoming?.viewAll ? <TrailQuietAction action={context.upcoming.viewAll} /> : null}{upcomingControls}</div>
         </section>
       </div>
 
@@ -95,8 +95,8 @@ export function StudentTrailView({ context, assets, locale = 'en', headingRef, n
 
         {context.portfolio ? <section className="student-trail__portfolio student-trail__panel" aria-labelledby={`${challengeId}-portfolio`}>
           <div className="student-trail__panel-heading"><CuevoIcon name="portfolio" variant="filled" size={26} /><h2 id={`${challengeId}-portfolio`}>{t.selectedWork}</h2>{context.portfolio.action ? <TrailQuietAction action={context.portfolio.action} /> : null}</div>
-          {context.portfolio.state === 'loading' ? <p role="status" className="student-trail__empty">{t.selectedWorkLoading}</p> : context.portfolio.state === 'unavailable' ? <p role="status" className="student-trail__empty">{t.selectedWorkUnavailable}</p> : context.portfolio.items.length ? <ul className="student-trail__selected-work">{context.portfolio.items.map((item, index) => <li key={index}><div className="student-trail__selected-work-heading"><h3><bdi>{item.title}</bdi></h3><Status tone={item.reviewed ? 'positive' : 'neutral'}>{item.reviewed ? t.reviewed : t.waitingReview}</Status></div><p className="student-trail__reflection" dir="auto">{item.reflection}</p>{item.contextLabel ? <details className="student-trail__work-context"><summary>{t.workContext}</summary><p><bdi>{item.contextLabel}</bdi></p></details> : null}{item.dateLabel ? <p className="student-trail__work-date">{t.sourceDate} · <bdi>{item.dateLabel}</bdi></p> : null}</li>)}</ul> : <p className="student-trail__empty">{t.selectedWorkEmpty}</p>}
-          {context.portfolio.state === 'partial' ? <p className="student-trail__work-date" role="status">{t.selectedWorkPartial}</p> : null}{portfolioControls}
+          {context.portfolio.state === 'loading' ? <WorkspaceState kind="loading" description={t.selectedWorkLoading} role="status"/> : context.portfolio.state === 'unavailable' ? <WorkspaceState kind="unavailable" description={t.selectedWorkUnavailable} role="status"/> : context.portfolio.items.length ? <ul className="student-trail__selected-work">{context.portfolio.items.map((item, index) => <li key={index}><div className="student-trail__selected-work-heading"><h3><bdi>{item.title}</bdi></h3><Status tone={item.reviewed ? 'positive' : 'neutral'}>{item.reviewed ? t.reviewed : t.waitingReview}</Status></div><p className="student-trail__reflection" dir="auto">{item.reflection}</p>{item.contextLabel ? <details className="student-trail__work-context"><summary>{t.workContext}</summary><p><bdi>{item.contextLabel}</bdi></p></details> : null}{item.dateLabel ? <p className="student-trail__work-date">{t.sourceDate} · <bdi>{item.dateLabel}</bdi></p> : null}</li>)}</ul> : <WorkspaceState kind={context.portfolio.state === 'partial' ? 'unknown' : 'empty'} description={context.portfolio.state === 'partial' ? t.selectedWorkPartial : t.selectedWorkEmpty}/>}
+          {context.portfolio.state === 'partial' && context.portfolio.items.length ? <p className="student-trail__work-date" role="status">{t.selectedWorkPartial}</p> : null}{portfolioControls}
         </section> : null}
 
         {context.classChallenge ? <section className="student-trail__challenge student-trail__panel" aria-labelledby={`${challengeId}-challenge`}>

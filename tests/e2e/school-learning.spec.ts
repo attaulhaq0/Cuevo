@@ -4,10 +4,10 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { humanContextLabel, selectHumanChoice } from './human-choice';
+import { currentCoursePreparationOutline } from './learning-source-navigation';
 type Account = { role: string; email: string; password: string };
 async function selectPreparation(page: Page, title: string, kind?: 'Practice') {
-  const outline=page.getByRole('navigation',{name:'Course structure',exact:true});
-  if(!await outline.isVisible()){const back=page.getByRole('button',{name:'Back to course structure',exact:true});await expect(back).toHaveCount(1);await expect(back).toBeEnabled();await back.click();}
+  const outline=await currentCoursePreparationOutline(page);
   const choice=outline.getByRole('button',{name:kind?`${title} ${kind}`:title,exact:true});
   await expect(choice,'One current named source must identify the intended preparation target').toHaveCount(1); await expect(choice).toBeEnabled(); await choice.click();
   await expect(choice).toHaveAttribute('aria-current','page'); await expect(page.locator('.course-view h1')).toHaveText(title);

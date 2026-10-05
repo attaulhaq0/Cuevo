@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 import { useState } from 'react';
 import { Button } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
@@ -9,7 +10,7 @@ import { timetableMaintenanceContext } from '../timetable-maintenance';
 
 export function TimetableMaintenanceRecord({ row, locale, onEdit, onCancel }: { row: SchoolRow; locale: 'en' | 'ar'; onEdit: () => void; onCancel: () => void }) {
   const t = locale === 'ar' ? schoolAr : schoolEn; const context = timetableMaintenanceContext(row, locale);
-  return <article><h3><bdi>{context.subjectName}</bdi> · <bdi>{context.classLabel}</bdi></h3><p>{t.teacher}: <bdi>{context.teacherName}</bdi></p><p><bdi>{context.weekday}</bdi> · <bdi dir="ltr">{context.timeRange}</bdi></p><p>{t.timetableWindow}: <bdi>{context.window}</bdi></p><p>{t.location}: <bdi>{context.location}</bdi></p><p>{t.timetableRevision}: {context.revision === null ? t.timetableContextUnavailable : new Intl.NumberFormat(locale).format(context.revision)}</p>{context.status === 'REQUIRES_REVIEW' ? <p className="notice" role="status">{t.timetableContextReview}</p> : null}<div className="learning-actions"><Button type="button" variant="quiet" disabled={context.status !== 'READY'} aria-label={`${t.editRecord} · ${context.accessibleLabel}`} onClick={onEdit}>{t.editRecord}</Button><Button type="button" variant="quiet" disabled={context.status !== 'READY'} aria-label={`${t.cancelRecord} · ${context.accessibleLabel}`} onClick={onCancel}>{t.cancelRecord}</Button></div></article>;
+  return <article><h3><bdi>{context.subjectName}</bdi> · <bdi>{context.classLabel}</bdi></h3><p>{t.teacher}: <bdi>{context.teacherName}</bdi></p><p><bdi>{context.weekday}</bdi> · <bdi dir="ltr">{context.timeRange}</bdi></p><p>{t.timetableWindow}: <bdi>{context.window}</bdi></p><p>{t.location}: <bdi>{context.location}</bdi></p><p>{t.timetableRevision}: {context.revision === null ? t.timetableContextUnavailable : new Intl.NumberFormat(locale).format(context.revision)}</p>{context.status === 'REQUIRES_REVIEW' ? <WorkspaceState kind="review" icon="calendar" description={t.timetableContextReview} role="status"/> : null}<div className="learning-actions"><Button type="button" variant="quiet" disabled={context.status !== 'READY'} aria-label={`${t.editRecord} · ${context.accessibleLabel}`} onClick={onEdit}>{t.editRecord}</Button><Button type="button" variant="quiet" disabled={context.status !== 'READY'} aria-label={`${t.cancelRecord} · ${context.accessibleLabel}`} onClick={onCancel}>{t.cancelRecord}</Button></div></article>;
 }
 
 export function RecordMaintenance({ rows, resource, onChanged }: { rows: SchoolRow[]; resource: 'calendar' | 'timetable' | 'report-periods'; onChanged: () => void }) {

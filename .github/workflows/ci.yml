@@ -77,9 +77,24 @@ jobs:
       - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with: { languages: javascript-typescript, build-mode: none }
       - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: '24.16.0', cache: npm }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify pinned scanner and scan full history plus authored worktree
+        run: node --import tsx --test scripts/verification/secret-scan-policy.test.ts scripts/verification/secret-scan.test.ts
+      - name: Scan full history plus authored worktree
+        run: node --import tsx scripts/verification/secret-scan.ts
   required:
     if: always()
-    needs: [fast-checks, technical-mvp, dependency-review, codeql]
+    needs: [fast-checks, technical-mvp, dependency-review, codeql, secret-scan]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -89,6 +104,7 @@ jobs:
           TECHNICAL: ${{ needs.technical-mvp.result }}
           DEPENDENCY: ${{ needs.dependency-review.result }}
           CODEQL: ${{ needs.codeql.result }}
+          SECRET_SCAN: ${{ needs.secret-scan.result }}
         run: |
-          if [ "$FAST" != success ] || [ "$TECHNICAL" != success ] || [ "$CODEQL" != success ]; then exit 1; fi
+          if [ "$FAST" != success ] || [ "$TECHNICAL" != success ] || [ "$CODEQL" != success ] || [ "$SECRET_SCAN" != success ]; then exit 1; fi
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then test "$DEPENDENCY" = success; else test "$DEPENDENCY" = skipped; fi

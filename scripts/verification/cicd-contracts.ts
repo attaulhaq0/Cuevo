@@ -115,7 +115,15 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   if (!steps.some(step => step.if === 'always()' && step.run === 'node --import tsx scripts/verification/cicd-evidence.ts')) issues.push('Safe evidence must export even on failure.');
   if (JSON.stringify(ci).includes('secrets.')) issues.push('PR verification must not receive external secrets.');
   const required = mapping(ciJobs.required);
-  if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks', 'technical-mvp', 'dependency-review', 'codeql']) || required.if !== 'always()') issues.push('Required status must include all verification jobs.');
+  if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks', 'technical-mvp', 'dependency-review', 'codeql', 'secret-scan']) || required.if !== 'always()') issues.push('Required status must include all verification jobs, including secret scan.');
+  const secretScan = mapping(ciJobs['secret-scan']); const secretSteps = list(secretScan.steps).map(mapping);
+  const secretCheckout = secretSteps.filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
+  if (secretScan.if !== undefined || secretScan['continue-on-error'] !== undefined || secretScan['runs-on'] !== 'ubuntu-latest'
+    || secretCheckout.length !== 1 || mapping(secretCheckout[0]?.with)['fetch-depth'] !== 0
+    || !secretSteps.some(step => step.run === 'node --import tsx scripts/verification/secret-scan.ts')
+    || secretSteps.some(step => step.if !== undefined || step['continue-on-error'] !== undefined)) issues.push('Required secret scan must run the pinned scanner on complete history without skip or waiver.');
+  const aggregate = list(required.steps).map(mapping).find(step => step.name === 'Require every verification boundary');
+  if (mapping(aggregate?.env).SECRET_SCAN !== '${{ needs.secret-scan.result }}' || !String(aggregate?.run).includes('[ "$SECRET_SCAN" != success ]')) issues.push('Required aggregate must fail unless secret scan succeeds.');
   if (mapping(release.concurrency)['cancel-in-progress'] !== false) issues.push('Unsafe release concurrency.');
   if (mapping(release.concurrency).group !== "cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}") issues.push('Automatic and manual production must share release concurrency.');
   const releaseJobs = mapping(release.jobs);

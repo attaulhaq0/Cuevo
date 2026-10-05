@@ -1,4 +1,5 @@
 export const communityEn = {
+  partialRecords: 'This is a partial current list. Load more or refresh before concluding that no permitted records are available.',
   classConnection: 'Learn with your class', classConnectionBody: 'Share ideas, ask questions and learn together in school-approved spaces.', familyUpdates: 'Stay connected with school', familyUpdatesBody: 'Read approved updates and open your current school conversations.',
   discussionAbout: 'About this discussion', discussionAboutBody: 'This space follows your current class or teacher-led group membership.', currentMembers: 'Current school-approved members', discussionFeed: 'Class discussion', mentionMembers: 'Mention current members (at most five)',
   reactionsUnavailable: 'Count unavailable',
@@ -13,6 +14,7 @@ export const communityEn = {
   connecting: 'Connecting to private updates…', connected: 'Private updates connected', offline: 'Offline — reconnect to refresh', unavailable: 'Live updates unavailable — refresh the discussion',
 };
 export const communityAr: typeof communityEn = {
+  partialRecords: 'هذه قائمة حالية جزئية. حمّل المزيد أو حدّث قبل استنتاج عدم وجود سجلات مسموحة.',
   classConnection: 'تعلّم مع صفّك', classConnectionBody: 'شارك الأفكار واطرح الأسئلة وتعلّم مع الآخرين في مساحات تعتمدها المدرسة.', familyUpdates: 'تواصل مع المدرسة', familyUpdatesBody: 'اقرأ التحديثات المعتمدة وافتح محادثاتك المدرسية الحالية.',
   discussionAbout: 'عن هذه المناقشة', discussionAboutBody: 'تتبع هذه المساحة عضويتك الحالية في الصف أو المجموعة التي يقودها المعلّم.', currentMembers: 'أعضاء حاليون معتمدون من المدرسة', discussionFeed: 'مناقشة الصف', mentionMembers: 'ذكر أعضاء حاليين (خمسة كحد أقصى)',
   reactionsUnavailable: 'العدد غير متاح',

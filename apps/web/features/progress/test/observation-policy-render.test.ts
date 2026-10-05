@@ -17,3 +17,5 @@ test('a composed observation page removes only its duplicate title while keeping
  try{for(const locale of ['en','ar'] as const){const html=renderToStaticMarkup(createElement(Providers,{initialLocale:locale,config:{supabaseUrl:'',supabasePublishableKey:'',apiUrl:''},children:createElement(LearningObservationPolicyView,{pageHeading:true,status:missing,canApprove:false,onRefresh(){},onSaved(){}})}));assert.doesNotMatch(html,/<h2>/);assert.match(html,locale==='en'?/Your school has not approved/:/لم تعتمد/);assert.doesNotMatch(html,/name="developmentWindowDays"/);}}
  finally{if(previous)Object.defineProperty(globalThis,'React',previous);else Reflect.deleteProperty(globalThis,'React');}
 });
+
+test('unconfigured and review-required policy render distinct shared states while administrator consent stays blank',()=>{for(const locale of['en','ar']as const){const empty=render(locale);assert.match(empty,/data-state="unknown"/);assert.doesNotMatch(empty,/type="checkbox"[^>]*checked/);const review=render(locale,{...missing,status:'REQUIRES_REVIEW'});assert.match(review,/data-state="review"/);assert.doesNotMatch(review,/name="developmentWindowDays"/);}});

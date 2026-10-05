@@ -1,5 +1,7 @@
 # Provider-owned worker transport prerequisite
 
+The [5 October founder-approved provider trust decision](../decisions/2026-10-05-supabase-edge-provider-trust.md) supersedes the proposed removal of trusted managed `service_role` grants below. The retained metadata and unsent request are historical evidence of the prior strict policy. Current activation requires the expanded untrusted/PUBLIC/custom-role predicate, hosted Data API disabled proof, private Cuevo RPC denial and functional Auth/Storage/Realtime plus signed source/lease recovery. Provider service trust is an explicit residual-risk decision; it does not grant Cuevo transport authority or establish hosted readiness. No request has been sent or key/Cron activated by this amendment.
+
 The hosted synthetic Cuevo release uses the [accepted signed event worker](../architecture/scalable-event-processing.md) and keeps network queues/signing secrets outside application roles. Current Cuevo project mqxdjvsyckzocokuikmx is empty of application schemas/runtime roles; the existing Vault provider-owned grants need correction before worker activation. This is an operator/provider task, not permission to weaken RLS or escalate an application login.
 
 ## Inspected evidence

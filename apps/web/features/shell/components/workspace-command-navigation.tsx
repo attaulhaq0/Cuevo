@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Button, CuevoIcon } from '@cuevo/ui';
+import { Button, CuevoIcon, WorkspaceState } from '@cuevo/ui';
 import { matchWorkspaceNavigation, type WorkspaceChromeAction, type WorkspaceNavigationItem } from '../model';
 import { commandAr, commandEn } from '../messages';
 
@@ -12,7 +12,7 @@ type CommandContext = { navigation: readonly WorkspaceNavigationItem[]; selected
 export function WorkspaceCommandResults({ navigation, selectedId, locale, query, onSelect }: CommandContext & { query: string; onSelect: (id: string) => void }) {
   const t = locale === 'ar' ? commandAr : commandEn;
   const matches = matchWorkspaceNavigation(navigation, query);
-  if (!matches.length) return <p className="workspace-command__empty" role="status">{navigation.length ? t.noMatch : t.empty}</p>;
+  if (!matches.length) return <WorkspaceState kind="empty" icon="search" description={navigation.length ? t.noMatch : t.empty} role="status"/>;
   return <ul className="workspace-command__results" aria-label={t.results}>{matches.map(item => <li key={item.id}>
     <button type="button" data-workspace-command={item.id} onClick={() => onSelect(item.id)} disabled={item.disabled || item.pending || !item.label.trim()} aria-busy={item.pending || undefined} aria-current={selectedId === item.id ? 'page' : undefined}>
       <CuevoIcon name={item.icon} size={24} /><span className="workspace-command__label"><bdi>{item.label.trim() ? item.label : t.nameUnknown}</bdi>{selectedId === item.id ? <small>{t.current}</small> : null}</span>

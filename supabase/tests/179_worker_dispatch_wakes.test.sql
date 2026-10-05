@@ -30,8 +30,9 @@ select throws_ok($$select internal.configure_worker_dispatch(true,'https://examp
 select throws_ok($$select internal.configure_worker_dispatch(true,'http://supabase_kong_cuevo:8000/functions/v1/cuevo-worker','worker-dispatch-token',false)$$,'22023',null,'local network endpoint requires explicit operator opt-in');
 
 -- Replace only network delivery inside this rollback test. No secret or remote HTTP is used.
--- Root verifies provider-owned net/Vault grants before this positive transport-contract slice.
-select is(internal.worker_transport_private(),true,'actual extension grants are private before wake activation');
+-- Root verifies current untrusted net/Vault grants before this positive slice.
+-- Trusted provider/service-role grants are separate from Cuevo delivery authority.
+select is(internal.worker_transport_private(),true,'actual untrusted extension paths are refused before wake activation');
 create temporary table worker_wake_capture(wake_id uuid not null,body jsonb not null);
 create or replace function internal.send_worker_wake(target_wake uuid,target_endpoint text,target_secret_name text)returns bigint language plpgsql security definer set search_path=''as $$begin
  insert into pg_temp.worker_wake_capture values(target_wake,jsonb_build_object('version',1,'wakeId',target_wake));return 101;

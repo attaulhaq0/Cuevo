@@ -49,7 +49,7 @@ function CurrentBehavior({version,disabled,onLockedChange}:{version:Version;disa
  {open?<section id={`${id}-content`} className="curriculum-source-review__content" aria-label={t.reviewNativeBehavior}>
  {query.loading||statusQuery.loading?<WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/>:query.error||statusQuery.error?<><LearningError error={(query.error??statusQuery.error)!}/><Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button></>:lifecycle?<>
  <p className="curriculum-source-review__limit">{t.behaviorNote}</p>
- {!allowed?<p className="notice" role="status">{t.planningSourceChanged}</p>:null}
+ {!allowed?<WorkspaceState kind="review" icon="help" description={t.planningSourceChanged} role="status"/>:null}
  {status?.accepted?<p>{t.behaviorBasis}: {status.basis==='LOCKED_ARTIFACT'?t.lockedArtifactBasis:t.schoolAuthoredBasis} · {status.reason}</p>:null}
  <div className="curriculum-source-review__selectors"><div className="field"><label htmlFor={`${id}-basis`}>{t.behaviorBasis}</label><select id={`${id}-basis`} value={basis} disabled={locked||disabled} onChange={event=>remember(event.target.value,directory)}><option value="SCHOOL_AUTHORED" disabled={status?.basis==='LOCKED_ARTIFACT'}>{t.schoolAuthoredBasis}</option><option value="LOCKED_ARTIFACT">{t.lockedArtifactBasis}</option></select></div>
  {basis==='LOCKED_ARTIFACT'?<div className="field"><label htmlFor={`${id}-artifact`}>{t.artifactDirectory}</label><input id={`${id}-artifact`} value={directory} maxLength={200} disabled={locked||disabled} onChange={event=>remember(basis,event.target.value)}/></div>:null}</div>

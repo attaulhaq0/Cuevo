@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@cuevo/ui';
+import { Button, WorkspaceState} from '@cuevo/ui';
 import type { SubmissionArtifact } from '@cuevo/contracts';
 import { useApp } from '../../../shared/session/providers';
 import { LearningError } from '../../../shared/components/feedback';
@@ -15,5 +15,5 @@ export function PortfolioArtifactDownload({itemId,revisionId,asset,onReviewed}:{
   if(!membership||!accessToken||!online||!scope||asset.state!=='AVAILABLE')return;const expected=scope;const active=new AbortController();controller.current?.abort();controller.current=active;setFailure(null);
   try{const response=await fetch(apiUrl+path,{headers:{Authorization:`Bearer ${accessToken}`,'X-School-Id':membership.schoolId},cache:'no-store',credentials:'omit',signal:AbortSignal.any([active.signal,AbortSignal.timeout(15000)])});if(!response.ok)throw new LearningApiError(response.status===403?'denied':'unavailable');const bytes=await response.arrayBuffer();const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');if(bytes.byteLength!==asset.byteSize||hash!==asset.sha256)throw new LearningApiError('invalid');if(!mounted.current||active.signal.aborted||current.current!==expected)return;const url=URL.createObjectURL(new Blob([bytes],{type:asset.contentType}));const anchor=document.createElement('a');anchor.href=url;anchor.download=asset.name;anchor.click();onReviewed?.();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(failure){if(mounted.current&&!active.signal.aborted&&current.current===expected)setFailure({scope,value:failure instanceof LearningApiError?failure:new LearningApiError('unavailable')});}
  }
- return scope?<div className="portfolio-artifact-download"><bdi>{asset.name}</bdi>{asset.state==='AVAILABLE'?<Button type="button" variant="quiet" onClick={()=>void download()}>{locale==='ar'?'تنزيل العمل المختار':'Download selected work document'}</Button>:<p>{locale==='ar'?'المستند غير متاح':'Document unavailable'}</p>}{error?<LearningError error={error}/>:null}</div>:null;
+ return scope?<div className="portfolio-artifact-download"><bdi>{asset.name}</bdi>{asset.state==='AVAILABLE'?<Button type="button" variant="quiet" onClick={()=>void download()}>{locale==='ar'?'تنزيل العمل المختار':'Download selected work document'}</Button>:<WorkspaceState kind="unavailable" description={locale==='ar'?'المستند غير متاح':'Document unavailable'}/>}{error?<LearningError error={error}/>:null}</div>:null;
 }

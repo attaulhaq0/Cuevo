@@ -139,14 +139,14 @@ test('actual required-status Bash rejects every failed, cancelled or skipped req
   const command = workflow.jobs.required.steps[0].run;
   const execute = (event: 'push' | 'pull_request', fields: Record<string, string> = {}) => {
     const result = spawnSync(bash!, ['--noprofile', '--norc', '-eo', 'pipefail', '-c', command], {
-      env: { ...process.env, BASH_ENV: '', FAST: 'success', TECHNICAL: 'success', CODEQL: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
+      env: { ...process.env, BASH_ENV: '', FAST: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
       encoding: 'utf8', timeout: 10000,
     });
     assert.equal(result.error, undefined); assert.equal(result.signal, null);
     return result.status;
   };
   assert.equal(execute('push'), 0); assert.equal(execute('pull_request'), 0);
-  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'TECHNICAL', 'CODEQL']) for (const state of ['failure', 'cancelled', 'skipped']) {
+  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
     assert.notEqual(execute(event, { [job]: state }), 0, `${event} ${job} ${state} must fail the required status`);
   }
   assert.notEqual(execute('pull_request', { DEPENDENCY: 'skipped' }), 0);
@@ -357,4 +357,18 @@ test('web and API automatic Git builds cannot bypass reviewed Actions deployment
     const config = JSON.parse(await readFile(`apps/${owner}/vercel.json`, 'utf8'));
     assert.equal(config.git.deploymentEnabled, false);
   }
+});
+
+test('required CI includes a secret-free full-history scanner with strict success aggregation', async () => {
+  const ci = await readFile('.github/workflows/ci.yml', 'utf8'); const release = await readFile('.github/workflows/release.yml', 'utf8');
+  assert.match(ci, /secret-scan:/);
+  assert.match(ci, /fetch-depth: 0/);
+  assert.match(ci, /node --import tsx scripts\/verification\/secret-scan.ts/);
+  for (const changed of [
+    ci.replace('fetch-depth: 0', 'fetch-depth: 1'),
+    ci.replace('node --import tsx scripts/verification/secret-scan.ts', 'echo scan-omitted'),
+    ci.replace('fast-checks, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, technical-mvp, dependency-review, codeql'),
+    ci.replace('SECRET_SCAN: ${{ needs.secret-scan.result }}', 'SECRET_SCAN: success'),
+    ci.replace('|| [ "$SECRET_SCAN" != success ]', ''),
+  ]) assert.ok(validateWorkflows(changed, release).some(issue => issue.includes('secret')));
 });

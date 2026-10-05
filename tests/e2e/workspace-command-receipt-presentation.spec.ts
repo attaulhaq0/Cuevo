@@ -1,3 +1,4 @@
+import { withBrowserRestoration } from './browser-restoration';
 import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Route } from '@playwright/test';
 
@@ -104,8 +105,13 @@ test('a malformed goal receipt after an unmounted read refresh keeps its origina
       return receipt;
     }
   });
-  try {
-    await page.getByRole('button', { name: 'Review my goal', exact: true }).click();
+  await withBrowserRestoration(async () => {
+    const records=page.locator('.development-goal-records');
+    await expect(records).toHaveCount(1);
+    await records.locator(':scope > summary').click();
+    const goalRecord=records.locator(`[data-goal-id="${goal.id}"]`);
+    await expect(goalRecord.getByRole('heading',{name:goal.title,level:3,exact:true})).toBeVisible();
+    await goalRecord.getByRole('button', { name: 'Review my goal', exact: true }).click();
     const form = page.getByRole('region', { name: 'Review my goal', exact: true });
     await form.getByLabel('Goal state', { exact: true }).selectOption('CLOSED');
     await form.getByLabel('What I reviewed', { exact: true }).fill('I reviewed my explanation with the recorded example.');
@@ -129,7 +135,7 @@ test('a malformed goal receipt after an unmounted read refresh keeps its origina
     expect(reviews).toHaveLength(2); expect(reviews[0].key).toBeTruthy(); expect(reviews[1].key).toBe(reviews[0].key);
     expect(reviews.map(command => command.body)).toEqual(Array.from({ length: 2 }, () => ({ expectedRevision: 1, status: 'CLOSED', review: 'I reviewed my explanation with the recorded example.', confirmReview: true })));
     expect(fixture.errors).toEqual([]); expect(fixture.remoteOrigins).toEqual([]);
-  } finally { held.resolve(); await page.unrouteAll({ behavior: 'wait' }); }
+  }, async () => { held.resolve(); await page.unrouteAll({ behavior: 'wait' }); });
 });
 
 test('a still-mounted form clears saving after access refresh and a late valid receipt without another POST or old notice', async ({ page }) => {
@@ -138,7 +144,7 @@ test('a still-mounted form clears saving after access refresh and a late valid r
   const fixture = await fictionalWorkspace(page, 'portfolio', async (route, url) => {
     if (url.pathname === path && route.request().method() === 'POST') { started.resolve(); await held.promise; return { id: 'f9000000-0000-4000-8000-000000000001', revision: 1 }; }
   });
-  try {
+  await withBrowserRestoration(async () => {
     await page.getByRole('button', { name: 'Create named collection', exact: true }).click();
     const form = page.getByRole('region', { name: 'Create named collection', exact: true });
     await form.getByLabel('Collection name', { exact: true }).fill('My recorded explanations');
@@ -157,5 +163,5 @@ test('a still-mounted form clears saving after access refresh and a late valid r
     await expect(page.getByRole('status').filter({ hasText: 'Create named collection: Saved.' })).toHaveCount(0);
     expect(fixture.commands.filter(command => command.path === path)).toHaveLength(1);
     expect(fixture.errors).toEqual([]); expect(fixture.remoteOrigins).toEqual([]);
-  } finally { held.resolve(); await page.unrouteAll({ behavior: 'wait' }); }
+  }, async () => { held.resolve(); await page.unrouteAll({ behavior: 'wait' }); });
 });

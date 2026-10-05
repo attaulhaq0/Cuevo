@@ -2,11 +2,11 @@ import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from 
 import { test,expect,type Page,type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
+import { currentCoursePreparationOutline } from './learning-source-navigation';
 type Account={role:string;email:string;password:string};
 async function paged(page:Page,row:Locator){await expect(page.locator('main [role="status"]').filter({hasText:/^Loading/})).toHaveCount(0);for(let n=0;n<30&&!await row.count();n++){const more=page.getByRole('button',{name:'Load more',exact:true}).first();if(!await more.count())break;await more.click();await expect(page.getByRole('button',{name:'Loading more…',exact:true})).toHaveCount(0);}await expect(row).toBeVisible();}
 async function selectPreparation(page: Page, title: string, kind?: 'Practice' | 'Assignment') {
- const outline=page.getByRole('navigation',{name:'Course structure',exact:true});
- if(!await outline.isVisible()){const back=page.getByRole('button',{name:'Back to course structure',exact:true});await expect(back).toHaveCount(1);await expect(back).toBeEnabled();await back.click();}
+ const outline=await currentCoursePreparationOutline(page);
  const choice=outline.getByRole('button',{name:kind?`${title} ${kind}`:title,exact:true});
  await expect(choice,'One current named source must identify the intended preparation target').toHaveCount(1); await expect(choice).toBeEnabled(); await choice.click();
  await expect(choice).toHaveAttribute('aria-current','page'); await expect(page.locator('.course-view h1')).toHaveText(title);

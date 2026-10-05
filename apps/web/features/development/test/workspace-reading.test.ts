@@ -54,6 +54,7 @@ test('staff without administrator role cannot mount policy approval and unknown 
   const html = render('teacher');
   assert.match(html, /Choose a learner with complete current school context/);
   assert.doesNotMatch(html, /development-configuration|Approve recognition policy|Create learning period|development-journey/);
+  assert.match(html, /data-state="unknown"/); assert.match(html, /data-state="empty"/);
 });
 
 test('Student without a current learning period gets one source prerequisite and no empty ledger or milestones', () => {

@@ -1,3 +1,4 @@
+import { withBrowserRestoration } from './browser-restoration';
 import { expectTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -46,7 +47,7 @@ test('parent work stays unresolved during child verification and the selected ch
     return command('/v1/school/guardian-relationships', { ...body, expectedRevision: current?.revision ?? 0 }, adminToken);
   }
   await configureRelationship({ ...extraRelationship, status: 'active' });
-  try {
+  await withBrowserRestoration(async()=>{
   // Academic setup is real API setup, separate from the parent browser acceptance below.
   const title = `Parent checked explanation ${new Date().toISOString()}`;
   const course = await command('/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title, description: 'Synthetic parent context source.' });
@@ -126,12 +127,12 @@ test('parent work stays unresolved during child verification and the selected ch
     }
   }
   expect(pageErrors).toEqual([]);
-  } finally {
+  },async()=>{
     await configureRelationship(originalRelationship ? {
       parentId, studentId: otherLearnerId, relationshipType: originalRelationship.relationshipType,
       status: originalRelationship.status, effectiveFrom: originalRelationship.effectiveFrom, effectiveTo: originalRelationship.effectiveTo, confirmAccessChange: true,
     } : { ...extraRelationship, status: 'revoked' });
-  }
+  });
 });
 
 async function assertUnresolved(page: Page, destination: string) {

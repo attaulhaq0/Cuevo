@@ -3,7 +3,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path=extensions,pg_catalog;
 select no_plan();
 select ok(to_regprocedure('internal.worker_transport_private()')is not null,'transport safety guard exists');
-select is(internal.worker_transport_private(),true,'provider-owned network and Vault grants must be hardened before activation');
+select is(internal.worker_transport_private(),true,'current untrusted transport grants are safe; managed provider trust adds no Cuevo RPC');
 select ok(not has_function_privilege('authenticated','internal.send_worker_wake(uuid,text,text)','EXECUTE'),'browser cannot invoke signed network delivery');
 select ok(not has_function_privilege('service_role','internal.send_worker_wake(uuid,text,text)','EXECUTE'),'service role cannot invoke private signed delivery');
 select ok(not has_function_privilege('cuevo_api','internal.worker_transport_private()','EXECUTE'),'API cannot inspect operational secret permissions');

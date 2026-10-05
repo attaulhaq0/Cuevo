@@ -1,2 +1,14 @@
 import{spawnSync}from'node:child_process';
-const result=spawnSync(process.platform==='win32'?'npm.cmd':'npm',['audit','--omit=dev','--json'],{encoding:'utf8',shell:process.platform==='win32'});let output:unknown;try{output=JSON.parse(result.stdout);}catch{throw Error('Dependency security scan returned no usable evidence.');}const row=output as{metadata?:{vulnerabilities?:{moderate?:number;high?:number;critical?:number}};error?:unknown};if(result.error||row.error||!row.metadata?.vulnerabilities)throw Error('Dependency security scan unavailable.');const counts=row.metadata.vulnerabilities;console.log(JSON.stringify({check:'runtime-dependency-security',moderate:counts.moderate??0,high:counts.high??0,critical:counts.critical??0}));if((counts.moderate??0)+(counts.high??0)+(counts.critical??0)>0||result.status!==0)throw Error('Runtime dependencies require security review.');
+import{existsSync}from'node:fs';
+import{createRequire}from'node:module';
+import{dirname,resolve}from'node:path';
+import{auditArguments,dependencyAuditResult,type AuditScope}from'./dependency-security-policy';
+const require=createRequire(import.meta.url);
+const candidates=[process.env.npm_execpath,resolve(dirname(process.execPath),'node_modules/npm/bin/npm-cli.js'),resolve(dirname(process.execPath),'../lib/node_modules/npm/bin/npm-cli.js')];
+let npmCli=candidates.find(path=>path&&path.endsWith('npm-cli.js')&&existsSync(path));
+if(!npmCli){try{npmCli=require.resolve('npm/bin/npm-cli.js');}catch{throw Error('Installed npm audit runtime is unavailable.');}}
+for(const scope of ['build-and-runtime','runtime']as AuditScope[]){
+ const result=spawnSync(process.execPath,[npmCli,...auditArguments(scope)],{encoding:'utf8',maxBuffer:16*1024*1024,timeout:120000,windowsHide:true});
+ if(result.error||result.signal)throw Error('Dependency security scan did not complete.');
+ console.log(JSON.stringify(dependencyAuditResult(scope,result.stdout,result.status)));
+}

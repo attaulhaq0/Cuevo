@@ -7,13 +7,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { humanContextLabel, selectHumanChoice } from './human-choice';
+import { currentCoursePreparationOutline } from './learning-source-navigation';
 
 type Account = { role: string; email: string; password: string };
 type Receipt = { id: string; [field: string]: unknown };
 const api = 'http://localhost:4000';
 async function selectLoopPreparation(page:Page,title:string,source:{courseId:string;resource:'course'|'unit'|'lesson';id:string}){
-  const outline=page.getByRole('navigation',{name:'Course structure',exact:true});
-  if(!await outline.isVisible()){const back=page.getByRole('button',{name:'Back to course structure',exact:true});await expect(back).toHaveCount(1);await expect(back).toBeEnabled();await back.click();}
+  const outline=await currentCoursePreparationOutline(page);
   const choice=outline.getByRole('button',{name:title,exact:true});await expect(choice).toHaveCount(1);await expect(choice).toBeEnabled();
   const requested=page.waitForResponse(response=>new URL(response.url()).pathname===`/v1/learning-content/${source.resource}/${source.id}`&&response.request().method()==='GET');
   await choice.click();await expect(choice).toHaveAttribute('aria-current','page');const current=await requested;expect(current.ok()).toBe(true);expect(await current.json()).toMatchObject({courseId:source.courseId,sourceId:source.id,resource:source.resource,title});

@@ -1,3 +1,4 @@
+import { currentCoursePreparationOutline } from './learning-source-navigation';
 import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -117,10 +118,10 @@ async function withCleanup(work: () => Promise<void>, steps: readonly (() => Pro
 }
 
 function contentEditor(page: Page, owner: Locator) {
-  return owner.locator(':scope > section').filter({ has: page.getByRole('button', { name: edit, exact: true }) });
+  return owner.locator('section:has(> .learning-actions)').filter({has:page.getByRole('button',{name:edit,exact:true})});
 }
 function contentForm(page: Page, owner: Locator, title: string) {
-  return owner.locator('.learning-form').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).last();
+  return owner.locator('.learning-form').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
 }
 async function visibleReceipt<T>(page: Page, path: string, submit: () => Promise<void>) {
   const received = page.waitForResponse(response => new URL(response.url()).pathname === path && response.request().method() === 'POST');
@@ -146,7 +147,8 @@ test('teacher revises exact course, unit and activity sources, retains learner c
     const firstInstructions = 'Compare both school examples and explain the first checking step.';
     const revise = async (resource: string, sourceId: string, owner: Locator, title: string, content?: string) => {
       const path = `/v1/learning-content/${resource}/${sourceId}`;
-      const before = await f.read<Content>(path); const editor = contentEditor(page, owner);
+      const before = await f.read<Content>(path);owner=await selectLifecyclePreparation(page,before.title,resource==='activity'?'Practice':undefined,sourceId); const editor = contentEditor(page, owner);
+      await expect(editor,'The selected preparation has one current content lifecycle owner').toHaveCount(1);
       await editor.getByRole('button', { name: edit, exact: true }).click();
       const form = contentForm(page, owner, edit); await form.getByLabel('Title', { exact: true }).fill(title);
       if (content !== undefined) await form.getByLabel('Learning content', { exact: true }).fill(content);
@@ -167,23 +169,23 @@ test('teacher revises exact course, unit and activity sources, retains learner c
       return published.receipt;
     };
     const courseRevision = await revise('course', course.id, page.locator('.course-view'), revisedTitle, revisedDescription);
-    await expect(page.locator('.course-view').getByRole('heading', { name: revisedTitle, exact: true })).toBeVisible();
+    await expect(page.locator('.course-view').getByRole('heading', { name: revisedTitle, level:1,exact: true })).toBeVisible();
     // This fixture has authoritative sequences 1/2; retain the owner locator when the reviewed title changes.
-    const unitOwner = page.locator('.unit-section').nth(0);
-    await expect(unitOwner.getByRole('heading', { name: `Original checking unit ${suffix}`, exact: true })).toBeVisible();
+    const unitOwner = await selectLifecyclePreparation(page,`Original checking unit ${suffix}`);
+    await expect(page.locator('.course-view h1')).toHaveText(`Original checking unit ${suffix}`);
     const unitRevision = await revise('unit', unit.id, unitOwner, revisedUnit);
-    const activityOwner = page.locator('.activity-section').nth(0);
-    await expect(activityOwner.getByRole('heading', { name: `Original checking activity ${suffix}`, exact: true })).toBeVisible();
+    const activityOwner = await selectLifecyclePreparation(page,`Original checking activity ${suffix}`,'Practice');
+    await expect(page.locator('.course-view h1')).toHaveText(`Original checking activity ${suffix}`);
     const activityRevision = await revise('activity', activity.id, activityOwner, revisedActivity, firstInstructions);
 
     await f.signIn(f.student); await f.openCourse(revisedTitle, course.id);
     await expect(page.locator('.course-view').getByText(revisedDescription, { exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: revisedUnit, exact: true })).toBeVisible();
-    const ownActivity = page.locator('.activity-section').filter({ has: page.getByRole('heading', { name: revisedActivity, exact: true }) });
+    await expect(page.locator('.course-view')).toContainText(revisedUnit);
+    const ownActivity = await openLifecycleStudentActivity(page,`Checking lesson ${suffix}`,revisedActivity);
     await expect(ownActivity.getByText(firstInstructions, { exact: true })).toBeVisible();
     const completed = await visibleReceipt<{ id: string }>(page, `/v1/activities/${activity.id}/complete`, () => ownActivity.getByRole('button', { name: 'Complete activity', exact: true }).click());
     await f.signIn(f.student); await f.openCourse(revisedTitle, course.id);
-    const restoredActivity = page.locator('.activity-section').filter({ has: page.getByRole('heading', { name: revisedActivity, exact: true }) });
+    const restoredActivity = await openLifecycleStudentActivity(page,`Checking lesson ${suffix}`,revisedActivity);
     await restoredActivity.getByRole('button', { name: 'Original learning context', exact: true }).click();
     const context = restoredActivity.getByRole('region', { name: 'Original learning context', exact: true });
     await expect(context.getByText(firstInstructions, { exact: true })).toBeVisible();
@@ -193,11 +195,13 @@ test('teacher revises exact course, unit and activity sources, retains learner c
 
     await f.signIn(f.teacher); await f.openCourse(revisedTitle, course.id);
     const finalInstructions = 'Teacher corrected the current checking example after the earlier completion. راجع المثال الحالي.';
-    const currentActivity = page.locator('.activity-section').filter({ has: page.getByRole('heading', { name: revisedActivity, exact: true }) });
+    const currentActivity = await selectLifecyclePreparation(page,revisedActivity,'Practice');
     await revise('activity', activity.id, currentActivity, revisedActivity, finalInstructions);
     expect(await f.read(`/v1/learning-content/sources/completion/${completed.receipt.id}`, f.studentToken)).toEqual(snapshot);
     const retireSource = async (resource: string, sourceId: string, owner: Locator) => {
       const path = `/v1/learning-content/${resource}/${sourceId}`; const current = await f.read<Content>(path);
+      owner=await selectLifecyclePreparation(page,current.title,resource==='activity'?'Reading':undefined,sourceId);
+      await expect(contentEditor(page,owner)).toHaveCount(1);
       await contentEditor(page, owner).getByRole('button', { name: retire, exact: true }).click();
       const form = contentForm(page, owner, retire);
       await form.getByLabel('Reason for this revision', { exact: true }).fill('Teacher retires only this unused synthetic source.');
@@ -213,7 +217,7 @@ test('teacher revises exact course, unit and activity sources, retains learner c
     await f.signIn(f.student); await f.openCourse(revisedTitle, course.id);
     await expect(page.getByRole('heading', { name: `Unused activity ${suffix}`, exact: true })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: `Unused unit ${suffix}`, exact: true })).toHaveCount(0);
-    const latest = page.locator('.activity-section').filter({ has: page.getByRole('heading', { name: revisedActivity, exact: true }) });
+    const latest = await openLifecycleStudentActivity(page,`Checking lesson ${suffix}`,revisedActivity);
     await expect(latest.getByText(finalInstructions, { exact: true })).toBeVisible();
     await latest.getByRole('button', { name: 'Original learning context', exact: true }).click();
     await expect(latest.getByRole('region', { name: 'Original learning context', exact: true }).getByText(firstInstructions, { exact: true })).toBeVisible();
@@ -238,7 +242,7 @@ test('teacher replaces a verified lesson document, republishes exact bytes and r
     lessonId = lesson.id;
     await f.command(`/v1/courses/${course.id}/publish`, {});
     await f.signIn(f.teacher); await f.openCourse(title, course.id);
-    const resources = page.locator('.lesson-section').filter({ has: page.getByRole('heading', { name: 'Current worksheet lesson', exact: true }) }).locator('.learning-resources');
+    let resources = (await selectLifecyclePreparation(page,'Current worksheet lesson')).locator('.learning-resources');
     const bytes = Buffer.from('Original school worksheet. ورقة مدرسية أصلية.'); const replacementBytes = Buffer.from('Corrected school worksheet: compare the exact checking step. ورقة مدرسية مصححة.');
     const name = 'ورقة أصلية.txt'; const replacementName = 'ورقة مصححة.txt'; const documentTitle = `Reviewed worksheet ${suffix}`;
     await resources.getByLabel('Choose document', { exact: true }).setInputFiles({ name, mimeType: 'text/plain', buffer: bytes });
@@ -260,6 +264,7 @@ test('teacher replaces a verified lesson document, republishes exact bytes and r
     const downloadPath = (source: Document) => `/v1/learning-resources/${source.id}/revisions/${source.revisionId}/download`;
     const studentDownload = async (expected: Document, expectedBytes: Buffer) => {
       await f.signIn(f.student); await f.openCourse(title, course.id);
+      await page.getByRole('button',{name:'Open lesson: Current worksheet lesson',exact:true}).click();await page.locator('.student-learning-journey__materials > summary').click();
       const own = page.locator('.learning-resources').getByRole('article').filter({ has: page.getByRole('heading', { name: documentTitle, exact: true }) });
       await expect(own).toContainText(expected.name);
       const downloadEvent = page.waitForEvent('download'); await own.getByRole('button', { name: 'Download document', exact: true }).click();
@@ -268,6 +273,7 @@ test('teacher replaces a verified lesson document, republishes exact bytes and r
     };
     await studentDownload(original, bytes);
     await f.signIn(f.teacher); await f.openCourse(title, course.id);
+    resources=(await selectLifecyclePreparation(page,'Current worksheet lesson')).locator('.learning-resources');
     await document.getByRole('button', { name: 'Replace with verified document', exact: true }).click();
     await resources.getByLabel('Choose document', { exact: true }).setInputFiles({ name: replacementName, mimeType: 'text/plain', buffer: replacementBytes });
     await resources.getByLabel('Reason', { exact: true }).fill('Teacher replaces the unused worksheet with reviewed corrected bytes.');
@@ -282,6 +288,7 @@ test('teacher replaces a verified lesson document, republishes exact bytes and r
     await studentDownload(current, replacementBytes);
     expect((await f.get(downloadPath(original), f.studentToken)).status()).toBe(403);
     await f.signIn(f.teacher); await f.openCourse(title, course.id);
+    resources=(await selectLifecyclePreparation(page,'Current worksheet lesson')).locator('.learning-resources');
     await document.getByRole('button', { name: 'Remove document', exact: true }).click();
     const removal = document.getByRole('region', { name: 'Remove document', exact: true });
     await removal.getByLabel('Reason', { exact: true }).fill('Teacher removes only this synthetic current worksheet.');
@@ -292,6 +299,7 @@ test('teacher replaces a verified lesson document, republishes exact bytes and r
     expect(removed.receipt).toMatchObject({ id: current.id, state: 'REMOVED', revision: current.revision + 1 });
     expect((await f.get(downloadPath(current), f.studentToken)).status()).toBe(403);
     await f.signIn(f.student); await f.openCourse(title, course.id);
+    await page.getByRole('button',{name:'Open lesson: Current worksheet lesson',exact:true}).click();await page.locator('.student-learning-journey__materials > summary').click();
     const ownResources = page.locator('.learning-resources');
     await expect(ownResources.getByText('No published documents are available here.', { exact: true })).toBeVisible();
     await expect(ownResources.getByRole('button', { name: 'Download document', exact: true })).toHaveCount(0);
@@ -304,3 +312,8 @@ test('teacher replaces a verified lesson document, republishes exact bytes and r
     });
   }, () => f.cleanupCourse(course.id)]);
 });
+
+async function selectLifecyclePreparation(page:Page,title:string,kind?:'Practice'|'Reading',sourceId?:string){const outline=await currentCoursePreparationOutline(page),choice=outline.getByRole('button',{name:kind?`${title} ${kind}`:title,exact:true});await expect(choice).toHaveCount(1);await expect(choice).toBeEnabled();await choice.click();await expect(choice).toHaveAttribute('aria-current','page');await expect(page.locator('.course-view h1')).toHaveText(title);const owner=page.getByRole('region',{name:'Course preparation',exact:true});await expect(owner).toHaveCount(1);await expect(owner).toBeVisible();if(sourceId){await expect(owner.getByRole('button',{name:edit,exact:true})).toBeEnabled();}return owner;}
+async function openLifecycleStudentActivity(page:Page,lesson:string,title:string){await page.getByRole('button',{name:`Open lesson: ${lesson}`,exact:true}).click();await page.getByRole('button',{name:`Open activity: ${title}`,exact:true}).click();await page.getByRole('button',{name:'Open this task',exact:true}).click();const owner=page.locator('.student-learning-journey__actual-work');await expect(owner).toHaveCount(1);await expect(owner.getByRole('heading',{name:title,exact:true})).toBeVisible();return owner;}
+
+test('adapter: lifecycle preparation waits current loading, names the exact kind and refuses duplicate source choice',async({page})=>{for(const state of['current','duplicate','disabled']){await page.setContent(`<div class="course-view"><h1>Current course</h1><p role="status">Loading learning…</p><nav aria-label="Course structure"><button ${state==='disabled'?'disabled':''}>Current practice Practice</button>${state==='duplicate'?'<button>Current practice Practice</button>':'<button>Current practice Reading</button>'}</nav><section aria-label="Course preparation">Current selected preparation</section></div><script>setTimeout(()=>document.querySelector('[role=status]').remove(),100);document.querySelector('button').onclick=e=>{e.currentTarget.setAttribute('aria-current','page');document.querySelector('h1').textContent='Current practice'};</script>`);if(state==='current')await expect(await selectLifecyclePreparation(page,'Current practice','Practice')).toBeVisible();else await expect(selectLifecyclePreparation(page,'Current practice','Practice')).rejects.toThrow();}});

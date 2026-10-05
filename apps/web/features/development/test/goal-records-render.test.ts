@@ -23,6 +23,8 @@ test('loading and confirmed empty are visible without implying an unloaded empty
  const loading=render({...query,data:[],loaded:false,loading:true});assert.match(loading,/Loading goals/);assert.doesNotMatch(loading,/<details|No goals are recorded/);
  const unloaded=render({...query,data:[],loaded:false});assert.doesNotMatch(unloaded,/No goals are recorded|Private goal record/);
  const empty=render({...query,data:[]});assert.match(empty,/No goals are recorded/);assert.doesNotMatch(empty,/<details/);
+ assert.match(empty,/data-state="empty"/); assert.doesNotMatch(empty,/development-empty/);
+ const partial=render({...query,data:[],nextCursor:'next'});assert.match(partial,/data-state="review"/);assert.doesNotMatch(partial,/data-state="empty"/);
 });
 test('loaded history can be collapsed while continuation and its failure remain outside it',()=>{
  const html=render({...query,nextCursor:'next'});assert.match(html,/<details class="development-goal-records"><summary>/);assert.ok(html.indexOf('Load more')>html.indexOf('</details>'));

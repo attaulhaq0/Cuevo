@@ -132,6 +132,7 @@ for (const role of roles) {
       const expectedView = await target.getAttribute('data-workspace-destination');
       const profileView = names[index].trim() === 'Account' ? 'account' : names[index].trim() === 'Access settings' ? 'access' : null;
       if (!profileView) expect(expectedView, 'Every current product workspace choice identifies its exact destination').not.toBeNull();
+      const developmentPeople = names[index].trim() === 'Development' && role !== 'student' && role !== 'parent' ? page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; }) : null;
       await keyboardActivate(page, target);
       if (expectedView) {
         await expect(page).toHaveURL(url => expectedView === 'overview' ? url.searchParams.get('view') === null : url.searchParams.get('view') === expectedView);
@@ -144,8 +145,30 @@ for (const role of roles) {
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
       // Staff/parent progress must select a real permitted learner before reviewing evidence.
       if (['Progress', 'Development'].includes(names[index].trim()) && role !== 'student' && role !== 'parent') {
-        const learner = page.locator(names[index].trim() === 'Progress' ? '#learner-selection' : '#development-learner'); const option = learner.locator('option[value]:not([value=""])').first();
-        await expect(option).toBeAttached(); await learner.focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+        const learner = names[index].trim() === 'Progress' ? page.locator('#learner-selection') : page.locator('.development-workspace').getByRole('combobox', { name: 'Learner', exact: true });
+        if (names[index].trim() === 'Development') {
+          const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+          const first = await developmentPeople!; expect(first.status()).toBe(200); expect(await first.finished()).toBeNull();
+          let cursor = (await first.json() as { items: unknown[]; nextCursor: string | null }).nextCursor; const seen = new Set<string>();
+          expect(cursor === null || uuid.test(cursor)).toBe(true);
+          const field = learner.locator('..'), more = field.getByRole('button', { name: 'Load more: Learner', exact: true });
+          for (let continuation = 0; cursor && continuation < 30; continuation++) {
+            expect(seen.has(cursor)).toBe(false); seen.add(cursor); const expectedCursor = cursor; await expect(more).toHaveCount(1);
+            const response = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && url.searchParams.get('cursor') === expectedCursor && row.request().method() === 'GET'; });
+            await expect(more).toBeEnabled(); await more.click(); const current = await response; expect(current.status()).toBe(200); expect(await current.finished()).toBeNull();
+            const body = await current.json() as { items: { userId: string; role: string }[]; nextCursor: string | null }; expect(body.items.length).toBeLessThanOrEqual(100);
+            expect(Array.isArray(body.items)).toBe(true); expect(body.nextCursor === null || uuid.test(body.nextCursor)).toBe(true); expect(body.nextCursor).not.toBe(expectedCursor);
+            for (const item of body.items) expect(item.userId).toMatch(uuid); expect(new Set(body.items.map(item => item.userId)).size).toBe(body.items.length);
+            for (const item of body.items.filter(item => item.role === 'student')) await expect(learner.locator(`option[value="${item.userId}"]`)).toBeAttached();
+            cursor = body.nextCursor;
+            await expect(field.getByRole('button', { name: 'Loading more…: Learner', exact: true })).toHaveCount(0);
+          }
+          expect(cursor).toBeNull(); await expect(more).toHaveCount(0); await settled(page);
+        }
+        const option = learner.locator('option[value]:not([value=""]):not([disabled])').first();
+        await expect(option).toBeAttached(); await expect(learner).toBeEnabled(); await learner.focus(); await expect(learner).toBeFocused();
+        if (names[index].trim() === 'Development') { await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); }
+        else { await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
         await expect(learner).toHaveValue((await option.getAttribute('value'))!); await settled(page);
       }
       if (names[index].trim() === 'Progress' && ['admin', 'coordinator', 'teacher'].includes(role)) {

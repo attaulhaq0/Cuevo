@@ -1,4 +1,5 @@
 import { openCurrentResult } from './result-reader';
+import { completeObservedSchoolSources, observeSchoolCurrentSources } from './school-current-sources';
 import { chooseTrailSchoolDate, expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -16,6 +17,7 @@ const yearGroup = '42000000-0000-4000-8000-000000000001';
 const subject = '43000000-0000-4000-8000-000000000001';
 
 async function fixture(page: Page) {
+  observeSchoolCurrentSources(page);
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
   const identities = JSON.parse(await readFile('supabase/seed/identities.json', 'utf8')) as { actors: { actorId: string; email: string; displayName: string }[] };
   const selected = Object.fromEntries((['admin', 'teacher', 'student', 'parent'] as Role[]).map(role => {
@@ -145,7 +147,6 @@ test('administrator revokes and restores current teacher, learner and guardian s
   const change = async (kind: Relation, status: 'Active' | 'Revoked') => {
     await context.signIn('admin');
     await page.getByRole('button', { name: 'People and access', exact: true }).click();
-    await context.allPages(page.locator('.school-workspace'));
     const current = (await context.rows(paths[kind])).find(row => matches(kind, row));
     if (!current) throw new Error('Current relationship lookup is unavailable.');
     const personName = kind === 'assignment' ? context.selected.teacher.displayName : context.selected.student.displayName;
@@ -250,7 +251,7 @@ test('administrator corrects and cancels timetable and report period, then creat
   const daily = async () => {
     await context.signIn('admin');
     await page.getByRole('button', { name: 'Daily operations', exact: true }).click();
-    await context.allPages(page.locator('.school-workspace'));
+    await completeObservedSchoolSources(page,'daily');
     await context.selectNamed(page.getByLabel('Daily class records', { exact: true }), context.classroom.id, context.className);
     await context.settle();
   };

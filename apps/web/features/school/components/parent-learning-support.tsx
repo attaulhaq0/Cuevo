@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 
 import { useCallback, useState } from 'react';
 import { Button, CuevoIcon } from '@cuevo/ui';
@@ -35,10 +36,10 @@ export function ParentLearningSupport({ learnerId, learnerName, refresh, pageHea
       <div className="cuevo-section-header__context"><div className="school-day-heading"><CuevoIcon name="help" size={28} />{pageHeading ? null : <h2>{t.parentSupport}</h2>}</div><p><bdi>{learnerName}</bdi> · {t.parentSupportNote}</p></div>
       <div className="learning-actions"><Button type="button" variant="quiet" onClick={() => setRetry(value => value + 1)}><CuevoIcon name="refresh" />{t.refreshParentSupport}</Button></div>
     </header>
-    {profile.loading ? <p role="status">{t.loadingParentSupport}</p> : profile.error ? <LearningError error={profile.error} /> : !currentProfile ? <LearningError error={new LearningApiError('invalid')} /> : !choices.length ? <p>{t.noParentSupportCourses}</p> : <>
+    {profile.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loadingParentSupport} role="status"/> : profile.error ? <LearningError error={profile.error} /> : !currentProfile ? <LearningError error={new LearningApiError('invalid')} /> : !choices.length ? <WorkspaceState kind="empty" icon="learning" description={t.noParentSupportCourses}/> : <>
       <div className="field"><label htmlFor="parent-support-course">{t.parentSupportCourse}</label><select id="parent-support-course" value={path ? courseId : ''} onChange={event => setCourseId(event.target.value)}><option value="">{t.chooseParentSupportCourse}</option>{choices.map(choice => <option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select></div>
-      {choices.some(choice => choice.requiresReview) ? <p className="notice">{t.parentSupportAmbiguous}</p> : null}
-      {!path ? <p>{t.chooseParentSupportCourse}</p> : support.loading ? <p role="status">{t.loadingParentSupport}</p> : support.error ? <LearningError error={support.error} /> : support.moreError ? <LearningError error={support.moreError} /> : !matches ? <LearningError error={new LearningApiError('invalid')} /> : <>{!active.length ? <p>{t.noParentSupport}</p> : active.map(source => <article className="school-record" key={source.id}>
+      {choices.some(choice => choice.requiresReview) ? <WorkspaceState kind="review" icon="help" description={t.parentSupportAmbiguous}/> : null}
+      {!path ? <WorkspaceState kind="unknown" icon="learning" description={t.chooseParentSupportCourse}/> : support.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loadingParentSupport} role="status"/> : support.error ? <LearningError error={support.error} /> : support.moreError ? <LearningError error={support.moreError} /> : !matches ? <LearningError error={new LearningApiError('invalid')} /> : <>{!active.length ? <WorkspaceState kind={support.nextCursor ? "review" : "empty"} icon="help" description={t.noParentSupport}/> : active.map(source => <article className="school-record" key={source.id}>
         <SupportHeading>{source.title}</SupportHeading><p>{source.courseTitle} · {source.assessmentTitle ?? t.courseWideParentSupport}</p><p className="lesson-content" dir="auto">{source.instructions}</p><p>{t.supportWindow}: <time dateTime={source.effectiveFrom}>{date(source.effectiveFrom)}</time>–<time dateTime={source.effectiveTo}>{date(source.effectiveTo)}</time> · UTC</p>
       </article>)}<LoadMore query={support} label={t.parentSupport} /></>}
     </>}

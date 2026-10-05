@@ -58,19 +58,19 @@ export function CoordinatorOutcomeView({ source, rows, outcome, hasSelection, lo
     {source.loading || !source.loaded && !source.error && !denied ? <WorkspaceState kind="loading" icon="refresh" title={copy.loading} role="status"/> : source.error || denied ? <LearningError error={source.error ?? source.moreError!} /> :
       <div className="coordinator-outcome-layout" data-selected={!!currentOutcome}>
         <section className="coordinator-outcome-directory" aria-label={t.directory}>
-          {currentRows.length?<h3>{t.directory}</h3>:null}{choices.some(row => row.requiresReview) ? <p className="notice">{copy.outcomeContextReview}</p> : null}
+          {currentRows.length?<h3>{t.directory}</h3>:null}{choices.some(row => row.requiresReview) ? <WorkspaceState kind="review" icon="help" description={copy.outcomeContextReview} role="status"/> : null}
           {currentRows.length ? <ul>{currentRows.map(row => {
             const choice = choices.find(choice => choice.id === row.id)!;
             return <li key={row.id}><div><h4>{row.context?.practiceTitle ?? copy.outcomeTitleUnavailable}</h4><p><bdi>{choice.label}</bdi></p><Status>{status(row)}</Status></div>
               <Button type="button" variant={currentOutcome?.id === row.id ? 'primary' : 'secondary'} aria-pressed={currentOutcome?.id === row.id} disabled={choice.requiresReview} onClick={event => onOpen(row, event.currentTarget)}>{t.open}</Button></li>;
-          })}</ul> : <WorkspaceState kind="empty" icon="progress" title={copy.noOutcomes} description={copy.emptyOutcomesBody}/>}
-          {hasSelection && !currentOutcome ? <p className="notice">{t.changed}</p> : !currentOutcome && currentRows.length ? <p className="notice">{t.choose}</p> : null}
-          {source.nextCursor || source.moreError || source.loadingMore ? <p className="notice">{t.partial}</p> : null}
+          })}</ul> : <WorkspaceState kind={source.nextCursor||source.moreError||source.loadingMore?"unknown":"empty"} icon="progress" title={source.nextCursor||source.moreError||source.loadingMore?undefined:copy.noOutcomes} description={source.nextCursor||source.moreError||source.loadingMore?t.partial:copy.emptyOutcomesBody}/>}
+          {hasSelection && !currentOutcome ? <WorkspaceState kind="review" icon="refresh" description={t.changed} role="status"/> : !currentOutcome && currentRows.length ? <WorkspaceState kind="review" icon="progress" description={t.choose}/> : null}
+          {currentRows.length > 0 && (source.nextCursor || source.moreError || source.loadingMore) ? <WorkspaceState kind="unknown" icon="help" description={t.partial} role="status"/> : null}
           {source.nextCursor || source.moreError ? <LoadMore query={source} label={copy.outcomes} /> : null}
         </section>
         {currentOutcome ? <section className="coordinator-outcome-selected" aria-labelledby={selectedHeading}><div className="coordinator-outcome-selected-heading">
           <h3 id={selectedHeading} ref={headingRef} tabIndex={-1}>{t.selected}</h3><Button type="button" variant="quiet" onClick={onClose}>{t.close}</Button>
-        </div>{source.nextCursor || source.moreError || source.loadingMore ? <div className="coordinator-outcome-selected-source-state"><p className="notice">{t.partial}</p>{source.moreError ? <LearningError error={source.moreError} /> : null}</div> : null}<OutcomeList outcomes={[currentOutcome]} headingLevel={4} /></section> : null}
+        </div>{source.nextCursor || source.moreError || source.loadingMore ? <div className="coordinator-outcome-selected-source-state"><WorkspaceState kind="unknown" icon="help" description={t.partial} role="status"/>{source.moreError ? <LearningError error={source.moreError} /> : null}</div> : null}<OutcomeList outcomes={[currentOutcome]} headingLevel={4} /></section> : null}
       </div>}
   </section>;
 }

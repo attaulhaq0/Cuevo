@@ -55,3 +55,7 @@ test('unavailable continuation keeps the admitted native comparison with local p
   assert.match(document.querySelector('.coordinator-outcome-selected-source-state')!.textContent, /partial current outcome list/);
   assert.match(html, /3 \/ 10|5 \/ 10/);
 });
+
+test('partial outcome and changed selection keep distinct shared source states without opening a native reader',()=>{const partial=renderToStaticMarkup(createElement(Providers,{initialLocale:'en',config:{supabaseUrl:'',supabasePublishableKey:'',apiUrl:''},children:createElement(views.CoordinatorOutcomeView,{source,rows:[outcome],outcome:null,hasSelection:true,locale:'en',onOpen(){},onClose(){}})}));assert.match(partial,/data-state="review"/);assert.match(partial,/data-state="unknown"/);assert.doesNotMatch(partial,/outcome-reading__ratio/);assert.match(partial,/Load more/);});
+
+test('zero loaded outcomes with a continuation remain unknown rather than complete empty',()=>{const html=renderToStaticMarkup(createElement(Providers,{initialLocale:'en',config:{supabaseUrl:'',supabasePublishableKey:'',apiUrl:''},children:createElement(views.CoordinatorOutcomeView,{source:{...source,data:[]},rows:[],outcome:null,hasSelection:false,locale:'en',onOpen(){},onClose(){}})}));assert.match(html,/data-state="unknown"/);assert.doesNotMatch(html,/No measured outcomes are available/);assert.equal((html.match(/data-state="unknown"/g)??[]).length,1);});

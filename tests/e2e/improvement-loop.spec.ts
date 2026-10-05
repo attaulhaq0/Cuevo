@@ -153,7 +153,8 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   await practice.getByRole('button', { name: 'Link follow-up assessment', exact: true }).click();
   const followUpForm = practice.getByRole('region', { name: 'Link follow-up assessment', exact: true });
   const assessmentPages=page.getByRole('region',{name:'Published follow-up assessment',exact:true});
-  await expect(assessmentPages).toBeVisible();
+  await expect(assessmentPages).toHaveCount(1);
+  await expect(followUpForm).toBeVisible();
   await expect(assessmentPages.getByRole('status').filter({hasText:'Loading next steps…'})).toHaveCount(0);
   while (!await followUpForm.getByLabel('Published follow-up assessment').locator(`option[value="${followUpAssessment.id}"]`).count()) {
     const more = assessmentPages.getByRole('button', { name: 'Load more: Published follow-up assessment', exact: true });

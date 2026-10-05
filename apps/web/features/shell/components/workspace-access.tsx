@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, CuevoIcon, Status, type CuevoIconName } from '@cuevo/ui';
+import { Button, CuevoIcon, WorkspaceState, type CuevoIconName } from '@cuevo/ui';
 import type { Membership } from '../../../shared/session/membership';
 import { useApp } from '../../../shared/session/providers';
 import { capabilityLabel } from '../../../shared/i18n/capability-label';
@@ -31,7 +31,7 @@ export function WorkspaceAccessView({ membership, onRefresh, locale, dictionary:
     <section className="workspace-access__capabilities" aria-labelledby="capabilities-heading">
       <header><CuevoIcon name="shield" size={28}/><h2 id="capabilities-heading">{t.capabilityTitle}</h2></header>
       <p>{t.capabilityBody}</p>
-      {membership.entitlements.length ? <ul>{membership.entitlements.map(code => <li key={code}><CuevoIcon name={capabilities[code]?.icon ?? 'help'} size={26}/><span>{capabilityLabel(code, locale)}</span></li>)}</ul> : <div className="notice"><Status tone="warning">{t.notConfigured}</Status><p>{t.noCapabilities}</p></div>}
+      {membership.entitlements.length ? <ul>{membership.entitlements.map(code => <li key={code}><CuevoIcon name={capabilities[code]?.icon ?? 'help'} size={26}/><span>{capabilityLabel(code, locale)}</span></li>)}</ul> : <WorkspaceState kind="unknown" icon="shield" title={t.notConfigured} description={t.noCapabilities}/>}
       {membership.role==='admin'&&membership.entitlements.length?<details><summary>{t.technicalDetails}</summary><ul className="workspace-access__source-codes">{membership.entitlements.map(code => <li key={code}><bdi>{code}</bdi></li>)}</ul></details>:null}
     </section>
   </div>;

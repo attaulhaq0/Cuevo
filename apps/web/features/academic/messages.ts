@@ -1,4 +1,4 @@
-export const academicEn = {
+export const academicEn = { partialSources: 'The current source list is incomplete. Load more or refresh before treating it as empty.',
   technicalDetails: 'Technical details',
   gradebookCourseIdentityReview: 'Matching course names need school context review before opening the gradebook.',
   outOf: 'out of',
@@ -151,7 +151,7 @@ export const academicEn = {
   sourceDetails: 'Technical source details',
   customNotice: 'School Custom • Synthetic context'
 };
-export const academicAr: typeof academicEn = {
+export const academicAr: typeof academicEn = { partialSources: 'قائمة المصادر الحالية غير مكتملة. حمّل المزيد أو حدّث العرض قبل اعتبارها فارغة.',
   technicalDetails: 'تفاصيل تقنية',
   gradebookCourseIdentityReview: 'تحتاج أسماء المقررات المتشابهة إلى مراجعة سياق المدرسة قبل فتح سجل الدرجات.',
   outOf: 'من',

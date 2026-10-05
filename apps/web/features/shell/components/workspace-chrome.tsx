@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Button, CuevoIcon, WorkspaceNavigationHost, WorkspaceNavigationProvider } from '@cuevo/ui';
+import { Button, CuevoIcon, WorkspaceState, WorkspaceNavigationHost, WorkspaceNavigationProvider } from '@cuevo/ui';
 import { navigationFocusTarget, type WorkspaceChromeAction, type WorkspaceChromeContext } from '../model';
 import { chromeAr, chromeEn } from '../messages';
 
@@ -123,18 +123,18 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
       }}><CuevoIcon name={context.currentWorkspace?.icon ?? context.navigation.find(item => item.id === context.selectedId)?.icon ?? 'school'} size={24} /><span>{context.currentWorkspace?.label || context.navigation.find(item => item.id === context.selectedId)?.label || t.workspaceUnknown}</span><CuevoIcon name="chevron" size={18} /></button>
       <div id={switcherId} ref={connectSwitcher} popover="auto" className="workspace-chrome__switcher" aria-label={t.chooseWorkspace} onToggle={event => {
         const open = event.newState === 'open'; setSwitcherOpen(open);
-        if (open) { positionSwitcher(); switcher.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true }); }
+        if (open) { positionSwitcher(); if (!switcher.current?.contains(document.activeElement)) switcher.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true }); }
         else if (!leavingSwitcher.current && !document.querySelector('dialog[open]') && (document.activeElement === document.body || switcher.current?.contains(document.activeElement))) switcherTrigger.current?.focus({ preventScroll: true });
       }}>{context.navigation.length ? <ul>{context.navigation.map(item => <li key={item.id}><button type="button" data-workspace-destination={item.id} aria-current={context.selectedId === item.id ? 'page' : undefined} disabled={item.disabled || item.pending} aria-busy={item.pending || undefined} onClick={() => {
         if (item.disabled || item.pending) return;
         leavingSwitcher.current = true;
         switcher.current?.hidePopover();
         item.onSelect();
-      }}><CuevoIcon name={item.icon} size={24} /><span>{item.label}</span></button></li>)}</ul> : <p>{t.empty}</p>}</div>
+      }}><CuevoIcon name={item.icon} size={24} /><span>{item.label}</span></button></li>)}</ul> : <WorkspaceState kind="unknown" description={t.empty}/>}</div>
       <WorkspaceNavigationHost className="workspace-chrome__sections" />
     </nav> : <nav className="workspace-chrome__navigation" aria-label={context.navigationLabel || t.navigation} data-overflow={overflowing}>
       <Button type="button" variant="quiet" className="workspace-chrome__rail-control workspace-chrome__rail-control--previous" aria-label={t.previous} onClick={() => scrollRail(false)} disabled={!overflowing}><CuevoIcon name="arrow" size={18} /></Button>
-      <div className="workspace-chrome__rail" ref={rail}>{context.navigation.length ? <ul>{context.navigation.map(item => <li key={item.id}><button type="button" data-workspace-destination={item.id} ref={element => { if (element) buttons.current.set(item.id, element); else buttons.current.delete(item.id); }} onClick={item.onSelect} disabled={item.disabled || item.pending} aria-busy={item.pending || undefined} aria-current={context.selectedId === item.id ? 'page' : undefined} onFocus={event => event.currentTarget.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' })} onKeyDown={event => { const target = navigationFocusTarget(context.navigation, item.id, event.key, rtl); if (target) { event.preventDefault(); buttons.current.get(target)?.focus(); } }}><CuevoIcon name={item.icon} variant={context.expression === 'student' ? 'filled' : 'outline'} size={25} /><span>{item.label}</span></button></li>)}</ul> : <p className="workspace-chrome__empty">{t.empty}</p>}</div>
+      <div className="workspace-chrome__rail" ref={rail}>{context.navigation.length ? <ul>{context.navigation.map(item => <li key={item.id}><button type="button" data-workspace-destination={item.id} ref={element => { if (element) buttons.current.set(item.id, element); else buttons.current.delete(item.id); }} onClick={item.onSelect} disabled={item.disabled || item.pending} aria-busy={item.pending || undefined} aria-current={context.selectedId === item.id ? 'page' : undefined} onFocus={event => event.currentTarget.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' })} onKeyDown={event => { const target = navigationFocusTarget(context.navigation, item.id, event.key, rtl); if (target) { event.preventDefault(); buttons.current.get(target)?.focus(); } }}><CuevoIcon name={item.icon} variant={context.expression === 'student' ? 'filled' : 'outline'} size={25} /><span>{item.label}</span></button></li>)}</ul> : <WorkspaceState kind="unknown" description={t.empty}/>}</div>
       <Button type="button" variant="quiet" className="workspace-chrome__rail-control workspace-chrome__rail-control--next" aria-label={t.next} onClick={() => scrollRail(true)} disabled={!overflowing}><CuevoIcon name="arrow" size={18} /></Button>
     </nav>}<div className="workspace-chrome__content">{children}</div>
   </div></WorkspaceNavigationProvider>;

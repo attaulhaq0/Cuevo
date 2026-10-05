@@ -132,6 +132,8 @@ Event/outbox/worker/scheduler work also loads the [scalable execution plan](arch
 
 ## Applications
 
+The [5 October Supabase Edge provider trust decision](decisions/2026-10-05-supabase-edge-provider-trust.md) owns the narrow current transport predicate amendment. `scripts/database/worker-transport-fixtures.ts` and its fixed rollback fixture run after ordinary SQL through `scripts/test-database.ts`; pure target/TAP/source cases live beside the database owner. Provider service trust does not grant Cuevo RPC or runtime-owner access. Hosted Data API-off, current HTTP denials and private Auth/Storage/Realtime functionality remain explicit activation evidence.
+
 | Area | Entry and owner | Where to change behavior |
 |---|---|---|
 | Web routing | [apps/web/app](../apps/web/app), [web README](../apps/web/README.md) | Route metadata, layout, errors and page composition only |

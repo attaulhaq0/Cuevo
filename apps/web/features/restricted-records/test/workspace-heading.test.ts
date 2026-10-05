@@ -36,5 +36,7 @@ test('Restricted current policy loading denial and disabled states each retain o
     assert.doesNotMatch(html, /Record a factual school note|data-restricted-id/);
     if (mode === 'denied') assert.match(html, /role="alert"/);
     if (mode === 'disabled') assert.match(html, /Synthetic operational demonstration only|Restricted records are disabled/);
+    if (mode === 'loading') assert.match(html, /data-state="loading"/);
+    if (mode === 'disabled') assert.match(html, /data-state="unavailable"/);
   }
 });

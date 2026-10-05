@@ -14,6 +14,7 @@ registerHooks({load(url,context,next){const p=url.replaceAll('\\','/');if(p.ends
 const{ApprovedSchoolContext}=await import('../components/approved-context.tsx');
 test('complete empty approved support explains permitted absence with one existing read recovery',()=>{
  const html=renderToStaticMarkup(createElement(ApprovedSchoolContext));assert.match(html,/No approved learning support is available with your current access/);assert.match(html,/Ask your school to review/);assert.equal((html.match(/>Refresh school records</g)??[]).length,1);assert.doesNotMatch(html,/All available records loaded/);
+ assert.match(html,/data-state="empty"/);
  fixture.app.locale='ar';const arabic=renderToStaticMarkup(createElement(ApprovedSchoolContext));assert.match(arabic,/لا يتاح دعم تعليمي معتمد ضمن صلاحياتك الحالية/);fixture.app.locale='en';
 });
 test('partial loading unavailable and denied support never become a complete empty claim',()=>{
