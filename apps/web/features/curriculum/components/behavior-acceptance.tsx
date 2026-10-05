@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { curriculumBehaviorAcceptanceSchema } from '@cuevo/contracts';
 import { Button, CuevoIcon } from '@cuevo/ui';
@@ -46,7 +47,7 @@ function CurrentBehavior({version,disabled,onLockedChange}:{version:Version;disa
  }
  return <section className="curriculum-source-review"><Button type="button" variant="quiet" disabled={disabled||locked} aria-expanded={open} aria-controls={`${id}-content`} onClick={()=>{if(!locked)setOpen(value=>!value);}}><CuevoIcon name="assessment"/>{t.reviewNativeBehavior}</Button>
  {open?<section id={`${id}-content`} className="curriculum-source-review__content" aria-label={t.reviewNativeBehavior}>
- {query.loading||statusQuery.loading?<p role="status">{t.loading}</p>:query.error||statusQuery.error?<><LearningError error={(query.error??statusQuery.error)!}/><Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button></>:lifecycle?<>
+ {query.loading||statusQuery.loading?<WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/>:query.error||statusQuery.error?<><LearningError error={(query.error??statusQuery.error)!}/><Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button></>:lifecycle?<>
  <p className="curriculum-source-review__limit">{t.behaviorNote}</p>
  {!allowed?<p className="notice" role="status">{t.planningSourceChanged}</p>:null}
  {status?.accepted?<p>{t.behaviorBasis}: {status.basis==='LOCKED_ARTIFACT'?t.lockedArtifactBasis:t.schoolAuthoredBasis} · {status.reason}</p>:null}

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Button } from '@cuevo/ui';
+import { Button, WorkspaceState } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { LearningApiError } from '../../../shared/api/client';
@@ -19,10 +19,10 @@ export function InsightContextDisclosure({ runId, learnerId, referenceId, baseli
   const courses = usePaginatedLearningQuery('/v1/courses?limit=100', parseCourse, 0);
   const classes = usePaginatedLearningQuery('/v1/classes?limit=100', parseChoice, 0);
   const people = usePaginatedLearningQuery('/v1/people?limit=100', parsePersonChoice, 0);
-  if (query.loading) return <p role="status">{t.loading}</p>;
+  if (query.loading) return <WorkspaceState kind="loading" icon="refresh" title={t.loading} role="status"/>;
   if (query.error) return <LearningError error={query.error} />;
   if (!query.data || query.data.runId !== runId) return <LearningError error={new LearningApiError('invalid')} />;
-  if (!query.data.context) return <p className="notice">{t.legacyContext}</p>;
+  if (!query.data.context) return <WorkspaceState kind="unknown" icon="help" description={t.legacyContext}/>;
   const context = query.data.context;
   if (context.learnerId !== learnerId || context.reference.id !== referenceId || !context.recentResults.some(result => result.resultId === baselineResultId)) return <LearningError error={new LearningApiError('invalid')} />;
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);

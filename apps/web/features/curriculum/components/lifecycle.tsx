@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
@@ -38,7 +39,7 @@ function CurrentLifecycle({version,versions,disabled,onLockedChange}:{version:Ve
  const clear=()=>{formDrafts.remove(slot);setIntent(null);};
  return <section className="curriculum-source-review"><Button type="button" variant="quiet" disabled={disabled||locked} aria-expanded={open} aria-controls={`${id}-content`} onClick={()=>{if(!locked)setOpen(value=>!value);}}><CuevoIcon name="curriculum"/>{t.sourceLifecycle}</Button>
  {open?<section id={`${id}-content`} className="curriculum-source-review__content" aria-label={t.sourceLifecycle}>
- {query.loading?<p role="status">{t.loading}</p>:query.error?<><LearningError error={query.error}/><Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button></>:page?<>
+ {query.loading?<WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/>:query.error?<><LearningError error={query.error}/><Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button></>:page?<>
  <header className="curriculum-source-review__heading"><h3>{version.framework} · {version.programme} · {curriculumVersionLabel(version.version,t)}</h3><Status tone={page.state==='ACTIVE'?'positive':'warning'}>{t.lifecycleStates[page.state]}</Status></header>
  <p>{page.reason}</p><p className="curriculum-source-review__limit">{t.lifecycleLimit}</p>
  <dl className="curriculum-source-review__facts">{[[t.boundProgrammes,page.programmeCount],[t.boundCourses,page.courseCount],[t.openAcademicWork,page.openAssessmentCount]].map(([label,value])=><div key={String(label)}><dt>{label}</dt><dd>{new Intl.NumberFormat(locale).format(Number(value))}</dd></div>)}</dl>

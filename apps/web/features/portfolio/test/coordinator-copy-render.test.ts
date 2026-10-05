@@ -32,7 +32,9 @@ test('Coordinator empty Portfolio uses read-only guidance and no author or shari
     const html = render(locale);
     assert.match(html, locale === 'en' ? /Read the permitted selected work and learner reflections\./ : /اقرأ الأعمال المختارة وتأملات الطلاب المتاحة ضمن صلاحياتك\./);
     assert.match(html, locale === 'en' ? /No permitted selected work is available/ : /لا تتاح أعمال مختارة ضمن صلاحياتك/);
-    assert.match(html, locale === 'en' ? /<h2>No permitted selected work is available<\/h2>/ : /<h2>لا تتاح أعمال مختارة ضمن صلاحياتك<\/h2>/);
+    assert.match(html,/cuevo-workspace-state/);
+    assert.match(html, locale === 'en' ? /<strong[^>]*>No permitted selected work is available<\/strong>/ : /<strong[^>]*>لا تتاح أعمال مختارة ضمن صلاحياتك<\/strong>/);
+    assert.equal((html.match(/<h1/g)??[]).length,1);
     assert.doesNotMatch(html, /before deciding what to share|Start with a piece of work|قبل اتخاذ قرار بشأن المشاركة|ابدأ بعمل اخترته/);
     assert.doesNotMatch(html, /portfolio-create|portfolio-organization|portfolio-review-actions|portfolio-private-files/);
     assert.equal((html.match(/<button /g) ?? []).length, 1, 'Only the existing Refresh action is offered in this confirmed empty state');
@@ -50,9 +52,9 @@ test('Coordinator populated Portfolio starts with a named directory and withhold
 });
 
 test('Coordinator Portfolio loading and denied reads cannot show the confirmed empty state', () => {
-  for (const state of [{ loading: true, loaded: false }, { error: new LearningApiError('denied') }]) {
+  for (const state of [{ loading: true, loaded: false }, { error: new LearningApiError('denied') },{moreError:new LearningApiError('unavailable')},{nextCursor:'a5000000-0000-4000-8000-000000000001'}]) {
     const html = render('en', [], state);
-    assert.doesNotMatch(html, /class="portfolio-empty"/);
+    assert.doesNotMatch(html, /data-state="empty"/);
     assert.doesNotMatch(html, /portfolio-create|portfolio-review-actions/);
   }
 });

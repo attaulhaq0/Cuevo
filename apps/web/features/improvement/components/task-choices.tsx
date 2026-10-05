@@ -5,13 +5,14 @@ import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { CommandForm } from '../../../shared/components/command-form';
 import { LearningError } from '../../../shared/components/feedback';
+import { WorkspaceState } from '@cuevo/ui';
 
 export function InterventionTaskChoices({ interventionId, canChoose, canRecover=canChoose }: { interventionId: string; canChoose: boolean;canRecover?:boolean }) {
   const app=useApp();const { locale } = app; const ar = locale === 'ar'; const [refresh, setRefresh] = useState(0);const path=`/v1/interventions/${interventionId}/choices`;const scope=improvementReadScope(app,path,refresh);
   useSyncExternalStore(app.commandJournal.subscribe,app.commandJournal.getSnapshot,app.commandJournal.getSnapshot);
   const original=app.commandJournal.get(path);
   const parse=useCallback((value:unknown)=>({scope,value:parseCurrentInterventionChoices(value,interventionId)}),[scope,interventionId]);const read=useApiQuery(scope?path:null,parse,refresh);const current={...read,data:currentImprovementRead(read.data,scope)};
-  if (current.loading||!current.error&&!current.data) return <p role="status">{ar ? 'جارٍ تحميل التدريب المعتمد…' : 'Loading approved practices…'}</p>;
+  if (current.loading||!current.error&&!current.data) return <WorkspaceState kind="loading" icon="refresh" title={ar ? 'جارٍ تحميل التدريب المعتمد…' : 'Loading approved practices…'} role="status"/>;
   if (current.error) return <LearningError error={current.error} />;
   if (!current.data) return null;
   const { options, choice } = current.data;const selectable=approvedPracticeChoiceOptions(current.data);

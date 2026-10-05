@@ -96,6 +96,14 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
     panel.style.maxHeight=`${Math.max(0,window.innerHeight-inset*2)}px`;
     panel.style.top=`${Math.max(inset,Math.min(rect.bottom+inset,window.innerHeight-panel.offsetHeight-inset))}px`;
   }
+  function positionSwitcher() {
+    const panel=switcher.current,trigger=switcherTrigger.current;
+    if(!panel||!trigger)return;
+    const inset=8,rect=trigger.getBoundingClientRect();
+    panel.style.left=`${Math.max(inset,Math.min(rect.left,window.innerWidth-Math.min(320,window.innerWidth-inset*2)-inset))}px`;
+    panel.style.maxHeight=`${Math.max(0,window.innerHeight-inset*2)}px`;
+    panel.style.top=`${Math.max(inset,Math.min(rect.bottom+6,window.innerHeight-panel.offsetHeight-inset))}px`;
+  }
   const identity = <><span className="workspace-chrome__avatar" aria-hidden="true"><CuevoIcon name="person" size={23} /></span><span><strong><bdi>{context.personName || t.personUnknown}</bdi></strong><small>{context.roleLabel || t.roleUnknown}</small></span></>;
   const hasProfile = Boolean(context.accountAction || context.settingsAction || context.signOutAction || context.appearanceControl);
   return <WorkspaceNavigationProvider enabled={focused} onActivate={activateSection}><div ref={chrome} className="workspace workspace-chrome" lang={context.locale} dir={rtl ? 'rtl' : 'ltr'} data-navigation-mode={focused ? 'focused' : 'home'} data-theme={context.theme} data-density={context.density || 'standard'} data-motion={context.quiet ? 'quiet' : 'standard'} data-expression={context.expression || 'staff'}>
@@ -106,14 +114,16 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
         leavingSwitcher.current = false;
         const rect = switcherTrigger.current?.getBoundingClientRect();
         if (rect && switcher.current) {
-          switcher.current.style.top = `${rect.bottom + 6}px`;
+          // Keep the opening frame in bounds before the native toggle delivers
+          // its measured open height to positionSwitcher.
+          switcher.current.style.top = '8px';
           switcher.current.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(320, window.innerWidth - 16) - 8))}px`;
-          switcher.current.style.maxHeight = `${Math.max(44, window.innerHeight - rect.bottom - 20)}px`;
+          switcher.current.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
         }
       }}><CuevoIcon name={context.currentWorkspace?.icon ?? context.navigation.find(item => item.id === context.selectedId)?.icon ?? 'school'} size={24} /><span>{context.currentWorkspace?.label || context.navigation.find(item => item.id === context.selectedId)?.label || t.workspaceUnknown}</span><CuevoIcon name="chevron" size={18} /></button>
       <div id={switcherId} ref={connectSwitcher} popover="auto" className="workspace-chrome__switcher" aria-label={t.chooseWorkspace} onToggle={event => {
         const open = event.newState === 'open'; setSwitcherOpen(open);
-        if (open) switcher.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+        if (open) { positionSwitcher(); switcher.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true }); }
         else if (!leavingSwitcher.current && !document.querySelector('dialog[open]') && (document.activeElement === document.body || switcher.current?.contains(document.activeElement))) switcherTrigger.current?.focus({ preventScroll: true });
       }}>{context.navigation.length ? <ul>{context.navigation.map(item => <li key={item.id}><button type="button" data-workspace-destination={item.id} aria-current={context.selectedId === item.id ? 'page' : undefined} disabled={item.disabled || item.pending} aria-busy={item.pending || undefined} onClick={() => {
         if (item.disabled || item.pending) return;

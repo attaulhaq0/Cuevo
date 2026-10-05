@@ -32,6 +32,10 @@ test('Student zero snapshot counts explain their basis and lead to current relea
     const html = render(locale, 'student');
     assert.match(html, locale === 'en' ? /records included in this snapshot/ : /سجلات مضمنة في هذا الملخص/);
     assert.match(html, /href="#progress-reports"/);
+    assert.match(html, /class="progress-source-context"/);
+    assert.match(html, /data-state="unknown"/);
+    assert.equal((html.match(/class="cuevo-workspace-links"/g) ?? []).length, 1);
+    assert.doesNotMatch(html, /class="progress-chapters"|progress-intro__actions/);
     assert.match(html, locale === 'en' ? /Released results remain available in Result pages/ : /تبقى النتائج الصادرة متاحة في صفحات النتائج/);
     const t = locale === 'ar' ? progressAr : progressEn;
     const zero = new Intl.NumberFormat(locale).format(0);
@@ -59,6 +63,7 @@ test('a denied current state withholds snapshot counts and its source explanatio
   for (const locale of ['en', 'ar'] as const) {
     const html = render(locale, 'student');
     assert.match(html, /role="alert"/);
+    assert.doesNotMatch(html, /class="cuevo-workspace-links"/);
     assert.doesNotMatch(html, /records included in this snapshot|سجلات مضمنة في هذا الملخص|progress-follow-up-grid|data-result-id/);
   }
   fixture.error = null;

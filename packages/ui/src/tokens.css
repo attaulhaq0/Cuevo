@@ -365,6 +365,24 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 .workspace .cuevo-record-heading { display:flex;align-items:center;gap:var(--space-3);min-inline-size:0; }
 .workspace .cuevo-record-heading > svg { flex:none; }
 .workspace .cuevo-empty-state { padding:var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-material-reading);color:var(--color-text-secondary);max-inline-size:72rem; }
+.workspace .cuevo-workspace-state { display:flex;align-items:start;gap:var(--space-3);min-inline-size:0;max-inline-size:100%;padding:var(--space-4);margin-block:var(--space-3);border:1px solid var(--color-border);border-inline-start:3px solid var(--color-primary);border-radius:var(--radius-lg);background:var(--color-material-reading);box-shadow:var(--elevation-subtle); }
+.workspace { --compact-outer-inset:min(var(--space-4),16px);--compact-reading-inset:min(var(--space-3),12px); }
+.workspace .cuevo-workspace-state__icon { display:grid;place-items:center;flex:none;inline-size:2.75rem;block-size:2.75rem;border-radius:var(--radius-md);background:var(--color-learning-surface); }
+.workspace .cuevo-workspace-state__body { flex:1;min-inline-size:0; }
+.workspace .cuevo-workspace-state__title { display:block;margin:0;font-size:var(--type-body);font-weight:var(--font-weight-semibold);color:var(--color-text);overflow-wrap:anywhere; }
+.workspace .cuevo-workspace-state__description { margin-block-start:var(--space-1);font-size:var(--type-sm);line-height:var(--line-height-body);color:var(--color-text-secondary);overflow-wrap:anywhere; }
+.workspace .cuevo-workspace-state__body > :is(p,details) { margin-block:var(--space-2) 0;overflow-wrap:anywhere; }
+.workspace .cuevo-workspace-state__description > p { margin:0; }
+.workspace .cuevo-workspace-state__actions { display:flex;flex-wrap:wrap;gap:var(--space-2);margin-block-start:var(--space-3); }
+.workspace .cuevo-workspace-state[data-state="loading"] { border-inline-start-color:var(--color-border); }
+.workspace .cuevo-workspace-state[data-state="denied"],.workspace .cuevo-workspace-state[data-state="unavailable"] { border-inline-start-color:var(--color-border-strong); }
+.workspace .cuevo-workspace-state[data-state="review"] { border-inline-start-color:var(--color-selection-border); }
+.workspace .cuevo-workspace-links { display:flex;align-items:center;gap:var(--space-2);flex:1;min-inline-size:0;max-inline-size:100%;overflow-x:auto;scroll-padding-inline:var(--space-2); }
+.workspace .cuevo-workspace-links > a { display:inline-flex;align-items:center;gap:var(--space-2);flex:1 0 auto;min-block-size:var(--control-min-size);padding:var(--control-padding-block) var(--space-3);border:2px solid transparent;border-radius:var(--radius-md);font-size:var(--type-sm);font-weight:var(--font-weight-medium);color:var(--color-text-secondary);text-decoration:none;white-space:nowrap; }
+.workspace .cuevo-workspace-links > a:hover { color:var(--color-text);background:var(--color-surface-accent); }
+.workspace .cuevo-workspace-links > a[aria-current="location"] { color:var(--color-selection-text);border-color:var(--color-selection-border);background:var(--color-selection-surface);box-shadow:inset 0 -3px var(--color-selection-border); }
+@media(max-width:600px) { .workspace .cuevo-workspace-state { padding:min(var(--space-3),12px);gap:min(var(--space-2),8px); } .workspace .cuevo-workspace-state__icon { inline-size:min(2.5rem,40px);block-size:min(2.5rem,40px); } .workspace .cuevo-workspace-state__actions .button { max-inline-size:100%;min-inline-size:0;white-space:normal; } .workspace .cuevo-workspace-links > a { flex:none;white-space:normal;overflow-wrap:anywhere;max-inline-size:100%; } }
+@media(max-width:360px) { .workspace .cuevo-workspace-state:has(.cuevo-workspace-state__icon) { flex-wrap:wrap; } .workspace .cuevo-workspace-state__body { flex-basis:100%; } }
 @media(max-width:767px){.workspace .cuevo-workspace-tabs>button{flex:none}.workspace .cuevo-record{padding:var(--space-3)}}
 .workspace :is([role="tablist"], [role="group"]) > button:is([aria-pressed], [role="tab"]) {
   min-block-size: var(--control-min-size);

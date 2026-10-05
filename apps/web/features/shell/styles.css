@@ -142,6 +142,7 @@
 .workspace .workspace-main { inline-size:100%; max-inline-size:var(--content-width); padding:var(--space-3) var(--space-4) var(--space-5); }
 .workspace .workspace-main.workspace-main--student-home { max-inline-size:none; padding:0; }
 .workspace .workspace-main:has(> .role-home) { padding:0; }
+@media(max-width:540px) { .workspace[data-navigation-mode="home"] .workspace-main:has(> div > :is(.admin-trail,.teacher-trail,.coordinator-trail,.parent-trail)) { padding-inline:var(--compact-outer-inset); } }
 .workspace .workspace-main > .detail-section { padding-block:var(--space-3); }
 .workspace .workspace-main > .detail-section > .detail-list { margin-block:var(--space-2) var(--space-3); }
 .workspace .workspace-main > .detail-section > .detail-list > div { padding-block:var(--space-2); }
@@ -182,8 +183,8 @@
 }
 @media (max-width: 360px) {
   .workspace .workspace-chrome__header { display:flex; flex-wrap:wrap; }
-  .workspace .workspace-chrome__brand { flex:1 1 7.2rem; min-inline-size:0; order:0; }
-  .workspace .workspace-chrome__person { flex:1 1 8.5rem; min-inline-size:0; order:1; }
+  .workspace .workspace-chrome__brand { flex:0 0 auto; min-inline-size:min-content; order:0; }
+  .workspace .workspace-chrome__person { flex:1 0 min(100%,11rem); min-inline-size:0; order:1; }
   .workspace .workspace-chrome__person > button { min-inline-size: 0; max-inline-size: 100%; inline-size:100%; }
   .workspace .workspace-chrome__person > button > span:not(.workspace-chrome__avatar) { min-inline-size: 0; }
   .workspace .workspace-chrome__person strong { max-inline-size: min(6rem, 23vw); }

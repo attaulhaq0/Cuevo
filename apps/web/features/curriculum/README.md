@@ -1,5 +1,7 @@
 # Curriculum context workspace
 
+Current complete empty record pages use the shared icon state within the existing source owner. Initial loading, current failures, later-page failures and nonterminal pages keep their own loading/recovery/continuation rather than claiming no context records. Existing role actions and Refresh remain unchanged; no empty state creates a curriculum, readiness or source authority claim.
+
 One root WorkspacePageHeading names the current records section or existing explicit configuration action. The previous identical root records/editor heading is removed only where this same title supplies the page heading; lower records retain a section heading while an action is open. Planning, objective and source-review owners keep their current course/period/source context and review facts beneath this page. No new read, official claim, permission or mirrored selected source is introduced.
 
 The six same-page configuration forms now explicitly omit CommandForm's duplicate title because WorkspacePageHeading already names that exact action. Current Course selection and all fields/source notes/confirmation/receipt/pending recovery remain in place; other shared form consumers retain their default h3. [Configuration heading cases](../../../../tests/e2e/curriculum-configuration-heading.spec.ts) exercise the actual owner and shared form in English/Arabic, empty sources and original-key recovery without domain writes.

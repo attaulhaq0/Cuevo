@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, CuevoIcon, Status } from '@cuevo/ui';
@@ -95,7 +96,7 @@ function CurrentLearnerGoals({ learnerId }: { learnerId: string }) {
       validateReceipt={(receipt, originalCommand) => { confirmLearnerGoalReceipt(receipt, learnerId, originalCommand); }}
       onSaved={() => saved(t.saved)} onCancel={() => {focusEditor.current=null;setCreate(false);}} onLockedChange={onLockedChange}
     /> : null}
-    {create ? <div>{courses.loading ? <p role="status">{t.loading}</p> : courses.error ? <LearningError error={courses.error} /> : courses.loaded && !courses.data.length ? <p className="notice">{t.noCourses}</p> : null}<LoadMore query={courses} label={t.course} /></div> : null}
+    {create ? <div>{courses.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : courses.error ? <LearningError error={courses.error} /> : courses.loaded && !courses.data.length ? <p className="notice">{t.noCourses}</p> : null}<LoadMore query={courses} label={t.course} /></div> : null}
     <LearnerGoalRecords query={goals} editing={create || !!action} student={student} locale={locale}><ul className="development-goal-list">{availableGoals.map(goal => {
       const path = `/v1/development/goals/${goal.id}/review`;
       const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value));

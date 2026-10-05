@@ -55,10 +55,10 @@ test.describe('isolated actual Student/Parent narrow text reflow', () => {
       nodes.forEach((element, index) => { element.style.fontSize = `${sizes[index] * 2}px`; });
     });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    const rootSelector = scenario.view === 'progress' ? '.progress-intro__actions' : scenario.view === 'school' ? '.school-workspace > .learning-toolbar,.school-day-filter' : '.assessment-metadata';
+    const rootSelector = scenario.view === 'progress' ? '.progress-navigation .cuevo-workspace-section-actions' : scenario.view === 'school' ? '.school-workspace > .learning-toolbar,.school-day-filter' : '.assessment-metadata';
     const overflow = await page.locator(rootSelector).evaluateAll(elements => elements.filter(element => element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 2).map(element => ({ class: element.className, width: element.clientWidth, scroll: element.scrollWidth })));
     expect(overflow).toEqual([]);
-    const target = date ?? page.locator(scenario.view === 'progress' ? '.progress-intro__actions button' : scenario.role === 'parent' ? '.school-workspace > .learning-toolbar > button' : '.assessment-section--open button').first();
+    const target = date ?? page.locator(scenario.view === 'progress' ? '.progress-navigation .cuevo-workspace-section-actions button' : scenario.role === 'parent' ? '.school-workspace > .learning-toolbar > button' : '.assessment-section--open button').first();
     await target.focus(); await target.scrollIntoViewIfNeeded(); await expect(target).toBeFocused();
     expect(await target.evaluate(element => { const bounds = element.getBoundingClientRect(), hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2); return hit === element || element.contains(hit); })).toBe(true);
     if (date) { await expect(date).toHaveValue(dateValue!); const bounds = await date.boundingBox(); expect(bounds!.width).toBeLessThanOrEqual(scenario.width - 32); }

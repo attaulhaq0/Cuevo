@@ -55,3 +55,11 @@ test('staff without administrator role cannot mount policy approval and unknown 
   assert.match(html, /Choose a learner with complete current school context/);
   assert.doesNotMatch(html, /development-configuration|Approve recognition policy|Create learning period|development-journey/);
 });
+
+test('Student without a current learning period gets one source prerequisite and no empty ledger or milestones', () => {
+  const html = render('student');
+  assert.equal((html.match(/Choose a learning period to open its recorded points, actions and milestones\./g) ?? []).length, 1);
+  assert.match(html, /data-state="unknown"/);
+  assert.doesNotMatch(html, /aria-label="Activity ledger"|development-milestones|development-total/);
+  assert.match(html, /Learning goals|development-companion/);
+});

@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 import { useState } from 'react';
 import { Button } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
@@ -47,7 +48,7 @@ export function SchoolAuditView({ source, rows, locale, canPrevious, canNext, on
   const denied = [source.error, source.moreError].find(error => error?.kind === 'denied' || error?.kind === 'unauthorized');
   const error = denied ?? source.error;
   return <section aria-label={t.audit}><header className="cuevo-section-header"><div className="cuevo-section-header__context">{pageHeading ? null : <h2>{t.audit}</h2>}<p>{t.auditNote}</p></div><Button type="button" variant="quiet" onClick={onRefresh}>{t.refresh}</Button></header>
-    {source.loading ? <p role="status">{t.loading}</p> : error ? <LearningError error={error} /> : <>
+    {source.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : error ? <LearningError error={error} /> : <>
       <SchoolAuditReading pageHeading={pageHeading} rows={rows} locale={locale} />{!rows.length ? <p>{copy.emptyPage}</p> : null}
       {source.moreError ? <LearningError error={source.moreError} /> : null}
       <nav className="school-audit-pagination pagination-actions" aria-label={copy.navigation}>

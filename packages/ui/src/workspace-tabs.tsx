@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { CuevoIcon, type CuevoIconName } from './icon';
-import { useWorkspaceNavigationSlot } from './workspace-navigation-slot';
+import { useWorkspaceNavigationSlot, WorkspaceNavigationContent } from './workspace-navigation-slot';
 
 export type WorkspaceTab = { id: string; label: string; icon: CuevoIconName; disabled?: boolean };
 /** Presentational workspace navigation. Owners retain selection, permission and requests. */
@@ -11,6 +10,15 @@ export function WorkspaceTabs({ label, items, selected, onChange, disabled = fal
   const slot = useWorkspaceNavigationSlot();
   const host = slot?.enabled ? slot.host : null;
   const container = useRef<HTMLDivElement>(null);
+  function revealFocused(button: HTMLButtonElement) {
+    const rail = container.current;
+    if (!rail) return;
+    const viewport = rail.getBoundingClientRect(), item = button.getBoundingClientRect(), style = getComputedStyle(button);
+    const outline = parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset));
+    const inset = Number.isFinite(outline) ? outline : 0;
+    const offset = item.left - inset < viewport.left ? item.left - inset - viewport.left : item.right + inset > viewport.right ? item.right + inset - viewport.right : 0;
+    if (offset) rail.scrollBy({ left: offset, behavior: 'instant' });
+  }
   useEffect(() => {
     const rail = container.current;
     if (!rail) return;
@@ -32,7 +40,7 @@ export function WorkspaceTabs({ label, items, selected, onChange, disabled = fal
       if (disabled || item.disabled) return;
       onChange(item.id);
       if (item.id !== selected && slot?.enabled) slot.onActivate?.(item.id);
-    }} onKeyDown={event => {
+    }} onFocus={event => revealFocused(event.currentTarget)} onKeyDown={event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       const rail = container.current;
       if (!rail) return;
@@ -48,5 +56,5 @@ export function WorkspaceTabs({ label, items, selected, onChange, disabled = fal
   </div>;
   // Server HTML and the first client render both wait for the actual host.
   // A portal keeps this owner's current callbacks instead of registering snapshots.
-  return slot?.enabled ? host ? createPortal(content, host) : null : content;
+  return <WorkspaceNavigationContent>{content}</WorkspaceNavigationContent>;
 }

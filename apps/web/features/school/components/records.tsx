@@ -1,4 +1,5 @@
 'use client';
+import { WorkspaceState } from '@cuevo/ui';
 import type { SchoolRow } from '../model';
 import { useApp } from '../../../shared/session/providers';
 import { schoolAr, schoolEn } from '../messages';
@@ -22,5 +23,5 @@ export function SchoolRecords({ title, rows, columns, names = {} }: { title: str
     if (typeof value === 'string' && /^\d{4}-\d\d-\d\d(?:T|$)/.test(value) && Number.isFinite(Date.parse(value))) return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', ...(value.includes('T') ? { timeStyle: 'short' as const } : { timeZone: 'UTC' }) }).format(new Date(value));
     return labels[String(value)] ?? String(value);
   }
-  return <section className="school-section" aria-label={title}><h2>{title}</h2>{rows.length ? <div className="school-table-scroll" tabIndex={0} role="region" aria-label={`${title} — ${t.scrollTable}`}><table><thead><tr>{columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>{columns.map(column => <td key={column.key}><bdi>{display(row, column.key)}</bdi></td>)}</tr>)}</tbody></table></div> : <p className="learning-empty">{t.empty}</p>}</section>;
+  return <section className="school-section" aria-label={title}><h2>{title}</h2>{rows.length ? <div className="school-table-scroll" tabIndex={0} role="region" aria-label={`${title} — ${t.scrollTable}`}><table><thead><tr>{columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>{columns.map(column => <td key={column.key}><bdi>{display(row, column.key)}</bdi></td>)}</tr>)}</tbody></table></div> : <WorkspaceState kind="empty" icon="school" description={t.empty}/>}</section>;
 }

@@ -33,7 +33,7 @@
 .support-trail-heading h2 { font-size: var(--type-title); line-height: var(--line-height-tight); }
 .support-trail-heading p { color: var(--color-text-secondary); max-inline-size: 65ch; font-size: var(--type-lg); line-height: var(--line-height-body); margin-block-start: var(--space-3); }
 .student-practices { display: grid; gap: var(--space-6); }
-.support-practice, .support-empty { background: var(--color-material-reading); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--elevation-subtle); min-inline-size: 0; }
+.support-practice { background: var(--color-material-reading); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--elevation-subtle); min-inline-size: 0; }
 .support-practice-heading { display: flex; align-items: center; gap: var(--space-4); }
 .support-practice-heading > img { inline-size: 4rem; block-size: 4rem; flex: none; object-fit: contain; }
 .support-practice-heading > div { flex: 1; min-inline-size: 0; }
@@ -67,16 +67,12 @@
 .support-source-disclosure { margin-block-start: var(--space-5); border-block-start: 1px solid var(--color-border); padding-block-start: var(--space-3); }
 .support-source-disclosure summary { display: flex; align-items: center; gap: var(--space-2); color: var(--color-link); font-weight: var(--font-weight-semibold); min-block-size: var(--control-min-size); cursor: pointer; }
 .support-source-disclosure > p { margin-block: var(--space-3); overflow-wrap: anywhere; }
-.support-empty { text-align: center; padding-block: var(--space-8); }
-.support-empty img { inline-size: 5.5rem; block-size: 5.5rem; object-fit: contain; margin-block-end: var(--space-4); }
-.support-empty h3 { font-size: var(--type-subheading); }
-.support-empty p { margin-block-start: var(--space-3); color: var(--color-text-secondary); }
 @media (max-width: 767px) {
   .support-trail-heading { gap: var(--space-3); }
   .support-trail-heading > img { inline-size: 4rem; block-size: 4rem; }
   .support-trail-heading h2 { font-size: var(--type-subheading); }
   .support-trail-heading p { font-size: var(--type-body); }
-  .support-practice, .support-empty { padding: var(--space-4); }
+  .support-practice { padding: var(--space-4); }
   .support-practice-heading { flex-wrap: wrap; gap: var(--space-3); }
   .support-practice-heading :is(h2,h3) { font-size: var(--type-lg); }
   .support-practice-heading > .button { inline-size: 100%; }

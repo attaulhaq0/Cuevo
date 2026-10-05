@@ -3,10 +3,11 @@ import { useCallback } from 'react';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { LearningError } from '../../../shared/components/feedback';
+import { WorkspaceState } from '@cuevo/ui';
 import { parseProposalPracticeContext } from '../model';
 export function ApprovedPracticeOptions({ runId, learnerId, referenceId, baselineResultId, selected, onSelected, locked }: { runId: string; learnerId:string;referenceId:string;baselineResultId:string;selected: string[]; onSelected: (ids: string[]) => void; locked: boolean }) {
   const { locale } = useApp(); const ar = locale === 'ar'; const parseContext=useCallback((value:unknown)=>parseProposalPracticeContext(value,{runId,learnerId,referenceId,baselineResultId}),[runId,learnerId,referenceId,baselineResultId]);const current = useApiQuery(`/v1/intelligence/runs/${runId}/context`, parseContext, 0);
-  if (current.loading) return <p role="status">{ar ? 'جارٍ تحميل خيارات التدريب…' : 'Loading practice options…'}</p>;
+  if (current.loading) return <WorkspaceState kind="loading" icon="refresh" title={ar ? 'جارٍ تحميل خيارات التدريب…' : 'Loading practice options…'} role="status"/>;
   if (current.error) return <LearningError error={current.error} />;
   if (!current.data?.context) return null;
   const options = current.data.context.learningOptions.filter(option => option.kind === 'practice');

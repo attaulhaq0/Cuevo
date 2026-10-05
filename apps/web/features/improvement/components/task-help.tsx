@@ -5,6 +5,7 @@ import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { CommandForm } from '../../../shared/components/command-form';
 import { LearningError } from '../../../shared/components/feedback';
+import { WorkspaceState } from '@cuevo/ui';
 
 
 export function InterventionTaskHelp({ interventionId, canManage, canRequest, canRecover=canRequest }: { interventionId: string; canManage: boolean; canRequest: boolean; canRecover?:boolean }) {
@@ -13,7 +14,7 @@ export function InterventionTaskHelp({ interventionId, canManage, canRequest, ca
   const original=app.commandJournal.get(`/v1/interventions/${interventionId}/help/reply`)??app.commandJournal.get(`/v1/interventions/${interventionId}/help`);
   const path=`/v1/interventions/${interventionId}/help`;const scope=improvementReadScope(app,path,refresh);const parse=useCallback((value:unknown)=>({scope,value:parseCurrentInterventionHelp(value,interventionId)}),[scope,interventionId]);
   const read=useApiQuery(scope?path:null,parse,refresh);const current={...read,data:currentImprovementRead(read.data,scope)};
-  if (current.loading||!current.error&&!current.data) return <p role="status">{ar ? 'جارٍ تحميل سياق المهمة…' : 'Loading task context…'}</p>;
+  if (current.loading||!current.error&&!current.data) return <WorkspaceState kind="loading" icon="refresh" title={ar ? 'جارٍ تحميل سياق المهمة…' : 'Loading task context…'} role="status"/>;
   if (current.error) return <LearningError error={current.error} />;
   if (!current.data) return null;
   const { approval, help } = current.data; const date = (value: string) => new Intl.DateTimeFormat(ar ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));

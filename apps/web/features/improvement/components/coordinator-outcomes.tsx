@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
-import { Button, Status } from '@cuevo/ui';
+import { Button, Status, WorkspaceState } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { LearningError } from '../../../shared/components/feedback';
 import { LoadMore } from '../../../shared/components/load-more';
@@ -12,7 +12,7 @@ import { currentImprovementDenial, type ImprovementSourceDenial } from '../sourc
 import { coordinatorOutcomeAr, coordinatorOutcomeEn, improvementAr, improvementEn } from '../messages';
 
 type Source = { context?: string; data: Outcome[]; loaded: boolean; loading: boolean; loadingMore: boolean; error: LearningApiError | null; moreError: LearningApiError | null; nextCursor: string | null; loadMore: () => void };
-export function CoordinatorOutcomes({ source }: { source: Source }) {
+export function CoordinatorOutcomes({ source, pageHeading=false }: { source: Source;pageHeading?:boolean }) {
   const { locale, accessGeneration } = useApp();
   const scope = `${source.context ?? ''}:${accessGeneration}`;
   const [selection, setSelection] = useState<{ scope: string; value: CoordinatorOutcomeSelection } | null>(null);
@@ -38,15 +38,15 @@ export function CoordinatorOutcomes({ source }: { source: Source }) {
       if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
     }
   }, [outcome, selected]);
-  return <CoordinatorOutcomeView source={currentSource} rows={rows} outcome={outcome} hasSelection={!!selected} locale={locale} headingRef={heading}
+  return <CoordinatorOutcomeView pageHeading={pageHeading} source={currentSource} rows={rows} outcome={outcome} hasSelection={!!selected} locale={locale} headingRef={heading}
     onOpen={(row, button) => { opener.current = button; focusReader.current = true; setSelection({ scope, value: coordinatorOutcomeSelection(row) }); }}
     onClose={() => { restoreOpener.current = true; setSelection(null); }} />;
 }
 
 /** The current source owner supplies selection; this view neither queries nor computes outcomes. */
-export function CoordinatorOutcomeView({ source, rows, outcome, hasSelection, locale, onOpen, onClose, headingRef }: {
+export function CoordinatorOutcomeView({ source, rows, outcome, hasSelection, locale, onOpen, onClose, headingRef, pageHeading=false }: {
   source: Source; rows: Outcome[]; outcome: Outcome | null; hasSelection: boolean; locale: 'en' | 'ar';
-  onOpen: (outcome: Outcome, button: HTMLButtonElement) => void; onClose: () => void; headingRef?: Ref<HTMLHeadingElement>;
+  onOpen: (outcome: Outcome, button: HTMLButtonElement) => void; onClose: () => void; headingRef?: Ref<HTMLHeadingElement>;pageHeading?:boolean;
 }) {
   const t = locale === 'ar' ? coordinatorOutcomeAr : coordinatorOutcomeEn, copy = locale === 'ar' ? improvementAr : improvementEn;
   const selectedHeading = useId(), denied = coordinatorOutcomeDenied(source);
@@ -54,16 +54,16 @@ export function CoordinatorOutcomeView({ source, rows, outcome, hasSelection, lo
   const currentRows = admitted ? rows : [], currentOutcome = admitted ? outcome : null;
   const choices = coordinatorOutcomeChoices(currentRows, locale, { unavailable: copy.outcomeTitleUnavailable, review: copy.outcomeContextReview });
   const status = (row: Outcome) => row.status === 'improved' ? copy.improved : row.status === 'no_meaningful_change' ? copy.noMeaningfulChange : copy.inconclusive;
-  return <section className="coordinator-outcomes"><header><h2>{t.title}</h2><p>{t.note}</p></header>
-    {source.loading || !source.loaded && !source.error && !denied ? <p role="status">{copy.loading}</p> : source.error || denied ? <LearningError error={source.error ?? source.moreError!} /> :
+  return <section className="coordinator-outcomes"><header>{pageHeading?null:<h2>{t.title}</h2>}<p>{t.note}</p></header>
+    {source.loading || !source.loaded && !source.error && !denied ? <WorkspaceState kind="loading" icon="refresh" title={copy.loading} role="status"/> : source.error || denied ? <LearningError error={source.error ?? source.moreError!} /> :
       <div className="coordinator-outcome-layout" data-selected={!!currentOutcome}>
         <section className="coordinator-outcome-directory" aria-label={t.directory}>
-          <h3>{t.directory}</h3>{choices.some(row => row.requiresReview) ? <p className="notice">{copy.outcomeContextReview}</p> : null}
+          {currentRows.length?<h3>{t.directory}</h3>:null}{choices.some(row => row.requiresReview) ? <p className="notice">{copy.outcomeContextReview}</p> : null}
           {currentRows.length ? <ul>{currentRows.map(row => {
             const choice = choices.find(choice => choice.id === row.id)!;
             return <li key={row.id}><div><h4>{row.context?.practiceTitle ?? copy.outcomeTitleUnavailable}</h4><p><bdi>{choice.label}</bdi></p><Status>{status(row)}</Status></div>
               <Button type="button" variant={currentOutcome?.id === row.id ? 'primary' : 'secondary'} aria-pressed={currentOutcome?.id === row.id} disabled={choice.requiresReview} onClick={event => onOpen(row, event.currentTarget)}>{t.open}</Button></li>;
-          })}</ul> : <p>{copy.noOutcomes}</p>}
+          })}</ul> : <WorkspaceState kind="empty" icon="progress" title={copy.noOutcomes} description={copy.emptyOutcomesBody}/>}
           {hasSelection && !currentOutcome ? <p className="notice">{t.changed}</p> : !currentOutcome && currentRows.length ? <p className="notice">{t.choose}</p> : null}
           {source.nextCursor || source.moreError || source.loadingMore ? <p className="notice">{t.partial}</p> : null}
           {source.nextCursor || source.moreError ? <LoadMore query={source} label={copy.outcomes} /> : null}

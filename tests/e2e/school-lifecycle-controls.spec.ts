@@ -1,5 +1,5 @@
 import { openCurrentResult } from './result-reader';
-import { expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace } from './trail-workspace';
+import { chooseTrailSchoolDate, expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -278,9 +278,11 @@ test('administrator corrects and cancels timetable and report period, then creat
     return saved;
   };
   const studentSlot = async (text: string, visible: boolean) => {
+    const sourceDay='2026-10-03';expect(new Date(`${sourceDay}T00:00:00Z`).getUTCDay()).toBe(initialSlot.dayOfWeek);expect(sourceDay>=initialSlot.effectiveFrom&&sourceDay<=initialSlot.effectiveTo).toBe(true);
     await context.signIn('student');
     await context.allPages(page.locator('.school-workspace'));
-    const timetable = page.getByRole('region', { name: 'Timetable', exact: true });
+    await chooseTrailSchoolDate(page,sourceDay);await expect(page.getByLabel('School date',{exact:true})).toHaveValue(sourceDay);
+    const timetable = page.getByRole('region', { name: 'Timetable', exact: true });await expect(timetable.locator(`time[datetime="${sourceDay}"]`)).toHaveCount(1);
     if (visible) await expect(timetable).toContainText(text);
     else await expect(timetable).not.toContainText(text);
   };
