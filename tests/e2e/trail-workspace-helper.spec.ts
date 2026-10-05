@@ -39,6 +39,23 @@ test('focused browser helper requires current chooser context and uses its nativ
   await expect(expectTrailWorkspace(page, 'student')).rejects.toThrow();
 });
 
+test('focused helper opens the current closed native chooser when a former node left expanded state', async ({ page }) => {
+  await page.setContent(fixture);
+  await page.locator('.workspace-chrome').evaluate(element => {
+    element.setAttribute('data-navigation-mode', 'focused');
+    element.querySelector('.workspace-chrome__navigation')!.outerHTML = '<nav class="workspace-chrome__focused-navigation"><button class="workspace-chrome__workspace-choice" popovertarget="current-chooser" aria-expanded="true"><span>Academic</span></button><div id="current-chooser" class="workspace-chrome__switcher" popover="auto"><button data-workspace-destination="academic" aria-current="page"><span>Academic</span></button><button data-workspace-destination="portfolio"><span>Portfolio</span></button></div></nav>';
+    const chooser = element.querySelector<HTMLDivElement>('#current-chooser')!;
+    element.querySelector<HTMLButtonElement>('[data-workspace-destination="portfolio"]')!.onclick = () => {
+      element.querySelector('main')!.innerHTML = '<h1>Current approved portfolio</h1>'; chooser.hidePopover();
+    };
+  });
+  await expect(page.locator('.workspace-chrome__switcher')).toBeHidden();
+  await expect(page.locator('.workspace-chrome__workspace-choice')).toHaveAttribute('aria-expanded', 'true');
+  await openTrailWorkspace(page, 'Portfolio');
+  await expect(page.getByRole('heading', { name: 'Current approved portfolio', exact: true })).toBeVisible();
+  await expect(page.locator('.workspace-chrome__switcher')).toBeHidden();
+});
+
 test('sign-out reaches an offscreen native profile after its document scroll has settled', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.setContent(`<style>body{margin:0}main{min-height:1800px}.workspace-chrome__profile{position:fixed;inset:60px 12px auto auto;margin:0}</style>${fixture}`);

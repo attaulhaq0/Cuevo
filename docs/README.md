@@ -54,3 +54,5 @@ For product requirements start with [product context](product/README.md) and its
 Product sources are grouped under product; source identities/facts/versions remain unchanged. Historical reports and review hashes describe their original snapshots; use the codebase map and product registry to resolve former paths. A plan or report is not proof that the full MVP passed.
 
 Current [approved Trail colors and background](design/2026-10-03-approved-trail-colors-and-background.md) govern the shared palette and media.
+
+The separate pilot measurement window and its guarded cleanup/evidence owners are documented in [the measurement decision](decisions/2026-10-05-isolated-pilot-measurement-window.md). It is source-prepared until the actual manual/defaultbranch exact-run gate passes.

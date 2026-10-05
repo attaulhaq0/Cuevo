@@ -40,6 +40,7 @@ export const learningEn = { retiredCourseNote:'This curriculum source is retired
   courses: 'Courses', assessments: 'Assessments', submissions: 'Submissions', refresh: 'Refresh', loading: 'Loading learning…',
 
   submissionUnknown: 'Load the remaining submitted work to confirm this task’s current status before editing.',
+  restoringSubmission: 'Restoring the current submitted work…', selectedSubmissionUnknown: 'The selected work has not been confirmed. Load more submitted work or try restoring it again.', selectedSubmissionUnavailable: 'The selected work is not available in the current submitted work. Refresh or return to the directory.', retrySubmissionSource: 'Try restoring submitted work',
   noCourses: 'No courses are available yet.', noAssessments: 'No assessments are available yet.', noSubmissions: 'No submissions are available yet.',
   createCourse: 'Create course', createUnit: 'Add unit', createLesson: 'Add lesson', createActivity: 'Add activity', createAssessment: 'Create assessment',
   title: 'Title', description: 'Description', class: 'Class', subject: 'Subject',  body: 'Lesson content', instructions: 'Instructions',
@@ -101,6 +102,7 @@ export const learningAr: typeof learningEn = {
   courses: 'المقررات', assessments: 'التقييمات', submissions: 'التسليمات', refresh: 'تحديث', loading: 'جارٍ تحميل التعلّم…',
 
   submissionUnknown: 'حمّل بقية الأعمال المسلّمة لتأكيد الحالة الحالية لهذا التقييم قبل تحريره.',
+  restoringSubmission: 'جارٍ استعادة العمل المسلّم الحالي…', selectedSubmissionUnknown: 'لم يُؤكّد العمل المحدد. حمّل مزيدًا من الأعمال المسلّمة أو حاول استعادته مجددًا.', selectedSubmissionUnavailable: 'العمل المحدد غير متاح ضمن الأعمال المسلّمة الحالية. حدّث الصفحة أو عُد إلى الدليل.', retrySubmissionSource: 'محاولة استعادة العمل المسلّم',
   noCourses: 'لا توجد مقررات متاحة بعد.', noAssessments: 'لا توجد تقييمات متاحة بعد.', noSubmissions: 'لا توجد تسليمات متاحة بعد.',
   createCourse: 'إنشاء مقرر', createUnit: 'إضافة وحدة', createLesson: 'إضافة درس', createActivity: 'إضافة نشاط', createAssessment: 'إنشاء تقييم',
   title: 'العنوان', description: 'الوصف', class: 'الصف', subject: 'المادة',  body: 'محتوى الدرس', instructions: 'التعليمات',

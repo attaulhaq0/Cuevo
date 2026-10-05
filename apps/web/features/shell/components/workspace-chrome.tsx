@@ -16,9 +16,15 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
   const rtl = context.locale === 'ar';
   const focused = context.mode === 'focused';
   const switcherId = `${useId()}-workspace-switcher`;
-  const switcher = useRef<HTMLDivElement>(null);
-  const switcherTrigger = useRef<HTMLButtonElement>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const switcher = useRef<HTMLDivElement>(null);
+  const connectSwitcher = useCallback((element: HTMLDivElement | null) => {
+    switcher.current = element;
+    // Conditional Home navigation removes this native popover without a
+    // reliable close toggle. A newly attached chooser always starts closed.
+    setSwitcherOpen(element?.matches(':popover-open') ?? false);
+  }, []);
+  const switcherTrigger = useRef<HTMLButtonElement>(null);
   const leavingSwitcher = useRef(false);
   const profileId = `${useId()}-profile`;
   const profile = useRef<HTMLDivElement>(null);
@@ -98,7 +104,7 @@ export function WorkspaceChrome({ context, children }: { context: WorkspaceChrom
           switcher.current.style.maxHeight = `${Math.max(44, window.innerHeight - rect.bottom - 20)}px`;
         }
       }}><CuevoIcon name={context.currentWorkspace?.icon ?? context.navigation.find(item => item.id === context.selectedId)?.icon ?? 'school'} size={24} /><span>{context.currentWorkspace?.label || context.navigation.find(item => item.id === context.selectedId)?.label || t.workspaceUnknown}</span><CuevoIcon name="chevron" size={18} /></button>
-      <div id={switcherId} ref={switcher} popover="auto" className="workspace-chrome__switcher" aria-label={t.chooseWorkspace} onToggle={event => {
+      <div id={switcherId} ref={connectSwitcher} popover="auto" className="workspace-chrome__switcher" aria-label={t.chooseWorkspace} onToggle={event => {
         const open = event.newState === 'open'; setSwitcherOpen(open);
         if (open) switcher.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
         else if (!leavingSwitcher.current && !document.querySelector('dialog[open]') && (document.activeElement === document.body || switcher.current?.contains(document.activeElement))) switcherTrigger.current?.focus({ preventScroll: true });

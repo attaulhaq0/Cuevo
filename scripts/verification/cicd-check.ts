@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { validateWorkflows } from './cicd-contracts';
+import { validatePilotWorkflow } from './pilot-workflow-contracts';
 const issues = validateWorkflows(await readFile('.github/workflows/ci.yml', 'utf8'), await readFile('.github/workflows/release.yml', 'utf8'));
+issues.push(...validatePilotWorkflow(await readFile('.github/workflows/pilot.yml', 'utf8')));
 if (issues.length) throw Error(issues.join('\n'));
 console.log('CI/CD workflow trust and artifact contracts passed.');

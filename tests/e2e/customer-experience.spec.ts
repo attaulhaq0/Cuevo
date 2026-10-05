@@ -64,11 +64,31 @@ async function signIn(page: Page, account: Account) {
 async function settled(page: Page) { await expect(page.locator('main [role="status"]').filter({ hasText: /^(Loading|جارٍ تحميل)/ })).toHaveCount(0); }
 async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string, destination: ArabicDestination) {
   const main = page.getByRole('main');
-  if (name === 'Overview' && role === 'student') await expect(main.getByRole('heading', { level: 1 })).toHaveText(/^مرحبًا، /); else if (name === 'Overview' && role === 'parent') await expect(main.getByRole('heading', { level: 1 })).toHaveText(/^(التعلّم، بوضوح|تعلّم واضح مع)/); else await expect(main.getByRole('heading', { level: 1 })).toHaveText(name === 'Overview' ? arabicRoleHeadings[role] : destination.heading ?? destination.label);
-  if (destination.refresh) await expect(main.getByRole('button', { name: destination.refresh, exact: true })).toBeVisible();
   const staff = role === 'admin' || role === 'teacher' || role === 'coordinator';
   const manager = role === 'admin' || role === 'teacher';
-  const tabs = main.getByRole('group', { name: destination.label, exact: true });
+  // Content headings remain with their feature; section controls now occupy
+  // the same owner's focused navigation slot outside main.
+  const headings: Record<string, string> = {
+    School: role === 'admin' ? 'الإعداد' : 'العمليات اليومية',
+    Community: role === 'parent' ? 'الإعلانات' : 'غرف الصف والمجموعات',
+    Portfolio: role === 'student' ? 'قصة تعلّمي' : role === 'parent' ? 'قصة تعلّم معتمدة من المدرسة' : 'العمل المختار والتأمل',
+    'Curriculum context': 'مصادر المنهج', Learning: 'مقرراتك',
+    Academic: manager ? 'التصحيح' : 'النتائج الصادرة',
+    'Next steps': role === 'student' ? 'مهام التدريب' : role === 'coordinator' ? 'النتائج' : 'المقترحات',
+  };
+  if (name === 'Overview' && role === 'student') await expect(main.getByRole('heading', { level: 1 })).toHaveText(/^مرحبًا، /); else if (name === 'Overview' && role === 'parent') await expect(main.getByRole('heading', { level: 1 })).toHaveText(/^(التعلّم، بوضوح|تعلّم واضح مع)/); else await expect(main.getByRole('heading', { level: 1 })).toHaveText(name === 'Overview' ? arabicRoleHeadings[role] : headings[name] ?? destination.heading ?? destination.label);
+  const sectionNavigation = page.locator('[data-workspace-sections]');
+  if (destination.refresh) await expect(page.locator('main, [data-workspace-sections]').getByRole('button', { name: destination.refresh, exact: true })).toBeVisible();
+  const tabs = sectionNavigation.getByRole('group', { name: destination.label, exact: true });
+  const sectionLabels = async (expected: string[], selected: string) => {
+    if (expected.length === 1) {
+      await expect(tabs).toHaveCount(0);
+      await expect(sectionNavigation.locator('.cuevo-workspace-section-current')).toHaveText(expected[0]);
+    } else {
+      await expect(tabs.getByRole('button')).toHaveText(expected);
+      await expect(tabs.getByRole('button', { name: selected, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    }
+  };
   const selector = async (label: string, placeholder: string) => {
     const choice = main.getByRole('combobox', { name: label, exact: true });
     await expect(choice).toBeVisible();
@@ -86,9 +106,8 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
       : role === 'coordinator' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'الأشخاص والصلاحيات', 'السياسات', 'العمليات اليومية']
         : role === 'teacher' ? ['الإعداد', 'الحرم والدعم التعليمي المعتمد', 'العمليات اليومية']
           : role === 'parent' ? ['الدعم التعليمي المعتمد', 'العمليات اليومية'] : ['العمليات اليومية'];
-    await expect(tabs.getByRole('button')).toHaveText(expected);
-    await expect(tabs.getByRole('button', { name: role === 'admin' ? 'الإعداد' : 'العمليات اليومية', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    if (staff && role !== 'admin') {await main.getByRole('button',{name:'العمليات اليومية',exact:true}).click();await selector('السجلات اليومية للصف', 'جميع الصفوف المسموح بها');}
+    await sectionLabels(expected, role === 'admin' ? 'الإعداد' : 'العمليات اليومية');
+    if (staff && role !== 'admin') {await tabs.getByRole('button',{name:'العمليات اليومية',exact:true}).click();await selector('السجلات اليومية للصف', 'جميع الصفوف المسموح بها');}
   } else if (name === 'Community') {
     await expect(tabs.getByRole('button')).toHaveText(role === 'parent' ? ['الإعلانات', 'الإشعارات', 'محادثات أولياء الأمور والمعلّمين']
       : manager ? ['غرف الصف والمجموعات', 'الإعلانات', 'الإشعارات', 'محادثات أولياء الأمور والمعلّمين'] : ['غرف الصف والمجموعات', 'الإعلانات', 'الإشعارات']);
@@ -96,19 +115,16 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
   } else if (name === 'Development') {
     await selector('فترة التعلّم', 'اختر فترة');
     if (staff) await selector('الطالب', 'اختر طالبًا');
-    if (role === 'student' || role === 'admin') await expect(main.getByText('اختر فترة تعلّم لعرض نقاطها وأنشطتها وإنجازاتها المسجّلة.',{exact:true}).first()).toBeVisible();
+    if (role === 'student') await expect(main.getByText('اختر فترة تعلّم لعرض نقاطها وأنشطتها وإنجازاتها المسجّلة.',{exact:true}).first()).toBeVisible();
     else await expect(main.getByText('اختر طالبًا مكتمل السياق المدرسي الحالي لفتح نموّه الشخصي.', { exact: true })).toBeVisible();
   } else if (name === 'Curriculum context') {
-    const sourceTabs = main.locator('.curriculum-workspace__navigation').getByRole('group', { name: destination.label, exact: true });
-    await expect(sourceTabs.getByRole('button')).toHaveText(['مصادر المنهج', 'أهداف التعلّم', 'برامج المدرسة', 'الولاية وأطر الجودة']);
-    await expect(sourceTabs.getByRole('button', { name: 'مصادر المنهج', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await sectionLabels(['مصادر المنهج', 'أهداف التعلّم', 'برامج المدرسة', 'الولاية وأطر الجودة'], 'مصادر المنهج');
   } else if (name === 'Learning') {
     await expect(tabs.getByRole('button')).toHaveText(manager || role === 'student' ? ['المقررات', 'التقييمات', 'التسليمات'] : ['المقررات', 'التقييمات']);
     await expect(tabs.getByRole('button', { name: 'المقررات', exact: true })).toHaveAttribute('aria-pressed', 'true');
   } else if (name === 'Academic') {
-    await expect(tabs.getByRole('button')).toHaveText(manager ? ['الأهداف', 'سلالم التقدير', 'التصحيح', 'سجل درجات الصف', 'النتائج الصادرة']
-      : staff ? ['الأهداف', 'سلالم التقدير', 'النتائج الصادرة'] : ['النتائج الصادرة']);
-    await expect(tabs.getByRole('button', { name: manager ? 'التصحيح' : 'النتائج الصادرة', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await sectionLabels(manager ? ['الأهداف', 'سلالم التقدير', 'التصحيح', 'سجل درجات الصف', 'النتائج الصادرة']
+      : staff ? ['الأهداف', 'سلالم التقدير', 'النتائج الصادرة'] : ['النتائج الصادرة'], manager ? 'التصحيح' : 'النتائج الصادرة');
   } else if (name === 'Progress' && staff) {
     await selector('الطالب', 'اختر طالبًا');
     await selector('الصف', 'اختر صفًا');
@@ -120,6 +136,7 @@ async function arabicPrimaryLabels(page: Page, role: CustomerRole, name: string,
     await expect(tabs.getByRole('button')).toHaveText(expected);
     const selectedTab = tabs.getByRole('button', { name: role === 'student' ? 'مهام التدريب' : 'المقترحات', exact: true });
     await selectedTab.click(); await settled(page); await expect(selectedTab).toHaveAttribute('aria-pressed', 'true');
+    await expect(main.getByRole('heading', { level: 1 })).toHaveText(role === 'student' ? 'مهام التدريب' : 'المقترحات');
   } else if (name === 'Access settings') {
     await expect(main.getByRole('heading', { name: 'العضوية الحالية', exact: true })).toBeVisible();
     await expect(main.getByRole('heading', { name: 'الميزات التي توفرها مدرستك', exact: true })).toBeVisible();
@@ -251,15 +268,16 @@ test('parent explicitly selects the child for approved results and the same chil
   const originalRelationship=await currentRelationship();
   async function configureRelationship(body:Record<string,unknown>){const current=await currentRelationship();return command(page,adminToken,'/v1/school/guardian-relationships',{...body,expectedRevision:current?.revision??0});}
   await configureRelationship({ ...relationship, status: 'active' });
+  const verificationFailures: unknown[] = [];
   try {
     await signIn(page, all.find(row => row.role === 'parent')!);
     const child = page.getByLabel('Child', { exact: true }); await expect(child).toBeVisible();
     await expect(child).toHaveValue(''); await capture(page, '09-parent-choose-child.png');
     await child.selectOption(childId);
     const report = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/learners/${childId}/academic-report`);
-    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Academic', exact: true }).click();
+    await openTrailWorkspace(page, 'Academic');
     expect((await report).ok()).toBe(true); await expect(page.getByLabel('Child', { exact: true })).toHaveValue(childId);
-    await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
+    await openTrailWorkspace(page, 'Portfolio');
     await expect(page.getByLabel('Child', { exact: true })).toHaveValue(childId);
     await capture(page, '10-parent-selected-child-portfolio.png');
     await configureRelationship({ ...relationship, status: 'revoked' });
@@ -267,7 +285,14 @@ test('parent explicitly selects the child for approved results and the same chil
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); expect((await accessRead).ok()).toBe(true); await settled(page);
     await expect(page.getByLabel('Child', { exact: true })).toHaveValue('');
     await expect(page.locator('.portfolio-item')).toHaveCount(0);
-  } finally { await configureRelationship(originalRelationship?{parentId,studentId:childId,relationshipType:originalRelationship.relationshipType,status:originalRelationship.status,effectiveFrom:originalRelationship.effectiveFrom,effectiveTo:originalRelationship.effectiveTo,confirmAccessChange:true}:{...relationship,status:'revoked'}); }
+  } catch (error) {
+    verificationFailures.push(error);
+  } finally {
+    try { await configureRelationship(originalRelationship?{parentId,studentId:childId,relationshipType:originalRelationship.relationshipType,status:originalRelationship.status,effectiveFrom:originalRelationship.effectiveFrom,effectiveTo:originalRelationship.effectiveTo,confirmAccessChange:true}:{...relationship,status:'revoked'}); }
+    catch (error) { verificationFailures.push(error); }
+  }
+  if (verificationFailures.length === 1) throw verificationFailures[0];
+  if (verificationFailures.length > 1) throw new AggregateError(verificationFailures, 'Parent source verification and exact guardian restoration both failed.');
 });
 
 test('main school relationships show readable names and no opaque identifiers', async ({ page }) => {
@@ -322,9 +347,10 @@ test('all roles use readable primary headings and selectors across current Engli
     expect(names, `${role} has current customer navigation`).toEqual(expect.arrayContaining(['Overview', 'Access settings', 'Account']));
     for (const name of names) {
       await openTrailWorkspace(page, name); await settled(page);
-      const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td').allTextContents();
+      const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td,[data-workspace-sections] button,[data-workspace-sections] .cuevo-workspace-section-current').allTextContents();
       expect(primary.join(' '), `${role}/${name} English primary labels`).not.toMatch(identifier);
     }
+    await openTrailWorkspace(page, 'Overview'); await settled(page);
     await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
@@ -339,10 +365,13 @@ test('all roles use readable primary headings and selectors across current Engli
       const destination = destinations[index];
       const choice = await trailWorkspaceAction(page, destination.label);
       await choice.click(); await settled(page);
-      if (!['Access settings', 'Account'].includes(name)) await expect(choice).toHaveAttribute('aria-current', 'page');
+      if (!['Access settings', 'Account'].includes(name)) {
+        const current = page.locator('button[data-workspace-destination][aria-current="page"]');
+        await expect(current).toHaveCount(1); await expect(current).toHaveText(destination.label);
+      }
       await test.step(`${role}/${name}: Arabic source labels and current role context`, () => arabicPrimaryLabels(page, role, name, destination));
       await settled(page);
-      const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td').allTextContents();
+      const primary = await page.locator('main h1,main h2,main h3,main h4,main h5,main h6,main select option,main .school-table-scroll td,[data-workspace-sections] button,[data-workspace-sections] .cuevo-workspace-section-current').allTextContents();
       expect(primary.join(' '), `${role}/${name} Arabic primary labels`).not.toMatch(identifier);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${role}/${name} Arabic mobile overflow`).toBe(true);
     }

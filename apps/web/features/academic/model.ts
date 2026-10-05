@@ -71,7 +71,7 @@ type MarkRevisionBase = { id: string;resultId?:string|null; revision: number; fe
 export type MarkRevision = MarkRevisionBase & ({ model: 'numeric'; score: number; maxScore: number } | { model: 'rubric'; nativeResult: NativeRubricResult });
 type MarkingBase = { id: string; assessmentId: string; learnerId: string; content: string; responseKind?: 'TEXT' | 'FILE'; artifactCount?: number; assessmentTitle: string; learnerName: string; policyVersion: number; referenceId: string | null; currentResult: MarkRevision | null; submissionRevision: number; submissionStatus: 'SUBMITTED' | 'RETURNED' | 'RESUBMITTED' | 'CLOSED' };
 export type MarkingItem = MarkingBase & ({ model: 'numeric'; maxScore: number; rubric: null } | { model: 'rubric'; rubric: RubricContext });
-type ReleasedBase = { id: string; submissionId: string; assessmentId?: string; learnerId: string; revision: number; feedback: string; status: 'RELEASED'; policyVersion: number; referenceId: string; referenceVersion: string; evidenceId: string; createdAt: string; assessmentTitle?: string; referenceTitle?: string; learnerName?: string;correctionReason?:string|null;previousResultId?:string|null };
+type ReleasedBase = { id: string; submissionId: string; assessmentId?: string; learnerId: string; revision: number; feedback: string; status: 'RELEASED'; policyVersion: number; referenceId: string; referenceVersion: string; evidenceId: string; createdAt: string; assessmentTitle?: string; referenceTitle?: string; learnerName?: string | null;correctionReason?:string|null;previousResultId?:string|null };
 export type NumericReleasedResult = ReleasedBase & { model: 'numeric'; score: number; maxScore: number; nativeResult: NativeNumericResult };
 export type ReleasedResult = NumericReleasedResult | ReleasedBase & { model: 'rubric'; nativeResult: NativeRubricResult };
 export type Evidence = AcademicEvidence;
@@ -139,7 +139,8 @@ export function parseMarkingItem(value: unknown): MarkingItem {
 }
 export function parseReleasedResult(value: unknown): ReleasedResult {
   if (!object(value) || !strings(value, ['id', 'submissionId', 'learnerId', 'referenceId', 'referenceVersion', 'evidenceId', 'createdAt']) || !Number.isFinite(Date.parse(String(value.createdAt))) || value.status !== 'RELEASED' || !integer(value.revision) || !integer(value.policyVersion) || typeof value.feedback !== 'string') throw new LearningApiError('invalid');
-  if (['assessmentTitle','referenceTitle','learnerName'].some(key=>value[key]!==undefined&&(typeof value[key]!=='string'||!value[key]))) throw new LearningApiError('invalid');
+  if (['assessmentTitle','referenceTitle'].some(key=>value[key]!==undefined&&(typeof value[key]!=='string'||!value[key]))) throw new LearningApiError('invalid');
+  if(value.learnerName!==undefined&&value.learnerName!==null&&(typeof value.learnerName!=='string'||!value.learnerName.trim()||value.learnerName.length>200))throw new LearningApiError('invalid');
   const nativeResult = parseNativeResult(value.nativeResult);
   const model = value.model ?? 'numeric';
   if (model !== nativeResult.type || nativeResult.policyVersion !== value.policyVersion || (nativeResult.type === 'numeric' ? nativeResult.score !== value.score || nativeResult.maxScore !== value.maxScore : value.score !== undefined || value.maxScore !== undefined)) throw new LearningApiError('invalid');

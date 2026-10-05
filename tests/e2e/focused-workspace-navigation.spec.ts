@@ -121,3 +121,13 @@ test('focused content uses one current heading and the long workspace is keyboar
   await expect.poll(() => main.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
   await expect(page.locator('[data-workspace-sections]')).toBeVisible();
 });
+
+test('workspace chooser expanded state follows the native popover after Home reentry', async({page})=>{
+ await focusedCommunity(page);
+ const chooser=page.locator('.workspace-chrome__switcher'),trigger=page.locator('.workspace-chrome__workspace-choice');
+ await trigger.click();await expect(chooser).toBeVisible();await expect(trigger).toHaveAttribute('aria-expanded','true');
+ await chooser.getByRole('button',{name:'Overview',exact:true}).click();await expect(page.locator('.workspace-chrome')).toHaveAttribute('data-navigation-mode','home');
+ await page.locator('.workspace-chrome__navigation').getByRole('button',{name:'Community',exact:true}).click();await expect(page.locator('.workspace-chrome')).toHaveAttribute('data-navigation-mode','focused');
+ await expect(chooser).toBeHidden();await expect(trigger).toHaveAttribute('aria-expanded','false');
+ await trigger.click();await expect(chooser).toBeVisible();await expect(trigger).toHaveAttribute('aria-expanded','true');
+});

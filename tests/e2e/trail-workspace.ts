@@ -82,8 +82,10 @@ export async function trailWorkspaceAction(page: Page, label: string): Promise<L
     await trigger.scrollIntoViewIfNeeded();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await expect(trigger).toBeVisible(); await expect(trigger).toBeEnabled();
-    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
     const chooser = page.locator('.workspace-chrome__switcher');
+    // Home replaces the focused popover DOM. Its former toggle state can
+    // outlive that node, so open the current native surface when it is closed.
+    if (!await chooser.isVisible()) await trigger.click();
     await expect(chooser).toBeVisible();
     return chooser.getByRole('button', { name: label, exact: true });
   }

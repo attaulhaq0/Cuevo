@@ -47,10 +47,10 @@ export function usePaginatedLearningQuery<T extends { id: string }>(path: string
     void requestRef.current(pagePath(path, cursor), { signal: controller.signal, isCurrentRead: () => currentContext.current === context }).then((value) => {
       if (controller.signal.aborted || currentContext.current !== context) return;
       const page = currentParseResponse(path, value, value => parsePage(value, parse));
-      if (accumulator.current.apply(context, cursor, page)) setState((current) => ({ ...current, data: accumulator.current.items, nextCursor: page.nextCursor, loadingMore: false }));
+      if (accumulator.current.apply(context, cursor, page)) { pending.current = false; setState((current) => ({ ...current, data: accumulator.current.items, nextCursor: page.nextCursor, loadingMore: false })); }
     }).catch((error: unknown) => {
-      if (!controller.signal.aborted && currentContext.current === context && accumulator.current.context === context) setState((value) => ({ ...value, loadingMore: false, moreError: error instanceof LearningApiError ? error : new LearningApiError('invalid') }));
-    }).finally(() => { if (currentContext.current === context && accumulator.current.context === context) pending.current = false; });
+      if (!controller.signal.aborted && currentContext.current === context && accumulator.current.context === context) { pending.current = false; setState((value) => ({ ...value, loadingMore: false, moreError: error instanceof LearningApiError ? error : new LearningApiError('invalid') })); }
+    }).finally(() => { if (currentContext.current === context && accumulator.current.context === context && moreController.current === controller) pending.current = false; });
   }, [context, enabled, path, parse]);
   return { ...(state.context === context ? state : empty<T>(context, enabled)), loadMore };
 }

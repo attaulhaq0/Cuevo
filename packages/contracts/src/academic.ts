@@ -1,5 +1,6 @@
 import { z } from 'zod';
 const evidenceName = z.string().min(1).max(200).nullable();
+const currentResultLearnerName = z.string().min(1).max(200).refine(value => value.trim().length > 0, 'Current learner names must not be blank.').nullable().optional();
 export const academicEvidenceContextSchema = z.object({
  status: z.enum(['READY', 'REQUIRES_REVIEW']), labelBasis: z.literal('CURRENT_REGISTERED_NAMES_AND_SOURCE_TASK'),
  identityRequiresReview: z.boolean(), learnerName: evidenceName, recordedByName: evidenceName,
@@ -35,7 +36,7 @@ export const closedResultCorrectionSchema=z.union([z.object({score:z.number().mi
 
 const nativeNumericReportSchema=z.object({type:z.literal('numeric'),score:z.number().min(0).max(100000),maxScore:z.number().positive().max(100000),policyVersion:z.number().int().positive(),normalized:z.null().optional()}).strict().refine(value=>value.score<=value.maxScore,'Native score must remain within its source scale.');
 const nativeRubricReportSchema=z.object({type:z.literal('rubric'),rubricId:z.uuid(),rubricTitle:z.string().min(1).max(200),rubricVersion:z.string().min(1).max(100),policyVersion:z.number().int().positive(),normalized:z.null(),criteria:z.array(z.object({criterionKey:rubricKey,criterionTitle:z.string().min(1).max(200),levelKey:rubricKey,levelLabel:z.string().min(1).max(200),levelDescription:z.string().min(1).max(2000)}).strict()).min(1).max(30)}).strict();
-const reportResultContext={id:z.uuid(),submissionId:z.uuid(),assessmentId:z.uuid(),learnerId:z.uuid(),revision:z.number().int().positive(),feedback:z.string().max(10000),status:z.literal('RELEASED'),policyVersion:z.number().int().positive(),referenceId:z.uuid(),referenceVersion:z.string().min(1).max(100),evidenceId:z.uuid(),createdAt:z.iso.datetime({offset:true}),actorId:z.uuid(),parentVisible:z.boolean(),assessmentTitle:z.string().min(1).max(200),referenceTitle:z.string().min(1).max(200)};
+const reportResultContext={id:z.uuid(),submissionId:z.uuid(),assessmentId:z.uuid(),learnerId:z.uuid(),learnerName:currentResultLearnerName,revision:z.number().int().positive(),feedback:z.string().max(10000),status:z.literal('RELEASED'),policyVersion:z.number().int().positive(),referenceId:z.uuid(),referenceVersion:z.string().min(1).max(100),evidenceId:z.uuid(),createdAt:z.iso.datetime({offset:true}),actorId:z.uuid(),parentVisible:z.boolean(),assessmentTitle:z.string().min(1).max(200),referenceTitle:z.string().min(1).max(200)};
 export const academicReportResultSchema=z.discriminatedUnion('model',[
  z.object({...reportResultContext,model:z.literal('numeric'),score:z.number().min(0),maxScore:z.number().positive(),nativeResult:nativeNumericReportSchema}).strict(),
  z.object({...reportResultContext,model:z.literal('rubric'),nativeResult:nativeRubricReportSchema}).strict(),

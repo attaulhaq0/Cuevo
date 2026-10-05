@@ -1,5 +1,5 @@
 import { openCurrentResult, openCurrentRubric } from './result-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -44,7 +44,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
     await page.getByLabel('School email').fill(account.email);
     await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, account.role);
-    await page.getByRole('button', { name: 'Academic', exact: true }).click();
+    await openTrailWorkspace(page, 'Academic');
   };
   const signOut = async () => {
     await signOutTrailWorkspace(page);
@@ -178,7 +178,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   await studentResult.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(studentResult).toContainText(submission.id);
   await visualCheck(studentResult);
-  await page.getByRole('button', { name: 'Progress', exact: true }).click();
+  await openTrailWorkspace(page, 'Progress');
   await expect.poll(async () => { const refreshed = page.waitForResponse(response => response.url().endsWith('/v1/learners/20000000-0000-4000-8000-000000000012/state') && response.request().method() === 'GET'); await page.getByRole('button', { name: 'Refresh learner state', exact: true }).click(); expect((await refreshed).ok()).toBe(true); await expect(page.getByText('Loading learner state…', { exact: true })).toHaveCount(0); return page.locator(`.progress-workspace [data-result-id="${correction.id}"]`).count(); }, { timeout: 15_000 }).toBe(1);
   await expect(page.locator(`.progress-workspace [data-result-id="${correction.id}"]`)).toContainText('Secure explanation');
   await visualCheck(page.locator(`.progress-workspace [data-result-id="${correction.id}"]`));
