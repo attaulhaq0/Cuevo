@@ -22,9 +22,9 @@ const manifest = () => ({
 });
 const context = { sha, environment: 'staging', ciRunId: '42', now, migrations: [{ version: '20261002074258', sha256: digest }] };
 const trustedRun = () => ({ id: 42, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'owner/repo' } });
-const releaseControls = () => ({ environment: { id:123,name: 'production', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }, branches: { branch_policies: [{ name: 'main', type: 'branch' }] }, signatures: { enabled: true }, main: { allow_force_pushes:{enabled:false},allow_deletions:{enabled:false},enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false, required_approving_review_count: 0,require_last_push_approval:false,bypass_pull_request_allowances:{users:[],teams:[],apps:[]} } } });
+const releaseControls = () => ({ repository:{full_name:'owner/repo',name:'repo',owner:{id:1,login:'owner',type:'Organization'}}, environment: { id:123,name: 'production', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }, branches: { branch_policies: [{ name: 'main', type: 'branch' }] }, signatures: { enabled: true }, main: { allow_force_pushes:{enabled:false},allow_deletions:{enabled:false},enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false, required_approving_review_count: 0,require_last_push_approval:false,bypass_pull_request_allowances:{users:[],teams:[],apps:[]} } } });
 test('release controls require existing protected environment and reviewed signed current main', () => {
-  validateReleaseControls(releaseControls(), { environment: 'production' });
+  validateReleaseControls(releaseControls(), { environment: 'production', repository: 'owner/repo' });
   for (const change of [
     (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules = []; },
     (v: ReturnType<typeof releaseControls>) => { v.environment.can_admins_bypass = true; },
@@ -37,10 +37,10 @@ test('release controls require existing protected environment and reviewed signe
     (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.require_code_owner_reviews = true; },
     (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.dismiss_stale_reviews = false; },
     (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.required_approving_review_count = 1; },
-  ]) { const value = releaseControls(); change(value); assert.throws(() => validateReleaseControls(value, { environment: 'production' })); }
-  assert.throws(() => validateReleaseControls({}, { environment: 'production' }));
+  ]) { const value = releaseControls(); change(value); assert.throws(() => validateReleaseControls(value, { environment: 'production', repository: 'owner/repo' })); }
+  assert.throws(() => validateReleaseControls({}, { environment: 'production', repository: 'owner/repo' }));
   const bypass = { ...releaseControls(), main: { ...releaseControls().main, required_pull_request_reviews: { ...releaseControls().main.required_pull_request_reviews, bypass_pull_request_allowances: { users: [{ id: 1 }], teams: [], apps: [] } } } };
-  assert.throws(() => validateReleaseControls(bypass, { environment: 'production' }));
+  assert.throws(() => validateReleaseControls(bypass, { environment: 'production', repository: 'owner/repo' }));
 });
 test('automatic release context admits only successful canonical current-main push CI', () => {
   const expected = { sha, ref: 'refs/heads/main', repository: 'owner/repo', eventName: 'workflow_run' };
@@ -76,6 +76,7 @@ test('actual release context writes only admitted outputs and rejects stale main
       process.argv[2] = ${JSON.stringify(mode)};
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
+        if(url==='https://api.github.com/repos/owner/repo')return Response.json({full_name:'owner/repo',name:'repo',owner:{id:1,login:'owner',type:'Organization'}});
         if (url === 'https://api.github.com/repos/owner/repo/actions/runs/42') return new Response(JSON.stringify(${JSON.stringify(run)}));
         if (url === 'https://api.github.com/repos/owner/repo/git/ref/heads/main') return new Response(JSON.stringify({ object: { type: 'commit', sha: ${JSON.stringify(currentSha)} } }));
         if (url === 'https://api.github.com/repos/owner/repo/environments/production') return new Response(JSON.stringify(${JSON.stringify(releaseControls().environment)}), { status: ${protectedEnvironment ? 200 : 404} });
@@ -271,6 +272,7 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
       Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
+        if(url==='https://api.github.com/repos/owner/repo')return Response.json({full_name:'owner/repo',name:'repo',owner:{id:1,login:'owner',type:'Organization'}});
         if(url==='https://api.github.com/repos/owner/repo/actions/runs/42')return new Response(JSON.stringify(${JSON.stringify(trustedRun())}));
         if(url==='https://api.github.com/repos/owner/repo/git/ref/heads/main')return new Response(JSON.stringify({object:{type:'commit',sha:'${sha}'}}));
         if(url==='https://api.github.com/repos/owner/repo/actions/runs/51')return new Response(JSON.stringify({id:51,run_attempt:1,repository:{full_name:'owner/repo'},head_sha:'${sha}',head_branch:'main',path:'.github/workflows/release.yml',event:'workflow_dispatch',status:'in_progress',conclusion:null}));

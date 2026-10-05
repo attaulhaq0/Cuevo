@@ -3,6 +3,7 @@ import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
+import {goalEn}from'../../apps/web/features/development/goal-messages';
 
 const root = resolve(import.meta.dirname, '../..');
 const css = ['packages/ui/src/tokens.css', 'apps/web/app/globals.css', 'apps/web/features/development/styles.css'].map(file => readFileSync(resolve(root, file), 'utf8')).join('\n');
@@ -71,7 +72,9 @@ test('dense current achievements keep natural height beside a longer class alias
   const milestones = await page.locator('.development-milestones').boundingBox(), board = await page.locator('.development-board').boundingBox();
   expect(milestones!.height).toBeLessThan(board!.height - 400);
   await expect(page.locator('.development-goal-records')).not.toHaveAttribute('open');
-  await expect(page.locator('.development-goals .development-meta')).toContainText('More');
+  const goals=page.locator('.development-goals'),history=goals.locator('.development-goal-records'),continuation=goals.locator('[data-state="review"]').filter({hasText:goalEn.moreGoals});
+  await expect(continuation).toHaveCount(1);await expect(continuation).toHaveText(goalEn.moreGoals);expect(await continuation.evaluate(element=>element.closest('details'))).toBeNull();
+  const more=goals.getByRole('button',{name:'Load more: Learning goals',exact:true});await expect(more).toHaveCount(1);await expect(more).toBeEnabled();await expect(more).toHaveAttribute('data-page-cursor','da000000-0000-4000-8000-000000004024');expect(await more.evaluate(element=>element.closest('details'))).toBeNull();await expect(history).not.toHaveAttribute('open');
   await health(page);
 });
 

@@ -19,7 +19,7 @@ async function desk(page: Page, mode: Mode) {
       if(url.pathname.includes('/auth/v1/token'))data={access_token:'fictional-student-desk-token',token_type:'bearer',expires_in:3600,refresh_token:'fictional-student-desk-refresh',user:{id:learner,aud:'authenticated',role:'authenticated',email:'learner@example.invalid',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-10-01T00:00:00Z'}};
       else if(url.pathname==='/v1/me')data={userId:learner,schoolId:school,membershipId:id(9),role:'student',displayName:'Lina Hassan',school:{id:school,name:'Reference school'},entitlements:['learning','assessment','curriculum','learner.state','improvement','portfolio','community','school.operations']};
       else if(url.pathname==='/v1/diagnostics/config')data={enabled:false};
-      else if(url.pathname==='/v1/assessments')data={items:[work,{...work,id:id(11),title:'Compare your next explanation'}],nextCursor:null};
+      else if(url.pathname==='/v1/assessments')data={items:[work,{...work,id:id(11),title:'Compare your next explanation'}],nextCursor:mode==='partial'?id(82):null};
       else if(url.pathname==='/v1/results'){
         if(mode==='feedback_failure'&&url.searchParams.has('cursor')){status=503;data={code:'REQUEST_UNAVAILABLE'};}
         else data={items:[result],nextCursor:mode==='feedback_failure'?id(81):null};
@@ -77,6 +77,19 @@ test('a failed summary continuation keeps its named source error and retry visib
   await expect(recovery.locator('[role="alert"]')).toBeVisible();
   await expect(recovery.getByRole('button',{name:'Load more: Released feedback and results',exact:true})).toBeVisible();
   expect(await recovery.evaluate(element=>element.closest('details'))).toBeNull();
+});
+
+test('partial Student work keeps concise source recovery beside the heading without displacing the current task',async({page})=>{
+ await desk(page,'partial');
+ const row=page.locator('.student-trail__intro-row'),notice=row.locator('.cuevo-workspace-state'),task=page.locator('.student-trail__current');
+ await expect(notice).toHaveAttribute('data-state','unknown');await expect(notice.getByRole('button')).toBeVisible();
+ for(const locale of ['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();for(const width of[1366,1024,901,768,390,320]){
+  await page.setViewportSize({width,height:900});await expect(page.locator('main h1')).toHaveCount(1);
+  const geometry=await row.evaluate(e=>({height:e.getBoundingClientRect().height,noticeHeight:e.querySelector('.cuevo-workspace-state')!.getBoundingClientRect().height,recoveryHeight:e.querySelector('button')!.getBoundingClientRect().height,overflow:document.documentElement.scrollWidth>innerWidth+1}));
+  expect(geometry.noticeHeight,`${locale}/${width}: source context keeps room for readable copy and its 44px recovery`).toBeLessThanOrEqual(width<=540?128:96);
+  expect(geometry.recoveryHeight).toBeGreaterThanOrEqual(44);expect(geometry.overflow).toBe(false);
+  await expect(task.getByRole('heading',{name:work.title,exact:true})).toBeVisible();
+ }}
 });
 
 for(const mode of['empty','denied','wrong','partial']as const)test(`Student Portfolio ${mode} remains honest without hiding independent current work`,async({page})=>{

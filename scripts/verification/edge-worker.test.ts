@@ -114,6 +114,23 @@ test('failure diagnostics retain only a bounded phase code and exclude raw datab
   assert.equal(safeEdgeFailureCode(new TypeError('Private payload')), 'TYPE_ERROR');
   assert.equal(safeEdgeFailureCode(edgeVerificationFailure('OWNED_SERVER_EXITED')), 'OWNED_SERVER_EXITED');
 });
+
+test('Edge fetch diagnostics keep a bounded own-data transport cause and never inspect private hooks',()=>{
+ const cause=(edgeDiagnostics as unknown as{safeEdgeTransportCause:(error:unknown)=>string|null}).safeEdgeTransportCause;assert.equal(typeof cause,'function');
+ assert.equal(cause(new TypeError('private',{cause:Object.assign(Error('private socket'),{code:'ECONNRESET'})})),'ECONNRESET');assert.equal(cause({cause:{cause:{code:'UND_ERR_SOCKET',message:'private'}}}),'UND_ERR_SOCKET');
+ for(const code of['ECONNRESET','ECONNREFUSED','EPIPE','ETIMEDOUT','EAI_AGAIN','ENOTFOUND','UND_ERR_SOCKET','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','UND_ERR_ABORTED'])assert.equal(cause({cause:{code,hostname:'private',address:'private',port:1}}),code);
+ let reads=0;const accessor=Object.defineProperty({},'cause',{get(){reads++;throw Error('private');}});const code=Object.defineProperty({},'code',{get(){reads++;throw Error('private');}});const cycle:{cause?:unknown}={};cycle.cause=cycle;
+ for(const error of[null,undefined,accessor,{cause:code},{cause:{code:{toString(){reads++;return'ECONNRESET';}}}},Object.create({code:'ECONNRESET'}),cycle,{code:'private-host-password'},{cause:{cause:{cause:{cause:{cause:{code:'ECONNRESET'}}}}}},new Proxy({},{getOwnPropertyDescriptor(){throw Error('private');}})])assert.equal(cause(error),null);assert.equal(reads,0);
+ assert.equal(safeEdgeFailureCode(new TypeError('private',{cause:{code:'ECONNRESET'}})),'TYPE_ERROR');
+});
+
+test('Edge final auth diagnostic admits only fixed probe and nullable transport code',()=>{
+ const summarize=edgeDiagnostics.edgeVerificationSummary;const failures=[{phase:'AUTH',code:'TYPE_ERROR',authProbe:'WRONG_SIGNATURE',transportCause:'ECONNRESET'}];const value=summarize([{name:'phase-auth',passed:false},{name:'owned-cleanup-and-container-preservation',passed:true}],failures,'a'.repeat(64));assert.deepEqual(value.failures,failures);assert.equal(value.status,'FAILED');
+ for(const row of[{phase:'AUTH',code:'TYPE_ERROR',authProbe:'PRIVATE_URL',transportCause:null},{phase:'AUTH',code:'TYPE_ERROR',authProbe:'WRONG_SIGNATURE',transportCause:'private'},{phase:'AUTH',code:'TYPE_ERROR',authProbe:'WRONG_SIGNATURE',transportCause:null,stack:'private'},Object.defineProperty({phase:'AUTH',code:'TYPE_ERROR'},'authProbe',{enumerable:true,get(){throw Error('private');}})])assert.throws(()=>summarize([{name:'phase-auth',passed:false}],[row],'a'.repeat(64)));
+ const unknown=summarize([{name:'phase-auth',passed:false}],[{phase:'AUTH',code:'TYPE_ERROR',authProbe:null,transportCause:null}],'a'.repeat(64));assert.deepEqual(unknown.failures,[{phase:'AUTH',code:'TYPE_ERROR',authProbe:null,transportCause:null}]);
+ for(const authProbe of['PUBLIC_UNSIGNED_READY','WRONG_SIGNATURE','EXTRA_SCOPE','CONTROL_UNCHANGED'])assert.doesNotThrow(()=>summarize([{name:'phase-auth',passed:false}],[{phase:'AUTH',code:'TYPE_ERROR',authProbe,transportCause:null}],'a'.repeat(64)));
+ assert.throws(()=>summarize([{name:'phase-auth',passed:false}],[{phase:'AUTH',code:'TYPE_ERROR',authProbe:'WRONG_SIGNATURE'}],'a'.repeat(64)));assert.throws(()=>summarize([{name:'phase-setup',passed:false}],[{phase:'SETUP',code:'TYPE_ERROR',authProbe:null,transportCause:null}],'a'.repeat(64)));
+});
 test('Docker inventory retries only transient read races and stops after three attempts', async () => {
   let attempts = 0;
   const result = await readEdgeInventory(async () => { attempts++; if (attempts < 3) throw edgeVerificationFailure('DOCKER_INVENTORY_RACE'); return ['new-owned-container']; });

@@ -1,5 +1,7 @@
 # Academic feature
 
+The unselected Marking chooser gives its submission-selection instruction once through the existing native disclosure summary. A standalone chooser retains its section heading; the root page still owns its content-first heading. Named choices, exact selected ID/opener callback, sourceComplete empty/unknown state and original-command disabled controls remain unchanged. Owner render and `marking-choice-instruction.spec.ts` cases verify keyboard selection and pending locks in English/Arabic desktop/mobile without domain writes.
+
 The current Academic root supplies one content-first WorkspacePageHeading for Objectives, Rubrics, Marking, Class gradebook or Released results, including loading/error/empty and unresolved Parent-child paths. An admitted exact marking source supplies its current task title and learner caption; exact released-result sources without a human title keep the truthful section heading. Nested selection stays in its existing owner and keeps its record heading beneath the page; no source read, command or mirrored selection state is added.
 
 When that root already supplies the directory heading, record objectives and released-result cards use level two and their feedback uses level three. The Marking chooser omits only its repeated generic title. Standalone/default composition retains its original section/record levels; selected record refs, current source context and native values are unchanged.

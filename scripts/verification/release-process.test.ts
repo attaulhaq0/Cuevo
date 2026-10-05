@@ -31,8 +31,9 @@ type Injection = {
   approval?: 'missing' | 'generic' | 'rejected' | 'duplicate' | 'wrong-founder' | 'malformed';
   unavailable?: string; invalidJson?: string; treeChanged?: boolean; diffChanged?: boolean;
   dirty?: boolean; untracked?: boolean; ancestorDenied?: boolean; controlsChanged?: boolean;
-  afterPull?: 'main' | 'controls' | 'expiry'; pullPublicChanged?: boolean;
+  afterPull?: 'main' | 'controls' | 'expiry'|'owner'; pullPublicChanged?: boolean;
   apiSameProject?:boolean;
+  repositoryOwner?:'User'|'Organization'|'Bot';repositoryName?:string;repositoryUnavailable?:boolean;bypassMetadata?:'omitted'|'null'|'unsafe';
 };
 
 function fixtureManifest(environment: 'staging' | 'production') {
@@ -132,13 +133,14 @@ async function createFixture(environment: 'staging' | 'production') {
       syncBuiltinESMExports();
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
+        if(url==='https://api.github.com/repos/owner/repo'){if(state.repositoryUnavailable)return new Response('PRIVATE_RESPONSE_SENTINEL',{status:403});return Response.json({full_name:state.repositoryName??'owner/repo',name:'repo',owner:{id:1,login:'owner',type:pulled&&state.afterPull==='owner'?'Organization':state.repositoryOwner??'Organization'}});}
         if (state.unavailable && url.endsWith(state.unavailable)) return new Response('PRIVATE_RESPONSE_SENTINEL', { status: 403 });
         if (state.invalidJson && url.endsWith(state.invalidJson)) return new Response('PRIVATE_RESPONSE_SENTINEL');
         if (url.endsWith('/actions/runs/42')) return Response.json({ id: 42, head_sha: '${sha}', head_branch: 'main', event: 'push', status: 'completed', conclusion: state.ciConclusion ?? 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'owner/repo' } });
         if (url.endsWith('/git/ref/heads/main')) return Response.json({ object: { type: 'commit', sha: state.currentSha ?? (pulled && state.afterPull === 'main' ? '${baseSha}' : '${sha}') } });
         if (url.endsWith('/environments/${environment}')) return Response.json({ id: state.environmentId ?? 123, name: '${environment}', can_admins_bypass: state.controlsChanged || (pulled && state.afterPull === 'controls') ? true : false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }, { type: 'branch_policy' }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } });
         if (url.endsWith('/deployment-branch-policies')) return Response.json({ total_count: 1, branch_policies: [{ name: 'main', type: 'branch' }] });
-        if (url.endsWith('/branches/main/protection')) return Response.json({ enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false, required_approving_review_count: 0, require_last_push_approval: false, bypass_pull_request_allowances: { users: [], teams: [], apps: [] } } });
+        if (url.endsWith('/branches/main/protection')) return Response.json({ enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false, required_approving_review_count: 0, require_last_push_approval: false, ...(state.bypassMetadata==='omitted'?{}:{bypass_pull_request_allowances:state.bypassMetadata==='null'?null:{ users: state.bypassMetadata==='unsafe'?[{id:1}]:[], teams: [], apps: [] }}) } });
         if (url.endsWith('/required_signatures')) return Response.json({ enabled: true });
         if (url.endsWith('/actions/runs/51')) return Response.json({ id: 51, run_attempt: state.runAttempt ?? 1, repository: { full_name: 'owner/repo' }, head_sha: '${sha}', head_branch: 'main', path: '.github/workflows/release.yml', event: 'workflow_dispatch', status: 'in_progress', conclusion: null });
         if (url.endsWith('/actions/runs/51/approvals')) {
@@ -256,3 +258,11 @@ test('artifact changes refuse upload and production staging always preserves ski
 test('a shared API and web project is rejected before preparation or credential consumption',async()=>{
  await withFixture(async fixture=>{for(const mode of ['prepare','approval'] as const){const result=fixture.execute(mode,{apiSameProject:true});noProvider(result);assert.match(result.stderr,/separate Vercel projects/);}});
 });
+
+test('live personal repository metadata admits unsupported omission and is read again before every provider boundary',async()=>{
+ await withFixture(async fixture=>{const personal={repositoryOwner:'User' as const,bypassMetadata:'omitted' as const};passed(fixture.execute('prepare',personal));passed(fixture.execute('approval',personal));const build=fixture.execute('build',personal);passed(build);assert.ok(build.stdout.indexOf('FETCH https://api.github.com/repos/owner/repo\n')<build.stdout.indexOf('SINK ["pull"'));passed(fixture.execute('deploy',personal));passed(fixture.execute('verify',personal));
+ for(const mode of['prepare','approval','build','deploy','verify']as const)for(const changed of[{repositoryOwner:'Organization' as const,bypassMetadata:'omitted' as const},{repositoryOwner:'Bot' as const,bypassMetadata:'omitted' as const},{repositoryName:'fork/repo'},{repositoryUnavailable:true},{repositoryOwner:'User' as const,bypassMetadata:'null' as const},{repositoryOwner:'User' as const,bypassMetadata:'unsafe' as const}])noProvider(fixture.execute(mode,changed));
+ const changed=fixture.execute('build',{...personal,afterPull:'owner'});noProviderAfterPull(changed);
+ });
+});
+function noProviderAfterPull(result:ReturnType<Awaited<ReturnType<typeof createFixture>>['execute']>){assert.equal(result.status,1);assert.match(result.stdout,/SINK \["pull"/);assert.doesNotMatch(result.stdout,/SINK \["build"|SINK \["deploy"|PROVIDER /);}

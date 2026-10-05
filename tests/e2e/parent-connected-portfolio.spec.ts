@@ -14,7 +14,7 @@ const root=resolve(import.meta.dirname,'../..'),optIn=process.env.CUEVO_PARENT_C
 const base='http://127.0.0.1:54121',api='http://127.0.0.1:54122',learner='20000000-0000-4000-8000-000000000012';
 test.describe('isolated connected Parent Portfolio',()=>{
  test.skip(!optIn,'Requires the explicit isolated synthetic Parent acceptance runtime.');
- test('student source, teacher approval and Parent current revision remain distinct after revocation',async({page})=>{
+ test('student source, teacher approval and Parent current revision remain distinct after revocation',async({page},info)=>{
   test.setTimeout(120000);page.setDefaultTimeout(15000);
   if(resolve(optIn!)!==resolve(root,'.local/bloom-runtime/runtime.json'))throw Error('Only the dedicated ignored acceptance runtime is permitted.');
   const build=(await readFile(resolve(root,'apps/web/.next/BUILD_ID'),'utf8')).trim();if(!expectedBuild||build!==expectedBuild)throw Error('Frozen Parent acceptance build required.');
@@ -32,7 +32,7 @@ test.describe('isolated connected Parent Portfolio',()=>{
   // The established memory-only browser session ends on a full reload; this switches test actors without changing roles.
   async function reloadToSignIn(){await page.goto(base+'/');await page.locator('.auth-submit').waitFor();}
   const title=`Checking reflection ${randomUUID().slice(0,8)}`,approvedReflection='I checked the school example and explained one reason.',privateReflection='Private later reflection awaiting school review.';
-  const out=resolve('C:/Users/hp/.codex/visualizations/2026/10/04/cuevo-parent-connected/portfolio',title.replaceAll(' ','-'));await mkdir(out,{recursive:true});
+  const out=info.outputPath('portfolio',title.replaceAll(' ','-'));await mkdir(out,{recursive:true});
   let itemId='',revisionId='';let primaryError:unknown;const cleanupErrors:unknown[]=[];const evidence:Record<string,unknown>={build,scope:'Actual isolated synthetic Auth/API/browser; existing native result unchanged'};
   try{
    if(resumed){itemId=resumed.id;const updated=await request<Item>('student',`/v1/portfolio/items/${itemId}/reflection`,{title,reflection:approvedReflection,expectedRevision:resumed.revision});revisionId=updated.revisionId;}else{await login('student');await page.getByRole('button',{name:'Select released work',exact:true}).click();const create=page.getByRole('region',{name:'Select released work',exact:true});await create.getByLabel('Released source evidence').selectOption(source.evidenceId);await create.getByLabel('Portfolio title').fill(title);await create.getByLabel('What I learned').fill(approvedReflection);const created=page.waitForResponse(r=>new URL(r.url()).pathname==='/v1/portfolio/items'&&r.request().method()==='POST');await create.getByRole('button',{name:'Save',exact:true}).click();const createdResponse=await created;expect(createdResponse.ok()).toBe(true);const receipt=await createdResponse.json()as Item;itemId=receipt.id;revisionId=receipt.revisionId;await writeFile(markerPath,JSON.stringify({id:itemId}));const item=(await request<{items:Item[]}>('student','/v1/portfolio/items?limit=100')).items.find(item=>item.id===itemId)!;expect(item.learnerId).toBe(learner);expect(item.revision).toBe(1);await reloadToSignIn();}

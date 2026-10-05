@@ -104,6 +104,8 @@
   .parent-trail__panel-heading > span:first-child { inline-size: 2.25rem; block-size: 2.25rem; }
   .parent-trail__panel-heading h2 { font-size: var(--type-body); }
   .parent-trail__panel-heading .status { margin-inline-start: 0; }
+  .parent-trail__feedback > .parent-trail__panel-heading h2 { flex:1 1 calc(100% - 2.25rem - var(--space-2)); }
+  .parent-trail__feedback > .parent-trail__panel-heading .status { flex:none; }
   .parent-trail__feedback blockquote { margin-block:var(--space-2); }
   .parent-trail__feedback blockquote p { font-size: var(--type-body); line-height: var(--line-height-body); }
   .parent-trail__native-context { flex-wrap: wrap; }

@@ -6,6 +6,11 @@
 .student-trail__content { position:relative; max-inline-size:var(--content-width); margin-inline:auto; padding:var(--space-3) var(--space-4); display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:var(--space-3); align-items:start; }
 .student-trail__scene { display:contents; }
 .student-trail__intro-row { grid-column:1; grid-row:1; display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-3); }
+.workspace .student-trail__intro-row > .cuevo-workspace-state { flex:1 1 18rem; margin-block:0; padding:var(--space-2) var(--space-3); }
+.workspace .student-trail__intro-row .cuevo-workspace-state__body { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2); }
+.workspace .student-trail__intro-row .cuevo-workspace-state__description { flex:1 1 12rem; margin-block:0; }
+.workspace .student-trail__intro-row .cuevo-workspace-state__actions { margin-block:0; }
+@media(max-width:1100px) { .workspace .student-trail__intro-row > .cuevo-workspace-state { flex-basis:100%; } }
 .student-trail__intro { grid-column:1; grid-row:1; }
 .student-trail__intro h1 { font-size:clamp(1.5rem,2vw,1.875rem); font-weight:var(--font-weight-bold); line-height:1.2; overflow-wrap:anywhere; }
 .student-trail__intro p { font-size:var(--type-sm); line-height:1.35; color:var(--color-text-secondary); margin-block-start:var(--space-1); }

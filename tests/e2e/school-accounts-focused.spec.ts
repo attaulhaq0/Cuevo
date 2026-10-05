@@ -25,14 +25,14 @@ import React,{useState}from'react';import{createRoot}from'react-dom/client';impo
 }
 async function open(page:import('@playwright/test').Page){const css=['packages/ui/src/tokens.css','apps/web/app/globals.css','apps/web/features/school/styles.css'].map(p=>readFileSync(resolve(root,p),'utf8')).join('\n');await page.setContent(`<style>${css}</style><div id='root'></div>`);await page.addScriptTag({content:await ownerBundle()});await page.getByRole('region',{name:'School accounts and invitations',exact:true}).waitFor();}
 
-test('Admin account directory opens one explicit form or exact reader and keeps pending original recovery',async({page})=>{
+test('Admin account directory opens one explicit form or exact reader and keeps pending original recovery',async({page},testInfo)=>{
  await page.setViewportSize({width:1366,height:768});await open(page);
  await expect(page.locator('.school-accounts .learning-form')).toHaveCount(0);
  const directory=page.locator('.school-accounts-directory'),layout=page.locator('.school-accounts-layout');
  expect(await directory.evaluate(el=>el.getBoundingClientRect().width>el.parentElement!.getBoundingClientRect().width-2)).toBe(true);
  await page.getByRole('button',{name:'Invite someone to school',exact:true}).click();
  await expect(page.locator('.school-accounts .learning-form')).toHaveCount(1);
-  await page.screenshot({path:resolve('C:/Users/hp/.codex/visualizations/2026/10/05','school-account-invite-selected-desktop.png')});
+  await page.screenshot({path:testInfo.outputPath('school-account-invite-selected-desktop.png')});
  await expect(page.getByLabel('I reviewed this person and role and approve this invitation')).not.toBeChecked();
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  await page.getByRole('combobox',{name:'Select an invitation to review',exact:true}).selectOption('00000000-0000-4000-8000-000000000011');

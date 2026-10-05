@@ -73,7 +73,7 @@ const github = async (path: string): Promise<unknown> => {
   const repository = required('GITHUB_REPOSITORY');
   if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repository)) throw Error('Invalid release repository.');
   try {
-    const response = await fetch(`https://api.github.com/repos/${repository}/${path}`, { headers: { Authorization: `Bearer ${required('GH_TOKEN')}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, signal: AbortSignal.timeout(15000) });
+    const response = await fetch(`https://api.github.com/repos/${repository}${path?'/' + path:''}`, { headers: { Authorization: `Bearer ${required('GH_TOKEN')}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw Error('Unavailable');
     return await response.json();
   } catch { throw Error('Current release control or approval evidence is unavailable; contents withheld.'); }
@@ -81,8 +81,8 @@ const github = async (path: string): Promise<unknown> => {
 const controlEvidence = async () => {
   const environment = required('RELEASE_ENVIRONMENT');
   if (!['staging', 'production'].includes(environment)) throw Error('Unknown release environment.');
-  const [environmentControl, branches, main, signatures] = await Promise.all([github(`environments/${environment}`), github(`environments/${environment}/deployment-branch-policies`), github('branches/main/protection'), github('branches/main/protection/required_signatures')]);
-  validateReleaseControls({ environment: environmentControl, branches, main, signatures }, { environment });
+  const [repository,environmentControl, branches, main, signatures] = await Promise.all([github(''),github(`environments/${environment}`), github(`environments/${environment}/deployment-branch-policies`), github('branches/main/protection'), github('branches/main/protection/required_signatures')]);
+  validateReleaseControls({ repository,environment: environmentControl, branches, main, signatures }, { environment,repository:required('GITHUB_REPOSITORY') });
   const identity = z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), name: z.literal(environment) }).parse(environmentControl);
   return identity;
 };

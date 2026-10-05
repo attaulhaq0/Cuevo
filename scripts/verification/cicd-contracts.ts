@@ -73,8 +73,20 @@ export function releaseContext(value: unknown, expected: { sha: string; ref: str
   }
   throw Error('Untrusted release event.');
 }
-export function validateReleaseControls(value: unknown, expected: { environment: string }) {
+export function validateReleaseControls(value: unknown, expected: { environment: string; repository?: string }) {
   if (!['staging', 'production'].includes(expected.environment)) throw Error('Unknown protected release environment.');
+  const repositoryName=z.string().regex(/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/).safeParse(expected.repository);
+  const dataField=(object:unknown,key:string):unknown=>{if(!object||typeof object!=='object')return undefined;const field=Object.getOwnPropertyDescriptor(object,key);return field&&'value'in field?field.value:undefined;};
+  const rawRepository=dataField(value,'repository'),rawOwner=dataField(rawRepository,'owner');
+  const repository= z.object({full_name:z.string(),name:z.string().min(1),owner:z.object({id:z.number().int().positive().max(Number.MAX_SAFE_INTEGER),login:z.string().min(1),type:z.enum(['User','Organization'])})}).safeParse({full_name:dataField(rawRepository,'full_name'),name:dataField(rawRepository,'name'),owner:{id:dataField(rawOwner,'id'),login:dataField(rawOwner,'login'),type:dataField(rawOwner,'type')}});
+  if(!repositoryName.success||!repository.success||repository.data.full_name!==repositoryName.data||`${repository.data.owner.login}/${repository.data.name}`!==repositoryName.data)throw Error('Release controls require the exact current repository identity and owner capability.');
+  const bypass=z.object({users:z.array(z.unknown()).length(0),teams:z.array(z.unknown()).length(0),apps:z.array(z.unknown()).length(0)});
+  const originalReviews=dataField(dataField(value,'main'),'required_pull_request_reviews');
+  if(!originalReviews||typeof originalReviews!=='object')throw Error('Main pull-request controls are missing or unverified.');
+  if(![Object.prototype,null].includes(Object.getPrototypeOf(originalReviews)))throw Error('Main pull-request control metadata must be an official JSON object.');
+  const present=Object.hasOwn(originalReviews,'bypass_pull_request_allowances');
+  if(present){const field=Object.getOwnPropertyDescriptor(originalReviews,'bypass_pull_request_allowances');if(!field||!('value'in field)||!bypass.safeParse({users:dataField(field.value,'users'),teams:dataField(field.value,'teams'),apps:dataField(field.value,'apps')}).success)throw Error('Explicit PR bypass metadata must confirm no permitted user, team or app.');}
+  else if(repository.data.owner.type!=='User')throw Error('Organization PR bypass controls are missing or unverified.');
   const reviewer = z.object({ type: z.literal('User'), reviewer: z.object({ id: z.literal(95836629), login: z.literal('attaulhaq0'), type: z.literal('User') }) });
   const rule = z.discriminatedUnion('type', [
     z.object({ type: z.literal('required_reviewers'), prevent_self_review: z.literal(false), reviewers: z.array(reviewer).length(1) }),
@@ -85,9 +97,10 @@ export function validateReleaseControls(value: unknown, expected: { environment:
     environment: z.object({ name: z.literal(expected.environment), can_admins_bypass: z.literal(false), protection_rules: z.array(rule), deployment_branch_policy: z.object({ protected_branches: z.literal(false), custom_branch_policies: z.literal(true) }) }),
     branches: z.object({ branch_policies: z.array(z.object({ name: z.literal('main'), type: z.literal('branch') })).length(1) }),
     signatures: z.object({ enabled: z.literal(true) }),
-    main: z.object({ enforce_admins: z.object({ enabled: z.literal(true) }), required_status_checks: z.object({ strict: z.literal(true), contexts: z.array(z.string()) }), allow_force_pushes: z.object({ enabled: z.literal(false) }), allow_deletions: z.object({ enabled: z.literal(false) }), required_pull_request_reviews: z.object({ dismiss_stale_reviews: z.literal(true), require_code_owner_reviews: z.literal(false), required_approving_review_count: z.literal(0), require_last_push_approval: z.literal(false), bypass_pull_request_allowances: z.object({ users: z.array(z.unknown()).length(0), teams: z.array(z.unknown()).length(0), apps: z.array(z.unknown()).length(0) }) }) }),
+    main: z.object({ enforce_admins: z.object({ enabled: z.literal(true) }), required_status_checks: z.object({ strict: z.literal(true), contexts: z.array(z.string()) }), allow_force_pushes: z.object({ enabled: z.literal(false) }), allow_deletions: z.object({ enabled: z.literal(false) }), required_pull_request_reviews: z.object({ dismiss_stale_reviews: z.literal(true), require_code_owner_reviews: z.literal(false), required_approving_review_count: z.literal(0), require_last_push_approval: z.literal(false), bypass_pull_request_allowances: bypass.optional() }) }),
   }).safeParse(value);
   if (!controls.success || controls.data.main.required_status_checks.contexts.filter(context => context === 'required').length !== 1 || controls.data.environment.protection_rules.filter(rule => rule.type === 'required_reviewers').length !== 1 || controls.data.environment.protection_rules.filter(rule => rule.type === 'branch_policy').length > 1 || controls.data.environment.protection_rules.filter(rule => rule.type === 'wait_timer').length > 1) throw Error('Founder release environment and main PR/signature/status controls are missing or unverified.');
+  return {repository:repositoryName.data,ownerType:repository.data.owner.type,prBypass:present?'EXPLICIT_EMPTY' as const:'NON_CONFIGURABLE_PERSONAL_REPOSITORY' as const};
 }
 export function safeEvidence(value: unknown, source: unknown, identity: { sha: string; runId: string }) {
   const evidence = z.object({ status: z.enum(['VERIFIED', 'FAILED', 'NOT_VERIFIED']), rows: z.array(z.object({ name: z.string().regex(/^[a-z][a-z0-9-]{0,80}$/), exitCode: z.number().int().nullable(), durationMs: z.number().nonnegative() })) }).parse(value);

@@ -84,6 +84,18 @@ export const ownedCronUnscheduleSql = 'select cron.unschedule($1::bigint)as remo
 export function requireCronRemoval(value: unknown) { if (value !== true) throw Error('Owned recovery schedule removal was not confirmed.'); }
 type VerificationFailureCode = 'DOCKER_INVENTORY_RACE' | 'COMMAND_UNAVAILABLE' | 'OWNED_SERVER_EXITED' | 'VERIFICATION_CANCELLED' | 'WAIT_EXPIRED';
 const verificationFailureCodes: VerificationFailureCode[] = ['DOCKER_INVENTORY_RACE', 'COMMAND_UNAVAILABLE', 'OWNED_SERVER_EXITED', 'VERIFICATION_CANCELLED', 'WAIT_EXPIRED'];
+const transportCauses=['ECONNRESET','ECONNREFUSED','EPIPE','ETIMEDOUT','EAI_AGAIN','ENOTFOUND','UND_ERR_SOCKET','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','UND_ERR_ABORTED'] as const;
+const authProbes=['PUBLIC_UNSIGNED_READY','WRONG_SIGNATURE','EXTRA_SCOPE','CONTROL_UNCHANGED'] as const;
+type EdgeAuthProbe=typeof authProbes[number];
+/** Fixed cause code only; never read error hooks, connection details, body or stack. */
+export function safeEdgeTransportCause(error:unknown):typeof transportCauses[number]|null{
+ const seen=new Set<object>();let current=error;
+ for(let depth=0;depth<4;depth++){
+  if(!current||typeof current!=='object'||seen.has(current))return null;seen.add(current);
+  try{const code=Object.getOwnPropertyDescriptor(current,'code');const value=code&&'value'in code?code.value:null;if(typeof value==='string'&&transportCauses.includes(value as typeof transportCauses[number]))return value as typeof transportCauses[number];const cause=Object.getOwnPropertyDescriptor(current,'cause');current=cause&&'value'in cause?cause.value:null;}catch{return null;}
+ }
+ return null;
+}
 export function edgeVerificationFailure(code: VerificationFailureCode) { return Object.assign(Error('Guarded Edge verification operation unavailable.'), { code }); }
 export function safeEdgeFailureCode(error: unknown) {
   const value = error as { code?: unknown; name?: unknown } | null;
@@ -123,9 +135,14 @@ export function edgeVerificationSummary(checks: unknown, failures: unknown, arti
     names.add(value.name); return { name: value.name, passed: value.passed, ...(value.durationMs === undefined ? {} : { durationMs: value.durationMs as number }), ...(value.count === undefined ? {} : { count: value.count as number }) };
   });
   const safeFailures = failures.map(value => {
-    if (!object(value) || Object.keys(value).sort().join('|') !== 'code|phase' || typeof value.phase !== 'string' || !diagnosticPhases.includes(value.phase as typeof diagnosticPhases[number]) || typeof value.code !== 'string'
-      || ![...verificationFailureCodes,'TYPE_ERROR','TRANSPORT_TIMEOUT','VERIFICATION_UNAVAILABLE'].includes(value.code as VerificationFailureCode) && !/^SQL_[A-Z0-9]{5}$/.test(value.code)) return invalid();
-    return { phase: value.phase, code: value.code };
+    if(!object(value))return invalid();const fields=Object.getOwnPropertyDescriptors(value),keys=Object.keys(fields).sort().join('|');
+    if(!['code|phase','authProbe|code|phase|transportCause'].includes(keys)||Object.values(fields).some(field=>!('value'in field)))return invalid();
+    const phase:unknown=fields.phase.value,code:unknown=fields.code.value;
+    if(typeof phase!=='string'||!diagnosticPhases.includes(phase as typeof diagnosticPhases[number])||typeof code!=='string'||![...verificationFailureCodes,'TYPE_ERROR','TRANSPORT_TIMEOUT','VERIFICATION_UNAVAILABLE'].includes(code as VerificationFailureCode)&&!/^SQL_[A-Z0-9]{5}$/.test(code))return invalid();
+    if(keys==='code|phase')return{phase,code};
+    const authProbe:unknown=fields.authProbe.value,transportCause:unknown=fields.transportCause.value;
+    if(phase!=='AUTH'||!(authProbe===null||typeof authProbe==='string'&&authProbes.includes(authProbe as EdgeAuthProbe))||!(transportCause===null||typeof transportCause==='string'&&transportCauses.includes(transportCause as typeof transportCauses[number])))return invalid();
+    return{phase,code,authProbe:authProbe as EdgeAuthProbe|null,transportCause:transportCause as typeof transportCauses[number]|null};
   });
   const evidence = edgeWorkerEvidence(safeChecks, artifactSha256);
   return { ...evidence, status: safeFailures.length ? 'FAILED' : evidence.status, failures: safeFailures };
@@ -176,7 +193,8 @@ async function main() {
   const worker = new Pool({ connectionString: workerUrl.toString(), max: 1, connectionTimeoutMillis: 3000, statement_timeout: 5000 });
   worker.on('error', () => { /* Runtime role failure is reported without credentials. */ });
   let client: PoolClient | undefined; let server: ChildProcess | undefined; let ownedEdge: ObservedContainer | undefined; let baselineControl: Record<string, unknown> | undefined; let secretId: string | undefined; let jobId: number | undefined; let configured = false; let canceled = false; let phase = 'SETUP';
-  const failures: { phase: string; code: string }[] = [];
+  const failures: { phase: string; code: string; authProbe?:EdgeAuthProbe|null;transportCause?:typeof transportCauses[number]|null }[] = [];
+  let authProbe:EdgeAuthProbe|null=null;
   const checks: Check[] = []; const generationIds = new Set<string>(); const probeRequestIds: string[] = [];
   const cancel = () => { canceled = true; };
   process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
@@ -225,16 +243,23 @@ async function main() {
     server = spawnOwnedProcess(process.execPath, [cli, 'functions', 'serve', 'cuevo-worker', '--env-file=' + envFile, '--network-id=cuevo-local'], { cwd: resolve('.'), env: childEnvironment, stdio: 'ignore' });
     server.on('error', () => { canceled = true; });
     phase = 'AUTH';
+    authProbe='PUBLIC_UNSIGNED_READY';
     await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
+    authProbe=null;
     await waitFor(async () => { const current = (await containers()).find(row => row.name === '/supabase_edge_runtime_cuevo'); if (!edgeRuntimeConnected(current)) return false; ownedEdge = assertStartedEdgeRuntime(baselineEdge, current); return true; }, 30000);
     check('owned-edge-runtime', true);
     phase = 'GATEWAY_INITIAL';
     await readyGateway('initial');
     phase = 'AUTH';
+    authProbe=null;
     const probeId = randomUUID();
+    authProbe='WRONG_SIGNATURE';
     const invalid = await fetch(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(randomBytes(32).toString('hex'), probeId, Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: probeId }), signal: AbortSignal.timeout(5000) }); check('wrong-signature-denied', invalid.status === 401);
+    authProbe='EXTRA_SCOPE';
     const extra = await fetch(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(purposeKey, probeId, Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: probeId, learnerId: actor }), signal: AbortSignal.timeout(5000) }); check('extra-scope-denied', extra.status === 400);
+    authProbe='CONTROL_UNCHANGED';
     check('auth-denial-preserves-control', JSON.stringify(await control()) === JSON.stringify(baselineControl));
+    authProbe=null;
     await client.query('begin');
     try { const created = (await client.query('select vault.create_secret($1,$2,$3)as id', [purposeKey, secretName, 'Temporary owned local worker verification purpose key.'])).rows[0]?.id; if (typeof created !== 'string' || !uuid.test(created)) throw Error('Exact Vault identity unavailable.'); secretId = created; await client.query("select set_config('app.runtime_env','local',true)"); await client.query('select internal.configure_worker_dispatch(true,$1,$2,true)', [endpoint, secretName]); await client.query('commit'); configured = true; } catch { await client.query('rollback'); secretId = undefined; throw Error('Private local dispatch setup failed; secret values withheld.'); }
     phase = 'COMMITTED_WAKE';
@@ -281,7 +306,7 @@ async function main() {
     check('transport-still-private', (await client.query('select internal.worker_transport_private()as private')).rows[0]?.private === true);
     const health = (await worker.query('select internal.worker_dispatch_health()as health')).rows[0]?.health;
     check('health-private-and-idle', health?.ready === true && health.transportPrivate === true && health.state === 'IDLE' && !JSON.stringify(health).includes(purposeKey) && !JSON.stringify(health).includes(secretName));
-  } catch (error) { checks.push({ name: 'phase-' + phase.toLowerCase().replaceAll('_', '-'), passed: false }); failures.push({ phase, code: safeEdgeFailureCode(error) }); }
+  } catch (error) { checks.push({ name: 'phase-' + phase.toLowerCase().replaceAll('_', '-'), passed: false }); failures.push({ phase, code: safeEdgeFailureCode(error),...(phase==='AUTH'?{authProbe,transportCause:safeEdgeTransportCause(error)}:{}) }); }
   finally {
     phase = 'RESTORE';
     let clean = true;

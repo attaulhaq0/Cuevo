@@ -30,7 +30,7 @@ async function open(page: import('@playwright/test').Page) {
   await page.locator('.portfolio-organization').waitFor();
 }
 
-test('Student organization opens one explicit action and preserves exact original pending recovery', async ({page}) => {
+test('Student organization opens one explicit action and preserves exact original pending recovery', async ({page},info) => {
   await page.setViewportSize({width:1366,height:768}); await open(page);
   const layout=page.locator('.portfolio-organization-layout');
   expect(await layout.evaluate(el=>el.querySelector('.portfolio-collection-controls')!.getBoundingClientRect().width>el.getBoundingClientRect().width-2)).toBe(true);
@@ -43,7 +43,7 @@ test('Student organization opens one explicit action and preserves exact origina
   const checkboxSize=await checkbox.boundingBox();expect(checkboxSize!.width).toBeLessThanOrEqual(24);expect(checkboxSize!.height).toBeLessThanOrEqual(24);
   expect(await checkbox.locator('..').evaluate(el=>getComputedStyle(el).display)).toBe('flex');
   await page.getByText('I request feedback on this exact reflection revision',{exact:true}).click();await expect(checkbox).toBeChecked();await checkbox.uncheck();
-  await page.screenshot({path:resolve('C:/Users/hp/.codex/visualizations/2026/10/05','portfolio-student-one-action-desktop.png')});
+  await page.screenshot({path:info.outputPath('portfolio-student-one-action-desktop.png')});
   await page.getByLabel('What feedback would help').fill('Please explain my first check');
   await page.getByLabel('I request feedback on this exact reflection revision').check();
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
@@ -79,7 +79,7 @@ test('Teacher requested source reader stays beside its queue and mobile Back res
   expect(await reader.evaluate(el=>el.parentElement?.classList.contains('portfolio-organization-layout'))).toBe(true);
   await expect(reader.getByText('I checked one recorded step.',{exact:true})).toBeVisible();
   await expect(reader.locator('[name="confirmSourceReview"]')).not.toBeChecked();
-  await page.screenshot({path:resolve('C:/Users/hp/.codex/visualizations/2026/10/05',`portfolio-requested-${info.project.name}-desktop.png`)});
+  await page.screenshot({path:info.outputPath('portfolio-requested-desktop.png')});
   await reader.locator('[name="feedback"]').fill('My exact first review');
   for(const width of [390,320]) {
     await page.setViewportSize({width,height:844}); await expect(queue).toBeHidden();
@@ -108,5 +108,5 @@ test('Teacher requested source reader stays beside its queue and mobile Back res
   const recovery=page.getByRole('region',{name:/Check previous Portfolio action|التحقّق من إجراء الحافظة السابق/,exact:true});
   await expect(recovery).toBeVisible();await expect(recovery.locator('form [name]')).toHaveCount(0);
   await expect(recovery.getByRole('button',{name:/Retry the same action|إعادة الإجراء نفسه/,exact:true})).toBeVisible();
-  const path=resolve('C:/Users/hp/.codex/visualizations/2026/10/05',`portfolio-requested-${info.project.name}-mobile.png`);await page.screenshot({path});
+  const path=info.outputPath('portfolio-requested-mobile.png');await page.screenshot({path});
 });

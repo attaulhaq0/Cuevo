@@ -15,7 +15,6 @@ type Input = ReturnType<typeof guardianRelationshipInputSchema.parse>;
 type Attempt = { key: string; body: Input; status: number; receipt: Receipt | null; delivery: string };
 const root = resolve(import.meta.dirname, '../..'), runtimePath = process.env.CUEVO_ADMIN_ACCESS_RUNTIME;
 const base = 'http://127.0.0.1:54121', api = 'http://127.0.0.1:54122', path = '/v1/school/guardian-relationships';
-const output = process.env.CUEVO_ADMIN_ACCESS_OUTPUT ?? 'C:/Users/hp/.codex/visualizations/2026/10/04/cuevo-admin-connected/access';
 const copy = {
   en: { language: 'English', people: 'People and access', family: 'Family relationships', change: 'Choose another record', edit: 'Edit this record', title: 'Configure guardian relationship', confirm: 'I approve this change to current access', save: 'Save', retry: 'Retry the same action', cancel: 'Cancel', refresh: 'Refresh school records', conflict: 'This action conflicts with the current record.', unavailable: 'The outcome is not confirmed.' },
   ar: { language: 'العربية', people: 'الأشخاص والصلاحيات', family: 'علاقات الأسرة', change: 'اختيار سجل آخر', edit: 'تعديل هذا السجل', title: 'إعداد علاقة وليّ الأمر', confirm: 'أوافق على هذا التغيير للصلاحيات الحالية', save: 'حفظ', retry: 'إعادة الإجراء نفسه', cancel: 'إلغاء', refresh: 'تحديث سجلات المدرسة', conflict: 'يتعارض هذا الإجراء مع السجل الحالي.', unavailable: 'لم تتأكّد نتيجة الإجراء.' },
@@ -90,6 +89,7 @@ test.describe('isolated actual Admin guardian command acceptance', () => {
 
   test('current precision, committed original-key recovery, stale conflict and Parent revocation restore', async ({ page }, info) => {
     test.setTimeout(150_000); page.setDefaultTimeout(8_000); await page.setViewportSize({ width: 1366, height: 768 });
+    const output = info.outputPath('access');
     await mkdir(output, { recursive: true });
     const original = await current(), attempts: Attempt[] = [], stages: string[] = [], errors: string[] = [], warnings: string[] = [], blocked: string[] = [];
     const baselinePeople = await all<Person>('/v1/school/people'); expect(baselinePeople.every(row => row.synthetic)).toBe(true);

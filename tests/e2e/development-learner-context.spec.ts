@@ -7,10 +7,33 @@ import { humanContextLabel, selectHumanChoice } from './human-choice';
 import { withBrowserRestoration } from './browser-restoration';
 import { schoolPolicyInputSchema } from '@cuevo/contracts';
 import type { Page } from '@playwright/test';
+import { z } from 'zod';
 
 function schoolLearnerPeriodTitle(startsAt: string, endsAt: string) {
   return `School learner context · ${startsAt.slice(0, 16).replace('T', ' ')} UTC – ${endsAt.slice(0, 16).replace('T', ' ')} UTC`;
 }
+
+function expectSamePeriodInstant(actual: unknown, expected: string) {
+  const instant=z.iso.datetime({offset:true});
+  const source=instant.parse(actual),recorded=instant.parse(expected);
+  const sourceTime=Date.parse(source),recordedTime=Date.parse(recorded);
+  expect(Number.isFinite(sourceTime)&&Number.isFinite(recordedTime)).toBe(true);
+  expect(sourceTime).toBe(recordedTime);
+  const submillisecond=(value:string)=>(value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1]??'').slice(3).replace(/0+$/,'');
+  expect(submillisecond(source)).toBe(submillisecond(recorded));
+}
+
+test('adapter: learner-context period source retains the recorded ISO instant across valid offset serialization',()=>{
+  const recorded='2026-10-06T20:14:00.000Z';
+  for(const source of['2026-10-06T20:14:00+00:00','2026-10-06T23:14:00+03:00','2026-10-06T13:14:00-07:00','2026-10-06T20:14:00.000000+00:00',recorded])expect(()=>expectSamePeriodInstant(source,recorded)).not.toThrow();
+  expect(()=>expectSamePeriodInstant('2026-10-07T20:14:00+00:00','2026-10-07T20:14:00.000Z')).not.toThrow();
+});
+
+test('adapter: learner-context period source rejects changed instants and malformed or unavailable timestamps',()=>{
+  const recorded='2026-10-06T20:14:00.000Z';
+  for(const source of['2026-10-06T20:15:00+00:00','2026-10-06T20:14:01+00:00','2026-10-06T20:14:00.001Z','2026-10-06T20:14:00.0001Z','2026-10-06T20:14:00+03:00',null,undefined,1780776840000,'','2026-10-06','October 6, 2026 20:14:00 UTC','2026-10-06T20:14:00','2026-02-30T20:14:00Z','2026-10-06T25:14:00Z','2026-10-06T20:14:00+25:00'])expect(()=>expectSamePeriodInstant(source,recorded)).toThrow();
+  expect(()=>expectSamePeriodInstant(recorded,'2026-10-06')).toThrow();
+});
 
 test('adapter: learner-context period title uses its exact recorded date window without a private identifier',()=>{
   const title=schoolLearnerPeriodTitle('2026-10-06T09:30:00.000Z','2026-10-07T09:30:00.000Z');
@@ -212,7 +235,8 @@ test('teacher loads complete authorized learner choices before reviewing develop
   const enabledPeriods = await period.locator('option[value]:not([value=""]):not([disabled])').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value));
   await expect.poll(() => periodSources.some(source => source.id === configured.id && source.classId === classId && source.policyId === policyReceipt.id && enabledPeriods.includes(source.id))).toBe(true);
   const currentPeriod = periodSources.find(source => source.id === configured.id && source.classId === classId && source.policyId === policyReceipt.id && enabledPeriods.includes(source.id))!;
-  expect(currentPeriod).toMatchObject({ id: configured.id, title: periodTitle, classId, policyId: policyReceipt.id, startsAt: periodStartsAt, endsAt: periodEndsAt });
+  expect(currentPeriod).toMatchObject({ id: configured.id, title: periodTitle, classId, policyId: policyReceipt.id });
+  expectSamePeriodInstant(currentPeriod.startsAt,periodStartsAt); expectSamePeriodInstant(currentPeriod.endsAt,periodEndsAt);
   const currentPeriodLabel = (await period.locator(`option[value="${currentPeriod.id}"]`).textContent())!.trim();
   const selectedPeriod = await selectHumanChoice(period, currentPeriodLabel, currentPeriod.id);
   expect(currentPeriod.title.trim()).not.toBe(''); expect(currentPeriod.policyId).not.toBe('');

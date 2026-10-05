@@ -69,7 +69,7 @@
 .teacher-trail__calendar li > .button { margin-inline-start: auto; }
 .teacher-trail__aside { display: grid; align-content: start; gap: var(--space-5); }
 .teacher-trail__updates-wrap { border-radius:var(--radius-lg); background:var(--color-material-reading); padding:var(--space-3); }
-.teacher-trail__updates-wrap:not([open]) > .teacher-trail__updates { display:none; }
+.teacher-trail__updates-wrap:is(details):not([open]) > .teacher-trail__updates { display:none; }
 .teacher-trail__updates-wrap[open] .teacher-trail__updates { padding:0; }
 .teacher-trail__updates-wrap[open] .teacher-trail__updates h2 { display:none; }
 .teacher-trail__insight { background: var(--color-surface-accent); border-radius: var(--radius-lg); padding: var(--space-3); }
