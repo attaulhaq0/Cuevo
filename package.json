@@ -48,7 +48,7 @@
     "build:edge": "node --import tsx scripts/runtime/build-edge-artifact.ts",
     "verify:edge": "node --env-file=.env.local --import tsx scripts/verification/edge-worker.ts",
     "check:cicd": "node --import tsx scripts/verification/cicd-check.ts",
-    "test:cicd": "node --import tsx --test scripts/verification/cicd-contracts.test.ts",
+    "test:cicd": "node --import tsx --test scripts/verification/cicd-contracts.test.ts scripts/verification/release-controls.test.ts scripts/verification/release-review.test.ts scripts/verification/release-process.test.ts",
     "verify:recovery": "node --env-file=.env.local --import tsx scripts/verification/recovery-drill.ts",
     "test:pilot": "node --import tsx --test scripts/verification/pilot-window-rules.test.ts scripts/verification/pilot-private-cleanup.test.ts scripts/verification/pilot-evidence.test.ts scripts/verification/pilot-window.test.ts scripts/verification/pilot-workflow-contracts.test.ts",
     "test:browser-pilot-volume": "node --import tsx --test scripts/database/browser-pilot-volume-rules.test.ts"

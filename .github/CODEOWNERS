@@ -1,4 +1,5 @@
-# Branch rules must require owners and dismiss stale approvals. An agent is never a reviewer.
+# Ownership routing remains with the founder. Independent agents review source;
+# the founder approves integration and release. Agents never fake a human review.
 * @attaulhaq0
 /.github/ @attaulhaq0
 /scripts/verification/ @attaulhaq0

@@ -48,7 +48,7 @@ test('Coordinator and Parent Learning read-only directories open one exact sourc
   }
   await page.getByRole('button',{name:'Open course',exact:true}).click();await page.locator('.learning-preparation-outline').getByRole('button',{name:'Explain your approach',exact:true}).click();
   await page.locator('#changed').click();await expect(page.getByText('Exact lesson material',{exact:true})).toHaveCount(0);await expect(page.locator('.learning-preparation-outline')).toBeVisible();
-  await expect(page.locator('.course-view > .notice')).toBeVisible();
+  const unavailable=page.locator('.course-view > .cuevo-workspace-state[data-state="unavailable"]');await expect(unavailable).toHaveCount(1);await expect(unavailable).toHaveText('The selected content is not in the current page. Choose a current source or refresh the course.');
   await page.getByRole('button',{name:'Back to courses',exact:true}).click();await page.locator('[data-workspace-section="assessments"]').click();await page.locator('[data-assessment-choice] button').first().click();await expect(page.locator('.assessment-section h2').first()).toHaveText('Updated exact task');
   await page.locator('#denied').click();await expect(page.locator('[role="alert"]').first()).toBeVisible();await expect(page.locator('form')).toHaveCount(0);await expect(page.getByText('Exact lesson material',{exact:true})).toHaveCount(0);await expect(page.locator('.assessment-section')).toHaveCount(0);
   expect(await page.evaluate(()=>(globalThis as unknown as {learningFixture:{writes:unknown[]}}).learningFixture.writes)).toEqual([]);expect(errors).toEqual([]);

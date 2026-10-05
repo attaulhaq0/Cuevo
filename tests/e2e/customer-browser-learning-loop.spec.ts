@@ -186,7 +186,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('teacher'); const baseline = await markAndRelease(baselineTitle, baselineSubmission, 2); await capture('03-reviewed-native-result.png'); await signOut();
 
     await signIn('student'); await navigate('Academic');
-    await expect(page.getByText('Read your released results, teacher feedback and the work behind them.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Released results', exact: true, level: 1 })).toBeVisible();
     const feedback = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: baselineTitle, exact: true }) });
     await openCurrentResult(page,String(baseline.id)); await expect(feedback.locator('.native-score strong')).toHaveText('2');
     expect(await feedback.innerText()).not.toContain('synthetic-school-1');

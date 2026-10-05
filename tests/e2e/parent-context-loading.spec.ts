@@ -1,5 +1,6 @@
 import { withBrowserRestoration } from './browser-restoration';
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { openCurrentResult } from './result-reader';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -87,8 +88,8 @@ test('parent work stays unresolved during child verification and the selected ch
       return handling.finally(() => handlers.delete(handling));
     });
     heldPhase = true; prematurelyStarted.length = 0;
-    try {
-      await page.locator('.workspace-chrome__navigation').getByRole('button', { name: destination, exact: true }).click();
+    await withBrowserRestoration(async()=>{
+      await openTrailWorkspace(page, destination);
       await directoryObserved;
       await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'Checking current child relationships…' })).toBeVisible();
       await assertUnresolved(page, destination);
@@ -97,11 +98,11 @@ test('parent work stays unresolved during child verification and the selected ch
       await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'جارٍ التحقق من علاقات الأطفال…' })).toBeVisible();
       await assertUnresolved(page, destination);
       expect(prematurelyStarted, `${destination} has no child content request before directory verification`).toEqual([]);
-    } finally {
+    },async()=>{
       heldPhase = false; release();
       await Promise.all([...handlers]);
       await page.unrouteAll({ behavior: 'wait' });
-    }
+    });
     for (const failure of failures) {
       expect(canceled.has(failure.request), `Only a recorded cancelled directory request may end without delivery: ${String(failure.error)}`).toBe(true);
     }
@@ -113,7 +114,7 @@ test('parent work stays unresolved during child verification and the selected ch
     }
     await child.selectOption(learnerId); await expect(child).toHaveValue(learnerId);
     if (destination === 'Academic') {
-      const source = page.locator(`[data-result-id="${result.id}"]`);
+      let source = await openCurrentResult(page,result.id);
       await expect(source.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await expect(source.locator('.native-score strong')).toHaveText('6');
       await expect(source).toContainText('Approved feedback for the current family.');
@@ -123,6 +124,7 @@ test('parent work stays unresolved during child verification and the selected ch
       const response = await reportRead; expect(response.ok()).toBe(true);
       const report = await response.json() as { items: { id: string; learnerId: string; nativeResult: { type: string; score: number; maxScore: number } }[] };
       expect(report.items.find(row => row.id === result.id)).toMatchObject({ learnerId, nativeResult: { type: 'numeric', score: 6, maxScore: 10 } });
+      source=await openCurrentResult(page,result.id);
       await expect(source.getByRole('heading', { name: title, exact: true })).toBeVisible();
     }
   }

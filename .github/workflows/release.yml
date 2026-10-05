@@ -34,9 +34,12 @@ jobs:
       sha: ${{ steps.context.outputs.sha }}
       ci-run-id: ${{ steps.context.outputs.ci-run-id }}
       environment: ${{ steps.context.outputs.environment }}
+      review-base64: ${{ steps.review.outputs.review-base64 }}
+      review-digest: ${{ steps.review.outputs.review-digest }}
+      environment-id: ${{ steps.review.outputs.environment-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '24.16.0' }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
@@ -54,6 +57,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
         run: node --import tsx scripts/verification/cicd-release.ts controls
+      - name: Prepare exact secret-free review package before founder approval
+        id: review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
+          RELEASE_SHA: ${{ steps.context.outputs.sha }}
+          CI_RUN_ID: ${{ steps.context.outputs.ci-run-id }}
+          CUEVO_RELEASE_REVIEW_INPUT_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: node --import tsx scripts/verification/cicd-release.ts prepare
   web-release:
     needs: release-admission
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
@@ -67,6 +82,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
           ref: ${{ needs.release-admission.outputs.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '24.16.0', cache: npm }
@@ -77,13 +93,20 @@ jobs:
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
         run: node --import tsx scripts/verification/cicd-release.ts ci
-      - name: Validate dependency release manifest
+      - name: Admit exact official founder approval before receiving deployment credentials
         env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          GH_TOKEN: ${{ github.token }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
-        run: node --import tsx scripts/verification/cicd-release.ts manifest
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+        run: node --import tsx scripts/verification/cicd-release.ts approval
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@62.1.0 --ignore-scripts --no-audit --no-fund
       - name: Build and verify public web artifact
@@ -92,6 +115,14 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
         run: node --import tsx scripts/verification/cicd-release.ts build
       - name: Deploy verified prebuilt artifact without domain promotion
         id: deploy
@@ -103,6 +134,11 @@ jobs:
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
           GH_TOKEN: ${{ github.token }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
         run: node --import tsx scripts/verification/cicd-release.ts deploy
       - name: Verify deployed artifact and dependency health
         env:
@@ -111,4 +147,11 @@ jobs:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
         run: node --import tsx scripts/verification/cicd-release.ts verify

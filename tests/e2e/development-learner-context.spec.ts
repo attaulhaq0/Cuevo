@@ -1,15 +1,63 @@
 import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
-import { test, expect, type Locator, type Response } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Locator, type Response } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { humanContextLabel, selectHumanChoice } from './human-choice';
+import { withBrowserRestoration } from './browser-restoration';
+import { schoolPolicyInputSchema } from '@cuevo/contracts';
+
+async function withSchoolRecognitionApproval(request: Pick<APIRequestContext, 'get' | 'post'>, admin: { email: string; password: string }, publicKey: string, verify: () => Promise<void>) {
+  const schoolId = '10000000-0000-4000-8000-000000000001';
+  const auth = await request.post(`${process.env.SUPABASE_URL ?? 'http://127.0.0.1:56321'}/auth/v1/token?grant_type=password`, { headers: { apikey: publicKey }, data: { email: admin.email, password: admin.password } });
+  expect(auth.status()).toBe(200);
+  const adminToken = (await auth.json()).access_token as string;
+  expect(adminToken).toEqual(expect.any(String));
+  const headers = { Authorization: `Bearer ${adminToken}`, 'X-School-Id': schoolId };
+  const readSchoolPolicy = async () => {
+    const response = await request.get('http://localhost:4000/v1/school/context', { headers }); expect(response.status()).toBe(200);
+    const context = await response.json() as { school: { id: string }; policy: Record<string, unknown> }; expect(context.school.id).toBe(schoolId);
+    const { version, ...policy } = context.policy;
+    const input = schoolPolicyInputSchema.parse({ ...policy, expectedVersion: version, reason: 'Validate the current synthetic school policy source.', confirmPolicyApproval: true });
+    return { version: input.expectedVersion, parentAttendanceVisible: input.parentAttendanceVisible, parentUpcomingVisible: input.parentUpcomingVisible, studentMessagingEnabled: input.studentMessagingEnabled, recognitionEnabled: input.recognitionEnabled, leaderboardEnabled: input.leaderboardEnabled, analyticsEnabled: input.analyticsEnabled };
+  };
+  const originalSchoolPolicy = await readSchoolPolicy();
+  let approvedSchoolPolicyVersion: number | null = null;
+  let recognitionApprovalKey: string | null = null;
+  const approveSchoolPolicy = async (policy: typeof originalSchoolPolicy, reason: string, key: string) => {
+    const body = schoolPolicyInputSchema.parse({ expectedVersion: policy.version, parentAttendanceVisible: policy.parentAttendanceVisible, parentUpcomingVisible: policy.parentUpcomingVisible, studentMessagingEnabled: policy.studentMessagingEnabled, recognitionEnabled: policy.recognitionEnabled, leaderboardEnabled: policy.leaderboardEnabled, analyticsEnabled: policy.analyticsEnabled, reason, confirmPolicyApproval: true });
+    const response = await request.post('http://localhost:4000/v1/school/policies', { headers: { ...headers, 'Idempotency-Key': key }, data: body });
+    expect(response.status()).toBe(200); const receipt = await response.json() as { id: string; command: string; schoolId: string; version: number };
+    expect(receipt).toMatchObject({ command: 'policy.approve', schoolId, version: policy.version + 1 }); expect(receipt.id).toMatch(/^[0-9a-f-]{36}$/i);
+    return receipt.version;
+  };
+  await withBrowserRestoration(async () => {
+    if (!originalSchoolPolicy.recognitionEnabled) {
+      recognitionApprovalKey = randomUUID();
+      approvedSchoolPolicyVersion = await approveSchoolPolicy({ ...originalSchoolPolicy, recognitionEnabled: true }, 'Synthetic learner-context verification approves the recognition configuration prerequisite.', recognitionApprovalKey);
+      expect(await readSchoolPolicy()).toEqual({ ...originalSchoolPolicy, version: approvedSchoolPolicyVersion, recognitionEnabled: true });
+    }
+    await verify();
+  }, async () => {
+    // Resolve an uncertain setup only with its original key and identical payload.
+    // Matching flags/version alone cannot establish ownership of another approval.
+    if (recognitionApprovalKey && approvedSchoolPolicyVersion === null) approvedSchoolPolicyVersion = await approveSchoolPolicy({ ...originalSchoolPolicy, recognitionEnabled: true }, 'Synthetic learner-context verification approves the recognition configuration prerequisite.', recognitionApprovalKey);
+    if (approvedSchoolPolicyVersion === null) return;
+    const current = await readSchoolPolicy();
+    expect(current, 'Restore only the exact test-owned recognition approval; a newer policy needs review').toEqual({ ...originalSchoolPolicy, version: approvedSchoolPolicyVersion, recognitionEnabled: true });
+    const restoredVersion = await approveSchoolPolicy({ ...originalSchoolPolicy, version: current.version }, 'Synthetic learner-context verification restores the preceding school recognition settings.', randomUUID());
+    expect(await readSchoolPolicy()).toEqual({ ...originalSchoolPolicy, version: restoredVersion });
+  });
+}
 
 test('teacher loads complete authorized learner choices before reviewing development context', async ({ page }) => {
   test.setTimeout(60000);
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as { role: string; email: string; password: string }[];
   const teacher = accounts.find(account => account.role === 'teacher')!;
   const admin = accounts.find(account => account.role === 'admin')!;
+  const publicKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!publicKey) throw new Error('Configured synthetic Auth is required for the school approval prerequisite.');
+  await withSchoolRecognitionApproval(page.request, admin, publicKey, async () => {
   const classId = '30000000-0000-4000-8000-000000000001';
   const periodTitle = `School learner context period ${randomUUID()}`;
   const errors: string[] = [];
@@ -46,9 +94,26 @@ test('teacher loads complete authorized learner choices before reviewing develop
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, 'admin');
   const adminPolicies = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/policies' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; });
   const adminClasses = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/classes' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; });
+  const adminPeriods = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/periods' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; });
   await openTrailWorkspace(page, 'Development');
   const initialPolicyPage = await readPage(await adminPolicies);
   let classPage = await readPage(await adminClasses);
+  const configuredPeriods = [] as { classId: string; endsAt: string }[];
+  let periodPageResponse = await adminPeriods;
+  const seenPeriodCursors = new Set<string>();
+  for (let part = 0; part < 30; part++) {
+    const body = await readPage(periodPageResponse) as PageBody & { items: { id: string; classId: string; endsAt: string }[] };
+    configuredPeriods.push(...body.items);
+    if (!body.nextCursor) break;
+    const cursor = body.nextCursor; expect(seenPeriodCursors.has(cursor)).toBe(false); seenPeriodCursors.add(cursor);
+    const next = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/periods' && url.searchParams.get('cursor') === cursor && row.request().method() === 'GET'; });
+    const more = page.locator('.development-workspace').getByRole('button', { name: 'Load more: Learning period', exact: true }); await expect(more).toBeEnabled(); await more.click(); periodPageResponse = await next;
+    if (part === 29) throw new Error('Current period source exceeded its bounded pages.');
+  }
+  const latestEnd = Math.max(Date.now(), ...configuredPeriods.filter(period => period.classId === classId).map(period => { const end = Date.parse(period.endsAt); expect(Number.isFinite(end)).toBe(true); return end; }));
+  const startMs = Math.ceil((latestEnd + 86400000) / 60000) * 60000;
+  const periodStartsAt = new Date(startMs).toISOString(), periodEndsAt = new Date(startMs + 86400000).toISOString();
+  const localInput = (value: string) => { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
   const adminWorkspace = page.locator('.development-workspace');
   await expect(adminWorkspace.getByRole('status').filter({ hasText: 'Loading development…' })).toHaveCount(0);
   const policyMore = adminWorkspace.getByRole('button', { name: 'Load more: Recognition policies', exact: true });
@@ -86,12 +151,12 @@ test('teacher loads complete authorized learner choices before reviewing develop
   await completeChoices(classMore, setup.getByLabel('Class', { exact: true }), '/v1/classes', classPage.nextCursor); await selectHumanChoice(setup.getByLabel('Class', { exact: true }), humanContextLabel('Year 1 · Cedar'), classId);
   const policyOption = setup.getByLabel('Policy', { exact: true }).locator(`option[value="${policyReceipt.id}"]`); await expect(policyOption).toBeAttached();
   await selectHumanChoice(setup.getByLabel('Policy', { exact: true }), (await policyOption.textContent())!.trim(), policyReceipt.id);
-  await setup.getByLabel('Title', { exact: true }).fill(periodTitle); await setup.getByLabel('Starts at', { exact: true }).fill('2026-09-01T00:00'); await setup.getByLabel('Ends at', { exact: true }).fill('2027-07-01T00:00');
+  await setup.getByLabel('Title', { exact: true }).fill(periodTitle); await setup.getByLabel('Starts at', { exact: true }).fill(localInput(periodStartsAt)); await setup.getByLabel('Ends at', { exact: true }).fill(localInput(periodEndsAt));
   await expect(setup.getByLabel('I approve this policy or period', { exact: true })).not.toBeChecked(); await setup.getByLabel('I approve this policy or period', { exact: true }).check();
   const periodResponse = page.waitForResponse(response => response.url() === 'http://localhost:4000/v1/development/periods' && response.request().method() === 'POST');
   await setup.getByRole('button', { name: 'Save', exact: true }).click(); const configuredPeriod = await periodResponse; expect(configuredPeriod.status()).toBe(200);
   const configured = await configuredPeriod.json() as { id: string; command: string; awards: number }; expect(configured).toMatchObject({ command: 'period', awards: 0 }); expect(configured.id).toMatch(/^[0-9a-f-]{36}$/i);
-  expect(configuredPeriod.request().postDataJSON()).toMatchObject({ classId, policyId: policyReceipt.id, title: periodTitle, confirmApproval: true }); await expect(setup).toHaveCount(0);
+  expect(configuredPeriod.request().postDataJSON()).toMatchObject({ classId, policyId: policyReceipt.id, title: periodTitle, startsAt: periodStartsAt, endsAt: periodEndsAt, confirmApproval: true }); await expect(setup).toHaveCount(0);
   await signOutTrailWorkspace(page);
   await page.getByLabel('School email').fill(teacher.email); await page.getByLabel('Password', { exact: true }).fill(teacher.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, 'teacher');
   const firstPeriods = page.waitForResponse(response => { const url = new URL(response.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/periods' && !url.searchParams.has('cursor') && response.request().method() === 'GET'; });
@@ -149,4 +214,42 @@ test('teacher loads complete authorized learner choices before reviewing develop
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]); expect(errors).toEqual([]);
+  });
+});
+
+test('adapter: recognition prerequisite preserves fields and original-key recovery without overwriting newer school approval', async () => {
+  const schoolId = '10000000-0000-4000-8000-000000000001';
+  const original = { version: 4, parentAttendanceVisible: true, parentUpcomingVisible: false, studentMessagingEnabled: false, recognitionEnabled: false, leaderboardEnabled: false, analyticsEnabled: true };
+  for (const scenario of ['complete', 'already-enabled', 'setup-uncertain', 'newer-policy', 'body-failure'] as const) {
+    let current = { ...original, recognitionEnabled: scenario === 'already-enabled' };
+    const writes: { body: Record<string, unknown>; key: string }[] = [], receipts = new Map<string, { id: string; command: string; schoolId: string; version: number }>();
+    const response = (value: unknown) => ({ status: () => 200, json: async () => value });
+    const request = {
+      get: async () => response({ school: { id: schoolId }, policy: current }),
+      post: async (url: string, options: { headers: Record<string, string>; data: Record<string, unknown> }) => {
+        if (url.includes('/auth/v1/')) return response({ access_token: 'synthetic-authorized-admin' });
+        expect(options.headers['X-School-Id']).toBe(schoolId); expect(options.headers.Authorization).toBe('Bearer synthetic-authorized-admin');
+        const body = schoolPolicyInputSchema.parse(options.data), key = options.headers['Idempotency-Key']; writes.push({ body, key });
+        if (receipts.has(key)) return response(receipts.get(key));
+        expect(body.expectedVersion).toBe(current.version);
+        current = { version: current.version + 1, parentAttendanceVisible: body.parentAttendanceVisible, parentUpcomingVisible: body.parentUpcomingVisible, studentMessagingEnabled: body.studentMessagingEnabled, recognitionEnabled: body.recognitionEnabled, leaderboardEnabled: body.leaderboardEnabled, analyticsEnabled: body.analyticsEnabled };
+        const receipt = { id: randomUUID(), command: 'policy.approve', schoolId, version: current.version }; receipts.set(key, receipt);
+        if (scenario === 'setup-uncertain' && writes.length === 1) throw new Error('Synthetic setup response lost after commit');
+        return response(receipt);
+      },
+    } as unknown as Pick<APIRequestContext, 'get' | 'post'>;
+    const run = withSchoolRecognitionApproval(request, { email: 'admin@synthetic.invalid', password: 'fixture-only' }, 'synthetic-public-key', async () => {
+      if (scenario === 'newer-policy') current = { ...current, version: current.version + 1, parentUpcomingVisible: true };
+      if (scenario === 'body-failure') throw new Error('Synthetic original verification failure');
+    });
+    if (['setup-uncertain', 'newer-policy', 'body-failure'].includes(scenario)) await expect(run).rejects.toThrow(); else await run;
+    if (scenario === 'already-enabled') expect(writes).toEqual([]);
+    else if (scenario === 'newer-policy') { expect(writes).toHaveLength(1); expect(current.parentUpcomingVisible).toBe(true); }
+    else {
+      expect(current).toEqual({ ...original, version: 6 });
+      expect(writes[0].body).toMatchObject({ expectedVersion: 4, parentAttendanceVisible: true, parentUpcomingVisible: false, analyticsEnabled: true, recognitionEnabled: true, leaderboardEnabled: false, confirmPolicyApproval: true });
+      if (scenario === 'setup-uncertain') { expect(writes).toHaveLength(3); expect(writes[1]).toEqual(writes[0]); } else expect(writes).toHaveLength(2);
+      expect(writes.at(-1)?.key).not.toBe(writes[0].key);
+    }
+  }
 });

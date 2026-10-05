@@ -3,6 +3,8 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { build } from 'esbuild';
+import { readFileSync } from 'node:fs';
 
 type Role = 'admin' | 'coordinator' | 'teacher' | 'student' | 'parent';
 type Account = { role: Role; email: string; password: string };
@@ -71,6 +73,28 @@ async function settled(page: Page) {
   await expect(page.locator('main [role="alert"]')).toHaveCount(0);
 }
 
+async function completeStaffPeople(page: Page, learner: Locator, first: import('@playwright/test').Response, development: boolean) {
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+  const read = async (response: import('@playwright/test').Response) => {
+    expect(response.status()).toBe(200); expect(await response.finished()).toBeNull();
+    const body = await response.json() as { items: { userId: string; role: string }[]; nextCursor: string | null };
+    expect(Array.isArray(body.items)).toBe(true); expect(body.items.length).toBeLessThanOrEqual(100); expect(body.nextCursor === null || uuid.test(body.nextCursor)).toBe(true);
+    for (const item of body.items) expect(item.userId).toMatch(uuid); expect(new Set(body.items.map(item => item.userId)).size).toBe(body.items.length);
+    for (const item of body.items.filter(item => item.role === 'student')) await expect(learner.locator(`option[value="${item.userId}"]`)).toBeAttached();
+    return body;
+  };
+  let cursor = (await read(first)).nextCursor; const seen = new Set<string>();
+  const field = learner.locator('..'), more = field.getByRole('button', { name: development ? 'Load more: Learner' : 'Load more', exact: true });
+  for (let continuation = 0; cursor && continuation < 30; continuation++) {
+    expect(seen.has(cursor)).toBe(false); seen.add(cursor); const expectedCursor = cursor; await expect(more).toHaveCount(1);
+    const response = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && url.searchParams.get('cursor') === expectedCursor && row.request().method() === 'GET'; });
+    await expect(more).toBeEnabled(); await more.click(); const body = await read(await response);
+    expect(body.nextCursor).not.toBe(expectedCursor); cursor = body.nextCursor;
+    await expect(field.getByRole('button', { name: development ? 'Loading more…: Learner' : 'Loading more…', exact: true })).toHaveCount(0);
+  }
+  expect(cursor).toBeNull(); await expect(more).toHaveCount(0); await settled(page);
+}
+
 async function semanticSmoke(page: Page) {
   await expect(page.getByRole('main')).toHaveCount(1);
   const navigation = page.locator('.workspace-chrome__navigation,.workspace-chrome__focused-navigation');
@@ -132,7 +156,7 @@ for (const role of roles) {
       const expectedView = await target.getAttribute('data-workspace-destination');
       const profileView = names[index].trim() === 'Account' ? 'account' : names[index].trim() === 'Access settings' ? 'access' : null;
       if (!profileView) expect(expectedView, 'Every current product workspace choice identifies its exact destination').not.toBeNull();
-      const developmentPeople = names[index].trim() === 'Development' && role !== 'student' && role !== 'parent' ? page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; }) : null;
+      const staffPeople = ['Progress', 'Development'].includes(names[index].trim()) && role !== 'student' && role !== 'parent' ? page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; }) : null;
       await keyboardActivate(page, target);
       if (expectedView) {
         await expect(page).toHaveURL(url => expectedView === 'overview' ? url.searchParams.get('view') === null : url.searchParams.get('view') === expectedView);
@@ -145,31 +169,14 @@ for (const role of roles) {
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
       // Staff/parent progress must select a real permitted learner before reviewing evidence.
       if (['Progress', 'Development'].includes(names[index].trim()) && role !== 'student' && role !== 'parent') {
-        const learner = names[index].trim() === 'Progress' ? page.locator('#learner-selection') : page.locator('.development-workspace').getByRole('combobox', { name: 'Learner', exact: true });
-        if (names[index].trim() === 'Development') {
-          const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-          const first = await developmentPeople!; expect(first.status()).toBe(200); expect(await first.finished()).toBeNull();
-          let cursor = (await first.json() as { items: unknown[]; nextCursor: string | null }).nextCursor; const seen = new Set<string>();
-          expect(cursor === null || uuid.test(cursor)).toBe(true);
-          const field = learner.locator('..'), more = field.getByRole('button', { name: 'Load more: Learner', exact: true });
-          for (let continuation = 0; cursor && continuation < 30; continuation++) {
-            expect(seen.has(cursor)).toBe(false); seen.add(cursor); const expectedCursor = cursor; await expect(more).toHaveCount(1);
-            const response = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && url.searchParams.get('cursor') === expectedCursor && row.request().method() === 'GET'; });
-            await expect(more).toBeEnabled(); await more.click(); const current = await response; expect(current.status()).toBe(200); expect(await current.finished()).toBeNull();
-            const body = await current.json() as { items: { userId: string; role: string }[]; nextCursor: string | null }; expect(body.items.length).toBeLessThanOrEqual(100);
-            expect(Array.isArray(body.items)).toBe(true); expect(body.nextCursor === null || uuid.test(body.nextCursor)).toBe(true); expect(body.nextCursor).not.toBe(expectedCursor);
-            for (const item of body.items) expect(item.userId).toMatch(uuid); expect(new Set(body.items.map(item => item.userId)).size).toBe(body.items.length);
-            for (const item of body.items.filter(item => item.role === 'student')) await expect(learner.locator(`option[value="${item.userId}"]`)).toBeAttached();
-            cursor = body.nextCursor;
-            await expect(field.getByRole('button', { name: 'Loading more…: Learner', exact: true })).toHaveCount(0);
-          }
-          expect(cursor).toBeNull(); await expect(more).toHaveCount(0); await settled(page);
-        }
+        const learner = names[index].trim() === 'Progress' ? page.locator('#learner-selection') : page.locator('.development-learner-picker select');
+        await completeStaffPeople(page, learner, await staffPeople!, names[index].trim() === 'Development');
         const option = learner.locator('option[value]:not([value=""]):not([disabled])').first();
         await expect(option).toBeAttached(); await expect(learner).toBeEnabled(); await learner.focus(); await expect(learner).toBeFocused();
+        const learnerValue = (await option.getAttribute('value'))!;
         if (names[index].trim() === 'Development') { await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); }
         else { await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
-        await expect(learner).toHaveValue((await option.getAttribute('value'))!); await settled(page);
+        await expect(learner).toHaveValue(learnerValue); await settled(page);
       }
       if (names[index].trim() === 'Progress' && ['admin', 'coordinator', 'teacher'].includes(role)) {
         const classSelector = page.locator('#summary-class'); await classSelector.focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
@@ -257,3 +264,31 @@ for (const state of [{ status: 403, title: 'School access is unavailable for thi
     await expect(page.locator('.workspace-chrome__person > button strong')).toHaveText(displayName);
   });
 }
+
+test('adapter: staff learner paging uses current query owners and captures the native selection before mobile collapse', async ({ page }) => {
+  const root = resolve(import.meta.dirname, '../..');
+  const bundle = await build({ stdin: { resolveDir: root, loader: 'tsx', contents: `
+import React,{useState}from'react';import{createRoot}from'react-dom/client';import{usePaginatedLearningQuery}from'./apps/web/shared/hooks/use-paginated-query';import{parsePersonChoice}from'./apps/web/shared/api/people';import{LoadMore}from'./apps/web/shared/components/load-more';import{progressLearnerChoices}from'./apps/web/features/progress/model';import{developmentLearnerChoices}from'./apps/web/features/development/model';import{FormDrafts}from'./apps/web/shared/session/form-drafts';
+const drafts=new FormDrafts();globalThis.staffPeopleApp={apiUrl:'http://localhost:4000',accessToken:'synthetic',online:true,status:'ready',accessGeneration:1,membership:{schoolId:'10000000-0000-4000-8000-000000000001',userId:'20000000-0000-4000-8000-000000000001',role:'admin'},formDrafts:drafts};
+const parseResponse=(_path,value,parse)=>parse(value),request=async path=>{const response=await fetch('http://localhost:4000'+path);return response.json()};globalThis.staffPeopleApi={request,parseResponse,t:{loadMore:'Load more',loadingMore:'Loading more…'}};
+function Harness(){const[mode,setMode]=useState('Progress'),[selected,setSelected]=useState('');const people=usePaginatedLearningQuery('/v1/people?limit=100',parsePersonChoice,mode==='Progress'?0:1),complete=people.loaded&&!people.loading&&!people.loadingMore&&!people.error&&!people.moreError&&!people.nextCursor;const choices=mode==='Progress'?progressLearnerChoices(people.data,'Unavailable',complete):developmentLearnerChoices(people.data,'Unavailable');return<main><button onClick={()=>{setSelected('');setMode('Development')}}>Development</button><div className='field' style={{display:selected?'none':'block'}}><label htmlFor='learner'>Learner</label><select id='learner' disabled={mode==='Progress'&&!complete} value={selected} onChange={event=>setSelected(event.target.value)}><option value=''>Choose learner</option>{choices.map(choice=><option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={people} label={mode==='Development'?'Learner':undefined}/></div>{selected?<h2>Current selected learner</h2>:null}</main>}createRoot(document.getElementById('root')).render(<Harness/>);
+` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', plugins: [{ name: 'current-staff-session-only', setup(bundler) {
+    bundler.onLoad({ filter: /shared[\\/]session[\\/]providers\.tsx$/ }, () => ({ loader: 'js', contents: 'export function useApp(){return globalThis.staffPeopleApp}' }));
+    bundler.onLoad({ filter: /shared[\\/]hooks[\\/]use-api\.ts$/ }, () => ({ loader: 'js', contents: 'export function useApi(){return globalThis.staffPeopleApi}' }));
+    bundler.onLoad({ filter: /\.(webp|png|svg)$/ }, args => ({ loader: 'js', contents: 'export default ' + JSON.stringify({ src: 'data:image/svg+xml;base64,' + readFileSync(args.path).toString('base64'), width: 128, height: 128 }) }));
+  } }] });
+  const firstId = '20000000-0000-4000-8000-000000000012', nextId = '20000000-0000-4000-8000-000000000013', cursor = '20000000-0000-4000-8000-000000000100';
+  await page.route('http://localhost:4000/v1/people**', async route => {
+    const next = new URL(route.request().url()).searchParams.get('cursor'); expect(next === null || next === cursor).toBe(true);
+    await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ items: [{ userId: next ? nextId : firstId, displayName: next ? 'Sara' : 'Lina', role: 'student', classLabels: ['Cedar · Year 1 · 2026–2027'] }], nextCursor: next ? null : cursor }) });
+  });
+  await page.setContent('<div id="root"></div>');
+  const first = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/people'); await page.addScriptTag({ content: bundle.outputFiles[0].text });
+  const learner = page.locator('#learner'); await completeStaffPeople(page, learner, await first, false);
+  const selected = (await learner.locator('option[value]:not([value=""]):not([disabled])').first().getAttribute('value'))!;
+  await learner.focus(); await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); await expect(learner).toHaveValue(selected); await expect(learner).toBeHidden();
+  const developmentRead = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/people' && !new URL(response.url()).searchParams.has('cursor'));
+  await page.getByRole('button', { name: 'Development', exact: true }).click(); await completeStaffPeople(page, learner, await developmentRead, true);
+  const developmentValue = (await learner.locator('option[value]:not([value=""]):not([disabled])').first().getAttribute('value'))!;
+  await learner.focus(); await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); await expect(learner).toHaveValue(developmentValue); await expect(learner).toBeHidden();
+});

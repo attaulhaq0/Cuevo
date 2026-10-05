@@ -9,33 +9,34 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
+import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-review';
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
 const manifest = () => ({
-  version: 1, environment: 'staging', commitSha: sha, ciRunId: '42', verifiedAt: '2026-10-02T11:00:00Z',
+  version: 2, environment: 'staging', commitSha: sha, ciRunId: '42', verifiedAt: '2026-10-02T11:00:00Z',
   api: { origin: 'https://api.stage.example.com', commitSha: sha, imageDigest: `sha256:${digest}`, healthVerified: true, evidenceUrl: 'https://github.com/owner/repo/actions/runs/41' },
   worker: { kind: 'container', origin: 'https://worker.stage.example.com', commitSha: sha, imageDigest: `sha256:${digest}`, healthVerified: true, evidenceUrl: 'https://github.com/owner/repo/actions/runs/41' },
-  database: { projectRef: 'stageproject', migrations: [{ version: '20261002074258', sha256: digest }], grantsVerified: true, rlsVerified: true, privateStorageVerified: true, privateRealtimeVerified: true, recoveryVerified: true, evidenceUrl: 'https://github.com/owner/repo/actions/runs/41' },
+  database: { projectRef: 'stageproject', migrations: [{ version: '20261002074258', sha256: digest }], grantsVerified: true, rlsVerified: true, privateStorageVerified: true, privateRealtimeVerified: true, recoveryVerified: true, evidenceUrl: 'https://github.com/owner/repo/actions/runs/41', dataApi: { state:'DISABLED' as const,projectRef:'stageproject',commitSha:sha,verifiedAt:'2026-10-02T11:00:00Z',configurationVerified:true,anonymousRestDenied:true,authenticatedRestDenied:true,serviceRestDenied:true,graphqlDenied:true,rpcDenied:true,evidenceUrl:'https://github.com/owner/repo/actions/runs/41' } },
   approval: { reviewer: 'school-owner', basis: 'SYNTHETIC_STAGING', evidenceUrl: 'https://github.com/owner/repo/issues/3' },
   publicConfig: { apiUrl: 'https://api.stage.example.com', supabaseUrl: 'https://stageproject.supabase.co', supabasePublishableKey: 'sb_publishable_public-only-value' },
 });
 const context = { sha, environment: 'staging', ciRunId: '42', now, migrations: [{ version: '20261002074258', sha256: digest }] };
 const trustedRun = () => ({ id: 42, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'owner/repo' } });
-const releaseControls = () => ({ environment: { name: 'production', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', reviewer: { id: 1 } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }, branches: { branch_policies: [{ name: 'main', type: 'branch' }] }, signatures: { enabled: true }, main: { enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: true, required_approving_review_count: 1 } } });
+const releaseControls = () => ({ environment: { id:123,name: 'production', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }, branches: { branch_policies: [{ name: 'main', type: 'branch' }] }, signatures: { enabled: true }, main: { allow_force_pushes:{enabled:false},allow_deletions:{enabled:false},enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false, required_approving_review_count: 0,require_last_push_approval:false,bypass_pull_request_allowances:{users:[],teams:[],apps:[]} } } });
 test('release controls require existing protected environment and reviewed signed current main', () => {
   validateReleaseControls(releaseControls(), { environment: 'production' });
   for (const change of [
     (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules = []; },
     (v: ReturnType<typeof releaseControls>) => { v.environment.can_admins_bypass = true; },
-    (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules[0].prevent_self_review = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules[0].prevent_self_review = true; },
     (v: ReturnType<typeof releaseControls>) => { v.environment.protection_rules[0].reviewers = []; },
     (v: ReturnType<typeof releaseControls>) => { v.branches.branch_policies[0].name = '*'; },
     (v: ReturnType<typeof releaseControls>) => { v.main.enforce_admins.enabled = false; },
     (v: ReturnType<typeof releaseControls>) => { v.signatures.enabled = false; },
     (v: ReturnType<typeof releaseControls>) => { v.main.required_status_checks.contexts = []; },
-    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.require_code_owner_reviews = false; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.require_code_owner_reviews = true; },
     (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.dismiss_stale_reviews = false; },
-    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.required_approving_review_count = 0; },
+    (v: ReturnType<typeof releaseControls>) => { v.main.required_pull_request_reviews.required_approving_review_count = 1; },
   ]) { const value = releaseControls(); change(value); assert.throws(() => validateReleaseControls(value, { environment: 'production' })); }
   assert.throws(() => validateReleaseControls({}, { environment: 'production' }));
   const bypass = { ...releaseControls(), main: { ...releaseControls().main, required_pull_request_reviews: { ...releaseControls().main.required_pull_request_reviews, bypass_pull_request_allowances: { users: [{ id: 1 }], teams: [], apps: [] } } } };
@@ -90,11 +91,11 @@ test('actual release context writes only admitted outputs and rejects stale main
     assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nenvironment=production\n`);
     assert.equal(execute('ci').status, 0);
     const controls = execute('controls'); assert.equal(controls.status, 0, controls.stderr); assert.ok(controls.stdout.includes('/protection/required_signatures'));
-    const missing = execute('controls', sha, trustedRun(), sha, false); assert.equal(missing.status, 1); assert.ok(missing.stderr.includes('protection metadata'));
+    const missing = execute('controls', sha, trustedRun(), sha, false); assert.equal(missing.status, 1); assert.ok(missing.stderr.includes('control or approval evidence'));
     const stale = execute('ci', 'c'.repeat(40)); assert.equal(stale.status, 1);
     assert.ok(stale.stderr.includes('Main changed'));
     const staleUpload = execute('deploy', 'c'.repeat(40)); assert.equal(staleUpload.status, 1);
-    assert.ok(staleUpload.stderr.includes('Main changed'));
+    assert.equal(staleUpload.stdout.includes('FETCH https://api.vercel.com'),false);
     const wrongCheckout = execute('ci', sha, trustedRun(), 'c'.repeat(40)); assert.equal(wrongCheckout.status, 1);
     assert.equal(wrongCheckout.stdout.includes('FETCH '), false); assert.ok(wrongCheckout.stderr.includes('checkout'));
     const failed = execute('ci', sha, { ...trustedRun(), conclusion: 'failure' }); assert.equal(failed.status, 1);
@@ -213,6 +214,15 @@ test('Edge admission requires every authentication, queue, role and transport pr
   }
 });
 
+test('hosted release requires current exact-project Data API disabled and observed endpoint denials',()=>{
+  const value=manifest();assert.doesNotThrow(()=>validateReleaseManifest(value,context));
+  for(const field of ['configurationVerified','anonymousRestDenied','authenticatedRestDenied','serviceRestDenied','graphqlDenied','rpcDenied'] as const){assert.throws(()=>validateReleaseManifest({...value,database:{...value.database,dataApi:{...value.database.dataApi,[field]:false}}},context));}
+  for(const fields of [{state:'ENABLED'},{projectRef:'otherproject'},{commitSha:baseShaForDenied()},{verifiedAt:'2026-09-30T00:00:00Z'},{verifiedAt:'2026-10-03T00:00:00Z'}])assert.throws(()=>validateReleaseManifest({...value,database:{...value.database,dataApi:{...value.database.dataApi,...fields}}},context));
+  const database:Record<string,unknown>={...value.database};delete database.dataApi;assert.throws(()=>validateReleaseManifest({...value,database},context));
+  assert.throws(()=>validateReleaseManifest({...value,version:1},context));
+});
+function baseShaForDenied(){return 'c'.repeat(40);}
+
 test('Edge admission binds project, function, source and locked dependency identity', () => {
   for (const fields of [
     { projectRef: 'otherproject' }, { projectRef: 'stage-project' }, { commitSha: 'c'.repeat(40) }, { functionName: 'another-worker' },
@@ -248,11 +258,27 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     await writeFile(join(migrationDirectory, '20261002074258_contract.sql'), sql);
     value.database.migrations = [{ version: '20261002074258', sha256: createHash('sha256').update(sql).digest('hex') }];
     await writeFile(join(releaseDirectory, 'deployment.json'), JSON.stringify({ url: 'https://cuevo-build.vercel.app', commitSha: sha }));
-    const script = (mode: 'manifest' | 'verify') => `
+    const assignments={baseSha:'c'.repeat(40),reviews:[{category:'source-spec-code' as const,taskId:'/root/source-review',reportSha256:'d'.repeat(64),evidenceSha256:'e'.repeat(64)},{category:'qa-regression-operations' as const,taskId:'/root/qa-review',reportSha256:'f'.repeat(64),evidenceSha256:'0'.repeat(64)}]};
+    const treeBytes='exact synthetic tree',diffBytes='exact synthetic diff';
+    const sourceManifestSha256=createHash('sha256').update(treeBytes).digest('hex'),diffSha256=createHash('sha256').update(diffBytes).digest('hex'),manifestSha256=createHash('sha256').update(canonicalReleaseReviewJson(value)).digest('hex');
+    const web={teamId:'team_cuevo',projectId:'prj_cuevo',target:'preview' as const};
+    const reviewInput={web,version:1 as const,repository:'owner/repo',releaseSha:sha,baseSha:assignments.baseSha,ciRunId:'42',manifestSha256,sourceManifestSha256,diffSha256,reviews:assignments.reviews.map(row=>({...row,releaseSha:sha,baseSha:assignments.baseSha,sourceManifestSha256,diffSha256,reviewedAt:'2026-10-02T11:00:00Z',provenance:'RETAINED_INDEPENDENT_AGENT_REPORT' as const,independenceAttested:true as const}))};
+    const prepared=prepareReleaseReviewPackage(reviewInput,{repository:'owner/repo',releaseSha:sha,baseSha:assignments.baseSha,ciRunId:'42',releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging',web,now,manifestSha256,sourceManifestSha256,diffSha256,reviews:assignments.reviews});
+    const protectedControls={...releaseControls(),environment:{...releaseControls().environment,name:'staging'}};
+    const script = (mode: 'manifest' | 'approval' | 'verify') => `
+      const cp=(await import('node:module')).createRequire(import.meta.url)('node:child_process');cp.execFileSync=(command,args)=>{if(command!=='git')throw Error('Unexpected executable before verified approval');if(args[0]==='rev-parse')return args[1]==='HEAD'?'${sha}':'${assignments.baseSha}';if(args[0]==='merge-base'||args[0]==='diff'&&args[1]==='--quiet'||args[0]==='ls-files')return '';if(args[0]==='ls-tree')return '${treeBytes}';if(args[0]==='diff')return '${diffBytes}';throw Error('Unexpected source read')};(await import('node:module')).syncBuiltinESMExports();
       process.argv[2] = '${mode}';
-      Date.now = () => ${mode === 'manifest' ? now : options.verifyAt ?? now};
+      Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
+        if(url==='https://api.github.com/repos/owner/repo/actions/runs/42')return new Response(JSON.stringify(${JSON.stringify(trustedRun())}));
+        if(url==='https://api.github.com/repos/owner/repo/git/ref/heads/main')return new Response(JSON.stringify({object:{type:'commit',sha:'${sha}'}}));
+        if(url==='https://api.github.com/repos/owner/repo/actions/runs/51')return new Response(JSON.stringify({id:51,run_attempt:1,repository:{full_name:'owner/repo'},head_sha:'${sha}',head_branch:'main',path:'.github/workflows/release.yml',event:'workflow_dispatch',status:'in_progress',conclusion:null}));
+        if(url==='https://api.github.com/repos/owner/repo/actions/runs/51/approvals')return new Response(JSON.stringify([{environments:[{id:123,name:'staging'}],state:'approved',user:{id:95836629,login:'attaulhaq0',type:'User'},comment:${JSON.stringify(prepared.comment)}}]));
+        if(url==='https://api.github.com/repos/owner/repo/environments/staging')return new Response(JSON.stringify(${JSON.stringify(protectedControls.environment)}));
+        if(url==='https://api.github.com/repos/owner/repo/environments/staging/deployment-branch-policies')return new Response(JSON.stringify(${JSON.stringify(protectedControls.branches)}));
+        if(url==='https://api.github.com/repos/owner/repo/branches/main/protection')return new Response(JSON.stringify(${JSON.stringify(protectedControls.main)}));
+        if(url==='https://api.github.com/repos/owner/repo/branches/main/protection/required_signatures')return new Response(JSON.stringify(${JSON.stringify(protectedControls.signatures)}));
         if (url === 'https://api.vercel.com/v13/deployments/cuevo-build.vercel.app?teamId=team_cuevo') return new Response(JSON.stringify({ id: 'dpl_cuevo', projectId: 'prj_cuevo', ownerId: 'team_cuevo', url: 'cuevo-build.vercel.app', readyState: 'READY', target: null, meta: { cuevoCommitSha: '${sha}' } }));
         if (url === 'https://api.vercel.com/v13/deployments/dpl_cuevoApi?teamId=team_cuevo') return new Response(JSON.stringify({ id: 'dpl_cuevoApi', projectId: 'prj_cuevoApi', ownerId: 'team_cuevo', url: 'cuevo-api-build.vercel.app', readyState: 'READY', target: null, meta: { cuevoCommitSha: '${sha}' }, ...${JSON.stringify(options.apiDeployment ?? {})} }));
         if (url === 'https://cuevo-build.vercel.app' || url === 'https://api.stage.example.com/health/ready') return new Response(null, { status: 200 });
@@ -261,9 +287,9 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
       };
       await import(${JSON.stringify(pathToFileURL(resolve('scripts/verification/cicd-release.ts')).href)});
     `;
-    const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, RELEASE_SHA: sha, RELEASE_ENVIRONMENT: 'staging', VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo', VERCEL_TOKEN: 'synthetic-verification-token' };
-    const execute = (mode: 'manifest' | 'verify', extra: Record<string, string> = {}) => spawnSync(process.execPath, ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href, '--input-type=module', '--eval', script(mode)], { cwd: directory, env: { ...env, ...extra }, encoding: 'utf8', timeout: 20000 });
-    const admission = execute('manifest', { CI_RUN_ID: '42', RELEASE_MANIFEST: JSON.stringify(value) });
+    const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, RELEASE_SHA: sha, RELEASE_ENVIRONMENT: 'staging', VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo', GITHUB_SHA:sha,GITHUB_REF:'refs/heads/main',GITHUB_REPOSITORY:'owner/repo',GITHUB_RUN_ID:'51',GITHUB_RUN_ATTEMPT:'1',GH_TOKEN:'synthetic-github-token',CI_RUN_ID:'42',RELEASE_MANIFEST:canonicalReleaseReviewJson(value),RELEASE_ENVIRONMENT_ID:'123',REVIEW_BASE64:prepared.base64,REVIEW_DIGEST:prepared.sha256,CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON:canonicalReleaseReviewJson(assignments) };
+    const execute = (mode: 'manifest' | 'approval' | 'verify', extra: Record<string, string> = {}) => spawnSync(process.execPath, ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href, '--input-type=module', '--eval', script(mode)], { cwd: directory, env: { ...env, ...(mode==='verify'?{VERCEL_TOKEN:'synthetic-verification-token'}:{}),...extra }, encoding: 'utf8', timeout: 20000 });
+    const admission = execute('approval');
     assert.equal(admission.error, undefined); assert.equal(admission.status, 0, admission.stderr);
     if (options.savedWorker || options.savedApi) {
       const path = join(releaseDirectory, 'public.json');
@@ -287,7 +313,7 @@ test('release verify reads exact API deployment metadata and refuses changed hos
     assert.equal(rejected.stdout.includes('FETCH https://api.stage.example.com/health/ready'), false);
   }
   const modified = await verifyRelease(vercelApiManifest(), { savedApi: { ...vercelApiManifest().api, deploymentId: 'dpl_changed' } });
-  assert.equal(modified.status, 1); assert.equal(modified.stdout.includes('FETCH '), false);
+  assert.equal(modified.status, 1); assert.equal(modified.stdout.includes('FETCH https://api.vercel.com'), false);
 });
 
 test('release verify fetches container readiness and refuses an unavailable worker', async () => {
@@ -298,7 +324,7 @@ test('release verify fetches container readiness and refuses an unavailable work
 
 test('release verify consumes admitted Edge attestations without any worker request', async () => {
   const result = await verifyRelease(edgeManifest()); assert.equal(result.error, undefined); assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(result.stdout.split(/\r?\n/).filter(line => line.startsWith('FETCH ')), [
+  assert.deepEqual(result.stdout.split(/\r?\n/).filter(line => line.startsWith('FETCH ')&&!line.startsWith('FETCH https://api.github.com')), [
     'FETCH https://api.vercel.com/v13/deployments/cuevo-build.vercel.app?teamId=team_cuevo',
     'FETCH https://cuevo-build.vercel.app', 'FETCH https://api.stage.example.com/health/ready',
   ]);
@@ -307,10 +333,10 @@ test('release verify consumes admitted Edge attestations without any worker requ
 
 test('release verify rejects expired Edge evidence or a modified admitted worker before network checks', async () => {
   const expired = await verifyRelease(edgeManifest(), { verifyAt: now + 86400000 }); assert.equal(expired.status, 1);
-  assert.equal(expired.stdout.includes('FETCH '), false);
+  assert.equal(expired.stdout.includes('FETCH https://api.vercel.com'), false);
   for (const savedWorker of [{ ...edgeManifest().worker, kind: 'unknown' }, { ...edgeManifest().worker, authVerified: false }]) {
     const modified = await verifyRelease(edgeManifest(), { savedWorker }); assert.equal(modified.status, 1);
-    assert.equal(modified.stdout.includes('FETCH '), false);
+    assert.equal(modified.stdout.includes('FETCH https://api.vercel.com'), false);
   }
 });
 
@@ -351,6 +377,13 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(ci, release + '\n      - uses: actions/download-artifact@' + 'a'.repeat(40) + '\n        with: { path: .vercel/output }\n').some(issue => issue.includes('artifacts')));
   assert.ok(validateWorkflows(ci, release + '\n      - run: echo ${{ github.event.workflow_run.head_branch }}\n').some(issue => issue.includes('shell')));
   assert.ok(validateWorkflows(ci, release + '\n      - uses: actions/checkout@' + 'a'.repeat(40) + '\n        with: { persist-credentials: false, ref: untrusted }\n').some(issue => issue.includes('checkout')));
+  for(const field of ['REVIEW_BASE64','REVIEW_DIGEST','RELEASE_ENVIRONMENT_ID','CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON'])assert.ok(validateWorkflows(ci,release.replaceAll(field,`OMITTED_${field}`)).length>0,`${field} must remain admitted at every boundary`);
+  assert.ok(validateWorkflows(ci,release.replace('run: node --import tsx scripts/verification/cicd-release.ts approval','run: node --import tsx scripts/verification/cicd-release.ts approval-omitted')).some(issue=>issue.includes('approval')));
+  assert.ok(validateWorkflows(ci,release.replace('review-base64: ${{ steps.review.outputs.review-base64 }}','review-base64: unverified')).some(issue=>issue.includes('outputs')));
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{'web-release':{steps:Record<string,unknown>[]}}};dump(value:unknown):string};
+  const altered=yaml.load(release);altered.jobs['web-release'].steps.splice(3,0,{name:'Unexpected direct upload',env:{VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'},run:'vercel deploy --prebuilt --yes --prod'});
+  assert.ok(validateWorkflows(ci,yaml.dump(altered)).length>0,'A direct credential consumer must not bypass the release owner or approval');
+  const inherited=yaml.load(release) as {jobs:{'web-release':{steps:Record<string,unknown>[];env?:Record<string,string>}}};inherited.jobs['web-release'].env={VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'};inherited.jobs['web-release'].steps.unshift({run:'node unreviewed-action.js'});assert.ok(validateWorkflows(ci,yaml.dump(inherited)).some(issue=>issue.includes('job-level')));
 });
 test('web and API automatic Git builds cannot bypass reviewed Actions deployment', async () => {
   for (const owner of ['web', 'api']) {

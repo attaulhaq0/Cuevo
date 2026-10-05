@@ -169,7 +169,8 @@ test('administrator revokes and restores current teacher, learner and guardian s
     const saved = await context.save(paths[kind], form);
     expect(saved.body).toMatchObject({ ...(kind === 'guardian' ? {parentId:current.parentId,studentId:current.studentId} : kind === 'assignment' ? {classId:current.classId,subjectId:current.subjectId,teacherId:current.teacherId} : {classId:current.classId,studentId:current.studentId}), expectedRevision: current.revision, status: status.toLowerCase(), effectiveFrom: current.effectiveFrom, effectiveTo: current.effectiveTo });
     expect(saved.receipt.revision).toBe(current.revision + 1);
-    await expect(record).toContainText(status);
+    const currentRecord = await selectTrailSchoolRecord(page, kind === 'assignment' ? 'assignment' : kind === 'enrollment' ? 'enrollment' : 'guardian', visibleContext);
+    await expect(currentRecord).toContainText(status);
     return saved;
   };
   const courseVisible = async (role: 'teacher' | 'student', visible: boolean) => {

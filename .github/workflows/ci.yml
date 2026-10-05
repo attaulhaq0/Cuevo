@@ -21,7 +21,7 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
-      - run: node --import tsx --test scripts/verification/cicd-contracts.test.ts
+      - run: npm run test:cicd
       - run: node --import tsx scripts/verification/cicd-check.ts
       - run: npm run check:repository && npm run test:repository && npm run check:architecture && npm run test:architecture && npm run check:docs && npm run test:docs
       - run: npm run lint && npm run typecheck && npm test
