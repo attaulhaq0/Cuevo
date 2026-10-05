@@ -95,6 +95,22 @@ async function completeStaffPeople(page: Page, learner: Locator, first: import('
   expect(cursor).toBeNull(); await expect(more).toHaveCount(0); await settled(page);
 }
 
+async function chooseCurrentClassByKeyboard(page:Page){
+ const select=page.locator('#summary-class'),field=select.locator('..');
+ await expect(select).toBeVisible();
+ await expect(page.locator('.class-summary-header [data-state="loading"]')).toHaveCount(0);
+ const more=field.getByRole('button',{name:'Load more',exact:true});
+ for(let part=0;await more.count()&&part<30;part++){
+  await expect(more).toBeEnabled();const cursor=await more.getAttribute('data-page-cursor');expect(cursor).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
+  const received=page.waitForResponse(response=>{const url=new URL(response.url());return response.request().method()==='GET'&&url.origin==='http://localhost:4000'&&url.pathname==='/v1/classes'&&url.searchParams.get('cursor')===cursor});
+  await more.click();const response=await received;expect(response.ok()).toBe(true);expect(await response.finished()).toBeNull();const current=await response.json() as {items:{id:string}[];nextCursor:string|null};expect(Array.isArray(current.items)&&current.items.length<=100).toBe(true);const ids=current.items.map(row=>row.id);expect(new Set(ids).size).toBe(ids.length);for(const id of ids){expect(id).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);await expect(select.locator(`option[value="${id}"]`)).toBeAttached();}if(current.nextCursor===null)await expect(more).toHaveCount(0);else{expect(current.nextCursor).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);expect(current.nextCursor).not.toBe(cursor);await expect(more).toHaveAttribute('data-page-cursor',current.nextCursor);}
+ }
+ await expect(more).toHaveCount(0);await expect(select).toBeEnabled();
+ await expect.poll(()=>select.locator('option[value]:not([value=""]):not([disabled])').count()).toBeGreaterThan(0);
+ const option=select.locator('option[value]:not([value=""]):not([disabled])').first(),expected=await option.getAttribute('value');expect((await option.textContent())?.trim()).toBeTruthy();
+ await select.focus();await expect(select).toBeFocused();await select.press('Home');await select.press('ArrowDown');await select.press('Tab');await expect(select).toHaveValue(expected!);await settled(page);
+}
+
 async function semanticSmoke(page: Page) {
   await expect(page.getByRole('main')).toHaveCount(1);
   const navigation = page.locator('.workspace-chrome__navigation,.workspace-chrome__focused-navigation');
@@ -179,8 +195,7 @@ for (const role of roles) {
         await expect(learner).toHaveValue(learnerValue); await settled(page);
       }
       if (names[index].trim() === 'Progress' && ['admin', 'coordinator', 'teacher'].includes(role)) {
-        const classSelector = page.locator('#summary-class'); await classSelector.focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
-        await expect(classSelector).not.toHaveValue(''); await settled(page);
+        await chooseCurrentClassByKeyboard(page);
       }
       await layoutMatrix(page, role, surface);
       await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
@@ -291,4 +306,12 @@ function Harness(){const[mode,setMode]=useState('Progress'),[selected,setSelecte
   await page.getByRole('button', { name: 'Development', exact: true }).click(); await completeStaffPeople(page, learner, await developmentRead, true);
   const developmentValue = (await learner.locator('option[value]:not([value=""]):not([disabled])').first().getAttribute('value'))!;
   await learner.focus(); await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); await expect(learner).toHaveValue(developmentValue); await expect(learner).toBeHidden();
+});
+test('current ClassLearningSummary source settles its first authorized class before keyboard selection',async({page})=>{
+ const root=resolve(import.meta.dirname,'../..');const compiled=await build({stdin:{resolveDir:root,loader:'tsx',contents:`
+import React,{createContext,useContext}from'react';import{createRoot}from'react-dom/client';import{ClassLearningSummaryPanel}from'./apps/web/features/progress/components/class-learning-summary';import{usePaginatedLearningQuery}from'./apps/web/shared/hooks/use-paginated-query';const C=createContext(null);globalThis.classUC=useContext;globalThis.classC=C;const app={locale:'en',apiUrl:'http://localhost:4000',accessToken:'synthetic',online:true,status:'ready',accessGeneration:1,membership:{schoolId:'10000000-0000-4000-8000-000000000001',userId:'20000000-0000-4000-8000-000000000001',role:'teacher'},formDrafts:{clearRead(){}}};globalThis.classAPI={t:{loadMore:'Load more',loadingMore:'Loading more…'},request:async path=>(await fetch('http://localhost:4000'+path)).json(),parseResponse:(_path,value,parse)=>parse(value)};createRoot(document.getElementById('root')).render(<C.Provider value={app}><main><ClassLearningSummaryPanel refresh={0} onReviewLearner={()=>{}} selectedLearnerId={null} labelContext='current' onLearnerContext={()=>{}}/></main></C.Provider>);
+`},bundle:true,write:false,platform:'browser',format:'iife',jsx:'automatic',loader:{'.webp':'dataurl','.png':'dataurl','.svg':'dataurl'},plugins:[{name:'actual-paging-input',setup(b){b.onLoad({filter:/shared[\\/]session[\\/]providers\.tsx$/},()=>({loader:'js',contents:'export function useApp(){return globalThis.classUC(globalThis.classC)}'}));b.onLoad({filter:/shared[\\/]hooks[\\/]use-api\.ts$/},()=>({loader:'js',contents:'export function useApi(){return globalThis.classAPI}export function useApiQuery(path,parse){return{data:path?parse({schoolId:"10000000-0000-4000-8000-000000000001",classId:"30000000-0000-4000-8000-000000000001",generatedAt:"2026-10-05T00:00:00Z",scope:"CURRENT_CLASS_PAGE",coverage:"NOT_ESTABLISHED",observationCoverage:"RECORDED_ONLY",windowStart:null,windowEnd:null,items:[],nextCursor:null}):null,loading:false,error:null}}'}));}}]});
+ let release!:()=>void;const held=new Promise<void>(done=>release=done);await page.route('http://localhost:4000/v1/classes**',async route=>{await held;await route.fulfill({contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({items:[{id:'30000000-0000-4000-8000-000000000001',name:'Year 1 · Cedar',academicYearName:'2026–2027',yearGroupName:'Year 1'}],nextCursor:null})})});
+ await page.setContent('<div id="root"></div>');await page.addScriptTag({content:compiled.outputFiles[0].text});const select=page.locator('#summary-class');await expect(select).toBeVisible();await select.focus();await select.press('ArrowDown');await select.press('Enter');await expect(select).toHaveValue('');release();
+ await chooseCurrentClassByKeyboard(page);await expect(select).toHaveValue('30000000-0000-4000-8000-000000000001');
 });

@@ -29,7 +29,7 @@ const { IntelligenceQualityReview } = await import('../components/quality-review
 const { InsightContextDisclosure } = await import('../components/insight-context.tsx');
 const { ApprovedPracticeOptions } = await import('../components/approved-practice-options.tsx');
 
-function setup(role: 'student' | 'teacher' | 'coordinator', locale: 'en' | 'ar' = 'en') {
+function setup(role: 'student' | 'teacher' | 'coordinator' | 'admin', locale: 'en' | 'ar' = 'en') {
   Object.assign(fixture, { loading: false, error: null, current: null });
   fixture.app = { locale, online: true, status: 'ready', apiUrl: '', accessToken: 'synthetic', accessGeneration: 1, membership: { userId: 'current-actor', schoolId: 'current-school', role, entitlements: ['learning', 'assessment', 'curriculum', 'improvement'] }, commandJournal: new CommandJournal(), formDrafts: new FormDrafts(), refreshAccess() {}, reportDiagnostic() {} };
 }
@@ -40,7 +40,7 @@ function page(title: string, child: React.ReactNode) {
 test('current empty practice keeps one root heading and one scoped state without awarding or assigning work', () => {
   for (const role of ['student', 'teacher'] as const) for (const locale of ['en', 'ar'] as const) {
     setup(role, locale);
-    const view = page('Practice tasks', createElement(InterventionList, { interventions: [], assessments: [], results: [], canManage: role === 'teacher', onChanged() {}, pageHeading: true }));
+    const view = page('Practice tasks', createElement(InterventionList, { interventions: [], source:{kind:'known-array'}, assessments: [], results: [], canManage: role === 'teacher', onChanged() {}, pageHeading: true }));
     assert.equal(view.querySelectorAll('h1').length, 1);
     assert.equal(view.querySelectorAll('h2').length, 0);
     assert.equal(view.querySelectorAll('.cuevo-workspace-state').length, 1);
@@ -52,16 +52,44 @@ test('current empty practice keeps one root heading and one scoped state without
 
 test('empty proposals and outcomes use scoped reading states without repeated directory headings', () => {
   setup('teacher');
-  const proposals = page('Proposals', createElement(ProposalList, { proposals: [], baselines: [], canDecide: false, onChanged() {}, pageHeading: true }));
+  const proposals = page('Proposals', createElement(ProposalList, { proposals: [], source:{kind:'known-array'}, baselines: [], canDecide: false, onChanged() {}, pageHeading: true }));
   assert.equal(proposals.querySelectorAll('h2').length, 0);
   assert.equal(proposals.querySelectorAll('.cuevo-workspace-state').length, 1);
   assert.match(proposals.textContent, /No proposals are available/);
   assert.match(proposals.textContent, /current.*source|available.*evidence/i);
-  const outcomes = page('Measured outcomes', createElement(OutcomeList, { outcomes: [] }));
+  const outcomes = page('Measured outcomes', createElement(OutcomeList, { outcomes: [],source:{kind:'known-array'} }));
   assert.equal(outcomes.querySelectorAll('.cuevo-workspace-state').length, 1);
   assert.match(outcomes.textContent, /No measured outcomes are available/);
   assert.match(outcomes.textContent, /follow-up|released result/);
   assert.doesNotMatch(outcomes.textContent, /Improved/);
+});
+
+test('proposal practice and outcome directories never call an incomplete current page empty EN AR every permitted role',()=>{
+ const complete={loaded:true,loading:false,loadingMore:false,error:null as LearningApiError|null,moreError:null as LearningApiError|null,nextCursor:null as string|null};
+ for(const role of['student','teacher','coordinator','admin']as const)for(const locale of['en','ar']as const){
+  setup(role,locale);
+  const render=(source:typeof complete)=>[
+   ...(role==='student'?[]:[page('Proposals',createElement(ProposalList,{proposals:[],baselines:[],canDecide:false,onChanged(){},pageHeading:true,source}))]),
+   page('Practice tasks',createElement(InterventionList,{interventions:[],assessments:[],results:[],canManage:role==='teacher',onChanged(){},pageHeading:true,source})),
+   page('Outcomes',createElement(OutcomeList,{outcomes:[],source}))
+  ];
+  for(const source of[{...complete,nextCursor:'current-page'},{...complete,loadingMore:true},{...complete,moreError:new LearningApiError('unavailable')},{...complete,loaded:false}])for(const view of render(source)){
+   assert.equal(view.querySelectorAll('[data-state="empty"]').length,0);assert.equal(view.querySelectorAll('[data-state="unknown"]').length,1);
+  }
+  for(const view of render(complete))assert.equal(view.querySelectorAll('[data-state="empty"]').length,1);
+  for(const view of render({...complete,moreError:new LearningApiError('denied')})){assert.equal(view.querySelectorAll('[data-state="empty"]').length,0);assert.match(view.textContent,/Permission denied/);}
+  for(const view of render({...complete,loading:true})){assert.equal(view.querySelectorAll('[data-state="empty"]').length,0);assert.equal(view.querySelectorAll('[data-state="loading"]').length,1);}
+  for(const view of render({...complete,error:new LearningApiError('unavailable')})){assert.equal(view.querySelectorAll('[data-state="empty"]').length,0);assert.match(view.textContent,/School service unavailable/);}
+ }
+});
+
+test('partial metadata preserves current proposal rows and original decision source recovery',()=>{
+ setup('teacher');const id='00000000-0000-4000-8000-000000000001';const proposal={id,learnerId:id,referenceId:id,baselineResultId:id,origin:'TEACHER_AUTHORED' as const,generationMode:'HUMAN' as const,intelligenceRunId:null,observation:'Current observed source',evidenceIds:[id],interpretation:'School interpretation',recommendation:'Current checking proposal',rationale:'Current reason',uncertainty:'No causal inference',activityTitle:'Current practice',instructions:'Exact instructions',status:'AWAITING_HUMAN' as const,createdAt:'2026-10-05T00:00:00Z'};
+ const source={loaded:true,loading:false,loadingMore:false,error:null,moreError:new LearningApiError('unavailable'),nextCursor:id};
+ const render=()=>page('Proposals',createElement(ProposalList,{proposals:[proposal],source,baselines:[],canDecide:true,onChanged(){},pageHeading:true}));
+ let view=render();assert.equal(view.querySelectorAll('[data-proposal-choice]').length,1);assert.equal(view.querySelectorAll('[data-state="unknown"]').length,1);
+ const path=`/v1/recommendations/${id}/decision`;(fixture.app.commandJournal as CommandJournal).prepare(path,path,{decision:'APPROVE',reason:'Original decision',editedActivityTitle:'Current practice',editedInstructions:'Exact instructions',approvedActivityIds:[]});
+ const original=(fixture.app.commandJournal as CommandJournal).get(path);view=render();assert.match(view.textContent,/Current observed source|Exact instructions/);assert.equal(view.querySelectorAll('[data-recommendation-id]').length,1);assert.equal((fixture.app.commandJournal as CommandJournal).get(path),original);
 });
 
 test('baseline loading, failure and incomplete pages never become confirmed empty results', () => {

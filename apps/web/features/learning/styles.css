@@ -294,6 +294,7 @@
 .learning-preparation-outline button:disabled, .learning-staff-directory button:disabled { cursor: default; }
 .learning-preparation-outline button > svg, .learning-staff-directory button > svg { flex: none; color: var(--color-learning-symbol); }
 .learning-preparation-outline button > bdi, .learning-preparation-outline button > span, .learning-staff-directory button > span { min-inline-size: 0; flex: 1; overflow-wrap: anywhere; }
+.learning-staff-directory button > span { text-align: start; }
 .learning-preparation-outline small, .learning-staff-directory small { display: block; font-size: var(--type-sm); color: var(--color-text-secondary); line-height: var(--line-height-body); margin-block-start: var(--space-1); }
 .learning-staff-directory > p { color: var(--color-text-secondary); font-size: var(--type-sm); margin-block-end: var(--space-5); }
 .learning-staff-directory li + li { margin-block-start: var(--space-3); }

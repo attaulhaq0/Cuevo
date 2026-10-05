@@ -151,6 +151,8 @@ export async function chooseTrailSchoolDate(page: Page, date: string): Promise<v
   if (await input.count()) { await input.fill(date); return; }
   const calendar = page.locator('.parent-calendar');
   await expect(calendar).toBeVisible();
+  const currentDate=calendar.getByLabel(/^(Selected school date|التاريخ المدرسي المحدد)$/,{exact:true});
+  if(await currentDate.count()){await expect(currentDate).toHaveCount(1);await expect(currentDate).toBeVisible();await currentDate.fill(date);await expect(currentDate).toHaveValue(date);return;}
   const month = calendar.locator('.parent-calendar-month h3');
   const expectedMonth = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(target);
   for (let step = 0; step < 36 && (await month.innerText()) !== expectedMonth; step++) {

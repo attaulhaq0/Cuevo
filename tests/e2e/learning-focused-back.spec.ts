@@ -55,6 +55,20 @@ test('Learning selected staff work returns focus and keeps mobile outline and or
   for (const section of ['assessments', 'submissions']) {
     await page.locator(`[data-workspace-section="${section}"]`).click();
     const choice = page.locator(section === 'assessments' ? '[data-assessment-choice] button' : '[data-submission-choice] button').first();
+    if (section === 'submissions') {
+      for (const locale of ['en','ar']) for (const width of [1366, 390]) {
+        if(locale==='ar'&&width===1366)await page.locator('#locale').click();
+        await page.setViewportSize({ width, height: 844 });
+        const alignment = await choice.locator(':scope > span').evaluate(element => {
+          const rect = element.getBoundingClientRect(), title = element.querySelector('strong')!;
+          const range = document.createRange(); range.selectNodeContents(title); const text = range.getBoundingClientRect();
+          return { align: getComputedStyle(element).textAlign, dir: getComputedStyle(element).direction, left: rect.left, right: rect.right, textLeft: text.left, textRight: text.right };
+        });
+        expect(alignment.align).toBe('start');
+        expect(Math.abs(alignment.dir === 'rtl' ? alignment.textRight - alignment.right : alignment.textLeft - alignment.left)).toBeLessThanOrEqual(2);
+      }
+      await page.locator('#locale').click();
+    }
     await choice.click(); const close = page.getByRole('button', { name: section === 'assessments' ? 'Close task' : 'Back to submitted work', exact: true });
     await close.click(); await expect(choice).toBeFocused();
     await choice.click();

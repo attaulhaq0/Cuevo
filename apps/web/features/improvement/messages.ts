@@ -1,4 +1,5 @@
 export const improvementEn = { technicalDetails: 'Technical details',
+  partialList: 'This is a partial current list. Load more or refresh before concluding that no permitted records are available.',
   emptyProposalsBody: 'Proposals appear here from the current permitted school sources. Teachers review the available evidence before approving a practice.',
   emptyBaselineBody: 'A teacher proposal or analysis starts from a released result you can currently access. Marking and release stay in Assessment.',
   emptyPracticeBody: 'Teacher-approved practice appears here when it is assigned. Completion and follow-up results remain separate school records.',
@@ -36,6 +37,7 @@ export const improvementEn = { technicalDetails: 'Technical details',
   humanNotice: 'Teacher proposals are human-authored interpretations of cited evidence. They are not AI analysis or authoritative academic records.',
 };
 export const improvementAr: typeof improvementEn = { technicalDetails: 'تفاصيل تقنية',
+  partialList: 'هذه قائمة حالية جزئية. حمّل المزيد أو حدّث العرض قبل استنتاج عدم وجود سجلات مسموحة.',
   emptyProposalsBody: 'تظهر هنا المقترحات من المصادر المدرسية الحالية المسموحة. يراجع المعلّمون الشواهد المتاحة قبل اعتماد التدريب.',
   emptyBaselineBody: 'يبدأ مقترح المعلّم أو التحليل من نتيجة صادرة يمكنك الوصول إليها حاليًا. يظل التصحيح وإصدار النتيجة في التقييم.',
   emptyPracticeBody: 'يظهر هنا التدريب الذي اعتمده المعلّم عند إسناده. يظل الإكمال ونتائج المتابعة سجلات مدرسية منفصلة.',

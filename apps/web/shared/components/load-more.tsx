@@ -9,5 +9,5 @@ export function LoadMore({ query, label }: { query: { nextCursor: string | null;
   const { t } = useApi();
   if (query.loading || !query.loaded) return null;
   if(!query.nextCursor&&!query.moreError)return null;
-  return <div className="pagination-actions">{query.moreError ? <LearningError error={query.moreError} /> : null}{query.nextCursor ? <Button type="button" variant="secondary" disabled={query.loadingMore} aria-label={label ? `${query.loadingMore ? t.loadingMore : t.loadMore}: ${label}` : undefined} onClick={query.loadMore}>{query.loadingMore ? t.loadingMore : t.loadMore}{label ? ` · ${label}` : ''}</Button> : null}</div>;
+  return <div className="pagination-actions">{query.moreError ? <LearningError error={query.moreError} /> : null}{query.nextCursor ? <Button type="button" variant="secondary" data-page-cursor={query.nextCursor} disabled={query.loadingMore} aria-label={label ? `${query.loadingMore ? t.loadingMore : t.loadMore}: ${label}` : undefined} onClick={query.loadMore}>{query.loadingMore ? t.loadingMore : t.loadMore}{label ? ` · ${label}` : ''}</Button> : null}</div>;
 }

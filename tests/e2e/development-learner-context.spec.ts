@@ -6,6 +6,14 @@ import AxeBuilder from '@axe-core/playwright';
 import { humanContextLabel, selectHumanChoice } from './human-choice';
 import { withBrowserRestoration } from './browser-restoration';
 import { schoolPolicyInputSchema } from '@cuevo/contracts';
+import type { Page } from '@playwright/test';
+
+async function refreshCurrentDevelopmentSources(page:Page){
+ const controller=new AbortController();const parse=async(response:Response)=>{expect(response.ok()).toBe(true);expect(await response.finished()).toBeNull();return response;};
+ const observe=(path:string)=>page.waitForEvent('response',{signal:controller.signal,predicate:response=>{const url=new URL(response.url());return url.origin==='http://localhost:4000'&&url.pathname===path&&!url.searchParams.has('cursor')&&response.request().method()==='GET';}}).then(parse).then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
+ const periods=observe('/v1/development/periods'),people=observe('/v1/people');
+ try{const [periodSource,peopleSource]=await Promise.all([periods,people,page.locator('.development-workspace').getByRole('button',{name:'Refresh development',exact:true}).click()]);if(!periodSource.ok)throw periodSource.error;if(!peopleSource.ok)throw peopleSource.error;return{periods:periodSource.value,people:peopleSource.value};}finally{controller.abort();await Promise.all([periods,people]);}
+}
 
 async function withSchoolRecognitionApproval(request: Pick<APIRequestContext, 'get' | 'post'>, admin: { email: string; password: string }, publicKey: string, verify: () => Promise<void>) {
   const schoolId = '10000000-0000-4000-8000-000000000001';
@@ -159,12 +167,10 @@ test('teacher loads complete authorized learner choices before reviewing develop
   expect(configuredPeriod.request().postDataJSON()).toMatchObject({ classId, policyId: policyReceipt.id, title: periodTitle, startsAt: periodStartsAt, endsAt: periodEndsAt, confirmApproval: true }); await expect(setup).toHaveCount(0);
   await signOutTrailWorkspace(page);
   await page.getByLabel('School email').fill(teacher.email); await page.getByLabel('Password', { exact: true }).fill(teacher.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, 'teacher');
-  const firstPeriods = page.waitForResponse(response => { const url = new URL(response.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/periods' && !url.searchParams.has('cursor') && response.request().method() === 'GET'; });
-  const firstPeople = page.waitForResponse(response => { const url = new URL(response.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/people' && !url.searchParams.has('cursor') && response.request().method() === 'GET'; });
   await openTrailWorkspace(page, 'Development');
-  const firstPeriodResponse = await firstPeriods; const firstPeriodPage = await readPage(firstPeriodResponse);
+  const currentSources=await refreshCurrentDevelopmentSources(page);const firstPeriodPage = await readPage(currentSources.periods);
   const periodSources = firstPeriodPage.items as { id: string; title: string; classId: string; policyId: string }[];
-  const firstPeoplePage = await readPage(await firstPeople);
+  const firstPeoplePage = await readPage(currentSources.people);
   const workspace = page.locator('.development-workspace'), selector = workspace.getByLabel('Learner', { exact: true });
   await expect.poll(() => selector.locator('option').count()).toBeGreaterThan(1);
   const field = selector.locator('..'), learnerMore = field.getByRole('button', { name: 'Load more: Learner', exact: true });
@@ -252,4 +258,15 @@ test('adapter: recognition prerequisite preserves fields and original-key recove
       expect(writes.at(-1)?.key).not.toBe(writes[0].key);
     }
   }
+});
+
+test('adapter: a preserved Development route uses explicit current refresh after earlier period and people reads',async({page})=>{
+ const reads:string[]=[];await page.route('http://localhost:4000/**',route=>{reads.push(new URL(route.request().url()).pathname);return route.fulfill({contentType:'application/json',body:JSON.stringify({items:[],nextCursor:null})});});
+ await page.setContent('<main><section class="development-workspace"><button>Refresh development</button></section></main><script>document.querySelector("button").onclick=()=>Promise.all([fetch("http://localhost:4000/v1/development/periods?limit=100"),fetch("http://localhost:4000/v1/people?limit=100")]);</script>');
+ await page.evaluate(async()=>{await Promise.all([fetch('http://localhost:4000/v1/development/periods?limit=100'),fetch('http://localhost:4000/v1/people?limit=100')]);});
+ const source=await refreshCurrentDevelopmentSources(page);expect(await source.periods.json()).toEqual({items:[],nextCursor:null});expect(reads.filter(path=>path==='/v1/development/periods')).toHaveLength(2);expect(reads.filter(path=>path==='/v1/people')).toHaveLength(2);
+});
+
+test('adapter: failed Development refresh preserves its click error and settles both current source observers',async({page})=>{
+ await page.setContent('<section class="development-workspace"></section>');page.setDefaultTimeout(300);await expect(refreshCurrentDevelopmentSources(page)).rejects.toThrow();
 });

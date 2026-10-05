@@ -1,6 +1,7 @@
 import { withBrowserRestoration } from './browser-restoration';
 import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
 import { openCurrentResult } from './result-reader';
+import { readRefreshedParentResult } from './refreshed-parent-result';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -118,13 +119,10 @@ test('parent work stays unresolved during child verification and the selected ch
       await expect(source.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await expect(source.locator('.native-score strong')).toHaveText('6');
       await expect(source).toContainText('Approved feedback for the current family.');
-      // A fresh authorized report receipt independently confirms the exact result/learner/native source.
-      const reportRead = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/learners/${learnerId}/academic-report` && response.request().method() === 'GET');
-      await page.getByRole('button', { name: 'Refresh academic records', exact: true }).click();
-      const response = await reportRead; expect(response.ok()).toBe(true);
-      const report = await response.json() as { items: { id: string; learnerId: string; nativeResult: { type: string; score: number; maxScore: number } }[] };
+      const refreshed = await readRefreshedParentResult(page, { apiOrigin: 'http://localhost:4000', schoolId, learnerId, resultId: result.id }, () => page.getByRole('button', { name: 'Refresh academic records', exact: true }).click());
+      const report = refreshed.report;
       expect(report.items.find(row => row.id === result.id)).toMatchObject({ learnerId, nativeResult: { type: 'numeric', score: 6, maxScore: 10 } });
-      source=await openCurrentResult(page,result.id);
+      source=refreshed.reader;
       await expect(source.getByRole('heading', { name: title, exact: true })).toBeVisible();
     }
   }

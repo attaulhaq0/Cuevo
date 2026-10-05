@@ -1,3 +1,5 @@
+import { attachDiagnosticPreservingFailure, serializeFailureDiagnostic } from './course-objective-diagnostics';
+import { observeProgressFocus } from './progress-focus-diagnostics';
 import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -32,6 +34,7 @@ test('switching language clears the previous-language saved action notice', asyn
 });
 
 test('class review brings the current named learner detail into keyboard focus and preserves refresh focus', async ({ page }) => {
+  const focusDiagnostic=observeProgressFocus(page,'http://localhost:4000');
   await login(page); await openTrailWorkspace(page, 'Progress'); await settled(page);
   await page.getByLabel('Class', { exact: true }).selectOption({ label: 'Year 1 · Cedar · Year 1 · 2026–2027' });
   const row = page.locator('[data-class-learner-id]').filter({ has: page.getByRole('heading', { name: 'Lina Al-Kuwari', exact: true }) });
@@ -43,7 +46,7 @@ test('class review brings the current named learner detail into keyboard focus a
   await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.getByRole('button',{name:'العودة إلى الطلاب',exact:true}).click();
   await row.getByRole('button', { name: 'مراجعة هذا الطالب', exact: true }).focus(); await page.keyboard.press('Enter');
-  const arabic = page.getByRole('heading',{level:2,name:/^شواهد الطالب الحالي · Lina Al-Kuwari(?: ·|$)/}); await expect(arabic).toBeFocused(); await expect(arabic).toBeInViewport();
+  const arabic = page.getByRole('heading',{level:2,name:/^شواهد الطالب الحالي · Lina Al-Kuwari(?: ·|$)/}); await attachDiagnosticPreservingFailure(async()=>{await expect(arabic).toBeFocused();await expect(arabic).toBeInViewport()},async()=>{const safe=serializeFailureDiagnostic(await focusDiagnostic(/^شواهد الطالب الحالي · Lina Al-Kuwari(?: ·|$)/));console.log(safe);await test.info().attach('progress-focus-source',{contentType:'application/json',body:safe})});
 });
 
 test('class review announces the named denied or unknown detail and class choices retain exact year context', async ({ page }) => {

@@ -9,11 +9,15 @@ import { LearningError } from '../../../shared/components/feedback';
 import { improvementAr, improvementEn } from '../messages';
 import { NativeResultView } from '../../academic/ui';
 import { OutcomeReadingView } from './outcome-reading';
+import { improvementListState, improvementListFailure, type ImprovementListSource } from '../source-page-model';
 
-export function OutcomeList({ outcomes, headingLevel=2 }: { outcomes: Outcome[];headingLevel?:2|4 }) {
+export function OutcomeList({ outcomes, source, headingLevel=2 }: { outcomes: Outcome[];source?:ImprovementListSource;headingLevel?:2|4 }) {
   const { locale, membership } = useApp(); const t = locale === 'ar' ? improvementAr : improvementEn;
-  if(membership?.role==='student')return outcomes.length?<section>{outcomes.map(outcome=><CurrentStudentOutcome key={outcome.id} outcome={outcome}/>)}</section>:<WorkspaceState kind="empty" icon="progress" title={t.noOutcomes} description={t.emptyOutcomesBody}/>;
-  return <OutcomeRows outcomes={outcomes} headingLevel={headingLevel}/>;
+  const state=improvementListState(source),failure=improvementListFailure(source);
+  const notice=state==='complete'||!source&&outcomes.length?null:state==='denied'||state==='error'?<LearningError error={failure!}/>:<><WorkspaceState kind={state==='loading'?'loading':'unknown'} icon="progress" description={state==='loading'?t.loading:t.partialList} role="status"/>{failure?<LearningError error={failure}/>:null}</>;
+  if(!outcomes.length&&state!=='complete')return notice;
+  if(membership?.role==='student')return outcomes.length?<><section>{outcomes.map(outcome=><CurrentStudentOutcome key={outcome.id} outcome={outcome}/>)}</section>{notice}</>:<WorkspaceState kind="empty" icon="progress" title={t.noOutcomes} description={t.emptyOutcomesBody}/>;
+  return <><OutcomeRows outcomes={outcomes} headingLevel={headingLevel}/>{outcomes.length?notice:null}</>;
 }
 function CurrentStudentOutcome({outcome}:{outcome:Outcome}) {
  const app=useApp();const [open,setOpen]=useState(false);const path=`/v1/interventions/${outcome.interventionId}`;const scope=improvementReadScope(app,open?path:null,0);

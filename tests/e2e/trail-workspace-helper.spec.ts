@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, selectTrailSchoolRecord } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, selectTrailSchoolRecord, chooseTrailSchoolDate } from './trail-workspace';
 
 const fixture = `<div class="workspace-chrome" lang="en" data-navigation-mode="home"><header class="workspace-chrome__header"><div class="workspace-chrome__school"><bdi>Reference school</bdi></div><div class="workspace-chrome__person"><button aria-label="Profile and settings" aria-expanded="false" popovertarget="profile"><strong>Lina Hassan</strong><small>Student</small></button><div id="profile" popover="auto" class="workspace-chrome__profile"><button data-open-access>Access settings</button><button data-signout>Sign out</button></div></div></header><nav class="workspace-chrome__navigation" aria-label="Workspace navigation"><button data-workspace-destination="overview" aria-current="page">Overview</button><button data-workspace-destination="learning">Learning</button></nav><main><h1>Hello, Lina Hassan!</h1></main></div><script>const trigger=document.querySelector('[popovertarget]');document.querySelector('#profile').addEventListener('toggle',e=>trigger.setAttribute('aria-expanded',String(e.newState==='open')));document.querySelector('[data-open-access]').onclick=()=>{document.querySelector('main').innerHTML='<h1>Your school access</h1>';document.querySelector('#profile').hidePopover();};document.querySelector('[data-signout]').onclick=()=>{document.querySelector('.workspace-chrome').remove();document.body.innerHTML='<form class="auth-form"><label>School email<input type="email"></label><label>Password<input type="password"></label><button type="submit">Sign in</button></form>';};</script>`;
 
@@ -86,4 +86,14 @@ test('School helper refuses ambiguity and does not choose a first matching recor
   await page.setContent('<section class="school-access-directory"><button>People</button><ul><li><button>Lina · Cedar</button></li><li><button>Lina · Cedar</button></li></ul><nav class="school-access-pagination"><button>Next</button></nav></section>');
   await expect(selectTrailSchoolRecord(page, 'person', 'Lina')).rejects.toThrow();
   await expect(page.locator('[aria-label="Selected current record"]')).toHaveCount(0);
+});
+
+test('School date helper selects the exact visible English source day including date punctuation',async({page})=>{
+ await page.setContent('<section class="parent-calendar"><div class="parent-calendar-month"><h3>October 2026</h3></div><button aria-label="Saturday, October 10, 2026 · 1 event" aria-pressed="false">10</button></section><script>document.querySelector(".parent-calendar>button").onclick=e=>e.currentTarget.setAttribute("aria-pressed","true");</script>');
+ await chooseTrailSchoolDate(page,'2026-10-10');await expect(page.getByRole('button',{name:'Saturday, October 10, 2026 · 1 event',exact:true})).toHaveAttribute('aria-pressed','true');
+});
+
+test('School date helper uses the visible date input when the narrow calendar grid is hidden',async({page})=>{
+ await page.setContent('<section class="parent-calendar"><div class="parent-calendar-month"><h3>October 2026</h3></div><label>Selected school date<input type="date" value="2026-10-05"></label><div style="display:none"><button aria-label="Saturday, October 10, 2026 · 1 event">10</button></div></section>');
+ await chooseTrailSchoolDate(page,'2026-10-10');await expect(page.getByLabel('Selected school date',{exact:true})).toHaveValue('2026-10-10');
 });

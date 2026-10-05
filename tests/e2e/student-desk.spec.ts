@@ -47,10 +47,14 @@ test('Student Desk shows actual source reflection, native zero and exact task ac
   await expect(selected.getByText('Waiting for review',{exact:true})).toBeVisible();await expect(selected.getByText('Reviewed',{exact:true})).toBeVisible();
   for(const locale of['English','العربية']){
     await page.getByRole('button',{name:locale,exact:true}).click();
-    for(const width of[1366,1440,768,390,320,640]){
+    for(const width of[1366,1440,1100,1024,901,768,390,320,640]){
       await page.setViewportSize({width,height:width>=1000?800:844});
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
       await expect(page.locator('.student-trail__primary')).toBeVisible();
+      await expect(page.locator('.student-trail__feedback-actions .student-home__native summary')).toBeVisible();
+      const reading=await page.locator('.student-trail').evaluate(root=>({nativeWidth:root.querySelector('.student-trail__feedback-actions .student-home__native summary')!.getBoundingClientRect().width,stageWords:[...root.querySelectorAll('.student-trail__stage strong')].map(label=>{const text=label.firstChild;if(!text||text.nodeType!==Node.TEXT_NODE)return 0;const phrase=text.textContent??'',word=phrase.trim().split(/\s+/)[0],start=phrase.indexOf(word),range=document.createRange();range.setStart(text,start);range.setEnd(text,start+word.length);return range.getClientRects().length;})}));
+      expect(reading.nativeWidth,`${locale}/${width}: native feedback must retain a readable track beside its action`).toBeGreaterThanOrEqual(150);
+      expect(reading.stageWords.every(lines=>lines===1),`${locale}/${width}: journey words must not fragment inside narrow grid tracks`).toBe(true);
     }
   }
   await page.getByRole('button',{name:'English',exact:true}).click();await page.setViewportSize({width:1366,height:768});
