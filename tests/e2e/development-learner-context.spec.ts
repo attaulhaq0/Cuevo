@@ -8,6 +8,17 @@ import { withBrowserRestoration } from './browser-restoration';
 import { schoolPolicyInputSchema } from '@cuevo/contracts';
 import type { Page } from '@playwright/test';
 
+function schoolLearnerPeriodTitle(startsAt: string, endsAt: string) {
+  return `School learner context · ${startsAt.slice(0, 16).replace('T', ' ')} UTC – ${endsAt.slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+test('adapter: learner-context period title uses its exact recorded date window without a private identifier',()=>{
+  const title=schoolLearnerPeriodTitle('2026-10-06T09:30:00.000Z','2026-10-07T09:30:00.000Z');
+  expect(title).toBe('School learner context · 2026-10-06 09:30 UTC – 2026-10-07 09:30 UTC');
+  expect(title).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  expect(schoolLearnerPeriodTitle('2026-10-07T09:30:00.000Z','2026-10-08T09:30:00.000Z')).not.toBe(title);
+});
+
 async function refreshCurrentDevelopmentSources(page:Page){
  const controller=new AbortController();const parse=async(response:Response)=>{expect(response.ok()).toBe(true);expect(await response.finished()).toBeNull();return response;};
  const observe=(path:string)=>page.waitForEvent('response',{signal:controller.signal,predicate:response=>{const url=new URL(response.url());return url.origin==='http://localhost:4000'&&url.pathname===path&&!url.searchParams.has('cursor')&&response.request().method()==='GET';}}).then(parse).then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
@@ -67,7 +78,6 @@ test('teacher loads complete authorized learner choices before reviewing develop
   if (!publicKey) throw new Error('Configured synthetic Auth is required for the school approval prerequisite.');
   await withSchoolRecognitionApproval(page.request, admin, publicKey, async () => {
   const classId = '30000000-0000-4000-8000-000000000001';
-  const periodTitle = `School learner context period ${randomUUID()}`;
   const errors: string[] = [];
   const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
   page.on('pageerror', error => errors.push(error.message));
@@ -121,6 +131,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
   const latestEnd = Math.max(Date.now(), ...configuredPeriods.filter(period => period.classId === classId).map(period => { const end = Date.parse(period.endsAt); expect(Number.isFinite(end)).toBe(true); return end; }));
   const startMs = Math.ceil((latestEnd + 86400000) / 60000) * 60000;
   const periodStartsAt = new Date(startMs).toISOString(), periodEndsAt = new Date(startMs + 86400000).toISOString();
+  const periodTitle = schoolLearnerPeriodTitle(periodStartsAt, periodEndsAt);
   const localInput = (value: string) => { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
   const adminWorkspace = page.locator('.development-workspace');
   await expect(adminWorkspace.getByRole('status').filter({ hasText: 'Loading development…' })).toHaveCount(0);
@@ -169,7 +180,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
   await page.getByLabel('School email').fill(teacher.email); await page.getByLabel('Password', { exact: true }).fill(teacher.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, 'teacher');
   await openTrailWorkspace(page, 'Development');
   const currentSources=await refreshCurrentDevelopmentSources(page);const firstPeriodPage = await readPage(currentSources.periods);
-  const periodSources = firstPeriodPage.items as { id: string; title: string; classId: string; policyId: string }[];
+  const periodSources = firstPeriodPage.items as { id: string; title: string; classId: string; policyId: string; startsAt: string; endsAt: string }[];
   const firstPeoplePage = await readPage(currentSources.people);
   const workspace = page.locator('.development-workspace'), selector = workspace.getByLabel('Learner', { exact: true });
   await expect.poll(() => selector.locator('option').count()).toBeGreaterThan(1);
@@ -191,7 +202,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
     expect(seenPeriods.has(periodCursor)).toBe(false); seenPeriods.add(periodCursor); const expectedCursor = periodCursor; await expect(periodMore).toHaveCount(1);
     const response = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/periods' && url.searchParams.get('cursor') === expectedCursor && row.request().method() === 'GET'; });
     await periodMore.click(); const current = await response; expect(current.status()).toBe(200); expect(await current.finished()).toBeNull();
-    const body = await readPage(current) as { items: { id: string; title: string; classId: string; policyId: string }[]; nextCursor: string | null }; expect(body.nextCursor).not.toBe(expectedCursor); periodCursor = body.nextCursor; periodSources.push(...body.items);
+    const body = await readPage(current) as { items: { id: string; title: string; classId: string; policyId: string; startsAt: string; endsAt: string }[]; nextCursor: string | null }; expect(body.nextCursor).not.toBe(expectedCursor); periodCursor = body.nextCursor; periodSources.push(...body.items);
     for (const item of body.items) await expect(period.locator(`option[value="${item.id}"]`)).toBeAttached();
     await expect(workspace.getByRole('button', { name: 'Loading more…: Learning period', exact: true })).toHaveCount(0);
   }
@@ -201,6 +212,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
   const enabledPeriods = await period.locator('option[value]:not([value=""]):not([disabled])').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value));
   await expect.poll(() => periodSources.some(source => source.id === configured.id && source.classId === classId && source.policyId === policyReceipt.id && enabledPeriods.includes(source.id))).toBe(true);
   const currentPeriod = periodSources.find(source => source.id === configured.id && source.classId === classId && source.policyId === policyReceipt.id && enabledPeriods.includes(source.id))!;
+  expect(currentPeriod).toMatchObject({ id: configured.id, title: periodTitle, classId, policyId: policyReceipt.id, startsAt: periodStartsAt, endsAt: periodEndsAt });
   const currentPeriodLabel = (await period.locator(`option[value="${currentPeriod.id}"]`).textContent())!.trim();
   const selectedPeriod = await selectHumanChoice(period, currentPeriodLabel, currentPeriod.id);
   expect(currentPeriod.title.trim()).not.toBe(''); expect(currentPeriod.policyId).not.toBe('');

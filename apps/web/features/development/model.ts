@@ -14,6 +14,22 @@ export type Period = { id: string; classId: string; policyId: string; title: str
 export type Ledger = { id: string; learnerId: string; periodId: string; observationId: string; kind: 'practice' | 'revision' | 'reflection'; points: number; occurredAt: string; policyId: string };
 export type Achievement = { id: string; learnerId: string; periodId: string; policyId: string; key: string; title: string; minimumPoints: number; earnedAt: string };
 export type Leaderboard = { periodId: string; status: 'OPT_IN_RECORDED_ACTIONS'; items: { alias: string; points: number; rank: number }[] };
+export type DevelopmentRecordSource={data:readonly unknown[];loaded:boolean;loading:boolean;loadingMore:boolean;error:unknown;moreError:unknown;nextCursor:string|null};
+/** Current summary admission is separate from this page's successful terminal read. */
+export function developmentRecordState(source:DevelopmentRecordSource):'loading'|'error'|'more-error'|'empty'|'partial'|'unknown'|'records'{
+ if(source.error)return'error';
+ if(source.moreError)return'more-error';
+ if(source.loading||source.loaded!==true)return'loading';
+ if(source.nextCursor)return'partial';
+ if(source.loading!==false||source.loadingMore!==false||source.error!==null||source.moreError!==null||source.nextCursor!==null)return'unknown';
+ return source.data.length?'records':'empty';
+}
+/** Errors and settled missing selected periods already have current-context recovery. */
+export function developmentPeriodPrerequisite(selected:string,source:Omit<DevelopmentRecordSource,'data'>):'loading'|'unknown'|null{
+ if(source.error||source.moreError)return null;
+ if(source.loading||source.loadingMore||source.loaded!==true)return'loading';
+ return selected?null:'unknown';
+}
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const exact = (row: Record<string, unknown>, keys: string[]) => Object.keys(row).length === keys.length && Object.keys(row).every(key => keys.includes(key));
 const strings = (row: Record<string, unknown>, keys: string[]) => keys.every(key => typeof row[key] === 'string' && row[key] !== '');

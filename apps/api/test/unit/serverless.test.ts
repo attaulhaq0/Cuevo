@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,11 +11,29 @@ afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await c
 
 async function expose(handler: ReturnType<typeof createServerlessHandler>) {
   const server = createServer((request, response) => { void handler(request, response); });
+  // Keep Expect requests on the same hosted boundary without sending an automatic100 response.
+  server.on('checkContinue', (request, response) => { void handler(request, response); });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   cleanup.push(() => new Promise<void>((resolve, reject) => {
     server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
   }));
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
+/** Ask the application to reject the declared limit before uploading a body it will not read. */
+async function expectContinueRequest(url: string, body: Buffer) {
+  let continued = false;
+  return new Promise<{status: number | undefined; body: Buffer; continued: boolean}>((resolve, reject) => {
+    const request = httpRequest(url, {method: 'POST', headers: {'content-type': 'application/json', 'content-length': body.length, expect: '100-continue', connection: 'close'}}, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      response.on('end', () => { request.end(); resolve({status: response.statusCode, body: Buffer.concat(chunks), continued}); });
+      response.on('error', reject);
+    });
+    request.on('continue', () => { continued = true; request.end(body); });
+    request.on('error', reject);
+    request.flushHeaders();
+  });
 }
 
 describe('hosted API Node HTTP boundary', () => {
@@ -81,6 +99,7 @@ describe('hosted API Node HTTP boundary', () => {
   it('passes raw bodies, original encoded URLs, status, headers and private binary bytes without JSON conversion', async () => {
     const fastify = Fastify({ bodyLimit: 1024 * 1024 });
     const bytes = Buffer.from([0, 255, 128, 13, 10, 34, 92]);
+    let jsonRequests = 0;
     fastify.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (_request, body, done) => done(null, body));
     fastify.post('/transport/file', async (request, reply) => {
       expect(request.body).toEqual(bytes); expect(request.raw.url).toBe('/transport/file?name=a%2Fb&name=c');
@@ -89,6 +108,7 @@ describe('hosted API Node HTTP boundary', () => {
       return bytes;
     });
     fastify.post('/transport/json', async (request, reply) => {
+      jsonRequests++;
       reply.header('content-type', 'application/json; charset=utf-8');
       return JSON.stringify(request.body);
     });
@@ -106,7 +126,22 @@ describe('hosted API Node HTTP boundary', () => {
     expect(await hostile.json()).toBe('<script>window.fixtureExecuted=true</script>');
     const malformed = await fetch(`${url}/transport/json`, { method: 'POST', headers: { 'content-type': 'application/json', connection: 'close' }, body: '{invalid' });
     expect(malformed.status).toBe(400); await malformed.arrayBuffer();
-    const oversized = await fetch(`${url}/transport/json`, { method: 'POST', headers: { 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify({ value: 'x'.repeat(1024 * 1024) }) });
-    expect(oversized.status).toBe(413); await oversized.arrayBuffer();
+    const oversized = await expectContinueRequest(`${url}/transport/json`, Buffer.from(JSON.stringify({ value: 'x'.repeat(1024 * 1024) })));
+    expect(oversized.status).toBe(413); expect(oversized.continued).toBe(false);
+    expect(JSON.parse(oversized.body.toString()).code).toBe('FST_ERR_CTP_BODY_TOO_LARGE');
+    expect(jsonRequests).toBe(2);
+  });
+
+  it('forwards a permitted 100-continue exchange and uploads its exact bytes only after the application allows it', async () => {
+    const bytes = Buffer.from('{"value":"سياق"}'); let uploads = 0;
+    const application = createServer((request, response) => {
+      request.on('data', () => uploads++); const chunks: Buffer[] = [];
+      request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      request.on('end', () => { expect(Buffer.concat(chunks)).toEqual(bytes); response.writeHead(201, {'content-type': 'application/json'}); response.end(Buffer.from('{"accepted":true}')); });
+      response.writeContinue();
+    });
+    const url = await expose(createServerlessHandler(async () => ({app: {getHttpServer: () => application}})));
+    const result = await expectContinueRequest(url, bytes);
+    expect(result.continued).toBe(true); expect(result.status).toBe(201); expect(JSON.parse(result.body.toString())).toEqual({accepted: true}); expect(uploads).toBeGreaterThan(0);
   });
 });

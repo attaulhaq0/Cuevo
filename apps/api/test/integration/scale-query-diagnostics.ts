@@ -1,4 +1,4 @@
-export const scaleSqlStages = ['IDENTITY', 'ACADEMIC_AUTHORIZATION', 'RELEASE_COURSE', 'CURRICULUM_WRITE', 'IDEMPOTENCY_BEGIN', 'RELEASE_LOCK', 'RELEASE_EXISTING', 'RELEASE_KIND', 'RELEASE_NATIVE', 'RELEASE_PROJECTION', 'AUDIT', 'OUTBOX', 'IDEMPOTENCY_FINISH', 'UNKNOWN'] as const;
+export const scaleSqlStages = ['IDENTITY', 'ACADEMIC_AUTHORIZATION', 'RELEASE_COURSE', 'CURRICULUM_WRITE', 'IDEMPOTENCY_BEGIN', 'RELEASE_LOCK', 'RELEASE_EXISTING', 'RELEASE_KIND', 'RELEASE_NATIVE', 'RELEASE_PROJECTION', 'IMPROVEMENT_AUTHORIZATION', 'MEASURE_LOCK', 'MEASURE_NATIVE', 'MEASURE_PROJECTION', 'OUTBOX_LOOKUP', 'AUDIT', 'OUTBOX', 'IDEMPOTENCY_FINISH', 'UNKNOWN'] as const;
 export type ScaleSqlStage = typeof scaleSqlStages[number];
 const sqlStates = ['57014', '40P01', '40001', '55P03', '42501', '22023', '23502', '23503', '23505', '23514', '55000'] as const;
 export type ScaleQueryFailure = { stage: ScaleSqlStage; sqlState: typeof sqlStates[number] | null; durationMs: number | null };
@@ -34,28 +34,28 @@ export function scaleSqlState(error: unknown): ScaleQueryFailure['sqlState'] {
 const duration = (start: number | null, end: number) => start !== null && Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.min(180000, Math.round(end - start)) : null;
 
 /** Promise-based fixture statements execute once and always retain the original rejection. */
-export async function observeScaleQuery<T>(sql: unknown, run: () => Promise<T>, observe: (failure: ScaleQueryFailure) => void, now = () => performance.now()): Promise<T> {
+export async function observeScaleQuery<T>(sql: unknown, run: () => Promise<T>, observe: (failure: ScaleQueryFailure) => void, now = () => performance.now(), classify = scaleSqlStage): Promise<T> {
   let start: number | null = null; try { start = now(); } catch { /* Clock failure cannot affect SQL. */ }
   try { return await run(); }
   catch (error) {
-    try { observe({ stage: scaleSqlStage(sql), sqlState: scaleSqlState(error), durationMs: duration(start, now()) }); } catch { /* Diagnostic failure cannot replace the driver error. */ }
+    try { observe({ stage: classify(sql), sqlState: scaleSqlState(error), durationMs: duration(start, now()) }); } catch { /* Diagnostic failure cannot replace the driver error. */ }
     throw error;
   }
 }
 
 /** Only the rollback fixture opts in; the production database and other contexts keep the original client. */
-export function scaleDiagnosticClient<T extends object>(client: T, observe?: (failure: ScaleQueryFailure) => void): T {
+export function scaleDiagnosticClient<T extends object>(client: T, observe?: (failure: ScaleQueryFailure) => void, classify = scaleSqlStage): T {
   if (!observe) return client;
   return new Proxy(client, { get(target, key, receiver) {
     if (key !== 'query') return Reflect.get(target, key, receiver);
     const query: unknown = Reflect.get(target, key);
     if (typeof query !== 'function') return query;
-    return (...args: unknown[]) => observeScaleQuery(args[0], () => Reflect.apply(query, target, args) as Promise<unknown>, observe);
+    return (...args: unknown[]) => observeScaleQuery(args[0], () => Reflect.apply(query, target, args) as Promise<unknown>, observe, undefined, classify);
   } });
 }
 
 export const scaleSetupOperations = ['assessment.create', 'assessment.reference', 'submission.create', 'assessment.marked', 'result.released'] as const;
-function checkedQueryFailure(query: ScaleQueryFailure) {
+export function checkedQueryFailure(query: ScaleQueryFailure) {
   const invalid=():never=>{throw Error('Fixed scale query diagnostic fields required.');};
   try {
     if(!query||typeof query!=='object'||Array.isArray(query))return invalid();

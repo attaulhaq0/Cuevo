@@ -96,6 +96,8 @@ async function completeStaffPeople(page: Page, learner: Locator, first: import('
 }
 
 async function chooseCurrentClassByKeyboard(page:Page){
+ const back=page.getByRole('button',{name:'Back to learners',exact:true});
+ if(await back.count()){await keyboardActivate(page,back);await expect(page.locator('.progress-review-layout')).toHaveAttribute('data-selected','false');await settled(page);}
  const select=page.locator('#summary-class'),field=select.locator('..');
  await expect(select).toBeVisible();
  await expect(page.locator('.class-summary-header [data-state="loading"]')).toHaveCount(0);
@@ -183,6 +185,9 @@ for (const role of roles) {
       } else await expect(page).toHaveURL(url => url.searchParams.get('view') === profileView);
       await expect(page.locator('main h1')).toBeFocused(); await settled(page);
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
+      if (names[index].trim() === 'Progress' && ['admin', 'coordinator', 'teacher'].includes(role)) {
+        await chooseCurrentClassByKeyboard(page);
+      }
       // Staff/parent progress must select a real permitted learner before reviewing evidence.
       if (['Progress', 'Development'].includes(names[index].trim()) && role !== 'student' && role !== 'parent') {
         const learner = names[index].trim() === 'Progress' ? page.locator('#learner-selection') : page.locator('.development-learner-picker select');
@@ -193,9 +198,6 @@ for (const role of roles) {
         if (names[index].trim() === 'Development') { await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); }
         else { await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); }
         await expect(learner).toHaveValue(learnerValue); await settled(page);
-      }
-      if (names[index].trim() === 'Progress' && ['admin', 'coordinator', 'teacher'].includes(role)) {
-        await chooseCurrentClassByKeyboard(page);
       }
       await layoutMatrix(page, role, surface);
       await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
@@ -307,11 +309,21 @@ function Harness(){const[mode,setMode]=useState('Progress'),[selected,setSelecte
   const developmentValue = (await learner.locator('option[value]:not([value=""]):not([disabled])').first().getAttribute('value'))!;
   await learner.focus(); await learner.press('Home'); await learner.press('ArrowDown'); await learner.press('Tab'); await expect(learner).toHaveValue(developmentValue); await expect(learner).toBeHidden();
 });
-test('current ClassLearningSummary source settles its first authorized class before keyboard selection',async({page})=>{
+test('adapter: current ClassLearningSummary source settles its first authorized class before keyboard selection',async({page})=>{
  const root=resolve(import.meta.dirname,'../..');const compiled=await build({stdin:{resolveDir:root,loader:'tsx',contents:`
 import React,{createContext,useContext}from'react';import{createRoot}from'react-dom/client';import{ClassLearningSummaryPanel}from'./apps/web/features/progress/components/class-learning-summary';import{usePaginatedLearningQuery}from'./apps/web/shared/hooks/use-paginated-query';const C=createContext(null);globalThis.classUC=useContext;globalThis.classC=C;const app={locale:'en',apiUrl:'http://localhost:4000',accessToken:'synthetic',online:true,status:'ready',accessGeneration:1,membership:{schoolId:'10000000-0000-4000-8000-000000000001',userId:'20000000-0000-4000-8000-000000000001',role:'teacher'},formDrafts:{clearRead(){}}};globalThis.classAPI={t:{loadMore:'Load more',loadingMore:'Loading more…'},request:async path=>(await fetch('http://localhost:4000'+path)).json(),parseResponse:(_path,value,parse)=>parse(value)};createRoot(document.getElementById('root')).render(<C.Provider value={app}><main><ClassLearningSummaryPanel refresh={0} onReviewLearner={()=>{}} selectedLearnerId={null} labelContext='current' onLearnerContext={()=>{}}/></main></C.Provider>);
 `},bundle:true,write:false,platform:'browser',format:'iife',jsx:'automatic',loader:{'.webp':'dataurl','.png':'dataurl','.svg':'dataurl'},plugins:[{name:'actual-paging-input',setup(b){b.onLoad({filter:/shared[\\/]session[\\/]providers\.tsx$/},()=>({loader:'js',contents:'export function useApp(){return globalThis.classUC(globalThis.classC)}'}));b.onLoad({filter:/shared[\\/]hooks[\\/]use-api\.ts$/},()=>({loader:'js',contents:'export function useApi(){return globalThis.classAPI}export function useApiQuery(path,parse){return{data:path?parse({schoolId:"10000000-0000-4000-8000-000000000001",classId:"30000000-0000-4000-8000-000000000001",generatedAt:"2026-10-05T00:00:00Z",scope:"CURRENT_CLASS_PAGE",coverage:"NOT_ESTABLISHED",observationCoverage:"RECORDED_ONLY",windowStart:null,windowEnd:null,items:[],nextCursor:null}):null,loading:false,error:null}}'}));}}]});
  let release!:()=>void;const held=new Promise<void>(done=>release=done);await page.route('http://localhost:4000/v1/classes**',async route=>{await held;await route.fulfill({contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({items:[{id:'30000000-0000-4000-8000-000000000001',name:'Year 1 · Cedar',academicYearName:'2026–2027',yearGroupName:'Year 1'}],nextCursor:null})})});
  await page.setContent('<div id="root"></div>');await page.addScriptTag({content:compiled.outputFiles[0].text});const select=page.locator('#summary-class');await expect(select).toBeVisible();await select.focus();await select.press('ArrowDown');await select.press('Enter');await expect(select).toHaveValue('');release();
  await chooseCurrentClassByKeyboard(page);await expect(select).toHaveValue('30000000-0000-4000-8000-000000000001');
+});
+
+test('adapter: mobile staff class selection returns to the current browse plane before learner detail hides it',async({page})=>{
+ const root=resolve(import.meta.dirname,'../..'),css=['packages/ui/src/tokens.css','apps/web/app/globals.css','apps/web/features/progress/styles.css'].map(file=>readFileSync(resolve(root,file),'utf8').replace(/@import[^;]+;/g,'')).join('\n');
+ const compiled=await build({stdin:{resolveDir:root,loader:'tsx',contents:`
+import React,{createContext,useContext,useState}from'react';import{createRoot}from'react-dom/client';import{ClassLearningSummaryPanel}from'./apps/web/features/progress/components/class-learning-summary';const C=createContext(null);globalThis.mobileClassC=C;globalThis.mobileClassUC=useContext;globalThis.mobileClass={backs:0,requests:[]};const app={locale:'en',apiUrl:'http://localhost:4000',accessToken:'synthetic',online:true,status:'ready',accessGeneration:1,membership:{schoolId:'10000000-0000-4000-8000-000000000001',userId:'20000000-0000-4000-8000-000000000001',role:'teacher'},formDrafts:{clearRead(){}}};globalThis.mobileClassAPI={t:{loadMore:'Load more',loadingMore:'Loading more…'},request:async path=>{globalThis.mobileClass.requests.push(path);return(await fetch('http://localhost:4000'+path)).json()},parseResponse:(_path,value,parse)=>parse(value)};function H(){const[selected,setSelected]=useState(true);return<C.Provider value={app}><main><div className='progress-review-layout' data-selected={selected}><ClassLearningSummaryPanel refresh={0} onReviewLearner={()=>{}} selectedLearnerId={null} labelContext='current' onLearnerContext={()=>{}}/><div className='progress-review-reading'>{selected?<button className='progress-back-to-learners' onClick={()=>{globalThis.mobileClass.backs++;setSelected(false)}}>Back to learners</button>:null}<button onClick={()=>setSelected(true)}>Open current learner</button></div></div></main></C.Provider>}createRoot(document.getElementById('root')).render(<H/>);
+`},bundle:true,write:false,platform:'browser',format:'iife',jsx:'automatic',loader:{'.webp':'dataurl','.png':'dataurl','.svg':'dataurl'},plugins:[{name:'current-mobile-class-inputs',setup(b){b.onLoad({filter:/shared[\\/]session[\\/]providers\.tsx$/},()=>({loader:'js',contents:'export function useApp(){return globalThis.mobileClassUC(globalThis.mobileClassC)}'}));b.onLoad({filter:/shared[\\/]hooks[\\/]use-api\.ts$/},()=>({loader:'js',contents:'export function useApi(){return globalThis.mobileClassAPI}export function useApiQuery(path,parse){return{data:path?parse({schoolId:"10000000-0000-4000-8000-000000000001",classId:"30000000-0000-4000-8000-000000000001",generatedAt:"2026-10-05T00:00:00Z",scope:"CURRENT_CLASS_PAGE",coverage:"NOT_ESTABLISHED",observationCoverage:"RECORDED_ONLY",windowStart:null,windowEnd:null,items:[],nextCursor:null}):null,loading:false,error:null}}'}));}}]});
+ const errors:string[]=[];page.on('pageerror',()=>errors.push('pageerror'));page.on('console',message=>{if(['warning','error'].includes(message.type()))errors.push(message.type());});
+ await page.setViewportSize({width:390,height:844});let release!:()=>void;const held=new Promise<void>(done=>release=done);await page.route('http://localhost:4000/v1/classes**',async route=>{await held;await route.fulfill({contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({items:[{id:'30000000-0000-4000-8000-000000000001',name:'Year 1 · Cedar',academicYearName:'2026–2027',yearGroupName:'Year 1'}],nextCursor:null})});});
+ await page.setContent('<style>'+css+'</style><a href="#root">Skip to main content</a><div id="root"></div>');await page.addScriptTag({content:compiled.outputFiles[0].text});const select=page.locator('#summary-class');await expect(select).toBeHidden();const choose=chooseCurrentClassByKeyboard(page).then(()=>({ok:true as const}),error=>({ok:false as const,error}));try{await expect(select).toBeVisible();await expect(page.locator('.progress-review-layout')).toHaveAttribute('data-selected','false');}finally{release();}const outcome=await choose;if(!outcome.ok)throw outcome.error;await expect(select).toHaveValue('30000000-0000-4000-8000-000000000001');expect(await page.evaluate(()=>(globalThis as unknown as{mobileClass:{backs:number}}).mobileClass.backs)).toBe(1);await keyboardActivate(page,page.getByRole('button',{name:'Open current learner',exact:true}));await expect(select).toBeHidden();expect(errors).toEqual([]);
 });

@@ -64,3 +64,8 @@ test('Student without a current learning period gets one source prerequisite and
   assert.doesNotMatch(html, /aria-label="Activity ledger"|development-milestones|development-total/);
   assert.match(html, /Learning goals|development-companion/);
 });
+
+test('Admin period reading owns one canonical prerequisite and does not claim selection during loading or failure',()=>{
+ const html=render();assert.equal((html.match(/Choose a learning period to open its recorded points, actions and milestones\./g)??[]).length,1);assert.match(html,/<section class="development-panel development-period"[\s\S]*?data-state="unknown"/);
+ const previous=fixture.emptyState;fixture.emptyState={...base,data:[],loaded:false,loading:true};const loading=render();assert.match(loading,/<section class="development-panel development-period"[\s\S]*?data-state="loading"/);assert.doesNotMatch(loading,/Choose a learning period to open/);fixture.emptyState=previous;
+});

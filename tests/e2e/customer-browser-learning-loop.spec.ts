@@ -8,6 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { humanContextLabel, selectHumanChoice } from './human-choice';
 import { currentCoursePreparationOutline } from './learning-source-navigation';
+import { attachDiagnosticPreservingFailure, observeCourseObjectiveTransport, serializeFailureDiagnostic } from './course-objective-diagnostics';
 
 type Account = { role: string; email: string; password: string };
 type Receipt = { id: string; [field: string]: unknown };
@@ -45,6 +46,8 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
   const directory = resolve('.local/customer-readiness/browser-learning-loop', run, test.info().project.name);
   await mkdir(directory, { recursive: true });
   const errors: string[] = []; const consoleErrors: string[] = []; const hydration: string[] = [];
+  const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const transportDiagnostic = observeCourseObjectiveTransport(page, {api,web:new URL(test.info().project.use.baseURL??'http://localhost:3000').origin,auth:authUrl?new URL(authUrl).origin:null});
   const writes: { path: string; id: string; status: number }[] = [];
   let learningCourseId='';let learningActivityId='';let learningCompletionId='';
   page.on('pageerror', error => errors.push(error.message));
@@ -297,7 +300,7 @@ test('a teacher and learner operate the entire evidence, analysis and measured s
     await signIn('parent');await navigate('Portfolio');const portfolioChild=page.getByLabel('Child',{exact:true});await selectHumanLabel(portfolioChild,new RegExp(`${escapeRegExp(studentName)}.*Year 1`));portfolioRow=await selectTrailPortfolioRecord(page,portfolio.id,`${title} selected explanation`);await expect(portfolioRow).toContainText('I used teacher feedback, practised a checking step');await expect(portfolioRow.locator('.native-score strong')).toHaveText('7');await capture('10-parent-approved-portfolio.png');await signOut();
     await signIn('teacher');await navigate('Portfolio');portfolioRow=await selectTrailPortfolioRecord(page,portfolio.id,`${title} selected explanation`);await portfolioRow.getByRole('button',{name:'Revoke parent sharing',exact:true}).click();const revoke=portfolioRow.getByRole('region',{name:'Revoke parent sharing',exact:true});await revoke.getByLabel('Reason',{exact:true}).fill('The school reviewed and withdrew current family publication.');await visibleMutation(`/v1/portfolio/items/${portfolio.id}/parent-revoke`,()=>revoke.getByRole('button',{name:'Save',exact:true}).click());await expect(portfolioRow).toHaveCount(0);portfolioRow=await selectTrailPortfolioRecord(page,portfolio.id,`${title} selected explanation`);await expect(portfolioRow).toContainText('Sharing is off.');await signOut();
     await signIn('parent');await navigate('Portfolio');await selectHumanLabel(page.getByLabel('Child',{exact:true}),new RegExp(`${escapeRegExp(studentName)}.*Year 1`));await page.getByRole('button',{name:'Refresh portfolio',exact:true}).click();await settled(page);await expect(portfolioRow).toHaveCount(0);await expect(page.locator('.parent-portfolio-directory li').filter({has:page.getByRole('heading',{name:`${title} selected explanation`,exact:true})})).toHaveCount(0);await capture('11-revoked-portfolio-hidden.png');
-    expect(errors).toEqual([]); expect(consoleErrors).toEqual([]); expect(hydration).toEqual([]);
+    await attachDiagnosticPreservingFailure(async()=>{expect(errors).toEqual([]); expect(consoleErrors).toEqual([]); expect(hydration).toEqual([]);},async()=>{console.log(serializeFailureDiagnostic(transportDiagnostic()));});
     await writeFile(resolve(directory, 'evidence.json'), JSON.stringify({ status: 'VERIFIED', mutationMode: 'VISIBLE_UI_ONLY', writes, sourceLoop: { course:learningCourseId,learningCompletion:learningCompletionId,baseline: baseline.id, evidence: baseline.evidenceId, proposal: proposal.id, intervention: interventionId, followUp: followUp.id, outcome: outcome.id }, provenance: 'Authorized browser receipts, evidence and processed learner-state source events; no owner audit/DB read.', officialCurriculumClaim: false, pageErrors: errors.length, consoleErrors: consoleErrors.length, hydrationWarnings: hydration.length }, null, 2));
   } catch (failure) { if(!page.isClosed())await capture('failure.png').catch(()=>undefined);await writeFile(resolve(directory, 'failure.json'), JSON.stringify({ status: 'FAILED', mutationMode: 'VISIBLE_UI_ONLY', confirmedWriteCount: writes.length, consoleErrorCount: errors.length, hydrationWarningCount: hydration.length }, null, 2)); throw failure; }
 });

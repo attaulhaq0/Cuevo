@@ -98,7 +98,7 @@ export function ApprovedSchoolContext({ pageHeading = false }: { pageHeading?: b
     {approve && creating === 'support' ? <section aria-label={t.approveLearningSupport}>
       <div className="field"><label htmlFor="support-course">{t.supportCourse}</label><select id="support-course" value={selected.courseId} disabled={sourceLocked || courses.loading || !!courses.error} onChange={event => changeSelection({ ...selection, courseId: event.target.value })}><option value="">{t.supportCourse}</option>{courseChoices.map(choice => <option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={courses} label={t.supportCourse} /></div>
       <div className="field"><label htmlFor="support-learner">{t.supportLearner}</label><select id="support-learner" value={selected.learnerId} disabled={sourceLocked || people.loading || !!people.error} onChange={event => changeSelection({ ...selection, learnerId: event.target.value })}><option value="">{t.supportLearner}</option>{learnerChoices.map(choice => <option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={people} label={t.supportLearner} /></div>
-      {choicesLoading ? <p role="status">{t.supportChecking}</p> : null}
+      {choicesLoading ? <WorkspaceState kind="loading" icon="refresh" description={t.supportChecking} role="status"/> : null}
       {choiceFailure ? <LearningError error={choiceFailure.error ?? choiceFailure.moreError!} /> : null}
       {!choiceFailure && !choicesLoading && !choicesReady ? <WorkspaceState kind="review" icon="learning" description={t.supportCompleteChoices}/> : null}
       <LoadMore query={assessments} label={t.supportAssessment} />

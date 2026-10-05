@@ -45,3 +45,13 @@ test('denied selected room keeps one generic recovery h1 and withholds its priva
 test('offline and missing room recovery use scoped state anatomy without leaking room context or changing commands',()=>{for(const locale of['en','ar']as const){app(locale);fixture.app.online=false;const offline=renderToStaticMarkup(createElement(CommunityWorkspace));assert.match(offline,/data-state="unavailable"/);assert.match(offline,/role="status"/);app(locale);fixture.loading=false;fixture.error=null;fixture.room=false;const missing=renderToStaticMarkup(createElement(RoomDiscussion,{room,onBack(){}}));assert.match(missing,/data-state="denied"/);assert.doesNotMatch(missing,/Checking explanations/);assert.equal((fixture.app.commandJournal as CommandJournal).pending().length,0);}});
 
 test('a community continuation cannot present the complete empty message',()=>{app();fixture.room=false;fixture.loading=false;fixture.error=null;fixture.nextCursor='remaining-page';const html=renderToStaticMarkup(createElement(CommunityWorkspace));assert.match(html,/data-state="unknown"/);assert.doesNotMatch(html,/No permitted community records are available/);fixture.nextCursor=null;});
+
+test('current class-room refresh presents one loading state while its existing controls remain disabled',()=>{
+ for(const locale of ['en','ar']as const){app(locale);fixture.loading=true;fixture.error=null;fixture.room=true;fixture.nextCursor=null;Object.assign(globalThis,{communityHeadingRoom:room});
+  const html=renderToStaticMarkup(createElement(RoomDiscussion,{room,onBack(){}}));
+  const main=html.split('<div class="community-discussion-main">')[1]?.split('<aside')[0];assert.ok(main);
+  assert.equal((main.match(/data-state="loading"/g)??[]).length,1);assert.equal((html.match(/<h1/g)??[]).length,1);
+  assert.match(html,/Back to rooms|العودة إلى الغرف/);assert.equal((fixture.app.commandJournal as CommandJournal).pending().length,0);
+ }
+ fixture.loading=false;fixture.room=false;
+});
