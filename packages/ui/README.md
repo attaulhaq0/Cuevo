@@ -22,6 +22,8 @@ The `Foundation/Trail` Storybook stories show Light, Dark, Compact, Arabic and Q
 
 ## Controlled icons
 
+Activating the current `WorkspaceTabs` section retains the current reading position, editor and source intent. Only a different enabled section calls the feature's `onChange` and requests Chrome reading focus; Refresh remains the owner's separate action. This shared behavior prevents the existing Community URL callback from treating the current section as a new destination and preserves the same rule for Learning, Academic, School, Curriculum and Next steps.
+
 `CuevoIcon` is the controlled utility icon registry, with named metaphors, shared optical size/stroke and hidden decorative semantics. New names are added here rather than arbitrary feature icon imports. The supplied logo/reference establishes shared cool-blue canvas, navy typography, contrast-safe blue/teal actions, focus and controlled elevations; raw image colors are identity accents and never assumed contrast-safe body text. Disclosure summaries share visible keyboard focus with buttons/fields. All-theme whole-app migration is still open.
 
 All current semantic names use the same dimensional transparent image family. Legacy filled/outline props remain accepted for caller compatibility and resolve to the same asset. Image colors remain intact inside actions; text, focus, pending and disabled controls communicate state. These are raster illustrations with separately generated source masters, not editable vectors.

@@ -37,7 +37,7 @@ export function WorkspaceTabs({ label, items, selected, onChange, disabled = fal
   if (!items.length && !actions) return null;
   const content = <div className="cuevo-workspace-section-navigation">
     {items.length > 1 ? <div ref={container} className="learning-tabs cuevo-workspace-tabs" role="group" aria-label={label}>{items.map(item => <button type="button" key={item.id} data-workspace-section={item.id} aria-pressed={item.id === selected} disabled={disabled || item.disabled} onClick={() => {
-      if (disabled || item.disabled) return;
+      if (disabled || item.disabled || item.id === selected) return;
       onChange(item.id);
       if (item.id !== selected && slot?.enabled) slot.onActivate?.(item.id);
     }} onFocus={event => revealFocused(event.currentTarget)} onKeyDown={event => {
