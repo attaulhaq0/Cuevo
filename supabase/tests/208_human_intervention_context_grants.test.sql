@@ -1,0 +1,10 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path=extensions,pg_catalog;
+select plan(4);
+select ok(has_function_privilege('cuevo_api','internal.read_intervention_context(uuid)','EXECUTE'),'API reads an exact currently authorized Intervention context');
+select ok(not exists(select 1 from pg_roles role where role.rolname in('anon','authenticated','service_role','cuevo_worker')and has_function_privilege(role.oid,'internal.read_intervention_context(uuid)'::regprocedure,'EXECUTE')),'Data API and worker cannot call named Intervention context');
+select ok((select p.prosecdef and p.provolatile='s'and 'search_path=""'=any(p.proconfig)from pg_proc p where p.oid='internal.read_intervention_context(uuid)'::regprocedure),'Intervention context is stable with an empty privileged search path');
+select ok(not has_table_privilege('cuevo_api','internal.improvement_result_sources','SELECT')and not has_table_privilege('authenticated','app.people','SELECT'),'Context adds no raw native source or people directory grants');
+select*from finish();
+rollback;

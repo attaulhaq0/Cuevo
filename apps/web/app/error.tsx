@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@cuevo/ui';
-import { useApp } from '../components/providers';
+import { useApp } from '../shared/session/providers';
 
 export default function ErrorPage({ reset }: { reset: () => void }) {
   const { dictionary: t } = useApp();

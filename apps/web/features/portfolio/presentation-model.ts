@@ -1,0 +1,1 @@
+export function portfolioReviewFocus(input:{reviewing:boolean;focusOnLoad:boolean;alreadyFocused:boolean;loading:boolean;settled:boolean;activeIntent:boolean}):'none'|'focus'|'scroll'{if(!input.focusOnLoad||input.alreadyFocused||input.loading||!input.settled||!input.activeIntent)return'none';return'scroll';}

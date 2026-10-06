@@ -1,0 +1,10 @@
+begin;create extension if not exists pgtap with schema extensions;set local search_path=extensions,pg_catalog;select no_plan();
+select ok(to_regclass('app.recommendations')is not null,'proposals persist separately from action');select ok(to_regclass('app.human_decisions')is not null,'immutable approval records');select ok(to_regclass('app.interventions')is not null,'approved interventions persist');select ok(to_regclass('app.outcome_measurements')is not null,'native outcome evidence persists');
+grant usage on schema extensions to cuevo_api;
+set local role cuevo_api;select set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);
+select throws_ok($$select internal.create_recommendation('99999999-0000-4000-8000-000000000001','{}')$$,'42501',null,'unknown source denied');
+select throws_ok($$select internal.decide_recommendation('99999999-0000-4000-8000-000000000001','APPROVE','Reason',null,null)$$,'42501',null,'approval cannot invent a proposal');
+select throws_ok($$select internal.complete_intervention('99999999-0000-4000-8000-000000000001',null)$$,'42501',null,'teacher cannot complete unsupported learner task');
+reset role;
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace join pg_roles r on r.rolname in('anon','authenticated','service_role','cuevo_worker')where n.nspname='app'and c.relname in('recommendations','human_decisions','interventions','intervention_completions','outcome_measurements')and has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE')),'improvement records private from Data API and worker');
+select *from finish();rollback;

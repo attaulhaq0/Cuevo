@@ -1,0 +1,44 @@
+[
+  {
+    "packId": "england-selected-subject-pending",
+    "kind": "curriculum",
+    "framework": "England National Curriculum",
+    "programme": "Selected subject vertical pending review",
+    "version": "REQUIRES_REVIEW",
+    "scope": "selected-subject",
+    "sourceStatus": "REQUIRES_REVIEW",
+    "rightsStatus": "UNKNOWN",
+    "sourceLocation": "docs/product/curriculum/70-ENGLAND-NATIONAL-CURRICULUM-DEEP-DOSSIER.md",
+    "sourceChecksum": null,
+    "synthetic": false,
+    "reason": "Structural dossier only; official locked subject artifact and academic approval missing."
+  },
+  {
+    "packId": "cambridge-0580-pending",
+    "kind": "curriculum",
+    "framework": "Cambridge",
+    "programme": "IGCSE Mathematics 0580 validation context",
+    "version": "REQUIRES_REVIEW",
+    "scope": "0580",
+    "sourceStatus": "REQUIRES_REVIEW",
+    "rightsStatus": "UNKNOWN",
+    "sourceLocation": "docs/product/curriculum/66-CAMBRIDGE-MATH-MVP-0580.md",
+    "sourceChecksum": null,
+    "synthetic": false,
+    "reason": "No approved local version-specific syllabus/content/rights bundle."
+  },
+  {
+    "packId": "qatar-jurisdiction-pending",
+    "kind": "jurisdiction",
+    "framework": "Qatar jurisdiction",
+    "programme": "Private-school requirements pending review",
+    "version": "REQUIRES_REVIEW",
+    "scope": "school-applicability-pending",
+    "sourceStatus": "REQUIRES_REVIEW",
+    "rightsStatus": "UNKNOWN",
+    "sourceLocation": "docs/product/curriculum/74-QATAR-JURISDICTION-DEEP-DOSSIER.md",
+    "sourceChecksum": null,
+    "synthetic": false,
+    "reason": "Current school-applicable dated requirement pack/rights review missing."
+  }
+]

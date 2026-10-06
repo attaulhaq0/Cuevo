@@ -3,10 +3,12 @@ import { z } from 'zod';
 const eventSchema = z.object({ eventId: z.uuid(), schoolId: z.uuid(), actorId: z.uuid(), type: z.string(), occurredAt: z.iso.datetime(), metadata: z.record(z.string(), z.unknown()) });
 const approvedNames: Record<string, string> = {
   'lesson.completed': 'lesson_completed', 'assignment.submitted': 'assessment_submitted',
+  'activity.complete':'learning_activity_completed','submission.create':'assessment_submitted','submission.resubmitted':'assessment_resubmitted','quiz.submitted':'quiz_submitted',
   'result.released': 'assessment_marked', 'signal.created': 'signal_created',
   'recommendation.approved': 'recommendation_reviewed', 'recommendation.rejected': 'recommendation_reviewed',
   'intervention.created': 'intervention_created', 'intervention.completed': 'intervention_completed',
   'reassessment.completed': 'reassessment_completed', 'outcome.measured': 'outcome_measured',
+  'reassessment.linked':'reassessment_linked','rubric.result.released':'assessment_marked',
   'community.post_created': 'community_post_created',
 };
 export function createAnalyticsEvent(input: unknown, policy: { schoolAllowed: boolean; pseudonymKey: string; syntheticEnvironment?: boolean }) {

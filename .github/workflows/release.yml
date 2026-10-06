@@ -1,0 +1,254 @@
+name: Cuevo reviewed web release
+on:
+  workflow_run:
+    workflows: [Cuevo verification]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected deployment environment
+        required: true
+        type: choice
+        options: [staging, production]
+      commit_sha:
+        description: Exact current main commit verified by CI
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful main push Cuevo verification run ID
+        required: true
+        type: string
+      backend_run_id:
+        description: Completed successful staging backend run; all four backend fields required together
+        required: false
+        type: string
+      backend_run_attempt:
+        description: Exact completed backend run attempt
+        required: false
+        type: string
+      backend_artifact_id:
+        description: Exact official single-file backend handover artifact ID
+        required: false
+        type: string
+      backend_transfer_sha256:
+        description: Exact canonical public backend transfer file SHA-256
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  release-admission:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: { contents: read, actions: read }
+    outputs:
+      sha: ${{ steps.context.outputs.sha }}
+      ci-run-id: ${{ steps.context.outputs.ci-run-id }}
+      environment: ${{ steps.context.outputs.environment }}
+      review-base64: ${{ steps.review.outputs.review-base64 }}
+      review-digest: ${{ steps.review.outputs.review-digest }}
+      environment-id: ${{ steps.review.outputs.environment-id }}
+      backend-selection-base64: ${{ steps.context.outputs.backend-selection-base64 }}
+      backend-manifest-base64: ${{ steps.review.outputs.backend-manifest-base64 }}
+      backend-bridge-base64: ${{ steps.review.outputs.backend-bridge-base64 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: '24.16.0' }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
+      - name: Admit release event without evaluating event input as code
+        id: context
+        run: node --import tsx scripts/verification/cicd-release.ts context
+      - name: Validate exact trusted CI commit
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_SHA: ${{ steps.context.outputs.sha }}
+          CI_RUN_ID: ${{ steps.context.outputs.ci-run-id }}
+        run: node --import tsx scripts/verification/cicd-release.ts ci
+      - name: Require existing protected release environment and main
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
+        run: node --import tsx scripts/verification/cicd-release.ts controls
+      - name: Prepare exact secret-free review package before founder approval
+        id: review
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
+          RELEASE_SHA: ${{ steps.context.outputs.sha }}
+          CI_RUN_ID: ${{ steps.context.outputs.ci-run-id }}
+          CUEVO_RELEASE_REVIEW_INPUT_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          BACKEND_SELECTION_BASE64: ${{ steps.context.outputs.backend-selection-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts prepare
+  web-release:
+    needs: release-admission
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ needs.release-admission.outputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    permissions: { contents: read, actions: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ needs.release-admission.outputs.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: '24.16.0', cache: npm }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
+      - name: Revalidate canonical CI and current main after environment approval
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+        run: node --import tsx scripts/verification/cicd-release.ts ci
+      - name: Admit exact official founder approval before receiving deployment credentials
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts approval
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@62.1.0 --ignore-scripts --no-audit --no-fund
+      - name: Build and verify public web artifact
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts build
+      - name: Deploy verified prebuilt artifact without domain promotion
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts deploy
+      - name: Verify deployed artifact and dependency health
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts verify
+      - name: Bind the verified internal staging frontend origin
+        if: needs.release-admission.outputs.backend-selection-base64 != ''
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts bind-staging-origin
+      - name: Install the browser only for admitted backend staging
+        if: needs.release-admission.outputs.backend-selection-base64 != ''
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Verify hosted five-role access against the completed backend
+        if: needs.release-admission.outputs.backend-selection-base64 != ''
+        env:
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts verify-browser
+      - name: Retain only the verified public web deployment identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cuevo-web-deployment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/cicd-release/web-deployment-result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
+      - name: Preserve exact public staging intent and cleanup evidence
+        if: always() && needs.release-admission.outputs.backend-selection-base64 != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/cicd-release/web-deployment-result.json
+            .local/cicd-release/web-origin-intent.json
+            .local/cicd-release/web-origin-result.json
+            .local/cicd-release/hosted-browser-intent.json
+            .local/cicd-release/hosted-browser-result.json
+            .local/cicd-release/hosted-browser-cleanup.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

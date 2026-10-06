@@ -1,0 +1,14 @@
+{
+  "packId": "synthetic-primary",
+  "kind": "school_custom",
+  "framework": "School Custom",
+  "programme": "Synthetic primary explanation",
+  "version": "synthetic-1",
+  "scope": "synthetic-primary",
+  "sourceStatus": "VERIFIED",
+  "rightsStatus": "PERMITTED",
+  "sourceLocation": "snapshot.txt",
+  "sourceChecksum": "10c42173fe372e07d216e306d02d6a2bd7ec9d11d71f53c2e0bd333d71af20b6",
+  "synthetic": true,
+  "reason": "Locked school-authored technical reference artifact; no official support claim."
+}

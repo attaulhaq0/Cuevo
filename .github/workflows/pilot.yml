@@ -1,0 +1,81 @@
+name: Cuevo isolated pilot measurements
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed commit with successful canonical push CI
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful canonical push CI run for this exact commit
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cuevo-pilot-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  SCARF_ANALYTICS: 'false'
+jobs:
+  pilot-measurements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.16.0'
+          cache: npm
+      - id: npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - id: dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - id: esbuild
+        run: node node_modules/esbuild/install.js
+      - id: browsers
+        run: npx --no-install playwright install --with-deps chromium firefox webkit
+      - id: measure
+        name: Verify exact isolated performance and volume windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUEVO_PILOT_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CUEVO_PILOT_CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: node --import tsx scripts/verification/pilot-window.ts
+      - id: cleanup
+        name: Recover only the admitted owned pilot window
+        if: always()
+        env:
+          CUEVO_PILOT_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CUEVO_PILOT_CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: node --import tsx scripts/verification/pilot-window.ts cleanup
+      - id: export
+        name: Export validated scalar pilot evidence
+        if: always()
+        env:
+          CUEVO_PILOT_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CUEVO_PILOT_CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: node --import tsx scripts/verification/pilot-evidence.ts
+      - id: upload
+        name: Retain only the sanitized pilot summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cuevo-pilot-safe-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/cicd-safe/pilot-summary.json
+          retention-days: 14
+          if-no-files-found: error
+      - id: stop
+        name: Stop only the native-admitted owned Supabase stack
+        if: always()
+        env:
+          CUEVO_PILOT_EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CUEVO_PILOT_CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: node --import tsx scripts/verification/pilot-window.ts stop

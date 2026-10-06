@@ -1,3 +1,5 @@
+import { openCurrentResult } from './result-reader';
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -14,7 +16,7 @@ test('teacher reviews and releases native result; student follows source evidenc
   if (!publicKey) throw new Error('Configured local public Auth key required for browser verification.');
   const token = async (a: Account) => { const response = await page.request.post(`${authUrl}/auth/v1/token?grant_type=password`, { headers: { apikey: publicKey }, data: { email: a.email, password: a.password } }); expect(response.ok()).toBe(true); return (await response.json()).access_token as string; };
   const teacherToken = await token(teacher); const studentToken = await token(student);
-  const command = async (path: string, body: Record<string, unknown>, accessToken: string) => { const r = await page.request.post(`http://localhost:4000${path}`, { headers: { Authorization: `Bearer ${accessToken}`, 'x-school-id': '10000000-0000-4000-8000-000000000001', 'Idempotency-Key': randomUUID() }, data: body }); expect(r.ok(), String(r.status())).toBe(true); return await r.json(); };
+  const command = async (path: string, body: Record<string, unknown>, accessToken: string) => { let r; try { r = await page.request.post(`http://localhost:4000${path}`, { headers: { Authorization: `Bearer ${accessToken}`, 'x-school-id': '10000000-0000-4000-8000-000000000001', 'Idempotency-Key': randomUUID() }, data: body }); } catch { throw new Error('Academic API transport unavailable; request details withheld.'); } expect(r.ok(), String(r.status())).toBe(true); return await r.json(); };
   const objective = await command('/v1/academic-references', { title: `${title} objective`, description: 'Synthetic school-authored review context.', version: 'browser-proof-1' }, teacherToken);
   const coordinator = accounts.find(a => a.role === 'coordinator')!;
   await command(`/v1/academic-references/${objective.id}/approve`, {}, await token(coordinator));
@@ -22,7 +24,7 @@ test('teacher reviews and releases native result; student follows source evidenc
   await command(`/v1/courses/${course.id}/publish`, {}, teacherToken);
   const assessment = await command('/v1/assessments', { courseId: course.id, title, instructions: 'Explain the synthetic example.', maxScore: 10 }, teacherToken);
   await command(`/v1/assessments/${assessment.id}/submissions`, { content: 'A synthetic response with a traceable source.' }, studentToken);
-  const signIn = async (a: Account) => { await page.goto('/'); await page.getByLabel('School email').fill(a.email); await page.getByLabel('Password', { exact: true }).fill(a.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Academic', exact: true }).click(); };
+  const signIn = async (a: Account) => { await page.goto('/'); await page.getByLabel('School email').fill(a.email); await page.getByLabel('Password', { exact: true }).fill(a.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page); await page.getByRole('button', { name: 'Academic', exact: true }).click(); };
   await signIn(teacher);
   await page.locator('.marking-queue__item').filter({ hasText: title }).click();
   const linkForm = page.getByRole('region', { name: 'Link approved objective', exact: true });
@@ -32,10 +34,10 @@ test('teacher reviews and releases native result; student follows source evidenc
   await markForm.getByLabel('Score (0–10)').fill('0'); await markForm.getByLabel('Teacher feedback').fill('Review this source evidence and try again.'); await markForm.getByRole('button', { name: 'Save marking draft', exact: true }).click();
   await expect(page.locator('.mark-review').getByText('Marking draft — review before release', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Release result', exact: true }).click();
-  const release = page.getByRole('region', { name: 'Release result', exact: true }); await expect(release.getByRole('checkbox')).not.toBeChecked(); await release.getByRole('button', { name: 'Release result', exact: true }).click();
+  const release = page.getByRole('region', { name: 'Release result', exact: true }); await expect(release.getByRole('checkbox')).not.toBeChecked(); const releasedResponse=page.waitForResponse(response=>/^\/v1\/results\/[^/]+\/release$/.test(new URL(response.url()).pathname)&&response.request().method()==='POST');await release.getByRole('button', { name: 'Release result', exact: true }).click();const released=await releasedResponse;expect(released.ok()).toBe(true);const releasedReceipt=await released.json() as {id:string};
   await expect(page.locator('.mark-review').getByText('Released', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).last().click(); await signIn(student);
-  const result = page.locator('.academic-row').filter({ hasText: title }); await expect(result.locator('.native-score strong')).toHaveText('0'); await result.getByRole('button', { name: 'View evidence', exact: true }).click();
+  await signOutTrailWorkspace(page); await signIn(student);
+  const result = await openCurrentResult(page,releasedReceipt.id); await expect(result.locator('.native-score strong')).toHaveText('0'); await result.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(result.locator('.evidence-provenance')).toContainText('Submission');
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); expect(axe.violations).toEqual([]);

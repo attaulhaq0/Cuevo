@@ -1,0 +1,22 @@
+import{z}from'zod';import{Controller,Get,Post,Req,Res,type Type}from'@nestjs/common';import{ApiBearerAuth,ApiBody,ApiHeader}from'@nestjs/swagger';import type{FastifyRequest,FastifyReply}from'fastify';import{DomainError}from'@cuevo/domain';import type{IdentityService}from'../../platform/identity/identity.service';import type{Database}from'../../platform/database/database';import{CommunityService,communitySchemas,type CommunityCommand,type CommunityResource}from'./community.service';
+const body=(command:CommunityCommand)=>ApiBody({required:true,schema:z.toJSONSchema(communitySchemas[command],{target:'openapi-3.0'})as never});
+export function createCommunityController(identity:IdentityService,database:Database):Type<unknown>{const service=new CommunityService(database);@Controller('/v1/community')@ApiBearerAuth()class CommunityController{
+private async respond(r:FastifyRequest,p:FastifyReply,fn:(a:Awaited<ReturnType<IdentityService['resolve']>>)=>Promise<unknown>){try{const school=r.headers['x-school-id'];if(Array.isArray(school))throw new DomainError('INVALID_SCHOOL',400,'School selection invalid.');const actor=await identity.resolve(r.headers.authorization,school);return p.code(200).header('Cache-Control','no-store').send(await fn(actor));}catch(e){const safe=e instanceof DomainError?e:new DomainError('REQUEST_UNAVAILABLE',503,'Community temporarily unavailable.');return p.code(safe.status).header('Cache-Control','no-store').send({code:safe.code,message:safe.message,requestId:r.id});}}
+private list(r:FastifyRequest,p:FastifyReply,kind:CommunityResource){return this.respond(r,p,a=>service.list(a,kind,(r.params as{id?:string}).id,r.query));}private command(r:FastifyRequest,p:FastifyReply,c:CommunityCommand){return this.respond(r,p,a=>service.command(a,c,(r.params as{id?:string}).id,r.body,r.headers['idempotency-key'],r.id));}
+@Get('/rooms')rooms(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'rooms');}
+@Get('/rooms/:id/roster')roster(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'roster');}
+@Get('/rooms/:id/posts')posts(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'posts');}
+@Get('/rooms/:id/reports')reports(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'reports');}
+@Get('/announcements')announcements(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'announcements');}
+@Get('/announcements/:id')announcement(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.respond(r,p,a=>service.announcement(a,(r.params as{id:string}).id));}
+@Get('/notifications')notifications(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.list(r,p,'notifications');}
+@Post('/rooms')@body('room.create')@ApiHeader({name:'Idempotency-Key',required:true})create(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'room.create');}
+@Post('/rooms/:id/members')@body('member.configure')@ApiHeader({name:'Idempotency-Key',required:true})members(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'member.configure');}
+@Post('/rooms/:id/posts')@body('post.create')@ApiHeader({name:'Idempotency-Key',required:true})post(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'post.create');}
+@Post('/posts/:id/reactions')@body('reaction.configure')@ApiHeader({name:'Idempotency-Key',required:true})react(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'reaction.configure');}
+@Post('/posts/:id/report')@body('report.create')@ApiHeader({name:'Idempotency-Key',required:true})report(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'report.create');}
+@Post('/posts/:id/moderate')@body('post.moderate')@ApiHeader({name:'Idempotency-Key',required:true})moderate(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'post.moderate');}
+@Post('/rooms/:id/restrict')@body('room.restrict')@ApiHeader({name:'Idempotency-Key',required:true})restrict(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'room.restrict');}
+@Post('/announcements')@body('announcement.create')@ApiHeader({name:'Idempotency-Key',required:true})announce(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'announcement.create');}
+@Post('/notifications/:id/read')@body('notification.read')@ApiHeader({name:'Idempotency-Key',required:true})read(@Req()r:FastifyRequest,@Res()p:FastifyReply){return this.command(r,p,'notification.read');}
+}return CommunityController;}

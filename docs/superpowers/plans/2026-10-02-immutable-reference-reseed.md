@@ -1,0 +1,7 @@
+# Immutable reference reseeding and published option fixture
+
+The frozen aggregate reproduced two outdated fixture assumptions. An approved intervention option is now tied to its exact published content revision, so changing a legacy activity row is not a published source change. The choice fixture now uses the normal content draft/publication commands and checks that an unpublished draft leaves the option available before publication makes the saved revision stale.
+
+Reference scenario reseeding called reference.create with the original key after its hierarchy was approved. The immutable draft guard correctly refused the insertion path before replay. Reuse now requires the original completed command fingerprint/ID plus exact saved source fields, parent/subject/version/creator and the full locked hierarchy. Reuse performs no source write; first creation remains the domain command. Source bundle bytes are still validated by the existing locked loader. No trigger, history, grading, role or curriculum rule is weakened.
+
+Verification: ten exact-source mismatch cases failed before the implementation and passed afterward; the existing two reference-scenario unit cases, root TypeScript and scoped lint passed. Actual repeated seeding, intervention choice API and attention/class-summary hooks are reserved for the parent's exclusive runtime window. The earlier failed aggregate remains failed; a fresh final frozen run is required.

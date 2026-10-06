@@ -1,0 +1,49 @@
+/* Storybook composes the production content view with illustrative chrome.
+   The runtime shell remains owned by features/shell. */
+.student-trail-preview.workspace { display: block; min-block-size: 100dvh; inline-size: 100%; }
+.student-trail-preview__header { position: relative; z-index: 2; background: var(--color-material-chrome); padding: var(--space-2) var(--space-8) var(--space-3); }
+.student-trail-preview__identity { display: flex; align-items: center; justify-content: space-between; min-block-size: 3rem; }
+.student-trail-preview__header .brand { gap: var(--space-2); }
+.student-trail-preview__header .brand__mark { inline-size: 3.5rem; block-size: 3.5rem; }
+.student-trail-preview__header .brand__name { font-family: 'Cuevo Nunito Sans', var(--font-sans); font-size: 2.25rem; font-weight: 900; letter-spacing: -.04em; }
+.student-trail-preview__account { display: flex; gap: var(--space-4); align-items: center; font-size: var(--type-body); }
+.student-trail-preview__account > span:first-child { display: flex; gap: var(--space-3); align-items: center; }
+.student-trail-preview__divider { inline-size: 1px; block-size: 1.375rem; background: var(--color-border-strong); margin-inline: var(--space-4); }
+.student-trail-preview__avatar { display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; color: var(--color-on-accent); background: var(--color-accent); border-radius: var(--radius-pill); }
+.student-trail-preview__nav { display: flex; justify-content: center; align-items: stretch; gap: var(--space-2); margin-inline: 12rem 15rem; margin-block-start: -.75rem; }
+.student-trail-preview__nav > button { border: 1px solid transparent; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--space-2); background: transparent; color: var(--color-text); min-block-size: 4.375rem; padding: var(--space-2) var(--space-3); font: inherit; font-size: .8125rem; line-height: 1.25; white-space: nowrap; cursor: pointer; }
+.student-trail-preview__nav > button > svg { color: var(--color-learning-symbol); }
+.student-trail-preview__nav > button:nth-child(2n) > svg { color: var(--color-feedback-symbol); }
+.student-trail-preview__nav > button:nth-child(4) > svg { color: var(--color-practice-symbol); }
+.student-trail-preview__nav > button[aria-current] { background: var(--color-selection-surface); color: var(--color-selection-text); border-color: var(--color-selection-border); box-shadow: inset 0 -3px var(--color-selection-border), var(--elevation-subtle); font-weight: var(--font-weight-bold); min-inline-size: 7rem;  border-width: 2px;}
+.student-trail-preview__nav > button[aria-current] svg { color: var(--color-selection-text); }
+.student-trail-preview.workspace[data-theme="dark"] .student-trail-preview__nav > button[aria-current] svg { color: var(--color-selection-text); }
+.student-trail-preview__nav > button:hover:not([aria-current]) { background: var(--color-surface-accent); }
+.student-trail-preview__footer { display: flex; gap: var(--space-5); align-items: center; min-block-size: 4rem; padding: var(--space-3) var(--space-8); background: var(--color-material-chrome); color: var(--color-text-secondary); font-size: .8125rem; }
+.student-trail-preview__footer .brand__mark { inline-size: 1.875rem; block-size: 1.875rem; }
+.student-trail-preview__footer .brand__name { font-size: 1.25rem; font-weight: 900; }
+.student-trail-preview__footer .student-trail-preview__divider { margin-inline: 0; }
+.student-trail-preview__footer-links { margin-inline-start: auto; display: flex; align-items: center; gap: var(--space-5); }
+.student-trail-preview__footer-links > span { display: flex; gap: var(--space-2); align-items: center; }
+.student-trail-preview__receipt { position: fixed; z-index: 6; inset-inline-end: var(--space-6); inset-block-end: var(--space-6); max-inline-size: min(30rem, calc(100% - 3rem)); display: flex; gap: var(--space-3); align-items: center; padding: var(--space-4); border: 1px solid var(--color-border); background: var(--color-material-reading); border-radius: var(--radius-lg); box-shadow: var(--elevation-floating); }
+.student-trail-preview__receipt p { margin: 0; }
+.student-trail-preview__dialog { position: fixed; z-index: 8; inset: 0; display: grid; place-items: center; padding: var(--space-5); background: var(--color-material-scrim); }
+.student-trail-preview__dialog form { inline-size: min(30rem, 100%); display: grid; gap: var(--space-4); padding: var(--space-6); border-radius: var(--radius-xl); background: var(--color-material-reading); }
+.student-trail-preview__dialog textarea { padding: var(--space-3); font: inherit; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-material-reading); }
+.student-trail-preview__dialog form > div { display: flex; gap: var(--space-3); }
+@media (max-width: 1300px) { .student-trail-preview__nav { margin-inline: 7rem; } .student-trail-preview__nav > button { padding-inline: var(--space-2); } }
+@media (max-width: 1000px) { .student-trail-preview__nav { margin-inline: 0; overflow-x: auto; justify-content: start; } .student-trail-preview__footer { flex-wrap: wrap; } }
+@media (max-width: 520px) {
+  .student-trail-preview__header { padding: var(--space-3) var(--space-4); }
+  .student-trail-preview__header .brand__mark { inline-size: 2.5rem; block-size: 2.5rem; }
+  .student-trail-preview__header .brand__name { font-size: 1.75rem; }
+  .student-trail-preview__account { gap: var(--space-2); }
+  .student-trail-preview__account > span:first-child, .student-trail-preview__account > bdi, .student-trail-preview__divider { display: none; }
+  .student-trail-preview__avatar { inline-size: 2.5rem; block-size: 2.5rem; font-size: var(--type-sm); }
+  .student-trail-preview__nav { margin-block-start: var(--space-2); gap: var(--space-1); }
+  .student-trail-preview__nav > button { min-block-size: 3.5rem; gap: var(--space-1); font-size: .6875rem; padding-inline: var(--space-2); }
+  .student-trail-preview__nav > button > svg { inline-size: 1.5rem; block-size: 1.5rem; }
+  .student-trail-preview__nav > button[aria-current] { min-inline-size: 5.5rem;  border-width: 2px;}
+  .student-trail-preview__footer { padding-inline: var(--space-4); gap: var(--space-3); }
+  .student-trail-preview__footer-links { margin: 0; inline-size: 100%; flex-wrap: wrap; gap: var(--space-3); }
+}

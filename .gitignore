@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.vercel/
 dist/
 coverage/
 playwright-report/
@@ -14,3 +15,4 @@ supabase/.branches/
 *.tsbuildinfo
 **/storybook-static/
 supabase/.config-reference/
+**/next-env.d.ts

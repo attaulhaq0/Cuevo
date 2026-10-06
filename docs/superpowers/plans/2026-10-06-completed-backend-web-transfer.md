@@ -1,0 +1,25 @@
+# Completed backend web transfer implementation plan
+
+**Goal:** Let the existing reviewed staging web release consume the successful backend's frozen public handover after that backend run has completed.
+
+**Authority:** The founder authorized finishing the existing internal team MVP deployment with the localhost-only demonstration preserved. Root approved this bounded completion of the current pipeline on 6 October. Sources 01/39/82/83, the existing founder release decision and backend workflow decision remain binding. This plan grants no production promotion, provider migration, paid-plan purchase or live pupil-data authority.
+
+**Architecture:** Export only safe canonical JSON after the existing native handover and public-settings proof. A separate read-only consumer requires the official successful completed backend run, its exact artifact archive digest and JSON digest, current signed main/CI/source and original proof clocks. The existing live backend mutation admission and separate web PREBUILD_RELEASE_ADMISSION approval remain unchanged.
+
+**Owners and steps:**
+
+- [x] Add failing controlled tests in `scripts/verification/backend-web-transfer.test.ts` and `backend-web-transfer-admission.test.ts`; retain RED output under ignored `.local/integration`.
+- [x] Implement `backend-web-transfer.ts`: confined original-file reads, native admission/handover reuse, exact public-settings and cleanup checks, fixed producer/evidence hashes and an exclusive canonical public JSON export. No runtime bundle, CA, archive, key, account or raw content crosses the boundary.
+- [x] Implement `backend-web-transfer-admission.ts`: read-only official run/approval/control/artifact requests; validate archive digest before bounded one-file in-memory ZIP decoding; verify current source, original historical admission and at-most-24-hour proof age. Reuse the existing release manifest, source and package validators. Report historical private proof as exported evidence, never as freshly re-executed tests.
+- [x] Run controlled native tests, lint/typecheck and architecture/docs/repository guards; retain failed cases, request independent peer review and leave changes unstaged.
+- [x] Integrate the exact helper interfaces into the existing backend/release owners, with the original web approval purpose and canonical review assignments. Root retains the actual deployed browser gate as the next phase.
+
+**Verification cases:** Wrong or failed/completed attempt; CI/main/signature/control drift; wrong founder/comment/environment or ambiguous approval; missing/extra/changed producer/evidence rows; stale/future export and proof clocks; changed manifest/settings/source; extra/encrypted/symlink/path-traversal/oversize ZIP entries; unsigned foreign redirect, missing archive digest, malformed UTF-8/JSON; exclusive export replay refusal; no deployment/provider mutation or secret persistence.
+
+**Limits:** Importing a successful source-bound artifact proves its provenance and original reported gates. It does not re-run private database/Storage/worker probes, prove hosted five-role learning journeys, certify curriculum or establish customer readiness. The original live operation expiry is checked historically at export and never renewed.
+
+**Checkpoint:** Seventeen final helper tests passed, plus twenty-six unchanged live backend/package tests in the earlier combined 41-test run. Scoped lint, root TypeScript, architecture17/docs7/repository25 checks passed. Independent review found and repaired native JSON+LF receipt compatibility and clarified whole-second GitHub chronology; final review reports no remaining material finding. The full native handover's real-source fixture remains unverified in this dirty checkout because the pending intervention migration correctly refuses its committed-source check. Root's clean final candidate must re-run that fixture and integrate/test the workflow wiring. Original RED and failure logs remain ignored under `.local/integration`.
+
+**Web integration:** `web-backend-bridge.ts` validates selection/faithful review facts; existing `cicd-release.ts` imports actual completed evidence before its own web package and every credential boundary. Same-run canonical outputs bind the selection, manifest and historical snapshot without refreshing proof clocks. `release.yml` retains separate protected approval, preview build/deploy and fixed safe deployment receipt upload. Controlled tests cover missing/changed bridge, refusal after public env pull, report/provenance/time drift and untouched legacy deployment paths. Actual hosted domain binding/access/learning-loop verification is root's next increment.
+
+**Web source checkpoint:** Combined existing release/workflow, new bridge and completed-transfer tests passed63/63. Final extra refusal for orphaned backend outputs and strict numeric attempt text passed separately; lint, TypeScript and CI/CD structural guards passed. Root's independent source review remains pending. No remote deployment, promotion or hosted customer acceptance was performed. Root's existing CodeQL guard changes in the same workflow validator/test files are preserved.

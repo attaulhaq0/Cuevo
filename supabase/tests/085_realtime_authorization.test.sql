@@ -1,0 +1,16 @@
+begin;create extension if not exists pgtap with schema extensions;grant usage on schema extensions to authenticated;set local search_path=extensions,pg_catalog;select no_plan();
+insert into app.entitlements(school_id,code,enabled,effective_from)select id,'community',true,'2026-09-01'from app.schools on conflict(school_id,code)do update set enabled=true;
+insert into app.community_rooms(school_id,id,class_id,name,type,owner_id)values('10000000-0000-4000-8000-000000000001','87000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Realtime authorization fixture','GROUP','20000000-0000-4000-8000-000000000004');
+insert into auth.sessions(id,user_id,created_at,updated_at,not_after)values('87000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000004',now(),now(),now()+interval'1 hour');
+insert into realtime.messages(id,topic,extension,payload,event,private)values('87000000-0000-4000-8000-000000000003','cuevo:10000000-0000-4000-8000-000000000001:room:87000000-0000-4000-8000-000000000001','broadcast','{}','authorization-probe',false);
+select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000004","session_id":"87000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+select set_config('realtime.topic','cuevo:10000000-0000-4000-8000-000000000001:room:87000000-0000-4000-8000-000000000001',true);
+set local role authenticated;
+select is("authorization".community_realtime_topic((select realtime.topic())),true,'current verified teacher session can join owned room without API app settings');
+select is((select count(*)from realtime.messages where id='87000000-0000-4000-8000-000000000003'),1::bigint,'authorized Realtime placeholder read succeeds with private false default');
+select set_config('realtime.topic','cuevo:10000000-0000-4000-8000-000000000002:room:87000000-0000-4000-8000-000000000001',true);
+select is((select count(*)from realtime.messages where id='87000000-0000-4000-8000-000000000003'),0::bigint,'foreign topic cannot read same placeholder');
+select set_config('realtime.topic','cuevo:10000000-0000-4000-8000-000000000001:room:87000000-0000-4000-8000-000000000001',true);
+reset role;update auth.sessions set not_after=now()-interval'1 second'where id='87000000-0000-4000-8000-000000000002';set local role authenticated;
+select is((select count(*)from realtime.messages where id='87000000-0000-4000-8000-000000000003'),0::bigint,'expired current session denied private topic read');
+reset role;select*from finish();rollback;

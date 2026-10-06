@@ -1,0 +1,108 @@
+import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+
+test.afterEach(async ({ page }) => {
+  // Finish owned interception callbacks before Playwright disposes this test's page.
+  await page.unrouteAll({ behavior: 'wait' });
+});
+type Account = { role: string; email: string; password: string };
+const schoolId = '10000000-0000-4000-8000-000000000001';
+const classId = '30000000-0000-4000-8000-000000000001';
+const subjectId = '43000000-0000-4000-8000-000000000001';
+async function accounts() { return JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[]; }
+async function token(page: Page, account: Account) { const key = process.env.SUPABASE_PUBLISHABLE_KEY; if (!key) throw new Error('Synthetic Auth configuration is required.'); const response = await page.request.post(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=password`, { headers: { apikey: key }, data: { email: account.email, password: account.password } }); expect(response.ok()).toBe(true); return (await response.json()).access_token as string; }
+async function command(page: Page, accessToken: string, path: string, data: Record<string, unknown>) { const response = await page.request.post(`http://localhost:4000${path}`, { headers: { Authorization: `Bearer ${accessToken}`, 'X-School-Id': schoolId, 'Idempotency-Key': randomUUID() }, data }); expect(response.ok(), `Synthetic setup returned ${response.status()}`).toBe(true); return await response.json() as { id: string }; }
+async function signIn(page: Page, account: Account) { await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email', { exact: true }).fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, account.role); }
+async function settled(page: Page) { await expect(page.locator('main [role="status"]').filter({ hasText: /^Loading/ })).toHaveCount(0); }
+async function findPaged(page: Page, row: Locator) { await expect.poll(async()=>await row.count()>0||await page.getByRole('button',{name:'Load more',exact:true}).count()>0).toBe(true); for (let count = 0; count < 30 && !await row.count(); count++) { const more = page.getByRole('button', { name: 'Load more', exact: true }).first(); if (!await more.count()) break; await more.click(); await expect(page.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0); } await expect(row).toBeVisible(); const openTask = row.getByRole('button', { name: 'Open task', exact: true }); if (await openTask.count()) await openTask.click(); }
+async function openRecoveryAssessment(page: Page, id: string, title: string) {
+  await settled(page);
+  const row=page.locator(`.assessment-section[data-assessment-id="${id}"]`);
+  const choice=page.locator(`.learning-staff-directory [data-assessment-choice="${id}"]`);
+  await expect.poll(async()=>await row.count()>0||await page.locator('.learning-staff-directory').count()>0).toBe(true);
+  if(!await row.count()){
+    const disclosure=page.locator('.learning-staff-directory .learning-staff-choice-disclosure');
+    if(await disclosure.count()&&await disclosure.getAttribute('open')===null){const change=disclosure.locator(':scope > summary');await expect(change).toHaveCount(1);await expect(change).not.toHaveAttribute('aria-disabled','true');await change.click();}
+    const more=page.locator('.learning-workspace > .pagination-actions').getByRole('button',{name:'Load more',exact:true});
+    for(let index=0;index<30&&!await choice.count();index++){await expect.poll(async()=>await choice.count()>0||await more.count()>0).toBe(true);if(await choice.count())break;await expect(more).toHaveCount(1);await expect(more).toBeEnabled();await more.click();await settled(page);}
+    await expect(choice).toHaveCount(1);await expect(choice.locator('strong')).toHaveText(title);
+    const response=page.waitForResponse(value=>new URL(value.url()).pathname===`/v1/assessments/${id}`&&value.request().method()==='GET');await choice.getByRole('button').click();const read=await response;expect(read.ok()).toBe(true);expect(await read.json()).toMatchObject({id,title});
+  }
+  await expect(row).toHaveCount(1);await expect(row.getByRole('heading',{name:title,level:2,exact:true})).toBeVisible();return row;
+}
+
+test('adapter: recovery opens only the independently known named assessment and refuses another source receipt',async({page})=>{
+ const id='e8000000-0000-4000-8000-000000000001',title='Current checking quiz';
+ for(const receiptId of[id,'e8000000-0000-4000-8000-000000000002']){
+  await page.route('https://fixture.invalid/v1/assessments/*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:receiptId,title})}));
+  await page.setContent(`<div class="learning-workspace"><section class="learning-staff-directory"><li data-assessment-choice="${id}"><button><strong>${title}</strong></button></li></section></div><script>document.querySelector('button').onclick=async()=>{await fetch('https://fixture.invalid/v1/assessments/${id}');document.querySelector('.learning-workspace').insertAdjacentHTML('beforeend','<article class="assessment-section" data-assessment-id="${id}"><h2>${title}</h2></article>');};</script>`);
+  if(receiptId===id)await openRecoveryAssessment(page,id,title);else await expect(openRecoveryAssessment(page,id,title)).rejects.toThrow();await page.unrouteAll({behavior:'wait'});
+ }
+});
+test('adapter: recovery opens a closed current source disclosure and respects its pending lock',async({page})=>{
+ const id='e8000000-0000-4000-8000-000000000001',title='Current checking quiz';
+ for(const locked of[false,true]){
+  await page.route('https://fixture.invalid/v1/assessments/*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id,title})}));
+  await page.setContent(`<div class="learning-workspace"><section class="learning-staff-directory"><details class="learning-staff-choice-disclosure"><summary aria-disabled="${locked}">Open task: Previous quiz</summary><li data-assessment-choice="${id}"><button><strong>${title}</strong></button></li></details></section></div><script>document.querySelector('button').onclick=async()=>{await fetch('https://fixture.invalid/v1/assessments/${id}');document.querySelector('.learning-workspace').insertAdjacentHTML('beforeend','<article class="assessment-section" data-assessment-id="${id}"><h2>${title}</h2></article>');};</script>`);
+  if(locked){await expect(openRecoveryAssessment(page,id,title)).rejects.toThrow();await expect(page.locator('.assessment-section')).toHaveCount(0);}else await openRecoveryAssessment(page,id,title);
+  await page.unrouteAll({behavior:'wait'});
+ }
+});
+async function assignment(page: Page, title: string, teacherToken: string) { const course = await command(page, teacherToken, '/v1/courses', { classId, subjectId, title, description: 'Synthetic recovery regression.' }); await command(page, teacherToken, `/v1/courses/${course.id}/publish`, {}); return command(page, teacherToken, '/v1/assessments', { courseId: course.id, title, instructions: 'Explain and check the school example.', maxScore: 10 }); }
+
+test('a multi-question quiz retains added options, answers and exact saved structure after refresh', async ({ page }) => {
+  test.setTimeout(90000); page.setDefaultTimeout(15000);
+  const teacher = (await accounts()).find(account => account.role === 'teacher')!;
+  const teacherToken = await token(page, teacher); const title = `School checking quiz ${new Date().toISOString()}`;
+  const assessment = await assignment(page, title, teacherToken);
+  await signIn(page, teacher); await openTrailWorkspace(page,'Learning'); await page.getByRole('button', { name: 'Assessments', exact: true }).click();
+  const row = await openRecoveryAssessment(page,assessment.id,title);
+  await row.getByRole('button', { name: 'Quiz versions', exact: true }).click(); await row.getByRole('button', { name: 'Create quiz version', exact: true }).click();
+  await row.getByRole('button', { name: 'Add question', exact: true }).click(); await row.getByRole('button', { name: 'Add option 1', exact: true }).click();
+  const form = row.getByRole('region', { name: 'Create quiz version', exact: true });
+  await form.getByLabel('Question prompt 1', { exact: true }).fill('Which step checks the example?');
+  await form.getByLabel('Option label 1.1', { exact: true }).fill('Repeat it without a check'); await form.getByLabel('Option label 1.2', { exact: true }).fill('Explain only the result'); await form.getByLabel('Option label 1.3', { exact: true }).fill('Check each step'); await form.getByLabel('Correct answer 1', { exact: true }).selectOption({ label: 'Check each step' });
+  await form.getByLabel('Question prompt 2', { exact: true }).fill('Which explanation is complete?'); await form.getByLabel('Option label 2.1', { exact: true }).fill('Show the method'); await form.getByLabel('Option label 2.2', { exact: true }).fill('Skip the method'); await form.getByLabel('Correct answer 2', { exact: true }).selectOption({ label: 'Show the method' });
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click(); await settled(page); await openRecoveryAssessment(page,assessment.id,title);
+  await expect(form.getByLabel('Question prompt 2', { exact: true })).toHaveValue('Which explanation is complete?'); await expect(form.getByLabel('Option label 1.3', { exact: true })).toHaveValue('Check each step');
+  await expect(form.getByLabel('Correct answer 1', { exact: true }).locator('option:checked')).toHaveText('Check each step'); await expect(form.getByLabel('Correct answer 2', { exact: true }).locator('option:checked')).toHaveText('Show the method');
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/assessments/${assessment.id}/quiz` && response.request().method() === 'POST'); await form.getByRole('button', { name: 'Save', exact: true }).click(); const receipt = await saved; expect(receipt.ok()).toBe(true);
+  const payload = receipt.request().postDataJSON() as { questions: { prompt: string; options: { key: string; label: string }[]; correctOptionKey: string }[] }; expect(payload.questions).toHaveLength(2); expect(payload.questions[0].options).toHaveLength(3); expect(payload.questions[0].options.find(option => option.key === payload.questions[0].correctOptionKey)?.label).toBe('Check each step'); expect(payload.questions[1].options.find(option => option.key === payload.questions[1].correctOptionKey)?.label).toBe('Show the method');
+});
+
+test('an exact returned submission remains revisable when the independent submission queue omits it', async ({ page }) => {
+  test.setTimeout(90000); page.setDefaultTimeout(15000);
+  const all = await accounts(); const teacherToken = await token(page, all.find(account => account.role === 'teacher')!); const student = all.find(account => account.role === 'student')!; const studentToken = await token(page, student);
+  const title = `Returned checking task ${new Date().toISOString()}`; const assessment = await assignment(page, title, teacherToken); const submission = await command(page, studentToken, `/v1/assessments/${assessment.id}/submissions`, { content: 'Original checking method.' });
+  await command(page, teacherToken, `/v1/submissions/${submission.id}/return`, { feedback: 'Explain the missing checking step.', expectedRevision: 1 });
+  // Controlled truncation checks the rendered consumer; backend integration proves the real own-current projection beyond100 sources.
+  await page.route('**/v1/submissions?limit=100', async route => { const response = await route.fetch(); const body = await response.json(); await route.fulfill({ response, json: { ...body, items: body.items.filter((item: { id: string }) => item.id !== submission.id), nextCursor: submission.id } }); });
+  await signIn(page, student); await openTrailWorkspace(page,'Learning'); await page.getByRole('button', { name: 'Assessments', exact: true }).click();
+  const row = page.locator('.assessment-section').filter({ has: page.getByRole('heading', { name: title, exact: true }) }); await findPaged(page, row); await expect(row.getByText('Returned for revision', { exact: true })).toBeVisible(); await expect(row).toContainText('Explain the missing checking step.');
+  const form = row.getByRole('region', { name: 'Resubmit revised work', exact: true }); await expect(form.getByLabel('Your response', { exact: true })).toHaveValue('Original checking method.'); await form.getByLabel('Your response', { exact: true }).fill('Revised method explains the checking step.');
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === `/v1/submissions/${submission.id}/resubmit` && response.request().method() === 'POST'); await form.getByRole('button', { name: 'Resubmit revised work', exact: true }).click(); const receipt = await saved; expect(receipt.ok()).toBe(true); expect(receipt.request().postDataJSON()).toMatchObject({ expectedRevision: 1, content: 'Revised method explains the checking step.' }); expect(await receipt.json()).toMatchObject({ revision: 2, previousSubmissionId: submission.id });
+});
+
+test('attendance correction drafts remain tied to their selected record and new records start separately', async ({ page }) => {
+  test.setTimeout(90000); page.setDefaultTimeout(15000);
+  const all = await accounts(); const admin = all.find(account => account.role === 'admin')!; const adminToken = await token(page, admin);
+  const peopleResponse = await page.request.get('http://localhost:4000/v1/school/people?limit=100', { headers: { Authorization: `Bearer ${adminToken}`, 'X-School-Id': schoolId } }); expect(peopleResponse.ok()).toBe(true);
+  const people = (await peopleResponse.json()).items as { id: string; displayName: string; role: string }[]; const learners = people.filter(person => person.role === 'student'); const firstLearner = learners.find(person => person.id === '20000000-0000-4000-8000-000000000012')!; const secondLearner = learners.find(person => person.displayName === 'Sara Al-Kuwari')!;
+  const date = `2027-03-${String(1 + parseInt(randomUUID().slice(0, 2), 16) % 27).padStart(2, '0')}`;
+  await command(page, adminToken, '/v1/school/attendance', { classId, studentId: firstLearner.id, occurredOn: date, status: 'present', note: 'First original note', expectedRevision: 0 });
+  await command(page, adminToken, '/v1/school/attendance', { classId, studentId: secondLearner.id, occurredOn: date, status: 'absent', note: 'Second original note', expectedRevision: 0 });
+  await signIn(page, admin); await openTrailWorkspace(page,'School'); await page.getByRole('button', { name: 'Daily operations', exact: true }).click(); await settled(page);
+  const displayedDate = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(date));
+  await page.getByLabel('School date',{exact:true}).fill(date);const firstRow = page.locator('.school-attendance-list li').filter({ has: page.getByRole('heading',{name:firstLearner.displayName,exact:true}) }).filter({ hasText: displayedDate });const secondRow=page.locator('.school-attendance-list li').filter({has:page.getByRole('heading',{name:secondLearner.displayName,exact:true})}).filter({hasText:displayedDate}); await findPaged(page, firstRow); await findPaged(page, secondRow);
+  const form = page.getByRole('region', { name: 'Correct this attendance record', exact: true });
+  await firstRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); await form.getByLabel('Status', { exact: true }).selectOption({ label: 'Late' }); await form.getByLabel('Staff note', { exact: true }).fill('First correction draft'); await form.getByLabel('Correction reason', { exact: true }).fill('First source correction');
+  await secondRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); await expect(page.locator('.school-attendance-context')).toContainText(secondLearner.displayName); await expect(form.getByLabel('Staff note', { exact: true })).toHaveValue('Second original note'); await form.getByLabel('Staff note', { exact: true }).fill('Second correction draft'); await form.getByLabel('Correction reason', { exact: true }).fill('Second source correction');
+  await firstRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); await expect(page.locator('.school-attendance-context')).toContainText(firstLearner.displayName); await expect(form.getByLabel('Staff note', { exact: true })).toHaveValue('First correction draft');
+  await secondRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); await expect(form.getByLabel('Staff note', { exact: true })).toHaveValue('Second correction draft');
+  await page.getByRole('button', { name: 'Record attendance', exact: true }).click(); await page.getByLabel('Daily class records',{exact:true}).selectOption(classId);await page.getByLabel('School date',{exact:true}).fill('2027-07-01');await expect(page.getByLabel('Student',{exact:true})).toHaveValue('');await expect(page.getByRole('region',{name:'Record attendance',exact:true})).toHaveCount(0);
+  await page.getByLabel('School date',{exact:true}).fill(date);await settled(page);await findPaged(page,firstRow);
+  await firstRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/school/attendance' && response.request().method() === 'POST'); await form.getByRole('button', { name: 'Save', exact: true }).click(); const receipt = await saved; expect(receipt.ok()).toBe(true); expect(receipt.request().postDataJSON()).toMatchObject({ studentId: firstLearner.id, occurredOn: date, expectedRevision: 1, status: 'late', note: 'First correction draft', correctionReason: 'First source correction' }); expect(await receipt.json()).toMatchObject({ revision: 2 });
+  await settled(page); await expect(firstRow).toContainText('Late'); await firstRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); await expect(form.getByLabel('Staff note', { exact: true })).toHaveValue('First correction draft'); await expect(form.getByLabel('Status', { exact: true })).toHaveValue('late'); await secondRow.getByRole('button', { name: 'Correct this attendance record', exact: true }).click(); await expect(form.getByLabel('Student', { exact: true })).toHaveCount(0);await expect(page.locator('.school-attendance-context')).toContainText(secondLearner.displayName); await expect(form.getByLabel('Staff note', { exact: true })).toHaveValue('Second correction draft');
+});

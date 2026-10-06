@@ -67,9 +67,12 @@ async function main() {
     if (!/^[a-f0-9]{64}$/.test(secrets.api) || !/^[a-f0-9]{64}$/.test(secrets.worker)) throw new Error('Invalid local runtime credential format.');
     await admin.query(`alter role cuevo_api login password '${secrets.api}'`);
     await admin.query(`alter role cuevo_worker login password '${secrets.worker}'`);
+    // The managed Realtime tenant table requires the local platform owner, not the app/migration role.
+    execFileSync('docker',['exec','supabase_db_cuevo','psql','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1','-c',"do $$begin if(select count(*)from _realtime.tenants)<>1 or not exists(select 1 from _realtime.tenants where external_id='realtime-dev')then raise exception 'Unexpected local Realtime tenant';end if;update _realtime.tenants set private_only=true where external_id='realtime-dev';end$$;"],{stdio:'ignore'});
   } finally { await admin.end(); }
   const variables: Record<string, string> = {
     NODE_ENV: 'development', API_PORT: '4000', WORKER_PORT: '4001', API_ALLOWED_ORIGIN: 'http://localhost:3000',
+    AI_GENERATION_MODE: 'FIXTURE', AI_FIXTURE_ENABLED: 'true', AI_POLICY_VERSION: '1',
     ...createRuntimeUrls(status, secrets), SUPABASE_URL: status.API_URL, SUPABASE_PUBLISHABLE_KEY: status.PUBLISHABLE_KEY,
     SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY, NEXT_PUBLIC_API_URL: 'http://localhost:4000',
     NEXT_PUBLIC_SUPABASE_URL: status.API_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: status.PUBLISHABLE_KEY,

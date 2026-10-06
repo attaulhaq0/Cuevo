@@ -1,0 +1,63 @@
+import type { Locale } from '../../shared/i18n/locale';
+import type { RecoveryFailure } from './recovery';
+
+const copy = {
+  en: {
+    title: 'School account recovery', introduction: 'Reset your school account password', body: 'Continue only if you requested this recovery through your school. Your school checks the exact approved account before password recovery.',
+    safety: 'Opening this page does not change a password. Continue verifies your account and the school-approved recovery request.', confirmation: 'I requested this school account recovery and want to reset my password.',
+    continue: 'Continue', loading: 'Preparing your recovery…', checking: 'Checking your account recovery…', retry: 'Check this recovery again',
+    authorized: 'Password recovery approved', authorizedBody: 'The school confirmed this account recovery. Save a new password, then finish by signing out your sessions.',
+    passwordTitle: 'Choose a new password', password: 'New password', confirmPassword: 'Confirm password', passwordHint: 'Use 12 to 128 characters and avoid a password you use elsewhere.', passwordSave: 'Save password', saving: 'Checking password recovery…',
+    checkPassword: 'Check password recovery', passwordSaved: 'Password recovery confirmed', passwordSavedBody: 'The school confirmed the password change. Sign out your sessions before returning to sign-in.',
+    signOutAll: 'Sign out all sessions', signingOut: 'Signing out your sessions…', finished: 'Recovery finished', finishedBody: 'Your password recovery and signout are confirmed. Sign in with your new password.', returnToSignIn: 'Return to sign in',
+    offline: 'You are offline. Connect before continuing.', decline: 'Leave recovery', declined: 'Recovery left unfinished', declinedBody: 'This page requested no further changes. Contact your school if you need help.',
+    contact: 'If this link is unexpected, expired or cannot be confirmed, contact your school administrator. Do not forward the recovery link.',
+    errors: {
+      'invalid-link': 'This recovery link is missing or incomplete. Ask your school administrator for a new link.',
+      'confirmation-required': 'Confirm that you requested this recovery before continuing.',
+      'verification-unknown': 'Account verification is not confirmed. Ask your school administrator to review the recovery and send a new link.',
+      'expired-link': 'This recovery link has expired or was already used. Ask your school administrator for a new link.',
+      'session-changed': 'The current account no longer matches this recovery. Contact your school administrator before continuing.',
+      'outcome-unknown': 'Recovery approval is not confirmed. Keep this page open and check this recovery again.',
+      'requires-review': 'The school could not confirm the current recovery approval. Contact your school administrator.',
+      busy: 'The current recovery operation is still being checked.',
+      'password-invalid': 'Use matching passwords with 12 to 128 characters.',
+      'password-unknown': 'Password saving is not confirmed. Keep this page open and check password recovery before trying another save.',
+      'password-not-changed': 'The school confirmed that the password has not changed. Enter matching new passwords and choose Save password.',
+      'reconciliation-required': 'Check password recovery before requesting another password change.',
+      'completion-unknown': 'The password recovery outcome is not confirmed. Keep this page open and check password recovery again.',
+      'signout-unknown': 'Signing out your sessions is not confirmed. Keep this page open and try Sign out all sessions again. Do not save another password.',
+      unavailable: 'Account services are unavailable. Keep this page open and retry when service returns.',
+    },
+  },
+  ar: {
+    title: 'استعادة حساب المدرسة', introduction: 'إعادة تعيين كلمة مرور حساب المدرسة', body: 'تابع فقط إذا طلبت هذه الاستعادة عبر مدرستك. تتحقق المدرسة من الحساب المعتمد المحدد قبل استعادة كلمة المرور.',
+    safety: 'فتح الصفحة لا يغيّر كلمة المرور. تتحقق المتابعة من حسابك وطلب الاستعادة المعتمد من المدرسة.', confirmation: 'طلبت استعادة حساب المدرسة هذا وأرغب في إعادة تعيين كلمة المرور.',
+    continue: 'متابعة', loading: 'جارٍ تجهيز الاستعادة…', checking: 'جارٍ التحقق من استعادة الحساب…', retry: 'التحقق من الاستعادة مجددًا',
+    authorized: 'تمت الموافقة على استعادة كلمة المرور', authorizedBody: 'أكدت المدرسة استعادة هذا الحساب. احفظ كلمة مرور جديدة ثم أنهِ العملية بتسجيل الخروج من جلساتك.',
+    passwordTitle: 'اختيار كلمة مرور جديدة', password: 'كلمة المرور الجديدة', confirmPassword: 'تأكيد كلمة المرور', passwordHint: 'استخدم من ١٢ إلى ١٢٨ حرفًا وتجنب كلمة مرور تستخدمها في مكان آخر.', passwordSave: 'حفظ كلمة المرور', saving: 'جارٍ التحقق من استعادة كلمة المرور…',
+    checkPassword: 'التحقق من استعادة كلمة المرور', passwordSaved: 'تم تأكيد استعادة كلمة المرور', passwordSavedBody: 'أكدت المدرسة تغيير كلمة المرور. سجّل الخروج من جلساتك قبل العودة لتسجيل الدخول.',
+    signOutAll: 'تسجيل الخروج من جميع الجلسات', signingOut: 'جارٍ تسجيل الخروج من جلساتك…', finished: 'اكتملت الاستعادة', finishedBody: 'تأكدت استعادة كلمة المرور وتسجيل الخروج. سجّل الدخول بكلمة المرور الجديدة.', returnToSignIn: 'العودة لتسجيل الدخول',
+    offline: 'أنت غير متصل بالإنترنت. اتصل قبل المتابعة.', decline: 'مغادرة الاستعادة', declined: 'لم تكتمل الاستعادة', declinedBody: 'لم تطلب الصفحة تغييرات إضافية. تواصل مع مدرستك إذا احتجت مساعدة.',
+    contact: 'إذا كان الرابط غير متوقع أو منتهي الصلاحية أو تعذر تأكيده، تواصل مع مسؤول مدرستك. لا تشارك رابط الاستعادة.',
+    errors: {
+      'invalid-link': 'رابط الاستعادة مفقود أو غير مكتمل. اطلب رابطًا جديدًا من مسؤول مدرستك.',
+      'confirmation-required': 'أكد أنك طلبت هذه الاستعادة قبل المتابعة.',
+      'verification-unknown': 'لم يتأكد التحقق من الحساب. اطلب من مسؤول مدرستك مراجعة الاستعادة وإرسال رابط جديد.',
+      'expired-link': 'انتهت صلاحية رابط الاستعادة أو استُخدم سابقًا. اطلب رابطًا جديدًا من مسؤول مدرستك.',
+      'session-changed': 'الحساب الحالي لم يعد يطابق هذه الاستعادة. تواصل مع مسؤول مدرستك قبل المتابعة.',
+      'outcome-unknown': 'لم تتأكد الموافقة على الاستعادة. أبقِ الصفحة مفتوحة وتحقق من الاستعادة مجددًا.',
+      'requires-review': 'تعذر على المدرسة تأكيد الموافقة الحالية على الاستعادة. تواصل مع مسؤول مدرستك.',
+      busy: 'لا تزال عملية الاستعادة الحالية قيد التحقق.',
+      'password-invalid': 'استخدم كلمتي مرور متطابقتين بطول من ١٢ إلى ١٢٨ حرفًا.',
+      'password-unknown': 'لم يتأكد حفظ كلمة المرور. أبقِ الصفحة مفتوحة وتحقق من الاستعادة قبل محاولة حفظ أخرى.',
+      'password-not-changed': 'أكدت المدرسة أن كلمة المرور لم تتغير. أدخل كلمتي مرور جديدتين متطابقتين ثم اختر حفظ كلمة المرور.',
+      'reconciliation-required': 'تحقق من استعادة كلمة المرور قبل طلب تغيير آخر.',
+      'completion-unknown': 'لم تتأكد نتيجة استعادة كلمة المرور. أبقِ الصفحة مفتوحة وتحقق من الاستعادة مجددًا.',
+      'signout-unknown': 'لم يتأكد تسجيل الخروج من جلساتك. أبقِ الصفحة مفتوحة وحاول تسجيل الخروج من جميع الجلسات مجددًا. لا تحفظ كلمة مرور أخرى.',
+      unavailable: 'خدمات الحساب غير متاحة. أبقِ الصفحة مفتوحة وحاول مجددًا عند عودة الخدمة.',
+    },
+  },
+};
+export function recoveryCopy(locale: Locale) { return copy[locale]; }
+export function recoveryFailureCopy(locale: Locale, failure: RecoveryFailure) { return copy[locale].errors[failure]; }

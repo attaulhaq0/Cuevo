@@ -1,0 +1,12 @@
+{
+  "required": [
+    "numeric-zero",
+    "missing-not-zero",
+    "rubric-complete-criteria",
+    "version-mismatch-denied",
+    "tenant-denied",
+    "parent-approved-only",
+    "immutable-history"
+  ],
+  "status": "TECHNICAL_FIXTURE"
+}

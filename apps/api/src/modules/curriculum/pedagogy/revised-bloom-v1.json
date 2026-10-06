@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1",
+  "taxonomyVersion": "revised-bloom-2001-cuevo-v1",
+  "title": { "en": "Reviewed thinking focus", "ar": "تركيز التفكير المراجَع" },
+  "interpretation": "TASK_DEMAND_NOT_LEARNER_LEVEL",
+  "contentAuthorship": "CUEVO_ORIGINAL_PARAPHRASES",
+  "reviewRequirement": "EXACT_SOURCE_HUMAN_REVIEW",
+  "knowledgeDimension": "NOT_IMPLEMENTED",
+  "limitations": {
+    "en": "These categories describe what a reviewed task asks someone to do. They do not measure a learner, order required stages, determine difficulty, award points or prove mastery. A school reviewer must check the actual task and its source. The complete primary texts are unavailable; no external licence or publisher approval is claimed.",
+    "ar": "تصف هذه الفئات ما تطلبه مهمة راجعها المختص. لا تقيس المتعلّم، ولا ترتّب مراحل إلزامية، ولا تحدّد الصعوبة، ولا تمنح نقاطًا أو تثبت الإتقان. يجب أن يراجع مسؤول المدرسة المهمة الفعلية ومصدرها. النصوص الأصلية الكاملة غير متاحة، ولا يُدّعى وجود ترخيص خارجي أو اعتماد من الناشر."
+  },
+  "rights": { "content": "CUEVO_AUTHORED_ORIGINAL", "externalFullTextLicensed": false, "publisherApproval": false, "externalTablesReproduced": false },
+  "sources": [
+    {
+      "sourceId": "anderson-krathwohl-2001",
+      "citation": "Anderson, L. W. and Krathwohl, D. R. (editors), 2001. A Taxonomy for Learning, Teaching, and Assessing: A Revision of Bloom's Taxonomy of Educational Objectives. Complete edition. Longman. Bibliographic anchor; full text not captured.",
+      "url": "https://celt.iastate.edu/prepare-and-teach/design-your-course/blooms-taxonomy/",
+      "accessedOn": "2026-10-04", "sourceVersion": "2001 complete edition; bibliographic reference only", "access": "BIBLIOGRAPHIC_ONLY", "snapshotSha256": null
+    },
+    {
+      "sourceId": "krathwohl-2002-overview",
+      "citation": "Krathwohl, D. R. (2002). A Revision of Bloom's Taxonomy: An Overview. Theory Into Practice, 41(4). DOI 10.1207/s15430421tip4104_2. Bibliographic anchor; full text not captured.",
+      "url": "https://doi.org/10.1207/s15430421tip4104_2",
+      "accessedOn": "2026-10-04", "sourceVersion": "2002 overview; bibliographic reference only", "access": "BIBLIOGRAPHIC_ONLY", "snapshotSha256": null
+    },
+    {
+      "sourceId": "university-florida-guide",
+      "citation": "University of Florida, Center for Instructional Technology and Training. Bloom's Taxonomy teaching guide. Public reference capture corroborates the six revised category identities; wording below is original Cuevo prose.",
+      "url": "https://citt.it.ufl.edu/resources/course-development/the-learning-process/designing-the-learning-experience/blooms-taxonomy/",
+      "accessedOn": "2026-10-04", "sourceVersion": "public page captured 2026-10-04", "access": "PUBLIC_REFERENCE_CAPTURE", "snapshotSha256": "cd19bbfe736cc8479dc86e514faf91aa449d0c8a0a0c4123c46bf0850d8e789d"
+    },
+    {
+      "sourceId": "iowa-state-celt-guide",
+      "citation": "Iowa State University, Center for Excellence in Learning and Teaching. Bloom's Taxonomy. Published page 53, modified 2024-08-13, retrieved 2026-10-04. Public reference corroborates the revised framework; no linked handout or table is reproduced.",
+      "url": "https://celt.iastate.edu/prepare-and-teach/design-your-course/blooms-taxonomy/",
+      "accessedOn": "2026-10-04", "sourceVersion": "page 53 modified 2024-08-13T16:07:37Z", "access": "PUBLIC_REFERENCE_CAPTURE", "snapshotSha256": "2d90d3877f825267b059aae5d331f7417445993287d75f97f3424bc472b5c5d2"
+    }
+  ],
+  "processes": [
+    { "process": "REMEMBER", "label": { "en": "Remember", "ar": "تذكّر" }, "description": { "en": "Bring a learned fact, idea or step back to mind when the task asks for it.", "ar": "استحضر حقيقة أو فكرة أو خطوة تعلّمتها عندما تطلبها المهمة." }, "learnerPrompt": { "en": "Recall what you have learned for this activity.", "ar": "استحضر ما تعلّمته لهذه المهمة." }, "sourceIds": ["university-florida-guide", "iowa-state-celt-guide", "anderson-krathwohl-2001"] },
+    { "process": "UNDERSTAND", "label": { "en": "Understand", "ar": "افهم" }, "description": { "en": "Show the meaning of an idea by explaining it, connecting examples or describing it in your own way.", "ar": "بيّن معنى فكرة بشرحها أو ربط أمثلتها أو وصفها بطريقتك." }, "learnerPrompt": { "en": "Explain the idea in your own way.", "ar": "اشرح الفكرة بطريقتك." }, "sourceIds": ["university-florida-guide", "iowa-state-celt-guide", "anderson-krathwohl-2001"] },
+    { "process": "APPLY", "label": { "en": "Apply", "ar": "طبّق" }, "description": { "en": "Use a learned idea or procedure to carry out the task in the situation given.", "ar": "استخدم فكرة أو طريقة تعلّمتها لتنفيذ المهمة في الموقف المعطى." }, "learnerPrompt": { "en": "Use an idea or method in this activity.", "ar": "استخدم فكرة أو طريقة في هذه المهمة." }, "sourceIds": ["university-florida-guide", "iowa-state-celt-guide", "anderson-krathwohl-2001"] },
+    { "process": "ANALYZE", "label": { "en": "Analyze", "ar": "حلّل" }, "description": { "en": "Look at the parts of an idea or example and describe how those parts relate to one another.", "ar": "انظر إلى أجزاء الفكرة أو المثال ووضّح كيف ترتبط ببعضها." }, "learnerPrompt": { "en": "Explore the parts and how they connect.", "ar": "استكشف الأجزاء وكيف ترتبط." }, "sourceIds": ["university-florida-guide", "iowa-state-celt-guide", "anderson-krathwohl-2001"] },
+    { "process": "EVALUATE", "label": { "en": "Evaluate", "ar": "قيّم" }, "description": { "en": "Make and explain a judgement using the evidence and criteria given for the task.", "ar": "قدّم حكمًا وفسّره باستخدام الشواهد والمعايير المحدّدة للمهمة." }, "learnerPrompt": { "en": "Check an idea and explain your judgement.", "ar": "افحص الفكرة وفسّر حكمك." }, "sourceIds": ["university-florida-guide", "iowa-state-celt-guide", "anderson-krathwohl-2001"] },
+    { "process": "CREATE", "label": { "en": "Create", "ar": "ابتكر" }, "description": { "en": "Bring ideas or parts together to make a response, plan or product that meets the task's purpose.", "ar": "اجمع الأفكار أو الأجزاء لتنتج استجابة أو خطة أو عملًا يحقّق غرض المهمة." }, "learnerPrompt": { "en": "Make something that brings your ideas together.", "ar": "أنشئ عملًا يجمع أفكارك." }, "sourceIds": ["university-florida-guide", "iowa-state-celt-guide", "anderson-krathwohl-2001"] }
+  ]
+}

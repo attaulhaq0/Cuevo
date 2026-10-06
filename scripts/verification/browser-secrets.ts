@@ -1,0 +1,7 @@
+import{readdir,readFile}from'node:fs/promises';import{resolve}from'node:path';
+const secrets=[process.env.SUPABASE_SERVICE_ROLE_KEY,process.env.OPENAI_API_KEY,process.env.AZURE_OPENAI_API_KEY,process.env.DATABASE_URL?new URL(process.env.DATABASE_URL).password:undefined,process.env.WORKER_DATABASE_URL?new URL(process.env.WORKER_DATABASE_URL).password:undefined].filter((value):value is string=>Boolean(value&&value.length>=16));
+const needles=[...new Set(secrets.flatMap(value=>[value,encodeURIComponent(value),Buffer.from(value).toString('base64')]))];
+if(needles.length===0)throw Error('Configure local server secrets before bundle verification.');
+let files=0;const inspect=async(directory:string)=>{for(const entry of await readdir(directory,{withFileTypes:true})){const path=resolve(directory,entry.name);if(entry.isDirectory())await inspect(path);else if(entry.isFile()&&/\.(js|json|html|css|map)$/.test(entry.name)){files++;const content=await readFile(path,'utf8');if(needles.some(value=>content.includes(value)))throw Error('Browser artifact contains a server secret.');}}};
+if(!process.env.NEXT_PUBLIC_API_URL||!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)throw Error('Configured public build inputs are required.');
+await inspect(resolve('apps/web/.next/static'));if(files===0)throw Error('No browser build artifacts found.');console.log('Browser secret exclusion verified: '+files+' static artifacts.');

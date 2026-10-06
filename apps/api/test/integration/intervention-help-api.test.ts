@@ -1,0 +1,42 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { config as dotenv } from 'dotenv';
+import { randomUUID } from 'node:crypto';
+import { createCustomerContext, customerCourse, customerReleased, type CustomerContext } from './customer-test-context';
+dotenv({ path: '.env.local', quiet: true });
+describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('approved task academic help actual Auth API', () => {
+  let context: CustomerContext;
+  beforeAll(async () => { context = await createCustomerContext(); }, 60000);
+  afterAll(async () => { await context?.close(); });
+  it('preserves private staff reasons and permits one exact learner request with a current teacher reply', async () => {
+    const course = await customerCourse(context, 'Exact task help'); const baseline = await customerReleased(context, 'strong', course.courseId, 'Help current baseline', 3); await context.drain();
+    const proposal = await context.command('teacher', '/v1/intelligence/analyze', { baselineResultId: baseline.resultId });
+    const approvalInput = { decision: 'APPROVE', reason: 'Private staff-only decision reason that must not reach the learner.', learnerNote: 'Use the checked practice. Ask me to explain one step if needed.' };
+    const approvalKey = randomUUID(); const approved = await context.command('teacher', `/v1/recommendations/${proposal.id}/decision`, approvalInput, approvalKey);
+    expect((await context.request('teacher', `/v1/recommendations/${proposal.id}/decision`, approvalInput, approvalKey)).json()).toEqual(approved);
+    const path = `/v1/interventions/${approved.interventionId}/help`; const before = await context.request('strong', path); expect(before.statusCode).toBe(200);
+    expect(before.json().approval).toMatchObject({ learnerNote: approvalInput.learnerNote, approvedAt: expect.any(String), teacherName: expect.any(String) }); expect(before.body).not.toContain(approvalInput.reason);
+    for (const role of ['parent', 'otherTeacher', 'coordinator', 'observed'] as const) expect((await context.request(role, path)).statusCode).toBe(403);
+    const input = { kind: 'WORKED_EXAMPLE', question: 'Could you explain the checking step in the worked example?', confirmSend: true }; const key = randomUUID();
+    expect((await context.request('strong', path, { ...input, confirmSend: false })).statusCode).toBe(400);
+    const request = await context.command('strong', path, input, key); expect(request.help).toMatchObject({ question: input.question, response: null }); expect((await context.request('strong', path, input, key)).json()).toEqual(request);
+    expect((await context.request('strong', path, { ...input, question: 'Replace the earlier question.' })).statusCode).toBe(409);
+    expect((await context.request('strong', `${path}/reply`, { response: 'I cannot reply as a learner.', confirmSend: true })).statusCode).toBe(403);
+    const reply = { response: 'Compare each number with the worked example, then explain one check.', confirmSend: true }; const replyKey = randomUUID();
+    const response = await context.command('teacher', `${path}/reply`, reply, replyKey); expect(response.help).toMatchObject({ response: { text: reply.response, teacherName: expect.any(String), respondedAt: expect.any(String) } });
+    expect((await context.request('teacher', `${path}/reply`, reply, replyKey)).json()).toEqual(response);
+    const learner = await context.request('strong', path); expect(learner.json().help.response.text).toBe(reply.response); expect(learner.body).not.toContain(approvalInput.reason);
+    expect((await context.client.query("select count(*)::integer count from internal.audit_events where school_id=$1 and action in('intervention.help.requested','intervention.help.replied')", [context.school])).rows[0].count).toBe(2);
+    expect((await context.client.query("select count(*)::integer count from internal.outbox_events where school_id=$1 and type in('intervention.help.requested','intervention.help.replied')", [context.school])).rows[0].count).toBe(2);
+    await context.drain();expect((await context.client.query("select count(*)::integer count from internal.outbox_events where school_id=$1 and type in('intervention.help.requested','intervention.help.replied')and state='COMPLETED'", [context.school])).rows[0].count).toBe(2);
+  });
+  it('leaves legacy learner notes unknown and denies new help after academic correction', async () => {
+    const course = await customerCourse(context, 'Stale task help'); const baseline = await customerReleased(context, 'observed', course.courseId, 'Stale help baseline', 3); await context.drain();
+    const proposal = await context.command('teacher', '/v1/intelligence/analyze', { baselineResultId: baseline.resultId });
+    const approved = await context.command('teacher', `/v1/recommendations/${proposal.id}/decision`, { decision: 'APPROVE', reason: 'Old private reason.' }); const path = `/v1/interventions/${approved.interventionId}/help`;
+    expect((await context.request('observed', path)).json().approval.learnerNote).toBeNull();
+    const correction = await context.command('teacher', `/v1/submissions/${baseline.submissionId}/results`, { score: 4, feedback: 'Reviewed correction.', expectedPolicyVersion: 2, expectedRevision: 1, sourceEvidence: true }); await context.command('teacher', `/v1/results/${correction.id}/release`, { expectedRevision: 2, parentVisible: true });
+    expect((await context.request('observed', path, { kind: 'INSTRUCTIONS', question: 'Can you explain the old task?', confirmSend: true })).statusCode).toBe(403);
+    expect((await context.request('teacher', `${path}/reply`, { response: 'Cannot reply against a changed source.', confirmSend: true })).statusCode).toBe(403);
+    expect((await context.request('observed', path)).statusCode).toBe(200);
+  });
+});

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1",
+  "taxonomyVersion": "revised-bloom-2001-cuevo-v1",
+  "files": {
+    "revised-bloom-v1.json": "9fb1b059f4fca90cec7f0deff37ca6b1e614d5f3fe5b03cae06a9f90a91e5d6d"
+  },
+  "researchSnapshots": {
+    "university-florida-guide": {
+      "sha256": "cd19bbfe736cc8479dc86e514faf91aa449d0c8a0a0c4123c46bf0850d8e789d",
+      "retrievedArtifact": ".local/bloom-source-research/florida.html",
+      "shipped": false
+    },
+    "iowa-state-celt-guide": {
+      "sha256": "2d90d3877f825267b059aae5d331f7417445993287d75f97f3424bc472b5c5d2",
+      "retrievedArtifact": ".local/bloom-source-research/iowa-page53.json",
+      "shipped": false
+    }
+  }
+}

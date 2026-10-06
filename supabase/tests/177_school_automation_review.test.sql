@@ -1,0 +1,11 @@
+begin;
+create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_api;set local search_path=extensions,pg_catalog;select no_plan();
+set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);
+select throws_ok($$select internal.read_school_automation()$$,'42501',null,'teacher cannot enumerate administrator policy/run summary');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000072',true);select throws_ok($$select internal.read_school_automation()$$,'42501',null,'parent cannot enumerate worker/policy state');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
+select is(jsonb_array_length(internal.read_school_automation()->'policies'),5,'bounded review returns exactly implemented policy families');
+select is(internal.read_school_automation()->>'approvals','EXISTING_HUMAN_APPROVALS_UNCHANGED','review never authorizes high-impact actions');
+select ok(not(internal.read_school_automation()::text like'%learnerId%'or internal.read_school_automation()::text like'%metadata%'or internal.read_school_automation()::text like'%lease%'),'projection excludes private event scope/payload/leases');
+select ok(not has_function_privilege('authenticated','internal.read_school_automation()','execute'),'DataAPI/browser role cannot invoke automation review');select ok(not has_table_privilege('cuevo_api','internal.outbox_events','select'),'review does not grant raw outbox access');
+reset role;select*from finish();rollback;

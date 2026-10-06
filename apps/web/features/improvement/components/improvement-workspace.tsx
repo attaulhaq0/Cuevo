@@ -1,0 +1,83 @@
+'use client';
+import { IconButton } from '@cuevo/ui';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, WorkspaceTabs, WorkspacePageHeading, WorkspaceState } from '@cuevo/ui';
+import { useApp } from '../../../shared/session/providers';
+import { parseRecommendation, parseIntervention, parseOutcome, parseCurrentIntervention, improvementReadScope, currentImprovementRead } from '../model';
+import { parseReleasedResult } from '../../academic/model';
+import { parseAssessment } from '../../learning/model';
+import { improvementAr, improvementEn, supportTrailAr, supportTrailEn } from '../messages';
+import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
+import { LoadMore } from '../../../shared/components/load-more';
+import { LearningError } from '../../../shared/components/feedback';
+import { ProposalList } from './proposals';
+import { InterventionList } from './interventions';
+import { OutcomeList } from './outcomes';
+import { CoordinatorOutcomes } from './coordinator-outcomes';
+import { IntelligenceRunStatusPanel } from './run-status';
+import { IntelligenceBudgetPanel } from './budget-policy';
+import { SchoolIntelligencePolicyPanel } from './school-policy';
+import { IntelligenceEvaluationMetrics } from './evaluation-metrics';
+import { IntelligenceExecutionRegistry } from './execution-registry';
+import type{NavigationIntent}from'../../../shared/session/navigation-intent';
+import{useApiQuery}from'../../../shared/hooks/use-api';
+
+import { admittedSourceRows, sourcePageDenied } from '../source-page-model';
+
+type Tab = 'proposals' | 'interventions' | 'outcomes' | 'runs' | 'budget' | 'policy' | 'evaluation' | 'execution';
+export function ImprovementPageHeading({ locale, section, title, caption }: { locale: 'en' | 'ar'; section: Tab; title?: string; caption?: string }) {
+  const t = locale === 'ar' ? improvementAr : improvementEn;
+  const labels = { runs: locale === 'ar' ? 'حالة التحليلات' : 'Analysis run status', evaluation: locale === 'ar' ? 'ملاحظات التقييم' : 'Evaluation observations', execution: locale === 'ar' ? 'اعتماد النموذج والتعليمات' : 'Model and prompt approval', budget: locale === 'ar' ? 'حدود ميزانية التحليل' : 'Analysis budget limits', policy: locale === 'ar' ? 'سياسة التحليل المدرسي' : 'School analysis policy' };
+  return <WorkspacePageHeading title={title || (section in labels ? labels[section as keyof typeof labels] : t[section as 'proposals' | 'interventions' | 'outcomes'])} caption={caption} />;
+}
+export function ImprovementWorkspace({intent}:{intent?:Extract<NavigationIntent,{view:'improvement'}>|null}={}) {
+ const app=useApp();const trail=app.locale==='ar'?supportTrailAr:supportTrailEn;
+ if(!app.online)return <><ImprovementPageHeading locale={app.locale} section="interventions"/><WorkspaceState kind="unavailable" icon="offline" description={trail.offline} role="status"/></>;
+ if(app.status!=='ready')return null;
+ return <CurrentImprovementWorkspace key={`${app.apiUrl}:${app.membership?.schoolId}:${app.membership?.userId}:${app.membership?.role}`} intent={intent}/>;
+}
+function CurrentImprovementWorkspace({intent}:{intent?:Extract<NavigationIntent,{view:'improvement'}>|null}) {
+  const app=useApp();const { membership, locale } = app; const t = locale === 'ar' ? improvementAr : improvementEn;
+  const manager = membership?.role === 'teacher' || membership?.role === 'admin';
+  const student = membership?.role === 'student';
+  const coordinator=membership?.role==='coordinator';
+  const permitted = !!membership && membership.role !== 'parent';
+  const [tab, setTab] = useState<Tab>(student ? 'interventions' : coordinator?'outcomes':'proposals');
+  const [refresh, setRefresh] = useState(0);
+  const root=useRef<HTMLDivElement>(null);const focusContext=`${membership?.schoolId}:${membership?.userId}:${membership?.role}:${intent?.id??''}:${tab}`;
+  const currentFocusContext=useRef(focusContext);currentFocusContext.current=focusContext;
+  const focused=useRef<{context:string;element:HTMLElement;form:string|null;name:string|null}|null>(null);const restore=useRef<typeof focused.current>(null);
+  useEffect(()=>{if(focused.current?.context!==focusContext)focused.current=null;if(restore.current?.context!==focusContext)restore.current=null;},[focusContext]);
+  useEffect(()=>{
+   if(!root.current)return;const observer=new MutationObserver(()=>{
+    const previous=focused.current;if(previous?.context===currentFocusContext.current&&!previous.element.isConnected&&(document.activeElement===document.body||document.activeElement===document.documentElement))restore.current=previous;
+    const pending=restore.current;if(!pending||pending.context!==currentFocusContext.current||document.activeElement!==document.body&&document.activeElement!==document.documentElement)return;
+    const target=Array.from(root.current?.querySelectorAll<HTMLElement>('input,textarea,select')??[]).find(element=>element.getAttribute('name')===pending.name&&element.closest('section[aria-label]')?.getAttribute('aria-label')===pending.form);
+    if(target&&!target.matches(':disabled')){target.focus();restore.current=null;}
+   });observer.observe(root.current,{subtree:true,childList:true});return()=>observer.disconnect();
+  },[]);
+  function rememberFocus(element:HTMLElement){focused.current=element.matches('input,textarea,select')?{context:focusContext,element,name:element.getAttribute('name'),form:element.closest('section[aria-label]')?.getAttribute('aria-label')??null}:null;}
+  const exactPath=intent?`/v1/interventions/${intent.id}`:null;const exactScope=improvementReadScope(app,exactPath,refresh);
+  const parseExact=useCallback((value:unknown)=>({scope:exactScope,value:parseCurrentIntervention(value,student?membership?.userId??null:null,intent?.id)}),[exactScope,student,membership?.userId,intent?.id]);
+  const exactRead=useApiQuery(exactScope?exactPath:null,parseExact,refresh);const exact={...exactRead,data:currentImprovementRead(exactRead.data,exactScope)};
+  const proposals = usePaginatedLearningQuery(!permitted || student ? null : '/v1/recommendations?limit=100', parseRecommendation, refresh);
+  const parsePractices=useCallback((value:unknown)=>student?parseCurrentIntervention(value,membership?.userId??null):parseIntervention(value),[student,membership?.userId]);
+  const interventions = usePaginatedLearningQuery(permitted ? '/v1/interventions?limit=100' : null, parsePractices, refresh);
+  const outcomePath=permitted?'/v1/outcomes?limit=100':null,outcomeScope=improvementReadScope(app,outcomePath,refresh);
+  const parseCoordinatorOutcome=useCallback((value:unknown)=>({...parseOutcome(value),sourceScope:outcomeScope}),[outcomeScope]);
+  const outcomeRead=usePaginatedLearningQuery(outcomePath,coordinator?parseCoordinatorOutcome:parseOutcome,refresh);
+  const outcomes={...outcomeRead,data:coordinator?outcomeRead.data.filter(row=>'sourceScope'in row&&row.sourceScope===outcomeScope):outcomeRead.data};
+  const results = usePaginatedLearningQuery(manager ? '/v1/results?limit=100' : null, parseReleasedResult, refresh);
+  const assessments = usePaginatedLearningQuery(manager ? '/v1/assessments?limit=100' : null, parseAssessment, refresh);
+  const active = tab === 'proposals' ? proposals : tab === 'interventions' ? interventions : outcomes;
+  const tabs: Tab[] = [...(!student ? ['proposals' as const] : []), 'interventions', 'outcomes',...(manager?['runs' as const,'evaluation' as const,'execution' as const]:[]),...(membership?.role==='admin'?['budget' as const,'policy' as const]:[])];
+  const choicesComplete=[results,assessments].every(query=>query.loaded&&!query.loading&&!query.loadingMore&&!query.error&&!query.moreError&&!query.nextCursor);
+  function reload() { setRefresh((value) => value + 1); }
+  // The active list owner renders its current continuation error. This footer
+  // retains the original cursor, pending state and retry callback without repeating that alert.
+  const activeContinuation={...active,moreError:null};
+  if (!permitted) return <><ImprovementPageHeading locale={locale} section={tab}/><WorkspaceState kind="denied" icon="shieldAlert" description={t.parentRestricted}/></>;
+  if(intent)return <div ref={root} className="improvement-workspace improvement-workspace--exact" onFocusCapture={event=>rememberFocus(event.target as HTMLElement)}><section><ImprovementPageHeading locale={locale} section="interventions" title={!exact.loading && !exact.error ? exact.data?.title : undefined}/><Button type="button" variant="quiet" onClick={()=>window.history.back()}>{locale==='ar'?'العودة إلى الخطوة السابقة':'Back to the previous step'}</Button>{exact.error?<><LearningError error={exact.error}/><Button type="button" onClick={reload}>{t.refresh}</Button></>:exact.loading||!exact.error&&!exact.data?<WorkspaceState kind="loading" icon="refresh" title={t.loading} role="status"/>:exact.data?<InterventionList pageHeading refresh={refresh} exact interventions={[exact.data]} assessments={admittedSourceRows(assessments)} results={admittedSourceRows(results)} canManage={manager} choicesComplete={choicesComplete} onChanged={reload}/>:null}{manager?<section aria-label={t.followUpResult}>{results.error?<LearningError error={results.error}/>:results.loading?<WorkspaceState kind="loading" icon="refresh" title={t.loading} role="status"/>:null}<LoadMore query={results} label={t.followUpResult}/></section>:null}{manager?<section aria-label={t.followUpAssessment}>{assessments.error?<LearningError error={assessments.error}/>:assessments.loading?<WorkspaceState kind="loading" icon="refresh" title={t.loading} role="status"/>:null}<LoadMore query={assessments} label={t.followUpAssessment}/></section>:null}</section></div>;
+  return <div ref={root} onFocusCapture={event=>rememberFocus(event.target as HTMLElement)} className={`improvement-workspace${student?" improvement-workspace--student":""}`}><ImprovementPageHeading locale={locale} section={tab}/><WorkspaceTabs label={t.improvement} selected={tab} items={tabs.map(value=>({id:value,icon:({proposals:'feedback',interventions:'practice',outcomes:'progress',runs:'progress',budget:'settings',policy:'shield',evaluation:'assessment',execution:'shield'}as const)[value],label:value === 'execution' ? (locale === 'ar' ? 'اعتماد التنفيذ' : 'Execution approval') : value === 'evaluation' ? (locale === 'ar' ? 'ملاحظات التقييم' : 'Evaluation observations') : value === 'policy' ? (locale === 'ar' ? 'سياسة التحليل' : 'Analysis policy') : value === 'budget' ? (locale === 'ar' ? 'حدود الميزانية' : 'Budget limits') : value === 'runs' ? (locale === 'ar' ? 'حالة التحليلات' : 'Analysis run status') : t[value]}))} onChange={value=>setTab(value as Tab)} actions={<IconButton icon="refresh" label={t.refresh} type="button" onClick={reload} />}/>{tab === 'execution' ? <IntelligenceExecutionRegistry pageHeading refreshKey={refresh} /> : tab === 'evaluation' ? <IntelligenceEvaluationMetrics pageHeading refreshKey={refresh} /> : tab === 'policy' ? <SchoolIntelligencePolicyPanel pageHeading refreshKey={refresh} /> : tab === 'budget' ? <IntelligenceBudgetPanel pageHeading refreshKey={refresh} /> : tab === 'runs' ? <IntelligenceRunStatusPanel pageHeading refreshKey={refresh} /> : coordinator&&tab==='outcomes'?<CoordinatorOutcomes pageHeading source={outcomes}/> : active.loading ? <WorkspaceState kind="loading" icon="refresh" title={t.loading} role="status"/> : active.error || sourcePageDenied(active) ? <LearningError error={(active.error ?? active.moreError)!} /> : tab === 'proposals' ? <ProposalList pageHeading refresh={refresh} proposals={proposals.data} source={proposals} baselines={admittedSourceRows(results)} baselineSource={results} canDecide={manager} onChanged={reload} /> : tab === 'interventions' ? <><InterventionList pageHeading refresh={refresh} interventions={interventions.data} source={interventions} assessments={admittedSourceRows(assessments)} results={admittedSourceRows(results)} canManage={manager} choicesComplete={choicesComplete} onChanged={reload} /></> : <OutcomeList outcomes={outcomes.data} source={outcomes} />}{!sourcePageDenied(active)&&!(coordinator&&tab==='outcomes')&&tab !== 'runs' && tab !== 'budget' && tab !== 'policy' && tab !== 'evaluation' && tab !== 'execution' ? <LoadMore query={activeContinuation} /> : null}{manager && results.nextCursor ? <div className="notice"><p>{t.baseline}</p><LoadMore query={results} /></div> : null}{manager && tab === 'interventions' ? <section aria-label={t.followUpAssessment}>{assessments.error?<LearningError error={assessments.error}/>:assessments.loading?<WorkspaceState kind="loading" icon="refresh" title={t.loading} role="status"/>:null}<LoadMore query={assessments} label={t.followUpAssessment}/></section> : null}</div>;
+}
