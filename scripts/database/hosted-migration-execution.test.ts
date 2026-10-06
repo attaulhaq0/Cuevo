@@ -28,3 +28,31 @@ test('injected private environment URL and metadata hooks cannot leak or redirec
 test('different source releases contend on one project migration lock while the original CLI is still in flight',async()=>{const{executeHostedMigrationStage}=await api(),first=fixture(),second=fixture();second.input.prepared.sourceSha='d'.repeat(40);let held=false;const keys:string[]=[];let releaseCli:()=>void=()=>undefined;const locked=async(key:string,run:(lease:{kind:'HELD';id:string;key:string})=>Promise<void>)=>{keys.push(key);if(held)throw Error('Project migration already active');held=true;try{await run({kind:'HELD',id:'owned-lock',key});return{kind:'RELEASED' as const};}finally{held=false;}};first.ports.withLock=locked;second.ports.withLock=locked;const original=first.ports.runCli;first.ports.runCli=async(args,env)=>{await new Promise<void>(resolve=>{releaseCli=resolve;});return original(args,env);};const pending=executeHostedMigrationStage(first.input,first.ports);while(!first.events.includes('journal:INTENT'))await new Promise(resolve=>setTimeout(resolve,0));const refused=await executeHostedMigrationStage(second.input,second.ports);assert.equal(refused.primaryCode,'LOCK_UNCONFIRMED');assert.equal(second.runs,0);assert.deepEqual(keys,[`${ref}:HOSTED_SCHEMA_MIGRATION`,`${ref}:HOSTED_SCHEMA_MIGRATION`]);releaseCli();assert.equal((await pending).status,'COMMITTED');});
 
 test('premature lock release and repeated callback cannot leave a detached CLI invocation',async()=>{const{executeHostedMigrationStage}=await api();for(const mode of['early','double']as const){const f=fixture();let completion:Promise<void>|undefined;f.ports.withLock=async(key,run)=>{completion=run({kind:'HELD',id:'owned-lock',key});if(mode==='double'){await run({kind:'HELD',id:'owned-lock',key});await completion;}return{kind:'RELEASED'};};const result=await executeHostedMigrationStage(f.input,f.ports);await completion;assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.primaryCode,'LOCK_UNCONFIRMED');assert.equal(f.runs,0);await new Promise(resolve=>setTimeout(resolve,0));assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(f.runs,0);}});
+
+test('held stage core reuses the supplied live lease without acquiring or releasing another lock', async () => {
+ const module = await api(); assert.equal(typeof module.prepareHeldHostedMigrationStage, 'function');
+ const f = fixture(), ports = { now: f.ports.now, readJournal: f.ports.readJournal, revalidate: f.ports.revalidate, writeJournal: f.ports.writeJournal, runCli: f.ports.runCli };
+ const stage = module.prepareHeldHostedMigrationStage(f.input, ports);
+ await stage.run({ kind: 'HELD', id: 'owned-lock', key: `${ref}:HOSTED_SCHEMA_MIGRATION` }, () => true);
+ assert.equal(stage.result.status, 'COMMITTED'); assert.equal(f.runs, 1);
+ assert.equal(f.events.includes('lock'), false); assert.equal(f.events.includes('unlock'), false);
+ await stage.releaseUnconfirmed(); assert.equal(stage.result.status, 'REQUIRES_REVIEW');
+ assert.equal(stage.result.cleanupCode, 'LOCK_RELEASE_UNCONFIRMED');
+ assert.equal((f.journals.at(-1) as { state: string }).state, 'REQUIRES_REVIEW');
+});
+
+test('lost aggregate lease before a held stage consumes no CLI and cannot become a confirmed stage', async () => {
+ const module = await api(); assert.equal(typeof module.prepareHeldHostedMigrationStage, 'function');
+ const f = fixture(), ports = { now: f.ports.now, readJournal: f.ports.readJournal, revalidate: f.ports.revalidate, writeJournal: f.ports.writeJournal, runCli: f.ports.runCli };
+ const stage = module.prepareHeldHostedMigrationStage(f.input, ports);
+ await stage.run({ kind: 'HELD', id: 'owned-lock', key: `${ref}:HOSTED_SCHEMA_MIGRATION` }, () => false);
+ assert.equal(stage.result.status, 'REQUIRES_REVIEW'); assert.equal(f.runs, 0); assert.equal(f.journals.length, 0);
+});
+
+test('a repeated lock callback after completed CLI preserves possible schema commitment as unknown', async () => {
+ const { executeHostedMigrationStage } = await api(), f = fixture();
+ f.ports.withLock = async (key, run) => { await run({ kind: 'HELD', id: 'owned-lock', key }); await run({ kind: 'HELD', id: 'owned-lock', key }); return { kind: 'RELEASED' }; };
+ const result = await executeHostedMigrationStage(f.input, f.ports);
+ assert.equal(f.runs, 1); assert.equal(result.status, 'REQUIRES_REVIEW'); assert.equal(result.commitment, 'UNKNOWN');
+ assert.equal(result.primaryCode, 'LOCK_UNCONFIRMED');
+});

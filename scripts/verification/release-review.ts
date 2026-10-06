@@ -47,11 +47,23 @@ export type PreparedReleaseReviewPackage = z.infer<typeof preparedSchema>;
 export function canonicalReleaseReviewJson(value: unknown): string {
   return canonicalJson(value, maximumBytes);
 }
-function canonicalJson(value: unknown, maximum: number): string {
+/** Bounded operator execution bundle only; approval/review packages retain their 48 KiB limit. */
+export function canonicalReleaseExecutionJson(value: unknown): string {
+  return canonicalJson(value, 1024 * 1024, 100000);
+}
+export function parseReleaseExecutionJson(text: string): unknown {
+  try {
+    if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > 1024 * 1024) return fail();
+    const value: unknown = JSON.parse(text);
+    if (canonicalReleaseExecutionJson(value) !== text) return fail();
+    return value;
+  } catch { return fail(); }
+}
+function canonicalJson(value: unknown, maximum: number, maximumNodes = 10000): string {
   let nodes = 0;
   const active = new Set<object>();
   function encode(item: unknown, depth: number): string {
-    if (++nodes > 10000 || depth > 20) return fail();
+    if (++nodes > maximumNodes || depth > 20) return fail();
     if (item === null) return 'null';
     if (typeof item === 'boolean') return item ? 'true' : 'false';
     if (typeof item === 'number') { if (!Number.isFinite(item) || Object.is(item, -0)) return fail(); return JSON.stringify(item); }

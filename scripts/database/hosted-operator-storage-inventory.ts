@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import { z } from 'zod';
+import { hostedOperatorStorageHeaders } from './hosted-operator-storage-policy';
 import { readCanonicalMigrationSources } from './hosted-migration-plan';
 import { replayPlan, posthogIntelligenceMigration } from './replay-plan';
 import { createHostedMigrationRemoteJournal } from './hosted-migration-remote-journal';
@@ -47,7 +48,7 @@ export async function readHostedOperatorStorageInventory(value:unknown):Promise<
   };
   const decode=(b:Uint8Array)=>new TextDecoder('utf8',{fatal:true}).decode(b);
   const management=async(query:string)=>JSON.parse(decode(await request('https://api.supabase.com/v1/projects/'+input.projectRef+'/database/query',{Authorization:'Bearer '+input.providerToken},'POST',JSON.stringify({query})))) as unknown;
-  const storage=async(path:string)=>request('https://'+input.projectRef+'.supabase.co/storage/v1/'+path,{apikey:input.storageKey,Authorization:'Bearer '+input.storageKey},'GET');
+  const storage=async(path:string)=>request('https://'+input.projectRef+'.supabase.co/storage/v1/'+path,hostedOperatorStorageHeaders(input.storageKey),'GET');
   const countsQuery="/* CUEVO_STORAGE_INVENTORY_COUNTS */ select (select count(*) from storage.buckets) as \"bucketCount\",(select count(*) from storage.objects) as \"totalObjects\",(select count(*) from storage.objects where bucket_id='cuevo-release-operator') as \"operatorObjects\",(select count(*) from storage.objects where bucket_id is distinct from 'cuevo-release-operator') as \"otherObjects\",(select count(*) from storage.objects where bucket_id='cuevo-release-operator' and(name is null or name !~ '"+pattern+"')) as \"invalidOperatorPaths\"";
   const readCounts=async()=>z.array(countsSchema).length(1).parse(await management(countsQuery))[0];
   const snapshot=async()=>{

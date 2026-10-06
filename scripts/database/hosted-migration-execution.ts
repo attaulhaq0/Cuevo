@@ -36,8 +36,11 @@ function snapshot(value:unknown,depth=0):unknown{
  return output;
 }
 
-/** Protocol over explicit injected adapters only. It performs no native/provider I/O and never attests hosted readiness. */
-export async function executeHostedMigrationStage(input:{prepared:Pick<HostedMigrationWorkdirs,'projectRef'|'sourceSha'|'treeSha'|'planSha256'>&{stage:HostedMigrationWorkdirs['stages'][number]};connection:HostedMigrationConnection;approvalDigest:string;repoRoot:string;ciRunId:string;certificateSha256:string},ports:HostedExecutionPorts):Promise<HostedExecutionResult>{
+export type HostedMigrationStageInput={prepared:Pick<HostedMigrationWorkdirs,'projectRef'|'sourceSha'|'treeSha'|'planSha256'>&{stage:HostedMigrationWorkdirs['stages'][number]};connection:HostedMigrationConnection;approvalDigest:string;repoRoot:string;ciRunId:string;certificateSha256:string};
+export type HeldHostedMigrationStage={key:string|null;result:HostedExecutionResult;run(lease:{kind:'HELD';id:string;key:string},isHeld:()=>boolean):Promise<void>;releaseUnconfirmed():Promise<void>};
+/** Stage authority and original journal protocol within a caller-owned live lease.
+ * It never acquires/releases a lock or attests that a supplied lease is native. */
+export function prepareHeldHostedMigrationStage(input:HostedMigrationStageInput,ports:Omit<HostedExecutionPorts,'withLock'>):HeldHostedMigrationStage{
  const result:HostedExecutionResult={status:'REQUIRES_REVIEW',commitment:'NOT_ATTEMPTED',schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY',execution:'INJECTED_PORTS',primaryCode:null,journalCode:null,cleanupCode:null};
  let parsed:z.infer<typeof inputSchema>,url:URL;
  try{parsed=inputSchema.parse(snapshot(input));url=new URL(parsed.connection.publicRecipe.databaseUrl);const p=parsed.prepared,s=p.stage,env=parsed.connection.privateEnvironment;
@@ -46,32 +49,45 @@ export async function executeHostedMigrationStage(input:{prepared:Pick<HostedMig
   if(!isAbsolute(parsed.repoRoot)||resolve(parsed.repoRoot)!==parsed.repoRoot||parsed.connection.publicRecipe.projectRef!==p.projectRef||url.protocol!=='postgresql:'||url.password||url.port!=='5432'||url.pathname!=='/postgres'||url.search!=='?sslmode=verify-full'||url.hash||!(direct||pooler)||direct!== (parsed.connection.publicRecipe.endpointKind==='direct')||JSON.stringify(parsed.connection.publicRecipe.cliTargetArgs)!==JSON.stringify(['--db-url',url.toString()])||!confined(s.workdir)||Object.keys(env).some(key=>!environmentKeys.has(key))||!env.PGPASSWORD?.trim()||[...env.PGPASSWORD].some(value=>value.charCodeAt(0)<32||value.charCodeAt(0)===127)||!env.PGSSLROOTCERT||!confined(env.PGSSLROOTCERT))throw Error('Invalid input.');
   const included=s.included.map(row=>row.version),before=[...s.expectedBeforeVersions].sort(),after=[...s.expectedAfterVersions].sort(),pending=s.pending.map(row=>row.version);
   if(new Set(included).size!==included.length||s.included.some(row=>row.name.slice(0,14)!==row.version)||new Set(before).size!==before.length||new Set(after).size!==after.length||JSON.stringify([...included].sort())!==JSON.stringify(after)||before.some(value=>!included.includes(value))||JSON.stringify([...pending].sort())!==JSON.stringify(after.filter(value=>!before.includes(value)))||s.pending.some(row=>!s.included.some(value=>value.name===row.name&&value.version===row.version&&value.sha256===row.sha256)))throw Error('Invalid stage.');
- }catch{result.primaryCode='INPUT_INVALID';return result;}
+ }catch{result.primaryCode='INPUT_INVALID';return{key:null,result,run:async()=>undefined,releaseUnconfirmed:async()=>undefined};}
  const p=parsed.prepared,s=p.stage,identity={projectRef:p.projectRef,sourceSha:p.sourceSha,treeSha:p.treeSha,planSha256:p.planSha256,stageId:s.id,stageSha256:hash({included:s.included,configSha256:s.configSha256}),databaseUrl:url.toString(),approvalDigest:parsed.approvalDigest,ciRunId:parsed.ciRunId,certificateSha256:parsed.certificateSha256};result.identity=identity;
- const key=`${p.projectRef}:HOSTED_SCHEMA_MIGRATION`;let entered=false,intent=false,attempted=false,lease:{id:string;key:string},leaseLive=true,completed=false,lockReturned=false,protocolViolation=false;let callback:Promise<void>|undefined;
- const live=()=>{if(!leaseLive)throw Error('Lock no longer held.');};
+ const key=`${p.projectRef}:HOSTED_SCHEMA_MIGRATION`;let entered=false,intent=false,attempted=false,lease:{id:string;key:string},isHeld=()=>false;
+ const live=()=>{if(!isHeld())throw Error('Lock no longer held.');};
  const write=async(state:HostedExecutionJournal['state'])=>{if(state!=='REQUIRES_REVIEW')live();const value:HostedExecutionJournal={version:1,identity,state,schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'};const expected=hash(value);const receipt=await ports.writeJournal(structuredClone(value));if(state!=='REQUIRES_REVIEW')live();if(receipt.kind!=='SYNCED'||receipt.sha256!==expected)throw Error('Journal unconfirmed.');};
  const admission=async(expected:'before'|'after')=>{live();const value=snapshotSchema.parse(snapshot(await ports.revalidate())),now=ports.now();live();
   if(!Number.isSafeInteger(now)||now<value.observedAtMs||now-value.observedAtMs>30000||value.source.sha!==p.sourceSha||value.source.tree!==p.treeSha||value.source.currentMainSha!==p.sourceSha||value.source.ciRunId!==identity.ciRunId||value.project.ref!==p.projectRef||value.project.host!==url.hostname||value.approval.digest!==identity.approvalDigest||value.approval.expiresAtMs<=now||value.artifact.stageSha256!==identity.stageSha256||value.tls.host!==url.hostname||value.tls.certificateSha256!==identity.certificateSha256||value.lock.id!==lease.id||value.lock.key!==key)throw Error('Admission changed.');
   const versions=expected==='before'?s.expectedBeforeVersions:s.expectedAfterVersions;
   if(JSON.stringify(value.history.map(row=>row.version).sort())!==JSON.stringify([...versions].sort())||new Set(value.history.map(row=>row.version)).size!==value.history.length||value.history.some(row=>s.included.find(source=>source.version===row.version)?.sha256!==row.sourceReceiptSha256)||expected==='after'&&value.postconditions!=='SATISFIED')throw Error('History unavailable.');
  };
- try{
-  const release=await ports.withLock(key,supplied=>{
-   if(entered||lockReturned){protocolViolation=true;leaseLive=false;return Promise.resolve();}
-   callback=(async()=>{
-   if(supplied.kind!=='HELD'||supplied.key!==key||!supplied.id||supplied.id.length>200)throw Error('Lock unconfirmed.');entered=true;lease={id:supplied.id,key};
+ const run=async(supplied:{kind:'HELD';id:string;key:string},held:()=>boolean)=>{
+   if(entered||supplied.kind!=='HELD'||supplied.key!==key||!supplied.id||supplied.id.length>200){result.primaryCode='LOCK_UNCONFIRMED';result.status='REQUIRES_REVIEW';return;}entered=true;lease={id:supplied.id,key};isHeld=held;
    try{
+    live();
     const prior=await ports.readJournal();live();if(prior!==null){const saved=journalSchema.parse(snapshot(prior));if(hash(saved.identity)!==hash(identity)||saved.state!=='COMMITTED'){result.primaryCode='PRIOR_REQUIRES_REVIEW';return;}await admission('after');result.status='NOOP';result.commitment='CONFIRMED';return;}
     await admission('before');result.primaryCode='JOURNAL_UNCONFIRMED';await write('INTENT');intent=true;
     result.primaryCode='ADMISSION_CHANGED';await admission('before');result.primaryCode='CLI_UNCONFIRMED';attempted=true;result.commitment='UNKNOWN';
     live();const cli=await ports.runCli(['db','push','--db-url',url.toString(),'--include-all','--skip-vault','--workdir',s.workdir,'--yes','--output-format','json'],{...parsed.connection.privateEnvironment});live();if(cli.kind!=='EXITED'||cli.exitCode!==0)throw Error('CLI unconfirmed.');
     result.primaryCode='POSTCONDITION_UNCONFIRMED';await admission('after');result.primaryCode='JOURNAL_UNCONFIRMED';await write('COMMITTED');result.status='COMMITTED';result.commitment='CONFIRMED';result.primaryCode=null;
    }catch{if(!result.primaryCode)result.primaryCode='ADMISSION_CHANGED';if(intent)await write('REQUIRES_REVIEW').catch(()=>{result.journalCode='REVIEW_JOURNAL_UNCONFIRMED';});result.status='REQUIRES_REVIEW';result.commitment=attempted?'UNKNOWN':'NOT_ATTEMPTED';}
-   })().finally(()=>{completed=true;});return callback;
+ };
+ const releaseUnconfirmed=async()=>{result.cleanupCode='LOCK_RELEASE_UNCONFIRMED';result.status='REQUIRES_REVIEW';if(intent)await write('REQUIRES_REVIEW').catch(()=>{result.journalCode='REVIEW_JOURNAL_UNCONFIRMED';});};
+ return{key,result,run,releaseUnconfirmed};
+}
+
+/** Compatibility owner for one acquired/released stage. Aggregate consumers use
+ * the same held-stage core inside their real session lock, never a release shim. */
+export async function executeHostedMigrationStage(input:HostedMigrationStageInput,ports:HostedExecutionPorts):Promise<HostedExecutionResult>{
+ const stage=prepareHeldHostedMigrationStage(input,ports);if(!stage.key)return structuredClone(stage.result);
+ let entered=false,completed=false,returned=false,violation=false,callback:Promise<void>|undefined;
+ try{
+  const release=await ports.withLock(stage.key,supplied=>{
+   if(entered||returned){violation=true;return Promise.resolve();}entered=true;
+   callback=stage.run(supplied,()=>!returned&&!violation).finally(()=>{completed=true;});return callback;
   });
-  lockReturned=true;if(!completed||protocolViolation){leaseLive=false;await callback?.catch(()=>undefined);result.primaryCode='LOCK_UNCONFIRMED';result.cleanupCode='LOCK_RELEASE_UNCONFIRMED';result.status='REQUIRES_REVIEW';result.commitment=attempted?'UNKNOWN':'NOT_ATTEMPTED';}
-  if(!entered){result.primaryCode='LOCK_UNCONFIRMED';return result;}if(release.kind!=='RELEASED'){result.cleanupCode='LOCK_RELEASE_UNCONFIRMED';result.status='REQUIRES_REVIEW';if(intent)await write('REQUIRES_REVIEW').catch(()=>{result.journalCode='REVIEW_JOURNAL_UNCONFIRMED';});}
- }catch{lockReturned=true;leaseLive=false;await callback?.catch(()=>undefined);if(!entered)result.primaryCode='LOCK_UNCONFIRMED';else result.cleanupCode='LOCK_RELEASE_UNCONFIRMED';result.status='REQUIRES_REVIEW';if(intent)await write('REQUIRES_REVIEW').catch(()=>{result.journalCode='REVIEW_JOURNAL_UNCONFIRMED';});}
- return structuredClone(result);
+  returned=true;
+  if(!entered){stage.result.primaryCode='LOCK_UNCONFIRMED';return structuredClone(stage.result);}
+  if(!completed||violation){await callback?.catch(()=>undefined);stage.result.primaryCode='LOCK_UNCONFIRMED';stage.result.commitment=stage.result.commitment==='NOT_ATTEMPTED'?'NOT_ATTEMPTED':'UNKNOWN';await stage.releaseUnconfirmed();}
+  else if(release.kind!=='RELEASED')await stage.releaseUnconfirmed();
+ }catch{returned=true;await callback?.catch(()=>undefined);if(!entered)stage.result.primaryCode='LOCK_UNCONFIRMED';else await stage.releaseUnconfirmed();stage.result.status='REQUIRES_REVIEW';}
+ return structuredClone(stage.result);
 }

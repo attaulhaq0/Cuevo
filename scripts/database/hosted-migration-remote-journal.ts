@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import { z } from 'zod';
 import type { HostedExecutionJournal, HostedExecutionPorts } from './hosted-migration-execution';
+import { hostedOperatorStorageHeaders } from './hosted-operator-storage-policy';
 
 const purpose = 'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL', bucket = 'cuevo-release-operator';
 const failure = () => Error('Remote migration journal identity, private storage or original intent requires review; contents withheld.');
@@ -41,7 +42,7 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
   const request = async (path: string, method: 'GET' | 'POST', body?: string, upload = false, missing = false, management = false): Promise<{ status: number; bytes: Uint8Array }> => {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000); let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
-      const url = management ? `https://api.supabase.com/v1/projects/${input.projectRef}/database/query` : `${origin}/${path}`, response = await fetch(url, { method, headers: { ...(management ? {} : { apikey: input.storageKey }), Authorization: 'Bearer ' + (management ? input.providerToken : input.storageKey), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(upload ? { 'x-upsert': 'false', 'Cache-Control': 'no-store' } : {}) }, ...(body === undefined ? {} : { body }), cache: 'no-store', redirect: 'error', signal: controller.signal });
+      const url = management ? `https://api.supabase.com/v1/projects/${input.projectRef}/database/query` : `${origin}/${path}`, response = await fetch(url, { method, headers: { ...(management ? { Authorization: 'Bearer ' + input.providerToken } : hostedOperatorStorageHeaders(input.storageKey)), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(upload ? { 'x-upsert': 'false', 'Cache-Control': 'no-store' } : {}) }, ...(body === undefined ? {} : { body }), cache: 'no-store', redirect: 'error', signal: controller.signal });
       if (response.redirected || response.url && response.url !== url || response.status === 404 && !missing || !response.ok && !(upload && response.status === 409) && !(missing && response.status === 404)) throw failure();
       if (response.status === 404 || response.status === 409) { void response.body?.cancel().catch(() => undefined); return { status: response.status, bytes: new Uint8Array() }; }
       const declared = response.headers.get('content-length'); if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > 65536) || !response.body) throw failure();

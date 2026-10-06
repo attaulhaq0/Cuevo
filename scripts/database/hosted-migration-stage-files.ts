@@ -6,7 +6,7 @@ import { types } from 'node:util';
 import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { replayPlan, nativeSourceMigration, posthogIntelligenceMigration } from './replay-plan';
 import type { HostedMigrationWorkdirs } from './hosted-migration-workdirs';
-import { canonicalReleaseReviewJson } from '../verification/release-review';
+import { canonicalReleaseExecutionJson } from '../verification/release-review';
 
 const failure=()=>new Error('Native migration stage source or physical artifact requires review; contents withheld.');
 const hash=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');
@@ -31,11 +31,11 @@ export async function admitHostedMigrationStageFiles(value:{repoRoot:string;sour
   const loaded=readCanonicalMigrationSources(input),plan=JSON.parse(canonicalHostedMigrationPlan(input.plan).json) as HostedMigrationPlanV1;
   if(plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();const replay=replayPlan(loaded.sources),ordered=[...replay.before,replay.prerequisite,...replay.remaining];
   const rows=ordered.map(name=>({name,version:name.slice(0,14),sha256:hash(loaded.sources.find(source=>source.name===name)!.bytes)}));
-  if(canonicalReleaseReviewJson(rows)!==canonicalReleaseReviewJson(plan.migrations))throw failure();
+  if(canonicalReleaseExecutionJson(rows)!==canonicalReleaseExecutionJson(plan.migrations))throw failure();
   const boundary=replay.remaining.indexOf(posthogIntelligenceMigration),groups=[replay.before,[nativeSourceMigration],replay.remaining.slice(0,boundary),replay.remaining.slice(boundary)],boundaries=groups.map((_,index)=>groups.slice(0,index+1).flat().length),ids=['prefix','native','pre-observability','remaining'];
   const index=ids.indexOf(input.stage.id);if(index<0||boundary<0||plan.stages[index].id!==input.stage.id)throw failure();
   const pendingNames=new Set(plan.pending.map(row=>row.name));if(plan.applied.length&&!boundaries.includes(plan.applied.length)||plan.stages.some((stage,index)=>JSON.stringify(stage.names)!==JSON.stringify(groups[index].filter(name=>pendingNames.has(name)))))throw failure();const included=rows.slice(0,Math.max(plan.applied.length,boundaries[index])),before=rows.slice(0,Math.max(plan.applied.length,index?boundaries[index-1]:0)).map(row=>row.version).sort(),after=included.map(row=>row.version).sort(),pending=included.filter(row=>plan.stages[index].names.includes(row.name));
-  if(canonicalReleaseReviewJson(input.stage.included)!==canonicalReleaseReviewJson(included)||canonicalReleaseReviewJson(input.stage.pending)!==canonicalReleaseReviewJson(pending)||JSON.stringify(input.stage.expectedBeforeVersions)!==JSON.stringify(before)||JSON.stringify(input.stage.expectedAfterVersions)!==JSON.stringify(after)||input.stage.configSha256!==hash(config))throw failure();
+  if(canonicalReleaseExecutionJson(input.stage.included)!==canonicalReleaseExecutionJson(included)||canonicalReleaseExecutionJson(input.stage.pending)!==canonicalReleaseExecutionJson(pending)||JSON.stringify(input.stage.expectedBeforeVersions)!==JSON.stringify(before)||JSON.stringify(input.stage.expectedAfterVersions)!==JSON.stringify(after)||input.stage.configSha256!==hash(config))throw failure();
   const releaseRoot=join(root,'.local','hosted-release'),workdir=input.stage.workdir,part=relative(releaseRoot,workdir);if(!part||isAbsolute(part)||part.split(/[\\/]/).some(piece=>!piece||piece==='.'||piece==='..'))throw failure();
   await physical(root,workdir,'directory');const supabase=join(workdir,'supabase'),migrations=join(supabase,'migrations');await physical(root,migrations,'directory');await physical(root,join(supabase,'config.toml'),'file');
   if(JSON.stringify((await readdir(workdir)).sort())!==JSON.stringify(['supabase'])||JSON.stringify((await readdir(supabase)).sort())!==JSON.stringify(['config.toml','migrations'])||JSON.stringify((await readdir(migrations)).sort())!==JSON.stringify(included.map(row=>row.name).sort())||await readFile(join(supabase,'config.toml'),'utf8')!==config)throw failure();

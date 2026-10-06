@@ -38,3 +38,12 @@ test('policy inputs cannot invoke getters or inject a bucket callback or secret'
   for (const value of [getter, proxy, { ...input, storageKey: 'private-canary' }, { ...input, bucket: 'other' }, { ...input, sourceSha: 'unknown' }]) assert.throws(() => prepareHostedOperatorStoragePolicy(value));
   assert.equal(calls, 0);
 });
+
+test('modern secret keys use only apikey while legacy operator credentials retain Bearer authentication', async () => {
+  const module = await api(); assert.equal(typeof module.hostedOperatorStorageHeaders, 'function');
+  const modern = 'sb_secret_private-operator-key-canary';
+  assert.deepEqual(module.hostedOperatorStorageHeaders(modern), { apikey: modern });
+  const legacy = 'legacy-operator-jwt-key-canary';
+  assert.deepEqual(module.hostedOperatorStorageHeaders(legacy), { apikey: legacy, Authorization: 'Bearer ' + legacy });
+  for (const value of ['sb_publishable_public-key-canary', modern + '\n', '', 12]) assert.throws(() => module.hostedOperatorStorageHeaders(value));
+});

@@ -1,5 +1,7 @@
 # Expanded Cuevo redesign goal acceptance
 
+6 October latest founder steering is retained in the [active delivery ledger](../reports/2026-10-06-active-delivery-ledger.md). Complete current Student Development and hosted integration work, audit the existing notification bell/backend, review PostHog by school/QA/developer/investor audience, and prepare a truthfully synthetic demonstration through real MVP workflows. Later messages add to this goal rather than replacing unresolved tasks. All five roles and every admitted section still require actual visual and functional acceptance; no 100% claim is created by the demonstration deadline or configured credentials.
+
 Founder explicitly expanded the redesign goal on5October2026 and requested continued execution until every permitted role/section/nested workflow is checked visually and functionally against the selected Cuevo direction. After the native tool refused to replace the old unfinished goal, the founder explicitly deleted it and requested creation of the expanded goal. The new goal is active with this scope. This replaces stale paused metadata, not the existing application or task; no acceptance is claimed by creating the goal.
 
 ## Required delivery
