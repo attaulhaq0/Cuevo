@@ -1,0 +1,12 @@
+import{test,expect}from'@playwright/test';import{build}from'esbuild';import{readFile}from'node:fs/promises';import{resolve}from'node:path';
+const root=resolve(import.meta.dirname,'../..');let script='',css='';
+test.beforeAll(async()=>{css=(await Promise.all(['packages/ui/src/tokens.css','apps/web/app/globals.css','apps/web/features/home/styles.css'].map(f=>readFile(resolve(root,f),'utf8')))).join('\n');script=(await build({write:false,bundle:true,platform:'browser',format:'iife',jsx:'automatic',loader:{'.webp':'dataurl'},stdin:{resolveDir:root,loader:'tsx',contents:`
+import React from'react';import{createRoot}from'react-dom/client';import{StudentTrailView}from'./apps/web/features/home/components/student-trail';const context={displayName:'Lina Hassan',schoolName:'Current school',availability:'ready',goal:{text:'Explain a checking step'},task:{title:'Explain the current example',description:'Current school task',course:'Current reasoning course',unit:'Checking lesson',state:'available',primaryAction:{label:'فتح هذه المهمة',onClick(){}}},stages:[],feedback:null,upcoming:null,recognition:{status:'unavailable',totalPoints:null,periodLabel:null,entries:[],currentMilestone:null},classChallenge:null,help:null,companion:{visible:false,name:'Foxi'}};createRoot(document.getElementById('root')).render(<main><StudentTrailView locale='ar' context={context} assets={{background:'',foxi:'',lesson:'',work:'',feedback:'',practice:'',reflect:'',grow:'',milestone:''}}/></main>);
+`}})).outputFiles[0].text;});
+test('Arabic Student Learning Desk has a current task heading, named goal and feedback while next-step guidance stays prose',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.setViewportSize({width:390,height:844});await page.setContent('<html lang="ar" dir="rtl"><style>'+css+'</style><div id="root"></div></html>');await page.addScriptTag({content:script});
+ await expect(page.getByRole('heading',{level:1})).toHaveText('مرحبًا، Lina Hassan!');
+ await expect(page.locator('.student-trail__intro p')).toHaveText('خطوتك التالية في التعلّم');
+ await expect(page.getByRole('main').getByRole('heading',{name:'خطوتك التالية في التعلّم',exact:true})).toHaveCount(0);
+ await expect(page.locator('.student-trail__task').getByRole('heading',{level:2})).toHaveText('Explain the current example');await expect(page.getByRole('heading',{name:'هدفي في التعلّم',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'ملاحظات المعلّم',exact:true})).toBeVisible();expect(errors).toEqual([]);
+});

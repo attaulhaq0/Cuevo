@@ -1,0 +1,11 @@
+# Existing deterministic automation and execution review
+
+Date2 October2026. Root authorized genuine source37 admin Automation gap. Sources11/37/39/81/83 and existing worker/outbox modules govern.
+
+Read-only review inside existing school owner. GET/v1/school/automation admin+school.operations only. Show actual current approved learner-state/attention/recognition/communication/intelligence policy versions, approver/date and current enablement/precondition flags. Fixed source-backed trigger→condition→human-approval→action explanations mirror implemented handlers. This adds no rule editor, retry mutation or autonomous consequential action. AI analysis remains actor-requested with current school/server/budget approval and human proposal review.
+
+Operational execution view uses explicit existing event allowlist: activity completion/submission revision/result release/state/habit invalidation and current community notifications. Exclude restricted/pastoral/support, attendance, private notes, child identity/raw work/provider context/lease/keys. Last7-day bounded event projection: up to2000 event rows plus truthful truncation. Counts cover returned projection only, not claimed school lifetime. Recentmax25 sanitized receipt rows show family/event state/attemptcount/times/safeerror kind, with exact eventidentity only inside deliberate provenance. Processed receipt evidence indicates deterministic handler completed; queue pending/failure is not academic result or causation.
+
+Approved controls use existing policy forms/destination links for attention, recognition, communication and AI; no duplicate policy branches. School privacy/recognition control direct currentSchoolPolicies. Other workspaces navigation via rootpublic callback. Existing domain guards unchanged. Source read filters current tenant/admin before rows; policies expose no bodies/reasons/secrets.
+
+Contracts/tests→ignored additiveSQL→newschoolautomation controller/service/model/messages/component→root source review/CLIapply/publiccomposition→actual admin existingpolicy approval→actual domain event worker processed receipt→review source counts/deny/stale/failure/RTLmobile/axe. All runtime rootexclusive. No claims complete fromcards orunitchecks.

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { getDictionary, getLocale } from '../lib/locale';
+import { getDictionary, getLocale } from '../shared/i18n/locale';
 
 export default async function NotFound() {
   const t = getDictionary(getLocale((await cookies()).get('cuevo_locale')?.value));

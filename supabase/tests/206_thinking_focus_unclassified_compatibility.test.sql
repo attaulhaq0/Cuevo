@@ -1,0 +1,10 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path=extensions,pg_catalog;
+select no_plan();
+insert into app.courses(school_id,id,class_id,subject_id,created_by,title,description,status)values('10000000-0000-4000-8000-000000000001','99690000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000004','Unclassified compatibility','Synthetic source','PUBLISHED');
+insert into app.assessments(school_id,id,course_id,created_by,title,instructions,max_score)values('10000000-0000-4000-8000-000000000001','99690000-0000-4000-8000-000000000002','99690000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000004','Unclassified source task','Explain',10);
+select lives_ok($$insert into app.submissions(school_id,id,assessment_id,learner_id,content)values('10000000-0000-4000-8000-000000000001','99690000-0000-4000-8000-000000000003','99690000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000012','Existing unclassified work')$$,'unclassified source insertion remains compatible without a mapping');
+select is((select jsonb_array_length(items)from app.thinking_focus_submission_snapshots where school_id='10000000-0000-4000-8000-000000000001'and submission_id='99690000-0000-4000-8000-000000000003'),0,'unclassified work records empty focus rather than invented mapping');
+select*from finish();
+rollback;

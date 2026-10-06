@@ -1,0 +1,233 @@
+-- Rollback-only private effect bookkeeping. Auth rows below are explicit synthetic facts,
+-- not provider/SMTP delivery proof. Production source/effect owner functions remain intact.
+begin;
+create extension if not exists pgtap with schema extensions;
+grant usage on schema extensions to cuevo_api,cuevo_worker;
+set local search_path=extensions,pg_catalog;
+select no_plan();
+select internal.configure_worker_dispatch(false,null,null,false);
+select set_config('app.runtime_env','local',true);
+
+select is((select count(*)from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='internal'and c.relname in('school_account_effect_leases','school_account_effect_attempts','school_account_effect_receipts','school_account_token_digests','school_account_effect_results')),5::bigint,'five private lease/attempt/receipt/token/result owners exist');
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='internal'and c.relname in('school_account_effect_leases','school_account_effect_attempts','school_account_effect_receipts','school_account_token_digests','school_account_effect_results')and(not c.relrowsecurity or not c.relforcerowsecurity)),'every effect/token table enables and forces RLS');
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace cross join pg_roles role where n.nspname='internal'and c.relname in('school_account_effect_leases','school_account_effect_attempts','school_account_effect_receipts','school_account_token_digests','school_account_effect_results')and role.rolname in('anon','authenticated','service_role','cuevo_api','cuevo_worker')and(has_table_privilege(role.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')or has_any_column_privilege(role.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))),'runtime/Data API have no raw table or column effect grants');
+select ok(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner)))permission where n.nspname='internal'and c.relname in('school_account_effect_leases','school_account_effect_attempts','school_account_effect_receipts','school_account_token_digests','school_account_effect_results')and permission.grantee=0),'PUBLIC has no raw effect table ACL');
+select is((select count(*)from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='internal'and p.proname in('read_school_account_effect','claim_school_account_effect','begin_school_account_effect_step','finish_school_account_effect_step','finish_school_account_effect')and p.prosecdef and 'search_path=""'=any(p.proconfig)),5::bigint,'five effect/status entrypoints have empty-search-path definer scope');
+select ok(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join pg_roles role where n.nspname='internal'and p.proname in('read_school_account_effect','claim_school_account_effect','begin_school_account_effect_step','finish_school_account_effect_step','finish_school_account_effect')and role.rolname in('anon','authenticated','service_role','cuevo_worker')and has_function_privilege(role.oid,p.oid,'EXECUTE')),'Data API and worker cannot call effect/status entrypoints');
+select ok(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join pg_roles role where n.nspname='internal'and p.proname in('lock_school_account_effect_source','require_school_account_effect_event','latest_school_account_effect','school_account_effect_result_receipt','school_account_admission_effect_ready')and role.rolname in('anon','authenticated','service_role','cuevo_api','cuevo_worker')and has_function_privilege(role.oid,p.oid,'EXECUTE')),'canonical source/effect readiness helpers stay owner-only');
+select ok(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner)))permission where n.nspname='internal'and p.proname in('claim_school_account_effect','begin_school_account_effect_step','finish_school_account_effect_step','finish_school_account_effect','lock_school_account_effect_source','require_school_account_effect_event','latest_school_account_effect','school_account_effect_result_receipt','school_account_admission_effect_ready')and permission.grantee=0 and permission.privilege_type='EXECUTE'),'PUBLIC receives no new effect/helper function execution');
+select ok(has_function_privilege('cuevo_api','internal.read_school_account_effect(uuid)','EXECUTE')and has_function_privilege('cuevo_api','internal.claim_school_account_effect(uuid)','EXECUTE')and has_function_privilege('cuevo_api','internal.begin_school_account_effect_step(uuid,uuid,text,uuid,text)','EXECUTE')and has_function_privilege('cuevo_api','internal.finish_school_account_effect_step(uuid,uuid,text,uuid,jsonb)','EXECUTE')and has_function_privilege('cuevo_api','internal.finish_school_account_effect(uuid,uuid)','EXECUTE'),'API can invoke the four reviewed effects and bounded status read');
+
+create temporary table effect_ids(kind text primary key,request_id uuid,context jsonb,result jsonb);
+create temporary table effect_before(kind text primary key,snapshot jsonb);
+grant select,insert,update on effect_ids,effect_before to cuevo_api,cuevo_worker;
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
+select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);
+select internal.configure_local_school_account_runtime(true,(select oid from pg_catalog.pg_database where datname=current_database()),'LOCAL_CUEVO','20000000-0000-4000-8000-000000000001','Explicit rollback-only effect bookkeeping',(select revision from internal.school_account_runtime_control where singleton),true);
+set local role cuevo_api;
+insert into effect_ids(kind,request_id)select label,(internal.create_school_account_invitation(jsonb_build_object('displayName','Effect test learner','email',label||'@effects.example.test','role','student','reason','Reviewed rollback-only effect source','confirmInvitation',true),'effects-'||label,repeat('a',64),'effect-test')->>'id')::uuid
+from unnest(array['success','unknown-create','unknown-link','unknown-delivery','lost-link','review','expired-create','expired-link','expired-delivery','revoked-create','revoked-link','revoked-delivery','forged','authority','reconcile','no-reserve','worker-complete','worker-fail','worker-process'])label;
+select is(internal.read_school_account_effect(request_id),'{"state":"PENDING","receipt":null}'::jsonb,'status read reports missing effects without admission')from effect_ids where kind='success';
+select throws_ok($$select internal.claim_school_account_effect(null)$$,'42501',null,'null exact request cannot admit effects');
+select throws_ok($$select internal.claim_school_account_effect('19800000-0000-4000-8000-000000000099')$$,'42501',null,'missing exact request cannot admit effects');
+update effect_ids set context=internal.claim_school_account_effect(request_id)where kind='success';
+select is((select context->>'state'from effect_ids where kind='success'),'ADMITTED','exact source claims one School-owned lease');
+select is((select context->>'requestId'from effect_ids where kind='success'),(select request_id::text from effect_ids where kind='success'),'claim binds exact request');
+select is((select context->>'requestRevision'from effect_ids where kind='success'),'1','effects retain approved invitation revision1');
+select is((select context->>'priorCreateState'from effect_ids where kind='success'),'NOT_ATTEMPTED','new create is not inferred from UUID reservation');
+select is((select context->>'priorLinkState'from effect_ids where kind='success'),'NOT_ATTEMPTED','new link is not inferred from request');
+select is((select context->>'priorDeliveryState'from effect_ids where kind='success'),'NOT_ATTEMPTED','new delivery is not inferred from link');
+select is(internal.read_school_account_effect(request_id),'{"state":"PROCESSING","receipt":null}'::jsonb,'status read does not treat active lease as delivery evidence')from effect_ids where kind='success';
+select ok((select(context->>'leaseExpiresAt')::timestamptz>clock_timestamp()and(context->>'leaseExpiresAt')::timestamptz<=clock_timestamp()+interval'60 seconds'from effect_ids where kind='success'),'claimed lease is future and bounded to60seconds');
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='success'$$,'22023',null,'active duplicate claim cannot replace its lease');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,null,'CREATE','19800000-0000-4000-8000-000000000001',null)from pg_temp.effect_ids where kind='success'$$,'22023',null,'null lease cannot reserve external work');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,null,'19800000-0000-4000-8000-000000000001',null)from pg_temp.effect_ids where kind='success'$$,'22023',null,'null step cannot bypass purpose checks');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE',null,null)from pg_temp.effect_ids where kind='success'$$,'22023',null,'null attempt cannot reserve external work');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001',repeat('a',64))from pg_temp.effect_ids where kind='success'$$,'22023',null,'CREATE cannot register a token digest');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000002',repeat('b',64))from pg_temp.effect_ids where kind='success'$$,'22023',null,'LINK requires confirmed current CREATE');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001',null),'CREATE reserves before external identity inspection')from effect_ids where kind='success';
+select is(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001',null),false,'same reserved attempt cannot execute again')from effect_ids where kind='success';
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000099',null)from pg_temp.effect_ids where kind='success'$$,'22023',null,'competing attempt cannot supersede unsettled external work');
+select throws_ok($$select internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)from pg_temp.effect_ids where kind='success'$$,'22023',null,'finalizer cannot release an unsettled CREATE');
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":false}')from pg_temp.effect_ids where kind='success'$$,'42501',null,'JSON confirmation cannot invent missing Auth identity');
+reset role;
+select is((select count(*)from app.memberships m join internal.school_account_requests r on r.provider_user_id=m.actor_id where r.id in(select request_id from effect_ids)),0::bigint,'claim/reservation grants no pending membership');
+select is((select count(*)from auth.users u join internal.school_account_requests r on r.provider_user_id=u.id where r.id in(select request_id from effect_ids)),0::bigint,'bookkeeping never creates Auth identities');
+insert into auth.users(id,email,is_anonymous,email_confirmed_at,aud,role,created_at,updated_at)
+select provider_user_id,email,false,null,'authenticated','authenticated',clock_timestamp(),clock_timestamp()from internal.school_account_requests where id in(select request_id from effect_ids);
+set local role cuevo_api;
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":true}')from pg_temp.effect_ids where kind='success'$$,'42501',null,'claimed email confirmation must agree with current Auth timestamp');
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":"false"}')from pg_temp.effect_ids where kind='success'$$,'22023',null,'confirmation is a boolean or explicit unknown');
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":false,"token_hash":"private"}')from pg_temp.effect_ids where kind='success'$$,'22023',null,'provider credentials cannot enter receipt JSON');
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"REQUIRES_REVIEW","code":"PRIVATE_PROVIDER_EXCEPTION"}')from pg_temp.effect_ids where kind='success'$$,'22023',null,'arbitrary provider exceptions cannot enter fixed receipts');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":null}'),'exact current identity may preserve unknown provider confirmation')from effect_ids where kind='success';
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":null}'),'same exact receipt is idempotent')from effect_ids where kind='success';
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000001','{"state":"OUTCOME_UNKNOWN","code":"PROVIDER_OUTCOME_UNKNOWN"}')from pg_temp.effect_ids where kind='success'$$,'22023',null,'contradictory receipt cannot overwrite confirmed attempt');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000002',null)from pg_temp.effect_ids where kind='success'$$,'22023',null,'LINK requires a nonnull application digest');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000002',repeat('A',64))from pg_temp.effect_ids where kind='success'$$,'22023',null,'LINK digest is lower-case SHA256 hex');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000002',repeat('b',64)),'LINK registers only an application digest before provider generation')from effect_ids where kind='success';
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY','19800000-0000-4000-8000-000000000003',null)from pg_temp.effect_ids where kind='success'$$,'22023',null,'DELIVERY cannot run before original LINK settles');
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000002','{"state":"CONFIRMED","code":"LINK_GENERATED","actionLink":"private"}')from pg_temp.effect_ids where kind='success'$$,'22023',null,'generated link remains transient');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000002','{"state":"CONFIRMED","code":"LINK_GENERATED"}'),'confirmed LINK has a separate minimized receipt')from effect_ids where kind='success';
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000098',repeat('c',64))from pg_temp.effect_ids where kind='success'$$,'22023',null,'confirmed LINK cannot regenerate with another digest');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY','19800000-0000-4000-8000-000000000003',null),'delivery receives its own durable admission')from effect_ids where kind='success';
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY','19800000-0000-4000-8000-000000000003','{"state":"CONFIRMED","code":"DELIVERY_ACCEPTED","email":"raw@example.test"}')from pg_temp.effect_ids where kind='success'$$,'22023',null,'delivery receipt excludes recipient/email content');
+select throws_ok($$select internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)from pg_temp.effect_ids where kind='success'$$,'22023',null,'finalizer cannot release in-flight delivery');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY','19800000-0000-4000-8000-000000000003','{"state":"CONFIRMED","code":"DELIVERY_ACCEPTED"}'),'delivery acceptance has its own exact receipt')from effect_ids where kind='success';
+update effect_ids set result=internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)where kind='success';
+select is((select result->>'status'from effect_ids where kind='success'),'AWAITING_CLAIM','only three confirmed effects await deliberate recipient claim');
+select is((select result->>'deliveryState'from effect_ids where kind='success'),'ACCEPTED','SMTP acceptance remains distinct from membership');
+select is(internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid),result,'current original final receipt reconciles without another effect')from effect_ids where kind='success';
+select is(internal.claim_school_account_effect(request_id),null::jsonb,'completed effect is not admitted for another send')from effect_ids where kind='success';
+select is(internal.read_school_account_effect(request_id),jsonb_build_object('state','COMPLETED','receipt',result),'status read returns current completed receipt without resending')from effect_ids where kind='success';
+reset role;
+select ok(internal.school_account_admission_effect_ready(r,t),'canonical ready helper binds latest exact complete chain and token')from internal.school_account_requests r join internal.school_account_token_digests t on t.request_id=r.id where r.id=(select request_id from effect_ids where kind='success');
+select is((select current_revision from internal.school_account_requests where id=(select request_id from effect_ids where kind='success')),1,'effect receipts never advance approved request revision');
+select is((select current_status from internal.school_account_requests where id=(select request_id from effect_ids where kind='success')),'REQUESTED','effect acceptance never manufactures claim source state');
+select is((select count(*)from app.people p join internal.school_account_requests r on r.provider_user_id=p.actor_id where r.id in(select request_id from effect_ids)),0::bigint,'confirmed effects create no school person');
+select ok(not exists(select 1 from internal.school_account_effect_results where request_id in(select request_id from effect_ids)and to_jsonb(school_account_effect_results)::text~'private|example.test|token_hash|admission_secret'),'final effect evidence contains no raw credentials or approved email');
+select throws_ok($$update internal.school_account_effect_attempts set step='DELIVERY'where attempt_id='19800000-0000-4000-8000-000000000001'$$,'55000',null,'attempt history is immutable even for owner mutation');
+select throws_ok($$delete from internal.school_account_effect_receipts where attempt_id='19800000-0000-4000-8000-000000000001'$$,'55000',null,'confirmed effect receipt cannot be deleted');
+select throws_ok($$update internal.school_account_token_digests set expires_at=clock_timestamp()+interval'1 day'where request_id=(select request_id from pg_temp.effect_ids where kind='success')$$,'55000',null,'digest purpose/revision/expiry cannot be rewritten');
+
+-- Actual owner functions prepare independent uncertain, review and lost-link sources.
+set local role cuevo_api;
+update effect_ids set context=internal.claim_school_account_effect(request_id)where kind in('unknown-create','unknown-link','unknown-delivery','lost-link','review','reconcile','no-reserve','revoked-create','revoked-link','revoked-delivery');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE',request_id,null),'independent source reserves CREATE')from effect_ids where kind in('unknown-create','unknown-link','unknown-delivery','lost-link','review','reconcile','revoked-create','revoked-link','revoked-delivery');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE',request_id,'{"state":"OUTCOME_UNKNOWN","code":"PROVIDER_OUTCOME_UNKNOWN"}'),'unknown original CREATE receipt is retained')from effect_ids where kind='unknown-create';
+update effect_ids set result=internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)where kind='unknown-create';
+select is((select result->>'status'from effect_ids where kind='unknown-create'),'OUTCOME_UNKNOWN','unknown create does not imply usable account');
+update effect_ids set context=internal.claim_school_account_effect(request_id)where kind='unknown-create';
+select is((select context->>'priorCreateState'from effect_ids where kind='unknown-create'),'OUTCOME_UNKNOWN','next exact claim requests UUID reconciliation without new CREATE');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000010',null),'unknown CREATE admits one reconciliation observation')from effect_ids where kind='unknown-create';
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE',request_id,'{"state":"REQUIRES_REVIEW","code":"IDENTITY_MISMATCH"}'),'review state remains separate from unknown')from effect_ids where kind='review';
+update effect_ids set result=internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)where kind='review';
+select is((select result->>'status'from effect_ids where kind='review'),'REQUIRES_REVIEW','review is a truthful terminal receipt without membership');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE',request_id,'{"state":"CONFIRMED","code":"IDENTITY_CONFIRMED","emailConfirmed":false}'),'remaining independent sources confirm exact UUID')from effect_ids where kind in('unknown-link','unknown-delivery','lost-link','reconcile','revoked-link','revoked-delivery');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK',(md5(request_id::text||':link'))::uuid,md5(request_id::text)||md5(request_id::text)),'independent LINK has a single digest')from effect_ids where kind in('unknown-link','unknown-delivery','lost-link','revoked-link','revoked-delivery');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK',(md5(request_id::text||':link'))::uuid,'{"state":"OUTCOME_UNKNOWN","code":"LINK_CONSUMPTION_UNKNOWN"}'),'uncertain LINK remains unknown')from effect_ids where kind='unknown-link';
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000030',repeat('d',64))from pg_temp.effect_ids where kind='unknown-link'$$,'22023',null,'uncertain LINK cannot repeat provider generation');
+update effect_ids set result=internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)where kind='unknown-link';
+select is(internal.claim_school_account_effect(request_id),null::jsonb,'terminal uncertain LINK cannot automatically reclaim provider work')from effect_ids where kind='unknown-link';
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK',(md5(request_id::text||':link'))::uuid,'{"state":"CONFIRMED","code":"LINK_GENERATED"}'),'remaining sources confirm their original LINK')from effect_ids where kind in('unknown-delivery','lost-link','revoked-delivery');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY',(md5(request_id::text||':delivery'))::uuid,null),'DELIVERY has its own attempt')from effect_ids where kind in('unknown-delivery','lost-link','revoked-delivery');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY',(md5(request_id::text||':delivery'))::uuid,'{"state":"OUTCOME_UNKNOWN","code":"DELIVERY_OUTCOME_UNKNOWN"}'),'ambiguous sink acceptance stays unknown')from effect_ids where kind='unknown-delivery';
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY','19800000-0000-4000-8000-000000000031',null)from pg_temp.effect_ids where kind='unknown-delivery'$$,'22023',null,'uncertain DELIVERY cannot send again');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY',(md5(request_id::text||':delivery'))::uuid,'{"state":"OUTCOME_UNKNOWN","code":"LINK_SECRET_UNAVAILABLE"}'),'lost transient link records unknown rather than regeneration')from effect_ids where kind='lost-link';
+update effect_ids set result=internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)where kind in('unknown-delivery','lost-link','no-reserve');
+select is((select result->>'status'from effect_ids where kind='no-reserve'),'OUTCOME_UNKNOWN','no reserved effect means missing evidence, never zero success');
+select ok(internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000032',null),'prior confirmed identity may be re-inspected before untouched LINK')from effect_ids where kind='reconcile';
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000032','{"state":"REQUIRES_REVIEW","code":"IDENTITY_MISMATCH"}'),'current mismatch does not overwrite earlier confirmed observation')from effect_ids where kind='reconcile';
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000033',repeat('e',64))from pg_temp.effect_ids where kind='reconcile'$$,'22023',null,'latest identity observation blocks LINK despite historical confirmation');
+
+-- Revoke through the source command while each original step is admitted.
+select internal.revoke_school_account_invitation(request_id,'{"expectedRevision":1,"reason":"Stop pending effect","confirmRevocation":true}','effect-revoke-'||kind,repeat('b',64),'effect-revoke')from effect_ids where kind in('revoked-create','revoked-link','revoked-delivery');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE','19800000-0000-4000-8000-000000000034',null)from pg_temp.effect_ids where kind='revoked-create'$$,'42501',null,'revoked source cannot begin another step');
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'CREATE',request_id,'{"state":"OUTCOME_UNKNOWN","code":"PROVIDER_OUTCOME_UNKNOWN"}'),'live revoked lease retains actual original CREATE observation')from effect_ids where kind='revoked-create';
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK',(md5(request_id::text||':link'))::uuid,'{"state":"OUTCOME_UNKNOWN","code":"LINK_CONSUMPTION_UNKNOWN"}'),'live revoked lease retains original LINK observation')from effect_ids where kind='revoked-link';
+select ok(internal.finish_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY',(md5(request_id::text||':delivery'))::uuid,'{"state":"CONFIRMED","code":"DELIVERY_ACCEPTED"}'),'live revoked lease records real sink acceptance without admitting recipient')from effect_ids where kind='revoked-delivery';
+update effect_ids set result=internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)where kind in('revoked-create','revoked-link','revoked-delivery');
+select is(result->>'status','REQUIRES_REVIEW','revoked source final outcome never awaits claim')from effect_ids where kind in('revoked-create','revoked-link','revoked-delivery');
+reset role;
+select is(code,'REQUEST_REVOKED','source acknowledgment distinguishes cancellation from delivered membership')from internal.school_account_effect_results where request_id in(select request_id from effect_ids where kind in('revoked-create','revoked-link','revoked-delivery'));
+select ok(not internal.school_account_admission_effect_ready(r,t),'revoked exact token is not admission authority')from internal.school_account_requests r join internal.school_account_token_digests t on t.request_id=r.id where r.id in(select request_id from effect_ids where kind in('revoked-link','revoked-delivery'));
+
+-- Exact historical abandonment fixtures retain valid immutable lease/attempt records.
+-- No production trigger or authority helper is disabled/replaced for this fault injection.
+insert into internal.school_account_effect_leases(lease_token,event_id,request_id,school_id,request_revision,actor_id,attempt_number,leased_at,expires_at)
+select r.id,e.id,r.id,r.school_id,1,r.requested_by,1,clock_timestamp()-interval'120 seconds',clock_timestamp()-interval'61 seconds'from internal.school_account_requests r join internal.outbox_events e on e.entity_id=r.id and e.type='school.account.provisioning_requested'where r.id in(select request_id from effect_ids where kind in('expired-create','expired-link','expired-delivery'));
+update internal.outbox_events e set state='PROCESSING',attempt_count=1,lease_token=l.lease_token,lease_until=l.expires_at from internal.school_account_effect_leases l where e.id=l.event_id and l.request_id in(select request_id from effect_ids where kind in('expired-create','expired-link','expired-delivery'));
+insert into internal.school_account_effect_attempts(attempt_id,event_id,request_id,school_id,request_revision,lease_token,step,step_number,prior_state,token_digest,started_at)
+select r.id,e.id,r.id,r.school_id,1,r.id,'CREATE',1,'NOT_ATTEMPTED',null,clock_timestamp()-interval'90 seconds'from internal.school_account_requests r join internal.outbox_events e on e.entity_id=r.id and e.type='school.account.provisioning_requested'where r.id in(select request_id from effect_ids where kind in('expired-create','expired-link','expired-delivery'));
+insert into internal.school_account_effect_receipts(attempt_id,state,code,email_confirmed)select request_id,'CONFIRMED','IDENTITY_CONFIRMED',false from effect_ids where kind in('expired-link','expired-delivery');
+insert into internal.school_account_effect_attempts(attempt_id,event_id,request_id,school_id,request_revision,lease_token,step,step_number,prior_state,token_digest,started_at)
+select (md5(r.id::text||':expired-link'))::uuid,e.id,r.id,r.school_id,1,r.id,'LINK',1,'NOT_ATTEMPTED',md5(r.id::text)||md5(r.id::text),clock_timestamp()-interval'80 seconds'from internal.school_account_requests r join internal.outbox_events e on e.entity_id=r.id and e.type='school.account.provisioning_requested'where r.id in(select request_id from effect_ids where kind in('expired-link','expired-delivery'));
+insert into internal.school_account_token_digests(school_id,request_id,request_revision,event_id,link_attempt_id,provider_user_id,purpose,token_digest,expires_at)
+select r.school_id,r.id,1,e.id,(md5(r.id::text||':expired-link'))::uuid,r.provider_user_id,'invite',md5(r.id::text)||md5(r.id::text),r.expires_at from internal.school_account_requests r join internal.outbox_events e on e.entity_id=r.id and e.type='school.account.provisioning_requested'where r.id in(select request_id from effect_ids where kind in('expired-link','expired-delivery'));
+insert into internal.school_account_effect_receipts(attempt_id,state,code)select(md5(request_id::text||':expired-link'))::uuid,'CONFIRMED','LINK_GENERATED'from effect_ids where kind='expired-delivery';
+insert into internal.school_account_effect_attempts(attempt_id,event_id,request_id,school_id,request_revision,lease_token,step,step_number,prior_state,started_at)
+select(md5(r.id::text||':expired-delivery'))::uuid,e.id,r.id,r.school_id,1,r.id,'DELIVERY',1,'NOT_ATTEMPTED',clock_timestamp()-interval'70 seconds'from internal.school_account_requests r join internal.outbox_events e on e.entity_id=r.id and e.type='school.account.provisioning_requested'where r.id=(select request_id from effect_ids where kind='expired-delivery');
+set local role cuevo_api;
+update effect_ids set context=internal.claim_school_account_effect(request_id)where kind in('expired-create','expired-link','expired-delivery');
+select is((select context->>'priorCreateState'from effect_ids where kind='expired-create'),'OUTCOME_UNKNOWN','expired reserved CREATE commits unknown before read-only reconciliation');
+select is((select context->>'priorLinkState'from effect_ids where kind='expired-link'),'OUTCOME_UNKNOWN','expired reserved LINK cannot regenerate');
+select is((select context->>'priorDeliveryState'from effect_ids where kind='expired-delivery'),'OUTCOME_UNKNOWN','expired reserved DELIVERY cannot send again');
+select throws_ok($$select internal.finish_school_account_effect_step((context->>'eventId')::uuid,request_id,'CREATE',request_id,'{"state":"OUTCOME_UNKNOWN","code":"PROVIDER_OUTCOME_UNKNOWN"}')from pg_temp.effect_ids where kind='expired-create'$$,'22023',null,'old expired lease cannot record after new exact admission');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'LINK','19800000-0000-4000-8000-000000000042',repeat('f',64))from pg_temp.effect_ids where kind='expired-link'$$,'22023',null,'expired LINK never receives a replacement digest');
+select throws_ok($$select internal.begin_school_account_effect_step((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'DELIVERY','19800000-0000-4000-8000-000000000043',null)from pg_temp.effect_ids where kind='expired-delivery'$$,'22023',null,'expired DELIVERY never receives another send admission');
+reset role;
+select is((select count(*)from internal.school_account_effect_receipts receipt join internal.school_account_effect_attempts attempt on attempt.attempt_id=receipt.attempt_id where attempt.request_id in(select request_id from effect_ids where kind in('expired-create','expired-link','expired-delivery'))and receipt.code='EFFECT_LEASE_EXPIRED'),3::bigint,'successful exact reclaim persists all three abandoned original outcomes');
+
+-- Role, current source/control and event forgery must fail before durable work.
+set local role cuevo_api;
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'teacher cannot claim Auth effects');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000002',true);
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'coordinator cannot claim Auth effects');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true);
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'student cannot claim Auth effects');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000072',true);
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'parent cannot claim Auth effects');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
+select set_config('app.school_id','10000000-0000-4000-8000-000000000002',true);
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'selected school header cannot authorize foreign invitation');
+select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);
+reset role;
+update app.entitlements set enabled=false where school_id='10000000-0000-4000-8000-000000000001'and code='school.operations';
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'current operations entitlement loss denies admission');
+reset role;
+update app.entitlements set enabled=true where school_id='10000000-0000-4000-8000-000000000001'and code='school.operations';
+update app.people set synthetic=false where school_id='10000000-0000-4000-8000-000000000001'and actor_id='20000000-0000-4000-8000-000000000012';
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'mixed pupil population denies local synthetic admission');
+reset role;
+update app.people set synthetic=true where school_id='10000000-0000-4000-8000-000000000001'and actor_id='20000000-0000-4000-8000-000000000012';
+insert into effect_before select 'forged-event',to_jsonb(e)from internal.outbox_events e where e.entity_id=(select request_id from effect_ids where kind='forged')and e.type='school.account.provisioning_requested';
+update internal.outbox_events set metadata='{"requestRevision":1,"owner":"SCHOOL_ACCOUNT_AUTH"}'where entity_id=(select request_id from effect_ids where kind='forged')and type='school.account.provisioning_requested';
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='forged'$$,'42501',null,'caller metadata cannot broaden exact event authority');
+reset role;
+update internal.outbox_events set metadata='{"requestRevision":1}',version=2 where entity_id=(select request_id from effect_ids where kind='forged')and type='school.account.provisioning_requested';
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='forged'$$,'42501',null,'foreign event revision cannot authorize original source');
+reset role;
+update internal.outbox_events set version=1,actor_id='20000000-0000-4000-8000-000000000004'where entity_id=(select request_id from effect_ids where kind='forged')and type='school.account.provisioning_requested';
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='forged'$$,'42501',null,'forged event actor cannot replace original approval');
+reset role;
+update internal.outbox_events set actor_id='20000000-0000-4000-8000-000000000001',entity_type='membership'where entity_id=(select request_id from effect_ids where kind='forged')and type='school.account.provisioning_requested';
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='forged'$$,'42501',null,'forged entity purpose cannot admit account effects');
+reset role;
+update internal.outbox_events set entity_type='school_account_request',type='school.account.recovery_requested'where entity_id=(select request_id from effect_ids where kind='forged');
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='forged'$$,'42501',null,'recovery ownership never turns into invite authorization');
+reset role;
+update internal.outbox_events set type='school.account.provisioning_requested'where entity_id=(select request_id from effect_ids where kind='forged');
+select is((select count(*)from internal.school_account_effect_leases where request_id=(select request_id from effect_ids where kind='forged')),0::bigint,'all forged events leave no effect lease');
+
+-- Worker denial uses separate genuine active leases so complete/fail/process checks are live.
+set local role cuevo_api;
+update effect_ids set context=internal.claim_school_account_effect(request_id)where kind in('worker-complete','worker-fail','worker-process');
+reset role;
+insert into effect_before select kind,to_jsonb(e)from effect_ids fixture join internal.outbox_events e on e.id=(fixture.context->>'eventId')::uuid where kind in('worker-complete','worker-fail','worker-process');
+set local role cuevo_worker;
+select is(internal.complete_outbox((context->>'eventId')::uuid,(context->>'leaseToken')::uuid),false,'worker cannot complete a genuinely active Auth-owned lease')from effect_ids where kind='worker-complete';
+select is(internal.fail_outbox((context->>'eventId')::uuid,(context->>'leaseToken')::uuid,'WORKER_FAILURE',0),false,'worker cannot fail a distinct active Auth-owned lease')from effect_ids where kind='worker-fail';
+select throws_ok($$select internal.process_learner_event((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)from pg_temp.effect_ids where kind='worker-process'$$,'42501',null,'worker processor rejects a distinct active Auth lease');
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'worker cannot invoke private Auth executor admission');
+reset role;
+select is(to_jsonb(e),before.snapshot,'worker denial preserves the full active outbox row')from effect_ids fixture join internal.outbox_events e on e.id=(fixture.context->>'eventId')::uuid join effect_before before on before.kind=fixture.kind where fixture.kind in('worker-complete','worker-fail','worker-process');
+set local role cuevo_api;
+select throws_ok($$select*from internal.school_account_token_digests$$,'42501',null,'API cannot read raw admission digests');
+select throws_ok($$select*from internal.school_account_effect_receipts$$,'42501',null,'API cannot enumerate raw effect receipt history');
+select throws_ok($$select internal.latest_school_account_effect(null,'CREATE')$$,'42501',null,'API cannot supply a canonical effect authority shortcut');
+reset role;
+select internal.configure_local_school_account_runtime(false,(select oid from pg_catalog.pg_database where datname=current_database()),'LOCAL_CUEVO','20000000-0000-4000-8000-000000000001','Paused rollback effect source',(select revision from internal.school_account_runtime_control where singleton),true);
+set local role cuevo_api;
+select throws_ok($$select internal.claim_school_account_effect(request_id)from pg_temp.effect_ids where kind='authority'$$,'42501',null,'operator pause denies exact source admission');
+select throws_ok($$select internal.finish_school_account_effect((context->>'eventId')::uuid,(context->>'leaseToken')::uuid)from pg_temp.effect_ids where kind='success'$$,'42501',null,'stored final receipt cannot bypass current operator approval');
+reset role;
+select*from finish();
+rollback;

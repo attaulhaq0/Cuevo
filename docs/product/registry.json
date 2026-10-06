@@ -1,0 +1,811 @@
+{
+  "version": 1,
+  "sourcePackVersion": "FINAL-2026-10-01",
+  "product": "Cuevo",
+  "company": "E Deviser",
+  "sourceCount": 89,
+  "pathBase": "repository-root",
+  "entries": [
+    {
+      "id": "00",
+      "title": "PRODUCT CONSTITUTION",
+      "originalPath": "00-PRODUCT-CONSTITUTION.md",
+      "path": "docs/product/overview/00-PRODUCT-CONSTITUTION.md",
+      "group": "overview",
+      "originalSha256": "197a2757957b52e3ac38320aa04b303d519a502a3517670eef9dcf0f9f581b3e",
+      "sha256": "197a2757957b52e3ac38320aa04b303d519a502a3517670eef9dcf0f9f581b3e"
+    },
+    {
+      "id": "01",
+      "title": "MVP SCOPE AND GATES",
+      "originalPath": "01-MVP-SCOPE-AND-GATES.md",
+      "path": "docs/product/overview/01-MVP-SCOPE-AND-GATES.md",
+      "group": "overview",
+      "originalSha256": "6cae82029161a9a5718607e38b404d82b3f019ce8ec2362d745904a5dde217c3",
+      "sha256": "6cae82029161a9a5718607e38b404d82b3f019ce8ec2362d745904a5dde217c3"
+    },
+    {
+      "id": "02",
+      "title": "SYSTEM ARCHITECTURE",
+      "originalPath": "02-SYSTEM-ARCHITECTURE.md",
+      "path": "docs/product/platform/02-SYSTEM-ARCHITECTURE.md",
+      "group": "platform",
+      "originalSha256": "0351ad1197f74c8432b9461adfe01d2a5691c26c696593f40e51f7fd2cdabf60",
+      "sha256": "0351ad1197f74c8432b9461adfe01d2a5691c26c696593f40e51f7fd2cdabf60"
+    },
+    {
+      "id": "03",
+      "title": "DOMAIN MODEL",
+      "originalPath": "03-DOMAIN-MODEL.md",
+      "path": "docs/product/overview/03-DOMAIN-MODEL.md",
+      "group": "overview",
+      "originalSha256": "00920f8919e685b5ab4d719fd284cded496e391bf2bac8d5443e6110e536aedb",
+      "sha256": "00920f8919e685b5ab4d719fd284cded496e391bf2bac8d5443e6110e536aedb"
+    },
+    {
+      "id": "04",
+      "title": "EVIDENCE AND LEARNER GRAPH",
+      "originalPath": "04-EVIDENCE-AND-LEARNER-GRAPH.md",
+      "path": "docs/product/domains/04-EVIDENCE-AND-LEARNER-GRAPH.md",
+      "group": "domains",
+      "originalSha256": "bf2f5a884df5e58c57e208230ffcdc776cb7276e781a5ff3562dea7ee5c64730",
+      "sha256": "bf2f5a884df5e58c57e208230ffcdc776cb7276e781a5ff3562dea7ee5c64730"
+    },
+    {
+      "id": "05",
+      "title": "CURRICULUM ENGINE",
+      "originalPath": "05-CURRICULUM-ENGINE.md",
+      "path": "docs/product/curriculum/05-CURRICULUM-ENGINE.md",
+      "group": "curriculum",
+      "originalSha256": "43d52fa40a8916e2f8b166edbeed0dd40127b740a18e8744c4aec4a0091911c0",
+      "sha256": "43d52fa40a8916e2f8b166edbeed0dd40127b740a18e8744c4aec4a0091911c0"
+    },
+    {
+      "id": "06",
+      "title": "CURRICULUM PACK SPEC",
+      "originalPath": "06-CURRICULUM-PACK-SPEC.md",
+      "path": "docs/product/curriculum/06-CURRICULUM-PACK-SPEC.md",
+      "group": "curriculum",
+      "originalSha256": "8140c3d91390937d513d98d6093beb9838aa9e358c28677bda66a0c5151537c2",
+      "sha256": "8140c3d91390937d513d98d6093beb9838aa9e358c28677bda66a0c5151537c2"
+    },
+    {
+      "id": "07",
+      "title": "SCHOOL CONFIGURATION AND MODULARITY",
+      "originalPath": "07-SCHOOL-CONFIGURATION-AND-MODULARITY.md",
+      "path": "docs/product/domains/07-SCHOOL-CONFIGURATION-AND-MODULARITY.md",
+      "group": "domains",
+      "originalSha256": "c8f0af303b5accbe8c5a0dae49ea9d922eae64e469d590bbfe0c4f967c51a818",
+      "sha256": "c8f0af303b5accbe8c5a0dae49ea9d922eae64e469d590bbfe0c4f967c51a818"
+    },
+    {
+      "id": "08",
+      "title": "LEARNER STATE MODEL",
+      "originalPath": "08-LEARNER-STATE-MODEL.md",
+      "path": "docs/product/domains/08-LEARNER-STATE-MODEL.md",
+      "group": "domains",
+      "originalSha256": "ae559ea9ca674691b7201378e383f80b7fc9e3576bc6b35dd821a55339830fcb",
+      "sha256": "ae559ea9ca674691b7201378e383f80b7fc9e3576bc6b35dd821a55339830fcb"
+    },
+    {
+      "id": "09",
+      "title": "HABIT LEARNER DEVELOPMENT",
+      "originalPath": "09-HABIT-LEARNER-DEVELOPMENT.md",
+      "path": "docs/product/domains/09-HABIT-LEARNER-DEVELOPMENT.md",
+      "group": "domains",
+      "originalSha256": "f35d681f66284745cda8b7cc076f2158a184aa5cb3cd05b7ede63052c92e7ab9",
+      "sha256": "f35d681f66284745cda8b7cc076f2158a184aa5cb3cd05b7ede63052c92e7ab9"
+    },
+    {
+      "id": "10",
+      "title": "INTELLIGENCE ORCHESTRATOR",
+      "originalPath": "10-INTELLIGENCE-ORCHESTRATOR.md",
+      "path": "docs/product/domains/10-INTELLIGENCE-ORCHESTRATOR.md",
+      "group": "domains",
+      "originalSha256": "b1bc76c087f2142fa504d7a9920de288779c0fbb88d867d95b56a2ae71ef4918",
+      "sha256": "b1bc76c087f2142fa504d7a9920de288779c0fbb88d867d95b56a2ae71ef4918"
+    },
+    {
+      "id": "11",
+      "title": "SIGNAL REALTIME AND AUTOMATION",
+      "originalPath": "11-SIGNAL-REALTIME-AND-AUTOMATION.md",
+      "path": "docs/product/domains/11-SIGNAL-REALTIME-AND-AUTOMATION.md",
+      "group": "domains",
+      "originalSha256": "d72f8ef9e6fab3f9c855fda90baabbb239f0948283489fe135390f63df4d5269",
+      "sha256": "d72f8ef9e6fab3f9c855fda90baabbb239f0948283489fe135390f63df4d5269"
+    },
+    {
+      "id": "12",
+      "title": "PERSONALIZED LEARNING",
+      "originalPath": "12-PERSONALIZED-LEARNING.md",
+      "path": "docs/product/domains/12-PERSONALIZED-LEARNING.md",
+      "group": "domains",
+      "originalSha256": "6642f19835177bdf13cfefc0b6f911a7e694f37c9583ccb20ef4d3cfc110ccf3",
+      "sha256": "6642f19835177bdf13cfefc0b6f911a7e694f37c9583ccb20ef4d3cfc110ccf3"
+    },
+    {
+      "id": "13",
+      "title": "LMS LXP FUNCTIONAL SPEC",
+      "originalPath": "13-LMS-LXP-FUNCTIONAL-SPEC.md",
+      "path": "docs/product/domains/13-LMS-LXP-FUNCTIONAL-SPEC.md",
+      "group": "domains",
+      "originalSha256": "9df2631c22afeaa47c17113c7a28993c3651a7ffb2c2869758b6766355afd793",
+      "sha256": "9df2631c22afeaa47c17113c7a28993c3651a7ffb2c2869758b6766355afd793"
+    },
+    {
+      "id": "14",
+      "title": "SIS MIS FUNCTIONAL SPEC",
+      "originalPath": "14-SIS-MIS-FUNCTIONAL-SPEC.md",
+      "path": "docs/product/domains/14-SIS-MIS-FUNCTIONAL-SPEC.md",
+      "group": "domains",
+      "originalSha256": "8c216fa54798f63f187a95402702300d3da9e6861c47bdb241c9d00ad642b2d9",
+      "sha256": "8c216fa54798f63f187a95402702300d3da9e6861c47bdb241c9d00ad642b2d9"
+    },
+    {
+      "id": "15",
+      "title": "SOCIAL COMMUNITY AND GAMIFICATION",
+      "originalPath": "15-SOCIAL-COMMUNITY-AND-GAMIFICATION.md",
+      "path": "docs/product/domains/15-SOCIAL-COMMUNITY-AND-GAMIFICATION.md",
+      "group": "domains",
+      "originalSha256": "f1afcb5a0418d35ac8eabe59d2e0b35bc6c181bc99e8c2ab79b5dba517e28c30",
+      "sha256": "83f153b5aedd6952675a8079565b6c0a67da95cc70abdb214082983fa4abcd9e"
+    },
+    {
+      "id": "16",
+      "title": "PORTFOLIO FUNCTIONAL SPEC",
+      "originalPath": "16-PORTFOLIO-FUNCTIONAL-SPEC.md",
+      "path": "docs/product/domains/16-PORTFOLIO-FUNCTIONAL-SPEC.md",
+      "group": "domains",
+      "originalSha256": "62233ca774c0645d2fa635376f3107e3b40d91cde582eae6155e6b7593cdd2a3",
+      "sha256": "62233ca774c0645d2fa635376f3107e3b40d91cde582eae6155e6b7593cdd2a3"
+    },
+    {
+      "id": "17",
+      "title": "ASSESSMENT GRADEBOOK FUNCTIONAL SPEC",
+      "originalPath": "17-ASSESSMENT-GRADEBOOK-FUNCTIONAL-SPEC.md",
+      "path": "docs/product/domains/17-ASSESSMENT-GRADEBOOK-FUNCTIONAL-SPEC.md",
+      "group": "domains",
+      "originalSha256": "63c08999c7cbc09e7ec2c3a2c6130c91545a2d91999afac1014d249546cb124b",
+      "sha256": "63c08999c7cbc09e7ec2c3a2c6130c91545a2d91999afac1014d249546cb124b"
+    },
+    {
+      "id": "18",
+      "title": "REPORTING TRANSCRIPTS PARENT REPORTS",
+      "originalPath": "18-REPORTING-TRANSCRIPTS-PARENT-REPORTS.md",
+      "path": "docs/product/domains/18-REPORTING-TRANSCRIPTS-PARENT-REPORTS.md",
+      "group": "domains",
+      "originalSha256": "42dee42d4d894da03749cac2750efa819f332267406df06b739fcc27c7c0ca49",
+      "sha256": "42dee42d4d894da03749cac2750efa819f332267406df06b739fcc27c7c0ca49"
+    },
+    {
+      "id": "19",
+      "title": "COMMUNICATION FUNCTIONAL SPEC",
+      "originalPath": "19-COMMUNICATION-FUNCTIONAL-SPEC.md",
+      "path": "docs/product/domains/19-COMMUNICATION-FUNCTIONAL-SPEC.md",
+      "group": "domains",
+      "originalSha256": "ba8e2752ae3302d8733a4d89751a365586f7aa7e5bf673e8b9017b2391126094",
+      "sha256": "ba8e2752ae3302d8733a4d89751a365586f7aa7e5bf673e8b9017b2391126094"
+    },
+    {
+      "id": "20",
+      "title": "BEHAVIOR PASTORAL SAFEGUARDING",
+      "originalPath": "20-BEHAVIOR-PASTORAL-SAFEGUARDING.md",
+      "path": "docs/product/domains/20-BEHAVIOR-PASTORAL-SAFEGUARDING.md",
+      "group": "domains",
+      "originalSha256": "132475718874f548be49a1e964a9e5222652b809a1732da08632dad6b034b583",
+      "sha256": "132475718874f548be49a1e964a9e5222652b809a1732da08632dad6b034b583"
+    },
+    {
+      "id": "21",
+      "title": "CQI AND IMPROVEMENT",
+      "originalPath": "21-CQI-AND-IMPROVEMENT.md",
+      "path": "docs/product/domains/21-CQI-AND-IMPROVEMENT.md",
+      "group": "domains",
+      "originalSha256": "6cd71fb9f579aaee19d16b154f7dab967e9ee36ffa6d5e60db907a3788b5e755",
+      "sha256": "6cd71fb9f579aaee19d16b154f7dab967e9ee36ffa6d5e60db907a3788b5e755"
+    },
+    {
+      "id": "22",
+      "title": "QUALITY AND ACCREDITATION MODEL",
+      "originalPath": "22-QUALITY-AND-ACCREDITATION-MODEL.md",
+      "path": "docs/product/quality/22-QUALITY-AND-ACCREDITATION-MODEL.md",
+      "group": "quality",
+      "originalSha256": "3d1a880a9a3f69bc4a314aac4968f7185307f927d93405e46a26b52de483117e",
+      "sha256": "3d1a880a9a3f69bc4a314aac4968f7185307f927d93405e46a26b52de483117e"
+    },
+    {
+      "id": "23",
+      "title": "QNSA FRAMEWORK PACK",
+      "originalPath": "23-QNSA-FRAMEWORK-PACK.md",
+      "path": "docs/product/quality/23-QNSA-FRAMEWORK-PACK.md",
+      "group": "quality",
+      "originalSha256": "4a24fd9423708f4e0b781732bc03f9d7bd0783c04e1eeb1383a222cedd11e43c",
+      "sha256": "4a24fd9423708f4e0b781732bc03f9d7bd0783c04e1eeb1383a222cedd11e43c"
+    },
+    {
+      "id": "24",
+      "title": "BSO FRAMEWORK PACK",
+      "originalPath": "24-BSO-FRAMEWORK-PACK.md",
+      "path": "docs/product/quality/24-BSO-FRAMEWORK-PACK.md",
+      "group": "quality",
+      "originalSha256": "b8fca4660cbfa4253ec3913d4f46b23b187cc79ec4aec6a493a3c94e44cbb02a",
+      "sha256": "b8fca4660cbfa4253ec3913d4f46b23b187cc79ec4aec6a493a3c94e44cbb02a"
+    },
+    {
+      "id": "25",
+      "title": "CIS FRAMEWORK PACK",
+      "originalPath": "25-CIS-FRAMEWORK-PACK.md",
+      "path": "docs/product/quality/25-CIS-FRAMEWORK-PACK.md",
+      "group": "quality",
+      "originalSha256": "ab10b6f1c704ff0fefbf475fc95fa3f3d199a34b56be9cb95d32226b3b17acc3",
+      "sha256": "ab10b6f1c704ff0fefbf475fc95fa3f3d199a34b56be9cb95d32226b3b17acc3"
+    },
+    {
+      "id": "26",
+      "title": "CURRICULUM FAMILY MODEL",
+      "originalPath": "26-CURRICULUM-FAMILY-MODEL.md",
+      "path": "docs/product/curriculum/26-CURRICULUM-FAMILY-MODEL.md",
+      "group": "curriculum",
+      "originalSha256": "48a9ecd2c955a302862ed4cb56a8e977cfadae0f1036b381446b80ce5c8f0390",
+      "sha256": "48a9ecd2c955a302862ed4cb56a8e977cfadae0f1036b381446b80ce5c8f0390"
+    },
+    {
+      "id": "27",
+      "title": "ENGLAND NATIONAL CURRICULUM PACK",
+      "originalPath": "27-ENGLAND-NATIONAL-CURRICULUM-PACK.md",
+      "path": "docs/product/curriculum/27-ENGLAND-NATIONAL-CURRICULUM-PACK.md",
+      "group": "curriculum",
+      "originalSha256": "94627c4811c809c03b8154cf88b6e5883bd63bd1c46e4ab58ec2fba483dc35ea",
+      "sha256": "94627c4811c809c03b8154cf88b6e5883bd63bd1c46e4ab58ec2fba483dc35ea"
+    },
+    {
+      "id": "28",
+      "title": "CAMBRIDGE FAMILY PACK",
+      "originalPath": "28-CAMBRIDGE-FAMILY-PACK.md",
+      "path": "docs/product/curriculum/28-CAMBRIDGE-FAMILY-PACK.md",
+      "group": "curriculum",
+      "originalSha256": "c0a9a0349b4b283b90d08d25ddeb8e754679ff69db2c843e0bb49d7f1ff393ab",
+      "sha256": "c0a9a0349b4b283b90d08d25ddeb8e754679ff69db2c843e0bb49d7f1ff393ab"
+    },
+    {
+      "id": "29",
+      "title": "IB FAMILY PACK",
+      "originalPath": "29-IB-FAMILY-PACK.md",
+      "path": "docs/product/curriculum/29-IB-FAMILY-PACK.md",
+      "group": "curriculum",
+      "originalSha256": "173e1f34c001c7b4f7d87141f85925538ea6f85bbea0b0ab9c19d0e01c65ef6a",
+      "sha256": "173e1f34c001c7b4f7d87141f85925538ea6f85bbea0b0ab9c19d0e01c65ef6a"
+    },
+    {
+      "id": "30",
+      "title": "PAKISTAN NATIONAL CURRICULUM PACK",
+      "originalPath": "30-PAKISTAN-NATIONAL-CURRICULUM-PACK.md",
+      "path": "docs/product/curriculum/30-PAKISTAN-NATIONAL-CURRICULUM-PACK.md",
+      "group": "curriculum",
+      "originalSha256": "4c9e01ff820ac3b3a406f7ee983c149a7ea075572d3f839bbbff7fdc048c5f5b",
+      "sha256": "4c9e01ff820ac3b3a406f7ee983c149a7ea075572d3f839bbbff7fdc048c5f5b"
+    },
+    {
+      "id": "31",
+      "title": "QATAR JURISDICTION PACK",
+      "originalPath": "31-QATAR-JURISDICTION-PACK.md",
+      "path": "docs/product/curriculum/31-QATAR-JURISDICTION-PACK.md",
+      "group": "curriculum",
+      "originalSha256": "1e278cd7caaecedfd838ac1b5343ff0b6fade1650da8c6869d5fd4f29e1fc439",
+      "sha256": "1e278cd7caaecedfd838ac1b5343ff0b6fade1650da8c6869d5fd4f29e1fc439"
+    },
+    {
+      "id": "32",
+      "title": "BRITISH QATAR MVP ARCHETYPE",
+      "originalPath": "32-BRITISH-QATAR-MVP-ARCHETYPE.md",
+      "path": "docs/product/curriculum/32-BRITISH-QATAR-MVP-ARCHETYPE.md",
+      "group": "curriculum",
+      "originalSha256": "3e1fef9d82f280759b55f78c08041548fb19e9b5447d1e41bd8cc039b48e8c74",
+      "sha256": "3e1fef9d82f280759b55f78c08041548fb19e9b5447d1e41bd8cc039b48e8c74"
+    },
+    {
+      "id": "33",
+      "title": "CURRICULUM RESEARCH AGENT",
+      "originalPath": "33-CURRICULUM-RESEARCH-AGENT.md",
+      "path": "docs/product/curriculum/33-CURRICULUM-RESEARCH-AGENT.md",
+      "group": "curriculum",
+      "originalSha256": "85835c8e9e043fc0108e7c830e04220c8749f700b49d8cff99b247d461257392",
+      "sha256": "85835c8e9e043fc0108e7c830e04220c8749f700b49d8cff99b247d461257392"
+    },
+    {
+      "id": "34",
+      "title": "CURRICULUM QA GOLDEN CASES",
+      "originalPath": "34-CURRICULUM-QA-GOLDEN-CASES.md",
+      "path": "docs/product/verification/34-CURRICULUM-QA-GOLDEN-CASES.md",
+      "group": "verification",
+      "originalSha256": "2f41d18bdde551ce49f82ec874512a73e69aa799ac60c840bf5f3b170c5e6dcd",
+      "sha256": "2f41d18bdde551ce49f82ec874512a73e69aa799ac60c840bf5f3b170c5e6dcd"
+    },
+    {
+      "id": "35",
+      "title": "CODEX AGENT ROLES",
+      "originalPath": "35-CODEX-AGENT-ROLES.md",
+      "path": "docs/product/delivery/35-CODEX-AGENT-ROLES.md",
+      "group": "delivery",
+      "originalSha256": "a17c2f114cb5de42708162d9e2c5c4a083bb56f269eb31daed1ae4449c500095",
+      "sha256": "a17c2f114cb5de42708162d9e2c5c4a083bb56f269eb31daed1ae4449c500095"
+    },
+    {
+      "id": "36",
+      "title": "DESIGN CONSTITUTION",
+      "originalPath": "36-DESIGN-CONSTITUTION.md",
+      "path": "docs/product/design/36-DESIGN-CONSTITUTION.md",
+      "group": "design",
+      "originalSha256": "dd494a8fe2ce1cf74b8f403b571c72562aadfd97a7774d9a85761b46136216c6",
+      "sha256": "dd494a8fe2ce1cf74b8f403b571c72562aadfd97a7774d9a85761b46136216c6"
+    },
+    {
+      "id": "37",
+      "title": "UI SCREEN INVENTORY",
+      "originalPath": "37-UI-SCREEN-INVENTORY.md",
+      "path": "docs/product/design/37-UI-SCREEN-INVENTORY.md",
+      "group": "design",
+      "originalSha256": "856100dcb1d6354d21060dc9b7ecf4a77009b1ccfab37850fc654156b9783b2e",
+      "sha256": "856100dcb1d6354d21060dc9b7ecf4a77009b1ccfab37850fc654156b9783b2e"
+    },
+    {
+      "id": "38",
+      "title": "API DATA AND EVENT CONTRACTS",
+      "originalPath": "38-API-DATA-AND-EVENT-CONTRACTS.md",
+      "path": "docs/product/platform/38-API-DATA-AND-EVENT-CONTRACTS.md",
+      "group": "platform",
+      "originalSha256": "0adad163f596bcf9d037b44bd00bb7d63da7ff62ba64ad060577fda240774206",
+      "sha256": "0adad163f596bcf9d037b44bd00bb7d63da7ff62ba64ad060577fda240774206"
+    },
+    {
+      "id": "39",
+      "title": "SECURITY PRIVACY AND AI GOVERNANCE",
+      "originalPath": "39-SECURITY-PRIVACY-AND-AI-GOVERNANCE.md",
+      "path": "docs/product/platform/39-SECURITY-PRIVACY-AND-AI-GOVERNANCE.md",
+      "group": "platform",
+      "originalSha256": "7e8c4d3e61212cb8605d35fa8ba2a49f22fecdf3a5e5a4245b152f4d790e80d2",
+      "sha256": "7e8c4d3e61212cb8605d35fa8ba2a49f22fecdf3a5e5a4245b152f4d790e80d2"
+    },
+    {
+      "id": "40",
+      "title": "SUPABASE AND DATABASE SETUP",
+      "originalPath": "40-SUPABASE-AND-DATABASE-SETUP.md",
+      "path": "docs/product/platform/40-SUPABASE-AND-DATABASE-SETUP.md",
+      "group": "platform",
+      "originalSha256": "a8efc28ce33ddc255286632fa52fae6964223e1566a01ed82eebe5ce37e1550b",
+      "sha256": "a8efc28ce33ddc255286632fa52fae6964223e1566a01ed82eebe5ce37e1550b"
+    },
+    {
+      "id": "41",
+      "title": "DOCKER LOCAL DEVELOPMENT",
+      "originalPath": "41-DOCKER-LOCAL-DEVELOPMENT.md",
+      "path": "docs/product/platform/41-DOCKER-LOCAL-DEVELOPMENT.md",
+      "group": "platform",
+      "originalSha256": "691ebeabbe7c312d077e0a6008eabedeef52b4f66aab721a721c5cf0f38b7809",
+      "sha256": "691ebeabbe7c312d077e0a6008eabedeef52b4f66aab721a721c5cf0f38b7809"
+    },
+    {
+      "id": "42",
+      "title": "OBSERVABILITY POSTHOG",
+      "originalPath": "42-OBSERVABILITY-POSTHOG.md",
+      "path": "docs/product/platform/42-OBSERVABILITY-POSTHOG.md",
+      "group": "platform",
+      "originalSha256": "0952ceff7d483f7629a69c595e77e09bc1cb5f706e5610764a3a658c1bf4d46f",
+      "sha256": "0952ceff7d483f7629a69c595e77e09bc1cb5f706e5610764a3a658c1bf4d46f"
+    },
+    {
+      "id": "43",
+      "title": "TESTING GOLDEN CASES",
+      "originalPath": "43-TESTING-GOLDEN-CASES.md",
+      "path": "docs/product/verification/43-TESTING-GOLDEN-CASES.md",
+      "group": "verification",
+      "originalSha256": "5cd80d56e1275f26e764edb75b51836b5030b3279ed575fa49f2e6b6b5369be0",
+      "sha256": "5cd80d56e1275f26e764edb75b51836b5030b3279ed575fa49f2e6b6b5369be0"
+    },
+    {
+      "id": "44",
+      "title": "MVP VERTICAL SLICE",
+      "originalPath": "44-MVP-VERTICAL-SLICE.md",
+      "path": "docs/product/delivery/44-MVP-VERTICAL-SLICE.md",
+      "group": "delivery",
+      "originalSha256": "cb70865a9194da69d9ec131633c59c52ddab534142c27c2d255c5c48cc5de2b9",
+      "sha256": "cb70865a9194da69d9ec131633c59c52ddab534142c27c2d255c5c48cc5de2b9"
+    },
+    {
+      "id": "45",
+      "title": "MVP IMPLEMENTATION BACKLOG",
+      "originalPath": "45-MVP-IMPLEMENTATION-BACKLOG.md",
+      "path": "docs/product/delivery/45-MVP-IMPLEMENTATION-BACKLOG.md",
+      "group": "delivery",
+      "originalSha256": "8acc78bc70c1093c1731d941ad2a869d449021e1fc9a4a367a624ea7d113b29b",
+      "sha256": "8acc78bc70c1093c1731d941ad2a869d449021e1fc9a4a367a624ea7d113b29b"
+    },
+    {
+      "id": "46",
+      "title": "POST MVP ROADMAP",
+      "originalPath": "46-POST-MVP-ROADMAP.md",
+      "path": "docs/product/overview/46-POST-MVP-ROADMAP.md",
+      "group": "overview",
+      "originalSha256": "54e299ba2c1632703f7bc3734ebdda876bfa3dd08c283d93e60f8f93d78398d5",
+      "sha256": "54e299ba2c1632703f7bc3734ebdda876bfa3dd08c283d93e60f8f93d78398d5"
+    },
+    {
+      "id": "47",
+      "title": "COMPETITIVE LANDSCAPE AND DIFFERENTIATION",
+      "originalPath": "47-COMPETITIVE-LANDSCAPE-AND-DIFFERENTIATION.md",
+      "path": "docs/product/overview/47-COMPETITIVE-LANDSCAPE-AND-DIFFERENTIATION.md",
+      "group": "overview",
+      "originalSha256": "4ceb555f2aecb16c9489f566aa9fcc9f3ea19c179c6afbe31b839fe0c8675902",
+      "sha256": "4ceb555f2aecb16c9489f566aa9fcc9f3ea19c179c6afbe31b839fe0c8675902"
+    },
+    {
+      "id": "48",
+      "title": "SOURCES ASSUMPTIONS AND OPEN DECISIONS",
+      "originalPath": "48-SOURCES-ASSUMPTIONS-AND-OPEN-DECISIONS.md",
+      "path": "docs/product/research/48-SOURCES-ASSUMPTIONS-AND-OPEN-DECISIONS.md",
+      "group": "research",
+      "originalSha256": "095a0aa482b8176ef48ca68595ad22f485f02432fee84ada68aeab2deaff18b5",
+      "sha256": "095a0aa482b8176ef48ca68595ad22f485f02432fee84ada68aeab2deaff18b5"
+    },
+    {
+      "id": "49",
+      "title": "AGENTIC DEVELOPMENT PROTOCOL",
+      "originalPath": "49-AGENTIC-DEVELOPMENT-PROTOCOL.md",
+      "path": "docs/product/delivery/49-AGENTIC-DEVELOPMENT-PROTOCOL.md",
+      "group": "delivery",
+      "originalSha256": "51eeb6eb87e1827fb7ef7c1884a87bcb694d375bb4fa4bcb51fe4915bb0c27fb",
+      "sha256": "f27b20c8811f7fd6dfda5095506bc2d2154d8d6a5433d2360029c2e8a65f2fe4"
+    },
+    {
+      "id": "50",
+      "title": "CURRICULUM COVERAGE MATRIX",
+      "originalPath": "50-CURRICULUM-COVERAGE-MATRIX.md",
+      "path": "docs/product/curriculum/50-CURRICULUM-COVERAGE-MATRIX.md",
+      "group": "curriculum",
+      "originalSha256": "a908867432318e9e0b70c4ff16a3291ed012949b918ff7c1fa98f6f029d474df",
+      "sha256": "a908867432318e9e0b70c4ff16a3291ed012949b918ff7c1fa98f6f029d474df"
+    },
+    {
+      "id": "51",
+      "title": "OPENAPI DOMAIN CHECKLIST",
+      "originalPath": "51-OPENAPI-DOMAIN-CHECKLIST.md",
+      "path": "docs/product/verification/51-OPENAPI-DOMAIN-CHECKLIST.md",
+      "group": "verification",
+      "originalSha256": "f266119a7328b5d918628af366f3bd568165d51daa0c35896473f0cfd25d23a1",
+      "sha256": "f266119a7328b5d918628af366f3bd568165d51daa0c35896473f0cfd25d23a1"
+    },
+    {
+      "id": "52",
+      "title": "DECISION LOG MVP",
+      "originalPath": "52-DECISION-LOG-MVP.md",
+      "path": "docs/product/research/52-DECISION-LOG-MVP.md",
+      "group": "research",
+      "originalSha256": "581fd1e9a7aa10a1b56274bdc21278b33b05a7180b01824f5bc3b53c6a7c23d2",
+      "sha256": "581fd1e9a7aa10a1b56274bdc21278b33b05a7180b01824f5bc3b53c6a7c23d2"
+    },
+    {
+      "id": "53",
+      "title": "IMPLEMENTATION HEALTH CHECK",
+      "originalPath": "53-IMPLEMENTATION-HEALTH-CHECK.md",
+      "path": "docs/product/verification/53-IMPLEMENTATION-HEALTH-CHECK.md",
+      "group": "verification",
+      "originalSha256": "2b8efed2de324ee629393173fa2d493a0a97d51967577d21aff341c074d2c2ec",
+      "sha256": "2b8efed2de324ee629393173fa2d493a0a97d51967577d21aff341c074d2c2ec"
+    },
+    {
+      "id": "54",
+      "title": "WHOLE APP IN PLAIN ENGLISH",
+      "originalPath": "54-WHOLE-APP-IN-PLAIN-ENGLISH.md",
+      "path": "docs/product/overview/54-WHOLE-APP-IN-PLAIN-ENGLISH.md",
+      "group": "overview",
+      "originalSha256": "78b8e02340d2ba3d13d5ba5fb6f2234cf4035cae14130d4bd8d1ad485fe7cbea",
+      "sha256": "78b8e02340d2ba3d13d5ba5fb6f2234cf4035cae14130d4bd8d1ad485fe7cbea"
+    },
+    {
+      "id": "55",
+      "title": "CURRICULUM DATA AND CONTENT INGESTION",
+      "originalPath": "55-CURRICULUM-DATA-AND-CONTENT-INGESTION.md",
+      "path": "docs/product/curriculum/55-CURRICULUM-DATA-AND-CONTENT-INGESTION.md",
+      "group": "curriculum",
+      "originalSha256": "67d295f6b63228f5e39e6902100deb1baec88ad1b1ad872e0ff886b7c16887f0",
+      "sha256": "67d295f6b63228f5e39e6902100deb1baec88ad1b1ad872e0ff886b7c16887f0"
+    },
+    {
+      "id": "56",
+      "title": "COMPETITOR FEATURE PARITY MAP",
+      "originalPath": "56-COMPETITOR-FEATURE-PARITY-MAP.md",
+      "path": "docs/product/overview/56-COMPETITOR-FEATURE-PARITY-MAP.md",
+      "group": "overview",
+      "originalSha256": "ba00082ffa72fd20a37132fe1150aaefe2aba655e313d0c12dd01808bbb53b61",
+      "sha256": "ba00082ffa72fd20a37132fe1150aaefe2aba655e313d0c12dd01808bbb53b61"
+    },
+    {
+      "id": "57",
+      "title": "CURRENT RESEARCH CHECKLIST 2026 10 01",
+      "originalPath": "57-CURRENT-RESEARCH-CHECKLIST-2026-10-01.md",
+      "path": "docs/product/research/57-CURRENT-RESEARCH-CHECKLIST-2026-10-01.md",
+      "group": "research",
+      "originalSha256": "8a683a347b8579ff047a19d7416009288f4caef99b217af1cdd6348843ef6729",
+      "sha256": "8a683a347b8579ff047a19d7416009288f4caef99b217af1cdd6348843ef6729"
+    },
+    {
+      "id": "58",
+      "title": "BEHAVIOR AND LEARNING SCIENCE",
+      "originalPath": "58-BEHAVIOR-AND-LEARNING-SCIENCE.md",
+      "path": "docs/product/domains/58-BEHAVIOR-AND-LEARNING-SCIENCE.md",
+      "group": "domains",
+      "originalSha256": "003bc8e5c84a68f3ae7fd796f4fe8d16bb0107d024efa584c533a5ff182dd90f",
+      "sha256": "4d5db6babd26d4caf6872f77be0bca7ad8bc3968912f176396331a9884bb8933"
+    },
+    {
+      "id": "59",
+      "title": "CURRICULUM PACK YAML EXAMPLES",
+      "originalPath": "59-CURRICULUM-PACK-YAML-EXAMPLES.md",
+      "path": "docs/product/curriculum/59-CURRICULUM-PACK-YAML-EXAMPLES.md",
+      "group": "curriculum",
+      "originalSha256": "0935e8c0f57a885b64613cbb5552838fad9ef42eb912f00aea5c9528bbe90118",
+      "sha256": "0935e8c0f57a885b64613cbb5552838fad9ef42eb912f00aea5c9528bbe90118"
+    },
+    {
+      "id": "60",
+      "title": "AI MODEL AND PROVIDER ABSTRACTION",
+      "originalPath": "60-AI-MODEL-AND-PROVIDER-ABSTRACTION.md",
+      "path": "docs/product/platform/60-AI-MODEL-AND-PROVIDER-ABSTRACTION.md",
+      "group": "platform",
+      "originalSha256": "1fe14f9b6727bfbd992b32ecdbd99e3a5a5539140a4a26a62dabfbd1bff852a4",
+      "sha256": "1fe14f9b6727bfbd992b32ecdbd99e3a5a5539140a4a26a62dabfbd1bff852a4"
+    },
+    {
+      "id": "61",
+      "title": "SECURITY THREAT TEST MATRIX",
+      "originalPath": "61-SECURITY-THREAT-TEST-MATRIX.md",
+      "path": "docs/product/verification/61-SECURITY-THREAT-TEST-MATRIX.md",
+      "group": "verification",
+      "originalSha256": "34d9dd7f3778494aaef68562130356785f64b2455104f5b418fc20c028519f7a",
+      "sha256": "34d9dd7f3778494aaef68562130356785f64b2455104f5b418fc20c028519f7a"
+    },
+    {
+      "id": "62",
+      "title": "FRONTEND ARCHITECTURE",
+      "originalPath": "62-FRONTEND-ARCHITECTURE.md",
+      "path": "docs/product/design/62-FRONTEND-ARCHITECTURE.md",
+      "group": "design",
+      "originalSha256": "e2ff402278e930d59a8c61cd21dfb7e5f03d505bccdea777c121ffb6d6d0145c",
+      "sha256": "e2ff402278e930d59a8c61cd21dfb7e5f03d505bccdea777c121ffb6d6d0145c"
+    },
+    {
+      "id": "63",
+      "title": "ACCESSIBILITY RTL I18N",
+      "originalPath": "63-ACCESSIBILITY-RTL-I18N.md",
+      "path": "docs/product/design/63-ACCESSIBILITY-RTL-I18N.md",
+      "group": "design",
+      "originalSha256": "4ea457514cc72f04cee1a87192bea22122ac0d955ddb6d149964ab6ad6deaede",
+      "sha256": "4ea457514cc72f04cee1a87192bea22122ac0d955ddb6d149964ab6ad6deaede"
+    },
+    {
+      "id": "64",
+      "title": "MVP DEMO SCRIPT",
+      "originalPath": "64-MVP-DEMO-SCRIPT.md",
+      "path": "docs/product/verification/64-MVP-DEMO-SCRIPT.md",
+      "group": "verification",
+      "originalSha256": "f33c5405cb21411a2ac04c4cf0ea1bb82fb2fb223178bcbcd86355d3d1ad9553",
+      "sha256": "f33c5405cb21411a2ac04c4cf0ea1bb82fb2fb223178bcbcd86355d3d1ad9553"
+    },
+    {
+      "id": "65",
+      "title": "AGENTIC INTELLIGENCE AS A PLATFORM",
+      "originalPath": "65-AGENTIC-INTELLIGENCE-AS-A-PLATFORM.md",
+      "path": "docs/product/domains/65-AGENTIC-INTELLIGENCE-AS-A-PLATFORM.md",
+      "group": "domains",
+      "originalSha256": "587ad662df66029e506ad88b51adde4f82275089595d3254d7b02991471765d2",
+      "sha256": "587ad662df66029e506ad88b51adde4f82275089595d3254d7b02991471765d2"
+    },
+    {
+      "id": "66",
+      "title": "CAMBRIDGE MATH MVP 0580",
+      "originalPath": "66-CAMBRIDGE-MATH-MVP-0580.md",
+      "path": "docs/product/curriculum/66-CAMBRIDGE-MATH-MVP-0580.md",
+      "group": "curriculum",
+      "originalSha256": "26f4299d34ec83c6ffce8a79366d046c3a6f853d1589581c575e59e36f90d391",
+      "sha256": "26f4299d34ec83c6ffce8a79366d046c3a6f853d1589581c575e59e36f90d391"
+    },
+    {
+      "id": "67",
+      "title": "SUPABASE BOOTSTRAP CHECKLIST",
+      "originalPath": "67-SUPABASE-BOOTSTRAP-CHECKLIST.md",
+      "path": "docs/product/platform/67-SUPABASE-BOOTSTRAP-CHECKLIST.md",
+      "group": "platform",
+      "originalSha256": "d52038f779e12d9b89ea8615286d7d88ccc221a1cebe516837e7573482bb906f",
+      "sha256": "d52038f779e12d9b89ea8615286d7d88ccc221a1cebe516837e7573482bb906f"
+    },
+    {
+      "id": "68",
+      "title": "FINAL TECH STACK AND ADR",
+      "originalPath": "68-FINAL-TECH-STACK-AND-ADR.md",
+      "path": "docs/product/platform/68-FINAL-TECH-STACK-AND-ADR.md",
+      "group": "platform",
+      "originalSha256": "ea2b83c97e2efaf4eee768614d2b944489827e88ed140e5c04a5ebe26bf99362",
+      "sha256": "ea2b83c97e2efaf4eee768614d2b944489827e88ed140e5c04a5ebe26bf99362"
+    },
+    {
+      "id": "69",
+      "title": "SOURCE LOCKED CURRICULUM PROTOCOL",
+      "originalPath": "69-SOURCE-LOCKED-CURRICULUM-PROTOCOL.md",
+      "path": "docs/product/curriculum/69-SOURCE-LOCKED-CURRICULUM-PROTOCOL.md",
+      "group": "curriculum",
+      "originalSha256": "d3cc94100d6ed80215452198e91d128e5792fdafa3bb4b123f7d66171be0a061",
+      "sha256": "d3cc94100d6ed80215452198e91d128e5792fdafa3bb4b123f7d66171be0a061"
+    },
+    {
+      "id": "70",
+      "title": "ENGLAND NATIONAL CURRICULUM DEEP DOSSIER",
+      "originalPath": "70-ENGLAND-NATIONAL-CURRICULUM-DEEP-DOSSIER.md",
+      "path": "docs/product/curriculum/70-ENGLAND-NATIONAL-CURRICULUM-DEEP-DOSSIER.md",
+      "group": "curriculum",
+      "originalSha256": "1b615b2afeb8199d79c9905436eb4d5be6404ed5a8df9c6bc143d7301299bfb0",
+      "sha256": "1b615b2afeb8199d79c9905436eb4d5be6404ed5a8df9c6bc143d7301299bfb0"
+    },
+    {
+      "id": "71",
+      "title": "CAMBRIDGE PATHWAY DEEP DOSSIER",
+      "originalPath": "71-CAMBRIDGE-PATHWAY-DEEP-DOSSIER.md",
+      "path": "docs/product/curriculum/71-CAMBRIDGE-PATHWAY-DEEP-DOSSIER.md",
+      "group": "curriculum",
+      "originalSha256": "21fb512984726b3c9650f53bf62d58f76a907904909b2c6dda43727348c23ba6",
+      "sha256": "21fb512984726b3c9650f53bf62d58f76a907904909b2c6dda43727348c23ba6"
+    },
+    {
+      "id": "72",
+      "title": "IB PROGRAMMES DEEP DOSSIER",
+      "originalPath": "72-IB-PROGRAMMES-DEEP-DOSSIER.md",
+      "path": "docs/product/curriculum/72-IB-PROGRAMMES-DEEP-DOSSIER.md",
+      "group": "curriculum",
+      "originalSha256": "1a28393a2d87600a47e42b36e4b98df00391fe800a97cbb5e8e7dc3cf2c79c96",
+      "sha256": "1a28393a2d87600a47e42b36e4b98df00391fe800a97cbb5e8e7dc3cf2c79c96"
+    },
+    {
+      "id": "73",
+      "title": "PAKISTAN NATIONAL CURRICULUM DEEP DOSSIER",
+      "originalPath": "73-PAKISTAN-NATIONAL-CURRICULUM-DEEP-DOSSIER.md",
+      "path": "docs/product/curriculum/73-PAKISTAN-NATIONAL-CURRICULUM-DEEP-DOSSIER.md",
+      "group": "curriculum",
+      "originalSha256": "81df847f72acc82709b9fb991eeb2cfa85dfd6b83ba53c75211eab1d5a59b077",
+      "sha256": "81df847f72acc82709b9fb991eeb2cfa85dfd6b83ba53c75211eab1d5a59b077"
+    },
+    {
+      "id": "74",
+      "title": "QATAR JURISDICTION DEEP DOSSIER",
+      "originalPath": "74-QATAR-JURISDICTION-DEEP-DOSSIER.md",
+      "path": "docs/product/curriculum/74-QATAR-JURISDICTION-DEEP-DOSSIER.md",
+      "group": "curriculum",
+      "originalSha256": "a42975960adf2c138329159524c5c1e480f16c31c6b8cac136d2a158fed4d7b1",
+      "sha256": "a42975960adf2c138329159524c5c1e480f16c31c6b8cac136d2a158fed4d7b1"
+    },
+    {
+      "id": "75",
+      "title": "QUALITY FRAMEWORKS DEEP DOSSIER",
+      "originalPath": "75-QUALITY-FRAMEWORKS-DEEP-DOSSIER.md",
+      "path": "docs/product/quality/75-QUALITY-FRAMEWORKS-DEEP-DOSSIER.md",
+      "group": "quality",
+      "originalSha256": "0f2ab74e82674f24b600f945db9a9ca20d7ae4adc31bb48cb3db716a25dad4a6",
+      "sha256": "0f2ab74e82674f24b600f945db9a9ca20d7ae4adc31bb48cb3db716a25dad4a6"
+    },
+    {
+      "id": "76",
+      "title": "CURRICULUM PACK BUILD PROTOCOL",
+      "originalPath": "76-CURRICULUM-PACK-BUILD-PROTOCOL.md",
+      "path": "docs/product/curriculum/76-CURRICULUM-PACK-BUILD-PROTOCOL.md",
+      "group": "curriculum",
+      "originalSha256": "cb818dc1aca203a149fe692d891865a0c92369293c2cb88594d6e3baa43925b7",
+      "sha256": "cb818dc1aca203a149fe692d891865a0c92369293c2cb88594d6e3baa43925b7"
+    },
+    {
+      "id": "77",
+      "title": "REFERENCE SCHOOL SYNTHETIC DATA",
+      "originalPath": "77-REFERENCE-SCHOOL-SYNTHETIC-DATA.md",
+      "path": "docs/product/verification/77-REFERENCE-SCHOOL-SYNTHETIC-DATA.md",
+      "group": "verification",
+      "originalSha256": "0fedc061c31878cc975a3ba0a20b2d85718e50eba1576c9877a40bf4420c513a",
+      "sha256": "0fedc061c31878cc975a3ba0a20b2d85718e50eba1576c9877a40bf4420c513a"
+    },
+    {
+      "id": "78",
+      "title": "AGENTIC AI EVALUATION HARNESS",
+      "originalPath": "78-AGENTIC-AI-EVALUATION-HARNESS.md",
+      "path": "docs/product/verification/78-AGENTIC-AI-EVALUATION-HARNESS.md",
+      "group": "verification",
+      "originalSha256": "653664adcee6cee643656eafa15645477b6d397bb520b48d291496b4e764a8f7",
+      "sha256": "653664adcee6cee643656eafa15645477b6d397bb520b48d291496b4e764a8f7"
+    },
+    {
+      "id": "79",
+      "title": "UI UX MOTION AND INTERACTION SYSTEM",
+      "originalPath": "79-UI-UX-MOTION-AND-INTERACTION-SYSTEM.md",
+      "path": "docs/product/design/79-UI-UX-MOTION-AND-INTERACTION-SYSTEM.md",
+      "group": "design",
+      "originalSha256": "21e1d92eeef056074d46f60483411466757ebdbcc64ea926c6c7cdf8aff3bfad",
+      "sha256": "21e1d92eeef056074d46f60483411466757ebdbcc64ea926c6c7cdf8aff3bfad"
+    },
+    {
+      "id": "80",
+      "title": "SOCIAL SAFETY AND COMMUNITY",
+      "originalPath": "80-SOCIAL-SAFETY-AND-COMMUNITY.md",
+      "path": "docs/product/domains/80-SOCIAL-SAFETY-AND-COMMUNITY.md",
+      "group": "domains",
+      "originalSha256": "fa333e7393a4a96b8be66c73cd187da49f0610cee106ed02cb55e98af6570684",
+      "sha256": "fa333e7393a4a96b8be66c73cd187da49f0610cee106ed02cb55e98af6570684"
+    },
+    {
+      "id": "81",
+      "title": "SUPABASE RLS GRANTS DATA API ARCHITECTURE",
+      "originalPath": "81-SUPABASE-RLS-GRANTS-DATA-API-ARCHITECTURE.md",
+      "path": "docs/product/platform/81-SUPABASE-RLS-GRANTS-DATA-API-ARCHITECTURE.md",
+      "group": "platform",
+      "originalSha256": "9873d3b0a44771c4099c827921b9356afabf326b0aa5bdc808a87f946944b411",
+      "sha256": "9873d3b0a44771c4099c827921b9356afabf326b0aa5bdc808a87f946944b411"
+    },
+    {
+      "id": "82",
+      "title": "DEPLOYMENT ENVIRONMENTS AND SECRETS",
+      "originalPath": "82-DEPLOYMENT-ENVIRONMENTS-AND-SECRETS.md",
+      "path": "docs/product/platform/82-DEPLOYMENT-ENVIRONMENTS-AND-SECRETS.md",
+      "group": "platform",
+      "originalSha256": "949847e47bebdd028fdd35a09573d650aeee9d71b57abfb40e5f82227d0ab341",
+      "sha256": "949847e47bebdd028fdd35a09573d650aeee9d71b57abfb40e5f82227d0ab341"
+    },
+    {
+      "id": "83",
+      "title": "MVP EXIT CRITERIA",
+      "originalPath": "83-MVP-EXIT-CRITERIA.md",
+      "path": "docs/product/overview/83-MVP-EXIT-CRITERIA.md",
+      "group": "overview",
+      "originalSha256": "1b641b7af40863f12d3700458a6e0377db5eb0d7d5015151ecbdc278751e4555",
+      "sha256": "1b641b7af40863f12d3700458a6e0377db5eb0d7d5015151ecbdc278751e4555"
+    },
+    {
+      "id": "84",
+      "title": "BUILD NOT BUILD RULES",
+      "originalPath": "84-BUILD-NOT-BUILD-RULES.md",
+      "path": "docs/product/overview/84-BUILD-NOT-BUILD-RULES.md",
+      "group": "overview",
+      "originalSha256": "f68c8b6af8ca177953573460062b30e7526feb3d3d2688dc955aaa6dc405fe21",
+      "sha256": "f68c8b6af8ca177953573460062b30e7526feb3d3d2688dc955aaa6dc405fe21"
+    },
+    {
+      "id": "85",
+      "title": "ADVERTISED SUPPORT AND CLAIMS POLICY",
+      "originalPath": "85-ADVERTISED-SUPPORT-AND-CLAIMS-POLICY.md",
+      "path": "docs/product/curriculum/85-ADVERTISED-SUPPORT-AND-CLAIMS-POLICY.md",
+      "group": "curriculum",
+      "originalSha256": "3e20c86599907fb6a9aa3ea8e454222b34bf06b7be57a600a7a652202c2c0dc3",
+      "sha256": "3e20c86599907fb6a9aa3ea8e454222b34bf06b7be57a600a7a652202c2c0dc3"
+    },
+    {
+      "id": "86",
+      "title": "RESEARCH SOURCE INDEX 2026 10 01",
+      "originalPath": "86-RESEARCH-SOURCE-INDEX-2026-10-01.md",
+      "path": "docs/product/research/86-RESEARCH-SOURCE-INDEX-2026-10-01.md",
+      "group": "research",
+      "originalSha256": "393d2956a57130c29f9e5b314a484f710f717fe084210724179f6ea737e3a71f",
+      "sha256": "393d2956a57130c29f9e5b314a484f710f717fe084210724179f6ea737e3a71f"
+    },
+    {
+      "id": "87",
+      "title": "IMPLEMENTATION ORDER FINAL",
+      "originalPath": "87-IMPLEMENTATION-ORDER-FINAL.md",
+      "path": "docs/product/delivery/87-IMPLEMENTATION-ORDER-FINAL.md",
+      "group": "delivery",
+      "originalSha256": "674ef6da3563b945372f1440a0bd0767fe0374dfa1b468bb1d231034ef3ebb21",
+      "sha256": "523c3f1d401642150b1cf11b9ea441a8718cb7693443320c63326dccfbc74739"
+    },
+    {
+      "id": "88",
+      "title": "CLAUDE OR CODEX AGENT NEUTRALITY",
+      "originalPath": "88-CLAUDE-OR-CODEX-AGENT-NEUTRALITY.md",
+      "path": "docs/product/delivery/88-CLAUDE-OR-CODEX-AGENT-NEUTRALITY.md",
+      "group": "delivery",
+      "originalSha256": "88f3f4f77ef49aeb72c9f116681467d64812aa347acda0e9e6d0ad97568b5971",
+      "sha256": "88f3f4f77ef49aeb72c9f116681467d64812aa347acda0e9e6d0ad97568b5971"
+    }
+  ]
+}

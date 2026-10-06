@@ -1,0 +1,11 @@
+import { z } from 'zod';
+import { assetDisplayNameSchema, assetContentTypeSchema } from './assets';
+export const resourceTargetKindSchema=z.enum(['lesson','activity','assessment']);
+export const resourceStageSchema=z.object({name:assetDisplayNameSchema,contentType:assetContentTypeSchema,byteSize:z.number().int().positive().max(524288),sha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export const resourceAttachSchema=z.object({assetId:z.uuid(),title:z.string().trim().min(1).max(200),sequence:z.number().int().min(1).max(10000)}).strict();
+export const resourceRevisionSchema=z.object({assetId:z.uuid(),expectedRevision:z.number().int().positive(),reason:z.string().trim().min(1).max(1000)}).strict();
+export const resourceRemoveSchema=z.object({expectedRevision:z.number().int().positive(),reason:z.string().trim().min(1).max(1000),confirmRemoval:z.literal(true)}).strict();
+export const resourcePublishSchema=z.object({expectedRevision:z.number().int().positive(),confirmPublication:z.literal(true)}).strict();
+export const learningResourceSchema=z.object({id:z.uuid(),revisionId:z.uuid(),revision:z.number().int().positive(),courseId:z.uuid(),targetKind:resourceTargetKindSchema,targetId:z.uuid(),title:z.string().min(1).max(200),sequence:z.number().int().positive(),state:z.enum(['ATTACHED','PUBLISHED','REMOVED']),assetId:z.uuid(),name:assetDisplayNameSchema,contentType:assetContentTypeSchema,byteSize:z.number().int().positive().max(524288),sha256:z.string().regex(/^[a-f0-9]{64}$/),assetState:z.enum(['STAGED','AVAILABLE','RETIRED']),createdAt:z.iso.datetime({offset:true})}).strict();
+export type LearningResource=z.infer<typeof learningResourceSchema>;
+export type ResourceTargetKind=z.infer<typeof resourceTargetKindSchema>;

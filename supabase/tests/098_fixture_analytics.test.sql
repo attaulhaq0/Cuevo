@@ -1,0 +1,25 @@
+begin;create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_worker;set local search_path=extensions,pg_catalog;select no_plan();
+-- Earlier completed browser events must not consume this fixture's bounded claim page.
+insert into internal.analytics_delivery(event_id,state,attempts,completed_at)select id,'COMPLETED',1,clock_timestamp()from internal.outbox_events on conflict(event_id)do update set state='COMPLETED',lease_token=null,lease_until=null,completed_at=clock_timestamp();
+insert into app.school_policy_versions(school_id,version,reason,approved_by,analytics_enabled)select'10000000-0000-4000-8000-000000000001',coalesce(max(version),0)+1,'Synthetic analytics fixture approval','20000000-0000-4000-8000-000000000001',true from app.school_policy_versions where school_id='10000000-0000-4000-8000-000000000001';
+insert into internal.outbox_events(school_id,id,actor_id,type,entity_type,entity_id,version,metadata,deduplication_key,state,completed_at)values('10000000-0000-4000-8000-000000000001','98000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000012','activity.complete','activity',gen_random_uuid(),1,'{"private":"excluded"}','analytics-golden', 'COMPLETED',clock_timestamp());
+create temporary table analytics_fixture(id uuid,lease_token uuid);grant select,insert on analytics_fixture to cuevo_worker;
+set local role cuevo_worker;
+insert into analytics_fixture select id,lease_token from internal.claim_analytics_delivery(100,30);
+select ok(exists(select 1 from analytics_fixture where id='98000000-0000-4000-8000-000000000001'),'approved synthetic completed event claimed');
+select is(internal.complete_analytics_delivery('98000000-0000-4000-8000-000000000001','99999999-0000-4000-8000-000000000001',repeat('a',64)),false,'foreign lease cannot acknowledge analytics');
+reset role;
+insert into app.school_policy_versions(school_id,version,reason,approved_by,analytics_enabled)select'10000000-0000-4000-8000-000000000001',coalesce(max(version),0)+1,'Synthetic analytics revocation','20000000-0000-4000-8000-000000000001',false from app.school_policy_versions where school_id='10000000-0000-4000-8000-000000000001';
+set local role cuevo_worker;
+select is(internal.analytics_delivery_allowed('98000000-0000-4000-8000-000000000001',(select lease_token from analytics_fixture where id='98000000-0000-4000-8000-000000000001')),false,'latest school revocation denies capture after claim');
+select is(internal.complete_analytics_delivery('98000000-0000-4000-8000-000000000001',(select lease_token from analytics_fixture where id='98000000-0000-4000-8000-000000000001'),repeat('a',64)),false,'policy revoked after claim cannot acknowledge capture');
+reset role;
+insert into app.school_policy_versions(school_id,version,reason,approved_by,analytics_enabled)select'10000000-0000-4000-8000-000000000001',coalesce(max(version),0)+1,'Synthetic analytics reapproval','20000000-0000-4000-8000-000000000001',true from app.school_policy_versions where school_id='10000000-0000-4000-8000-000000000001';
+set local role cuevo_worker;
+select is(internal.complete_analytics_delivery('98000000-0000-4000-8000-000000000001',(select lease_token from analytics_fixture where id='98000000-0000-4000-8000-000000000001'),repeat('a',64)),true,'current receipt completes minimized delivery');
+select is((select count(*)from internal.claim_analytics_delivery(100,30)where id='98000000-0000-4000-8000-000000000001'),0::bigint,'delivered event cannot capture twice');
+select throws_ok('select *from internal.analytics_delivery','42501',null,'worker has no raw analytics receipt access');
+reset role;
+select is((select insert_id from internal.analytics_delivery where event_id='98000000-0000-4000-8000-000000000001'),repeat('a',64),'receipt stores only pseudonymous insert identity');
+select ok(not has_table_privilege('authenticated','internal.analytics_delivery','SELECT,INSERT,UPDATE,DELETE'),'analytics private from Data API');
+select*from finish();rollback;

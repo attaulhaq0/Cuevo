@@ -1,0 +1,6 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { parseVersion, parseOverlay } from '../model.ts';
+import { LearningApiError } from '../../../shared/api/client.ts';
+test('official source metadata cannot appear as an approved synthetic curriculum', () => { const version = { id: 'v', packId: 'school', kind: 'school_custom', framework: 'School Custom', programme: 'Synthetic learning', version: 'v1', scope: 'Synthetic proof', sourceStatus: 'VERIFIED', rightsStatus: 'PERMITTED', sourceLocation: 'local synthetic fixture', sourceChecksum: null, synthetic: true, reason: 'School-authored synthetic context.' }; assert.equal(parseVersion(version).synthetic, true); assert.throws(() => parseVersion({ ...version, synthetic: false }), LearningApiError); });
+test('jurisdiction and quality remain separate unknown or reviewed-needed axes', () => { const overlay = { id: 'o', packVersionId: 'v', axis: 'jurisdiction', status: 'REQUIRES_REVIEW' }; assert.equal(parseOverlay(overlay).axis, 'jurisdiction'); assert.throws(() => parseOverlay({ ...overlay, status: 'CUSTOMER_READY' }), LearningApiError); assert.throws(() => parseOverlay({ ...overlay, axis: 'academic' }), LearningApiError); });

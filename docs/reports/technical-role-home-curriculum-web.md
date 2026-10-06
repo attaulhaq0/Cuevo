@@ -1,0 +1,11 @@
+# Role action home and curriculum context frontend
+
+Date: 2026-10-01. Cuevo by E Deviser. Sources00/05/06/07/13/18/26/36/37/39/43/63/69/76/79/83/85 govern current-role action, native context, source limits and programme configuration.
+
+RoleHome replaces the foundation coming-next view through a public navigation callback. It reads bounded permitted learning/submissions, marking, approved support, native feedback, outcomes/calendar/announcements and offers role-specific actions. It does not invent school-wide totals or infer missing assignments when current submission pages are incomplete. Students get available work/returned revisions/practice/feedback; teachers marking/support/attendance; coordinators programme/evidence/outcomes; parents approved child feedback/work/context; admins current setup/configuration.
+
+CurriculumWorkspace separates immutable pack versions/source/rights, reference hierarchy, programme instances and jurisdiction/quality overlays. Admin/coordinator configure synthetic references/programmes/course/learner assignments with explicit confirmations and expected versions. Official metadata remains source-limited UNKNOWN/REQUIRES_REVIEW/SOURCE_RESTRICTED and cannot be activated as official support. No syllabus facts, grading rules or accreditation claims are inferred.
+
+Pure tests failed before next-action derivation and source/overlay validation, then pass. Current-role data states/localized native values/recovery follow shared mechanisms; API permission is authoritative. Independent review ensured incomplete/error dependencies cannot be described as no action. Fresh configured production build, root/web TypeScript and focused lint passed.
+
+The isolated source-limited curriculum browser journey passed (1.7 seconds, 2.9 total), recording explicitly UNKNOWN official metadata without activation. The five-role home journey passed (7.4 seconds, 8.7 total), showing next-action surfaces with role-aware navigation, no coming-next placeholders, Arabic390 and zero axe violations for all five roles. The Browser plugin was unavailable; repository Playwright used stable local web/API/worker processes. Root owns shell/layout registration and complete clean-seed gate evidence. Native models, scopes and acceptance status are unchanged; these passing journeys do not establish official support or whole-MVP exit.

@@ -1,0 +1,82 @@
+name: Cuevo hosted learning native QA
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha: { description: Exact verified main commit, required: true, type: string }
+      ci_run_id: { description: Successful canonical main push CI, required: true, type: string }
+      ui_run_id: { description: Completed reviewed web release run, required: true, type: string }
+      ui_run_attempt: { description: Exact UI run attempt, required: true, type: string }
+      ui_artifact_id: { description: Official scoped UI artifact, required: true, type: string }
+      command_manifest_sha256: { description: Original command manifest digest, required: true, type: string }
+      journal_head_sha256: { description: Original journal head digest, required: true, type: string }
+      mode:
+        description: Full chain or retained original reconciliation
+        required: true
+        type: choice
+        options: [FULL_LOOP, ORIGINAL_RECONCILIATION]
+permissions: { contents: read, actions: read }
+env:
+  RELEASE_ENVIRONMENT: staging
+concurrency:
+  group: cuevo-hosted-learning-native-qa
+  cancel-in-progress: false
+jobs:
+  prepare-qa:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      review-base64: ${{ steps.prepare.outputs.review-base64 }}
+      review-digest: ${{ steps.prepare.outputs.review-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0' }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
+      - id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node --import tsx scripts/verification/hosted-learning-qa.ts prepare
+  native-qa:
+    needs: prepare-qa
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: { name: staging }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0' }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
+      - name: Admit current protected QA before operator credentials
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NATIVE_REVIEW_BASE64: ${{ needs.prepare-qa.outputs.review-base64 }}
+          NATIVE_REVIEW_DIGEST: ${{ needs.prepare-qa.outputs.review-digest }}
+        run: node --import tsx scripts/verification/hosted-learning-qa.ts approval
+      - name: Verify fixed original commands and native chain read only
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NATIVE_REVIEW_BASE64: ${{ needs.prepare-qa.outputs.review-base64 }}
+          NATIVE_REVIEW_DIGEST: ${{ needs.prepare-qa.outputs.review-digest }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_DATABASE_TLS_CA: ${{ secrets.CUEVO_DATABASE_TLS_CA }}
+        run: node --import tsx scripts/verification/hosted-learning-qa.ts verify
+      - name: Preserve only native QA result or failure metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-learning-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/hosted-release/learning-native-result.json
+            .local/hosted-release/learning-native-failure.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

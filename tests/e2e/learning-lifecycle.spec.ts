@@ -1,0 +1,103 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { test, expect, type Route } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { createLifecycleDiagnostics, createLifecycleResponseHistory, lifecycleDiagnosticCount, type LifecycleDiagnosticDom, type LifecycleInitialDom } from './learning-lifecycle-diagnostics';
+type Account = { role: string; email: string; password: string };
+test('private draft, teacher return and immutable resubmission work beside checked quiz answers', async ({ page }) => {
+  test.setTimeout(90_000);
+  const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
+  const teacher = accounts.find(account => account.role === 'teacher')!; const student = accounts.find(account => account.role === 'student')!;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY; if (!key) throw new Error('Local public Auth configuration required.');
+  const auth = async (account: Account) => { let response; try { response = await page.request.post(`${process.env.SUPABASE_URL ?? 'http://127.0.0.1:56321'}/auth/v1/token?grant_type=password`, { headers: { apikey: key }, data: { email: account.email, password: account.password } }); } catch { throw new Error('Synthetic Auth transport unavailable; details withheld.'); } expect(response.ok()).toBe(true); return (await response.json()).access_token as string; };
+  const teacherToken = await auth(teacher);
+  const command = async (path: string, body: Record<string, unknown>) => { let response; try { response = await page.request.post(`http://localhost:4000${path}`, { headers: { Authorization: `Bearer ${teacherToken}`, 'X-School-Id': '10000000-0000-4000-8000-000000000001', 'Idempotency-Key': randomUUID() }, data: body }); } catch { throw new Error(`Domain transport unavailable for ${path}; details withheld.`); } expect(response.ok(), 'HTTP ' + response.status() + ' for ' + path).toBe(true); return await response.json() as { id: string }; };
+  const title = `Lifecycle ${randomUUID().slice(0, 6)}`;
+  const course = await command('/v1/courses', { classId: '30000000-0000-4000-8000-000000000001', subjectId: '43000000-0000-4000-8000-000000000001', title, description: 'Independent synthetic lifecycle.' }); await command(`/v1/courses/${course.id}/publish`, {});
+  const assignment = await command('/v1/assessments', { courseId: course.id, title, instructions: 'Explain and revise.', maxScore: 10 });
+  const quiz = await command('/v1/assessments', { courseId: course.id, title: `${title} quiz`, instructions: 'Choose a safe synthetic answer.', maxScore: 10 });
+  const signIn = async (account: Account) => { await page.goto('/'); if (await page.getByRole('button', { name: 'English', exact: true }).isVisible()) await page.getByRole('button', { name: 'English', exact: true }).click(); await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, account.role); await page.getByRole('button', { name: 'Learning', exact: true }).click(); await page.getByRole('button', { name: 'Assessments', exact: true }).click(); };
+  const signOut = async () => { await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); };
+  const row = (name: string) => page.locator('.assessment-section').filter({ has: page.getByRole('heading', { name, exact: true }) });
+  const waitRow = async (target: ReturnType<typeof row>, name: string, expectedId: string) => {
+    const directory = page.locator('.learning-staff-directory [data-assessment-choice]').filter({ has: page.getByText(name, { exact: true }) });
+    for (let pageIndex = 0; pageIndex < 40; pageIndex++) {
+      const more = page.locator('.learning-workspace').getByRole('button', { name: 'Load more', exact: true }).first();
+      await expect.poll(async () => await target.count() > 0 || await directory.count() > 0 || await more.count() > 0).toBe(true);
+      if (await directory.count()) { await expect(directory).toHaveAttribute('data-assessment-choice', expectedId); await directory.getByRole('button').click(); await expect(target).toBeVisible(); return; }
+      if (await target.count()) { await expect(target).toHaveAttribute('data-assessment-id', expectedId); await expect(target).toBeVisible(); const openTask = target.getByRole('button', { name: 'Open task', exact: true }); if (await openTask.count()) await openTask.click(); return; }
+      await more.click(); await expect(page.getByRole('button', { name: 'Loading more…', exact: true })).toHaveCount(0);
+    }
+    throw new Error('Exact task was not reached within authorized continuation.');
+  };
+  const response = (suffix: string) => page.waitForResponse(result => result.url().endsWith(suffix) && result.request().method() === 'POST');
+  await signIn(teacher); const quizRow = row(`${title} quiz`); await waitRow(quizRow, `${title} quiz`, quiz.id);
+  await quizRow.getByRole('button', { name: 'Quiz versions', exact: true }).click(); await quizRow.getByRole('button', { name: 'Create quiz version', exact: true }).click();
+  const quizForm = quizRow.getByRole('region', { name: 'Create quiz version', exact: true }); await quizForm.getByLabel('Question prompt 1', { exact: true }).fill('Which example follows the teacher instructions?'); await quizForm.getByLabel('Option label 1.1', { exact: true }).fill('Show the steps'); await quizForm.getByLabel('Option label 1.2', { exact: true }).fill('Skip the explanation'); await quizForm.getByLabel('Correct answer 1', { exact: true }).selectOption({ label: 'Show the steps' }); await quizForm.getByRole('button', { name: 'Save', exact: true }).click();
+  const publish = quizRow.getByRole('region', { name: 'Publish quiz version', exact: true }); await publish.getByRole('button', { name: 'Publish quiz version', exact: true }).click(); await signOut();
+  const assignmentRow = row(title);
+  let releaseDraftRead!: () => void; const draftReadHeld = new Promise<void>(resolve => { releaseDraftRead = resolve; });
+  let draftReadStarted!: () => void; const draftReadObserved = new Promise<void>(resolve => { draftReadStarted = resolve; });
+  let draftReadFinished!: () => void; const draftReadComplete = new Promise<void>(resolve => { draftReadFinished = resolve; });
+  const draftPath = `/v1/assessments/${assignment.id}/draft`;
+  const holdDraftRead = async (route: Route) => { if (route.request().method() === 'GET') { draftReadStarted(); await draftReadHeld; } try { await route.continue(); } finally { draftReadFinished(); } };
+  await page.route(`**${draftPath}`, holdDraftRead);
+  try {
+  await signIn(student); await waitRow(assignmentRow, title, assignment.id); await draftReadObserved;
+  await assignmentRow.evaluate(element => {
+    const observed = { prematureEditor: false }; const observer = new MutationObserver(records => {
+      for (const record of records) for (const node of record.addedNodes) if (node instanceof HTMLElement
+        && (node.matches('textarea[name="content"]') || node.querySelector('textarea[name="content"]'))) observed.prematureEditor = true;
+    });
+    observer.observe(element, { childList: true, subtree: true });
+    Object.assign(element, { draftReadObservation: observed, draftReadObserver: observer });
+  });
+  // Default editing now loads the current draft before exposing any response editor.
+  await assignmentRow.getByRole('button', { name: 'Save draft', exact: true }).first().click(); await draftReadObserved;
+  await expect(assignmentRow.getByRole('region', { name: 'Save draft', exact: true }).getByLabel('Your response')).toHaveCount(0);
+  expect(await assignmentRow.evaluate(element => {
+    const state = element as HTMLElement & { draftReadObservation: { prematureEditor: boolean }; draftReadObserver: MutationObserver };
+    state.draftReadObserver.disconnect(); return state.draftReadObservation.prematureEditor;
+  }), 'An editable draft must never mount before the initial current source read completes').toBe(false);
+  releaseDraftRead(); await draftReadComplete; await page.unroute(`**${draftPath}`, holdDraftRead);
+  } finally { releaseDraftRead(); await page.unroute(`**${draftPath}`, holdDraftRead); }
+  let form = assignmentRow.getByRole('region', { name: 'Save draft', exact: true }); await form.getByLabel('Your response').fill('Private first draft.');
+  const draftSaved = response(draftPath); await form.getByRole('button', { name: 'Save draft', exact: true }).click(); const draftReceipt = await draftSaved;
+  expect(draftReceipt.ok()).toBe(true); expect(draftReceipt.request().postDataJSON()).toMatchObject({ content: 'Private first draft.', expectedRevision: 0 });
+  expect(await draftReceipt.json()).toMatchObject({ assessmentId: assignment.id, content: 'Private first draft.', revision: 1, status: 'DRAFT' });
+  form = assignmentRow.getByRole('region', { name: 'Submit work', exact: true }); await expect(form.getByLabel('Your response')).toHaveValue('Private first draft.'); const submitted = response(`/v1/assessments/${assignment.id}/submissions`); await form.getByRole('button', { name: 'Submit work', exact: true }).click(); const original = await (await submitted).json() as { id: string }; await signOut();
+  await signIn(teacher); await page.getByRole('button', { name: 'Submissions', exact: true }).click(); const submissionChoice = page.locator('.learning-staff-directory [data-submission-choice]').filter({ has: page.getByText(title, { exact: true }) }); for(let pageIndex=0;pageIndex<40&&!await submissionChoice.count();pageIndex++){const more=page.locator('.learning-workspace').getByRole('button',{name:'Load more',exact:true}).first();await expect.poll(async()=>await submissionChoice.count()>0||await more.count()>0).toBe(true);if(!await submissionChoice.count()){await more.click();await expect(page.getByRole('button',{name:'Loading more…',exact:true})).toHaveCount(0);}}await expect(submissionChoice).toHaveCount(1);await expect(submissionChoice).toHaveAttribute('data-submission-choice',original.id);
+  const diagnostics=createLifecycleDiagnostics(original.id,(original as {revision?:unknown}).revision);
+  const history=createLifecycleResponseHistory();let initialDom:LifecycleInitialDom={returnFormCount:null,feedbackCount:null};
+  let diagnosticActive=false,diagnosticGeneration=0,readSequence=0;const observations:Promise<void>[]=[];const latestReadSequence:Record<string,number>={};
+  const observeLifecycle=(result:import('@playwright/test').Response)=>{if(!diagnosticActive||result.request().method()!=='GET')return;const path=new URL(result.url()).pathname;const category=path==='/v1/me'?'MEMBERSHIP':path==='/v1/submissions'?'SUBMISSION_QUEUE':path===`/v1/submissions/${original.id}/source-work`?'SELECTED_SOURCE_WORK':null;if(!category)return;const generation=diagnosticGeneration,sequence=++readSequence,historyToken=history.begin(category,result.status());latestReadSequence[category]=sequence;if(historyToken===null){diagnostics.observeUnknown(category,result.status());return;}if(category==='MEMBERSHIP'){diagnostics.observeUnknown(category,result.status());return;}const notObserved=Symbol('not-observed');let timer:ReturnType<typeof setTimeout>;observations.push(Promise.race([result.json().catch(()=>null),new Promise<symbol>(done=>{timer=setTimeout(()=>done(notObserved),500);})]).then(body=>{clearTimeout(timer!);if(body!==notObserved){const sample=createLifecycleDiagnostics(original.id,(original as {revision?:unknown}).revision);sample.observe(category,result.status(),body);history.settle(historyToken,sample.summary('BLANK_EDITOR',{readerCount:null,selectedCount:null,selectedIdentityMatches:null,returnFormCount:null,feedbackCount:null}).reads[category].schemaValid);}if(generation===diagnosticGeneration&&latestReadSequence[category]===sequence){if(body===notObserved)diagnostics.observeUnknown(category,result.status());else diagnostics.observe(category,result.status(),body);}}));};
+  const boundedCount=(locator:import('@playwright/test').Locator)=>lifecycleDiagnosticCount(()=>locator.count());
+  diagnosticActive=true;diagnosticGeneration++;page.on('response',observeLifecycle);
+  await submissionChoice.getByRole('button').click();const submissionRow = page.locator('.submission-section').filter({ has:page.getByRole('heading',{name:title,exact:true}) }); await expect(submissionRow).toBeVisible(); await submissionRow.getByRole('button', { name: 'Return for revision', exact: true }).click(); const returnedForm = submissionRow.getByRole('region', { name: 'Return for revision', exact: true });
+  const initialCounts=await Promise.all([boundedCount(returnedForm),boundedCount(returnedForm.getByLabel('Revision feedback'))]);initialDom={returnFormCount:initialCounts[0],feedbackCount:initialCounts[1]};
+  const revalidateSubmission = async () => {
+    const membershipRead = page.waitForResponse(result => new URL(result.url()).pathname === '/v1/me' && result.request().method() === 'GET');
+    const sourceRead = page.waitForResponse(result => new URL(result.url()).pathname === '/v1/submissions' && result.request().method() === 'GET');
+    await page.evaluate(() => dispatchEvent(new Event('focus')));
+    expect((await membershipRead).ok()).toBe(true); expect((await sourceRead).ok()).toBe(true);
+    await expect(page.locator('[data-submission-choice]').filter({ has: page.locator('button[aria-current="true"]') })).toHaveAttribute('data-submission-choice', original.id);
+  };
+  const checkReturnRevalidation=async(stage:'BLANK_EDITOR'|'TYPED_EDITOR',assertEditor:()=>Promise<void>)=>{
+    diagnostics.reset();diagnosticGeneration++;if(stage==='TYPED_EDITOR'){history.reset();observations.length=0;diagnosticActive=true;page.on('response',observeLifecycle);}
+    try{await revalidateSubmission();await assertEditor();}
+    catch(error){
+      try{await Promise.all(observations);
+      const identityCount=await boundedCount(page.locator(`[data-submission-choice="${original.id}"] button[aria-current="true"]`));
+      const dom:LifecycleDiagnosticDom={readerCount:await boundedCount(submissionRow),selectedCount:await boundedCount(page.locator('[data-submission-choice] button[aria-current="true"]')),selectedIdentityMatches:identityCount===null?null:identityCount===1,returnFormCount:await boundedCount(returnedForm),feedbackCount:await boundedCount(returnedForm.getByLabel('Revision feedback'))};
+      console.log(JSON.stringify(diagnostics.summary(stage,dom,initialDom,history.snapshot())));}catch{console.log(JSON.stringify({code:'RETURN_EDITOR_DIAGNOSTIC_UNAVAILABLE',stage}));}throw error;
+    }finally{diagnosticActive=false;page.off('response',observeLifecycle);}
+  };
+  // The editor choice exists before a command or a typed draft. Ordinary
+  // revalidation must restore it only after this same source is read again.
+  await checkReturnRevalidation('BLANK_EDITOR',()=>expect(returnedForm.getByLabel('Revision feedback')).toBeVisible());
+  await returnedForm.getByLabel('Revision feedback').fill('Explain each step and resubmit.');
+  await checkReturnRevalidation('TYPED_EDITOR',()=>expect(returnedForm.getByLabel('Revision feedback')).toHaveValue('Explain each step and resubmit.')); const returnResponse = response(`/v1/submissions/${original.id}/return`); await returnedForm.getByRole('button', { name: 'Return for revision', exact: true }).click(); const returnReceipt = await returnResponse; expect(returnReceipt.status()).toBe(200); expect(await returnReceipt.json()).toMatchObject({ status: 'RETURNED' }); await expect(returnedForm).toHaveCount(0); await signOut();
+  await signIn(student); await waitRow(assignmentRow, title, assignment.id); await expect(assignmentRow.getByText('Returned for revision', { exact: true })).toBeVisible(); const revisedForm = assignmentRow.getByRole('region', { name: 'Resubmit revised work', exact: true }); await revisedForm.getByLabel('Your response').fill('Revised source: each step is explained.'); const resubmitted = response(`/v1/submissions/${original.id}/resubmit`); await revisedForm.getByRole('button', { name: 'Resubmit revised work', exact: true }).click(); const revised = await (await resubmitted).json(); expect(revised).toMatchObject({ revision: 2, previousSubmissionId: original.id }); await assignmentRow.getByRole('button', { name: 'Submission history', exact: true }).click(); await expect(assignmentRow.getByRole('region', { name: 'Submission history', exact: true })).toContainText('Private first draft.'); await expect(assignmentRow).toContainText('Revised source: each step is explained.');
+  await waitRow(quizRow, `${title} quiz`, quiz.id); const attemptForm = quizRow.getByRole('region', { name: 'Quiz questions', exact: true }); await attemptForm.getByLabel('Which example follows the teacher instructions?').selectOption({ label: 'Show the steps' }); const checkedResponse = response('/v1/assessments/' + quiz.id + '/quiz/attempts'); await attemptForm.getByRole('button', { name: 'Check my answers', exact: true }).click(); const checkedReceipt = await checkedResponse; expect(checkedReceipt.ok()).toBe(true); expect(await checkedReceipt.json()).toMatchObject({ assessmentId: quiz.id, status: 'CHECKED_NOT_GRADED' }); await expect(attemptForm).toHaveCount(0); await waitRow(quizRow, title + ' quiz', quiz.id); await expect(quizRow.getByText('Answers checked — not graded', { exact: true })).toBeVisible(); await expect(quizRow).not.toContainText('Correct option key'); await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+});

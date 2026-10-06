@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import React,{createElement} from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { registerHooks } from 'node:module';
+import { LearningApiError } from '../../../shared/api/client.ts';
+import { schoolDayEn,schoolDayAr } from '../day-messages.ts';
+import type { ParentCalendarSource } from '../parent-calendar-model.ts';
+const fixture={locale:'en',membership:{role:'parent'},accessGeneration:1};Object.assign(globalThis,{React,parentDaySourceFixture:fixture});
+registerHooks({load(url,context,next){if(url.replaceAll('\\','/').endsWith('/shared/session/providers.tsx'))return{format:'module',shortCircuit:true,source:'export function useApp(){return globalThis.parentDaySourceFixture}'};return next(url,context);}});
+const{SchoolDayRecords}=await import('../components/school-day-records.tsx');
+const base:ParentCalendarSource={loaded:true,loading:false,loadingMore:false,error:null,moreError:null,nextCursor:null};
+const policy={version:1,parentAttendanceVisible:true,parentUpcomingVisible:true,studentMessagingEnabled:false as const,recognitionEnabled:false,leaderboardEnabled:false,analyticsEnabled:false};
+test('Parent partial zero day panels each show one partial state and no no-record claim',()=>{for(const locale of['en','ar']){fixture.locale=locale;const t=locale==='ar'?schoolDayAr:schoolDayEn;const html=renderToStaticMarkup(createElement(SchoolDayRecords,{attendance:[],timetable:[],calendar:[],policy,day:'2026-10-06',onDayChange(){},parentChildId:'current-child',parentSources:{calendar:base,timetable:{...base,nextCursor:'later'},attendance:{...base,loadingMore:true}}}));assert.equal(html.split(t.partial).length-1,2);assert.ok(!html.includes(t.noTimetable));assert.ok(!html.includes(t.noAttendance));assert.ok(!html.includes('data-state="empty"')||html.includes('parent-calendar'));}});
+test('Parent missing current sources and current denial withhold stale rows while complete zero remains empty',()=>{fixture.locale='en';const render=(source:ParentCalendarSource|undefined)=>renderToStaticMarkup(createElement(SchoolDayRecords,{attendance:[],timetable:[],calendar:[],policy,day:'2026-10-06',onDayChange(){},parentChildId:'current-child',parentSources:source?{calendar:base,timetable:source,attendance:source}:undefined}));assert.ok(render(undefined).includes(schoolDayEn.recordsChecking));assert.ok(!render(undefined).includes(schoolDayEn.noAttendance));assert.ok(render(base).includes(schoolDayEn.noAttendance));const denied=render({...base,moreError:new LearningApiError('denied')});assert.ok(denied.includes('role="alert"'));assert.ok(!denied.includes(schoolDayEn.noAttendance));});

@@ -1,0 +1,3 @@
+-- Historical no-op version applied while the community design was still being reviewed.
+-- Complete community persistence/private Realtime is defined by later migration
+-- 20261001091545_safe_community_implementation.sql. Preserve this applied source identity.

@@ -1,0 +1,31 @@
+import { z } from 'zod';
+
+const accountRole = z.enum(['admin', 'coordinator', 'teacher', 'student', 'parent']);
+const reason = z.string().trim().min(1).max(1000);
+/** Current setup only; this read does not approve or perform account operations. */
+export const schoolAccountAvailabilitySchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('AVAILABLE'), reason: z.null() }).strict(),
+  z.object({ state: z.literal('SETUP_REQUIRED'), reason: z.enum(['OPERATOR_APPROVAL_REQUIRED', 'DELIVERY_UNAVAILABLE']) }).strict(),
+]);
+export const schoolAccountInviteSchema = z.object({ displayName: z.string().trim().min(1).max(200), email: z.email().max(254), role: accountRole, reason, confirmInvitation: z.literal(true) }).strict();
+export const schoolAccountInvitationRevokeSchema = z.object({ expectedRevision: z.number().int().positive(), reason, confirmRevocation: z.literal(true) }).strict();
+export const schoolAccountClaimSchema = z.object({ id: z.uuid(), admissionSecret: z.string().regex(/^[a-f0-9]{64}$/), confirmAdmission: z.literal(true) }).strict();
+export const schoolAccountInvitationQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(25).default(25), cursor: z.uuid().optional() }).strict();
+export const schoolAccountInvitationStatusSchema = z.enum(['REQUESTED', 'SOURCE_ACKNOWLEDGED', 'IDENTITY_CONFIRMED', 'LINK_PENDING', 'DELIVERY_ACCEPTED', 'CLAIMED', 'REVOKED', 'REQUIRES_REVIEW', 'OUTCOME_UNKNOWN']);
+const invitationFields = { id: z.uuid(), schoolId: z.uuid(), revision: z.number().int().positive(), status: schoolAccountInvitationStatusSchema, createdAt: z.iso.datetime({ offset: true }), expiresAt: z.iso.datetime({ offset: true }) };
+export const schoolAccountInvitationReceiptSchema = z.object(invitationFields).strict().refine(value => Date.parse(value.expiresAt) > Date.parse(value.createdAt), 'Invitation expiry must follow creation.');
+export const schoolAccountInvitationSchema = z.object({ ...invitationFields, purpose: z.enum(['invite', 'recovery']).optional(), displayName: z.string().trim().min(1).max(200), email: z.email().max(254), role: accountRole, userId: z.uuid().nullable() }).strict().refine(value => Date.parse(value.expiresAt) > Date.parse(value.createdAt), 'Invitation expiry must follow creation.');
+export const schoolAccountInvitationPageSchema = z.object({ items: z.array(schoolAccountInvitationSchema).max(25), nextCursor: z.uuid().nullable() }).strict().refine(value => new Set(value.items.map(item => item.id)).size === value.items.length, 'Invitation identities must be unique.');
+export const schoolAccountClaimReceiptSchema = z.object({ id: z.uuid(), schoolId: z.uuid(), userId: z.uuid(), role: accountRole, status: z.literal('CLAIMED'), revision: z.number().int().positive() }).strict();
+export const schoolAccountDeliveryRequestSchema = z.object({ expectedRevision: z.literal(1), confirmDelivery: z.literal(true) }).strict();
+export const schoolAccountEffectReceiptSchema = z.object({ id: z.uuid(), schoolId: z.uuid(), eventId: z.uuid(), requestRevision: z.literal(1), status: z.enum(['AWAITING_CLAIM', 'REQUIRES_REVIEW', 'OUTCOME_UNKNOWN']), providerState: z.enum(['CONFIRMED', 'REQUIRES_REVIEW', 'OUTCOME_UNKNOWN']), deliveryState: z.enum(['ACCEPTED', 'REQUIRES_REVIEW', 'OUTCOME_UNKNOWN']) }).strict().refine(value => value.status !== 'AWAITING_CLAIM' || value.providerState === 'CONFIRMED' && value.deliveryState === 'ACCEPTED', 'Awaiting claim requires confirmed provider and delivery effects.');
+export const schoolAccountEffectStatusSchema = z.object({ state: z.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']), receipt: schoolAccountEffectReceiptSchema.nullable() }).strict();
+export const schoolAccountRecoveryRequestSchema = z.object({ expectedMembershipRevision: z.number().int().positive(), reason, confirmRecovery: z.literal(true) }).strict();
+export const schoolAccountRecoveryAuthorizationSchema = z.object({ id: z.uuid(), admissionSecret: z.string().regex(/^[a-f0-9]{64}$/), confirmRecovery: z.literal(true) }).strict();
+export const schoolAccountRecoveryCompletionSchema = z.object({ id: z.uuid(), confirmCompletion: z.literal(true) }).strict();
+export const schoolAccountRecoveryReceiptSchema = z.object({ id: z.uuid(), schoolId: z.uuid(), userId: z.uuid(), status: z.enum(['AUTHORIZED', 'COMPLETED']), revision: z.literal(1) }).strict();
+export type SchoolAccountInvite = z.infer<typeof schoolAccountInviteSchema>;
+export type SchoolAccountInvitation = z.infer<typeof schoolAccountInvitationSchema>;
+export type SchoolAccountInvitationPage = z.infer<typeof schoolAccountInvitationPageSchema>;
+export type SchoolAccountInvitationReceipt = z.infer<typeof schoolAccountInvitationReceiptSchema>;
+export type SchoolAccountClaimReceipt = z.infer<typeof schoolAccountClaimReceiptSchema>;

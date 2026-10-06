@@ -1,0 +1,3 @@
+import{describe,expect,it}from'vitest';import type{Database}from'../../src/platform/database/database';import{CommunityMentionService}from'../../src/modules/community/mentions.service';
+const id='00000000-0000-4000-8000-000000000001';const actor={userId:id,schoolId:id,membershipId:id,role:'parent'as const,entitlements:['community']};
+describe('mention source role boundary',()=>{it('parent cannot read pupil mention or confirm receipt',async()=>{const service=new CommunityMentionService({}as Database);await expect(service.source(actor,id)).rejects.toMatchObject({status:403});await expect(service.read(actor,id,{},'mention-read-key','test')).rejects.toMatchObject({status:403});});});

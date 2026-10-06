@@ -1,0 +1,18 @@
+begin;
+create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_api,cuevo_worker;set local search_path=extensions,pg_catalog;select no_plan();
+create temporary table document_events(draft uuid,first_event uuid,second_event uuid,lease uuid);grant select,insert,update on document_events to cuevo_api,cuevo_worker;
+insert into app.courses(school_id,id,class_id,subject_id,created_by,title,description,status)values('10000000-0000-4000-8000-000000000001','99540000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000004','Document draft event course','Synthetic','PUBLISHED');
+insert into app.assessments(school_id,id,course_id,created_by,title,instructions,max_score)values('10000000-0000-4000-8000-000000000001','99550000-0000-4000-8000-000000000001','99540000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000004','Document draft event source','Explain',10);
+set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000012',true);
+insert into document_events(draft)values((internal.submission_work_command('draft','99550000-0000-4000-8000-000000000001',null,'{"responseKind":"TEXT","content":"First actual draft","assetIds":[],"expectedRevision":0}','document-event-draft1',repeat('a',64),'document-event-test')->>'id')::uuid);
+select internal.submission_work_command('draft','99550000-0000-4000-8000-000000000001',null,'{"responseKind":"TEXT","content":"Second actual draft","assetIds":[],"expectedRevision":1}','document-event-draft2',repeat('b',64),'document-event-test')is not null as later_draft;
+reset role;update document_events set first_event=(select id from internal.outbox_events where school_id='10000000-0000-4000-8000-000000000001'and entity_id=document_events.draft and type='submission.work.changed'and version=1),second_event=(select id from internal.outbox_events where school_id='10000000-0000-4000-8000-000000000001'and entity_id=document_events.draft and type='submission.work.changed'and version=2),lease=gen_random_uuid();
+update internal.outbox_events set state='PROCESSING',lease_token=(select lease from document_events),lease_until=clock_timestamp()+interval'30 seconds'where id=(select first_event from document_events);
+set local role cuevo_worker;
+select lives_ok($$select internal.process_learner_event((select first_event from document_events),(select lease from document_events))$$,'older valid draft event ACK uses immutable audit revision after draft advances');
+reset role;update document_events set lease=gen_random_uuid();update internal.outbox_events set state='PROCESSING',version=99,lease_token=(select lease from document_events),lease_until=clock_timestamp()+interval'30 seconds'where id=(select second_event from document_events);set local role cuevo_worker;
+select throws_ok($$select internal.process_learner_event((select second_event from document_events),(select lease from document_events))$$,'22023',null,'forged draft event version cannot ACK against another audit revision');
+reset role;
+select is((select count(*)from internal.processed_events where event_id in(select first_event from document_events)),1::bigint,'one valid older event is acknowledged');select is((select count(*)from internal.processed_events where event_id in(select second_event from document_events)),0::bigint,'forged event has no processed receipt');
+select is((select count(*)from app.habit_observations where source_event_id in(select first_event from document_events)),0::bigint,'draft ACK does not fabricate a habit observation');
+select*from finish();rollback;

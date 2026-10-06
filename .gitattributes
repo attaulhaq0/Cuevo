@@ -1,3 +1,26 @@
 * text=auto eol=lf
+supabase/migrations/20261003032848_current_academic_source_candidates.sql -text -eol
+supabase/migrations/20261003035947_human_academic_source_context.sql -text -eol
+supabase/migrations/20261003040930_academic_reference_display_dates.sql -text -eol
+supabase/migrations/20261003043730_human_outcome_read_context.sql -text -eol
+supabase/migrations/20261003045152_outcome_context_authorized_projection.sql -text -eol
+supabase/migrations/20261003045559_intervention_history_exact_candidate.sql -text -eol
 *.png binary
+supabase/migrations/20261003043730_human_outcome_read_context.sql -text -eol
+supabase/migrations/20261003045152_outcome_context_authorized_projection.sql -text -eol
+supabase/migrations/20261003045559_intervention_history_exact_candidate.sql -text -eol
 *.pdf binary
+# Preserve exact applied bytes for these newly authored migration sources.
+# Older migrations retain their canonical existing Git representation.
+supabase/migrations/20261002020723_submission_work_and_portfolio_artifacts.sql -text -eol
+supabase/migrations/20261002022848_controlled_parent_teacher_conversations.sql -text -eol
+supabase/migrations/20261002023055_parent_conversation_choice_identity.sql -text -eol
+supabase/migrations/20261002025737_versioned_learning_content_and_connected_tasks.sql -text -eol
+supabase/migrations/20261002030019_learning_content_structural_scope.sql -text -eol
+supabase/migrations/20261002031417_controlled_community_maintenance.sql -text -eol
+supabase/migrations/20261002032051_community_archived_source_scope.sql -text -eol
+supabase/migrations/20261002034618_controlled_group_mentions.sql -text -eol
+supabase/migrations/20261002035925_restricted_synthetic_school_records.sql -text -eol
+supabase/migrations/20261002040140_restricted_record_history_context.sql -text -eol
+supabase/migrations/20261002041452_school_automation_policy_execution_review.sql -text -eol
+supabase/migrations/20261002074258_bounded_intelligence_metric_sources.sql -text -eol

@@ -1,0 +1,10 @@
+begin;create extension if not exists pgtap with schema extensions;grant usage on schema extensions to cuevo_api;set local search_path=extensions,pg_catalog;select no_plan();
+set local role cuevo_api;select set_config('app.school_id','10000000-0000-4000-8000-000000000001',true);select set_config('app.actor_id','20000000-0000-4000-8000-000000000001',true);
+select lives_ok($$select internal.read_school_audit('{"limit":25}')$$,'School admin may read sanitized current audit');
+select ok(not exists(select 1 from jsonb_array_elements(internal.read_school_audit('{"limit":25}')->'items')row where row?'metadata'or row?'actorId'),'Sanitized audit excludes raw metadata and actor identifiers');
+select set_config('app.actor_id','20000000-0000-4000-8000-000000000004',true);
+select throws_ok($$select internal.read_school_audit('{"limit":25}')$$,'42501',null,'Teacher has no admin audit authority');
+reset role;
+select ok(not has_function_privilege('authenticated','internal.read_school_audit(jsonb)','execute'),'Browser Data API cannot read audit helper');
+select ok(not has_function_privilege('cuevo_worker','internal.read_school_audit(jsonb)','execute'),'Worker has no admin audit read');
+select*from finish();rollback;

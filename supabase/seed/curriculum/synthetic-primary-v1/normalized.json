@@ -1,0 +1,28 @@
+{
+  "references": [
+    {
+      "key": "stage",
+      "parent": null,
+      "type": "stage",
+      "title": "Synthetic stage",
+      "description": "School-defined stage for the technical case.",
+      "sequence": 1
+    },
+    {
+      "key": "mathematics",
+      "parent": "stage",
+      "type": "subject",
+      "title": "School mathematics",
+      "description": "School-authored mathematics context.",
+      "sequence": 1
+    },
+    {
+      "key": "explanation",
+      "parent": "mathematics",
+      "type": "objective",
+      "title": "Explain the school example",
+      "description": "Explain the selected school-authored example and a checking step.",
+      "sequence": 1
+    }
+  ]
+}

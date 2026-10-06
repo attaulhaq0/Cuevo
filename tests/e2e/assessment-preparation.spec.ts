@@ -1,0 +1,53 @@
+import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import{test,expect,type Locator}from'@playwright/test';
+import{readFile}from'node:fs/promises';
+import{randomUUID}from'node:crypto';
+import { humanContextLabel, selectHumanChoice } from './human-choice';
+import { openCurrentStaffAssessment } from './learning-source-navigation';
+type Account={role:string;email:string;password:string};
+async function selectPreparationCourse(form: Locator, title: string, courseId: string) {
+  return selectHumanChoice(form.getByLabel('Course', { exact: true }), `${title} · Year 1 · Cedar · Year 1 · 2026–2027 · Mathematics`, courseId);
+}
+
+test('adapter: course preparation selects one human class and subject caption with its independent receipt', async ({ page }) => {
+ const courseId='f4000000-0000-4000-8000-000000000001',title='Explain (and check) [school]';
+ const label=`${title} · Year 1 · Cedar · Year 1 · 2026–2027 · Mathematics`;
+ await page.setContent(`<section aria-label="Create assessment"><label for="course">Course</label><select id="course"><option value="">Course</option><option value="${courseId}">${label}</option><option value="f4000000-0000-4000-8000-000000000002">${title} · Year 2 · Maple · Year 2 · 2026–2027 · Mathematics</option></select></section>`);
+ const form=page.getByRole('region',{name:'Create assessment',exact:true});
+ expect(await selectPreparationCourse(form,title,courseId)).toEqual({label,value:courseId});
+ await expect(form.getByLabel('Course',{exact:true})).toHaveValue(courseId);
+});
+
+test('adapter: course preparation refuses duplicate captions, disabled choices and wrong receipt identity', async ({ page }) => {
+ const courseId='f4000000-0000-4000-8000-000000000001',otherId='f4000000-0000-4000-8000-000000000002',title='Checking explanations';
+ const label=`${title} · Year 1 · Cedar · Year 1 · 2026–2027 · Mathematics`;
+ for(const options of [
+  `<option value="${courseId}">${label}</option><option value="${otherId}">${label}</option>`,
+  `<option value="${courseId}" disabled>${label}</option>`,
+  `<option value="${otherId}">${label}</option>`,
+ ]){
+  await page.setContent(`<section aria-label="Create assessment"><label for="course">Course</label><select id="course"><option value="">Course</option>${options}</select></section>`);
+  const form=page.getByRole('region',{name:'Create assessment',exact:true});
+  await expect(selectPreparationCourse(form,title,courseId)).rejects.toThrow();
+  await expect(form.getByLabel('Course',{exact:true})).toHaveValue('');
+ }
+});
+test('teacher privately prepares and publishes a quiz, then its learner reviews checked answers after closure',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(15000);
+ const accounts=JSON.parse(await readFile('.local/synthetic-accounts.json','utf8'))as Account[];const teacher=accounts.find(item=>item.role==='teacher')!;const student=accounts.find(item=>item.role==='student')!;
+ const key=process.env.SUPABASE_PUBLISHABLE_KEY!;const auth=await page.request.post(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=password`,{headers:{apikey:key},data:{email:teacher.email,password:teacher.password}});expect(auth.ok()).toBe(true);const token=(await auth.json()).access_token;
+ const title=`Prepared school question ${randomUUID().slice(0,5)}`;
+ const command=async(path:string,body:Record<string,unknown>)=>{const response=await page.request.post(`http://localhost:4000${path}`,{headers:{Authorization:`Bearer ${token}`,'X-School-Id':'10000000-0000-4000-8000-000000000001','Idempotency-Key':randomUUID()},data:body});expect(response.ok(),response.status().toString()).toBe(true);return response.json();};
+ const courseTitle=`${title} course`;const course=await command('/v1/courses',{classId:'30000000-0000-4000-8000-000000000001',subjectId:'43000000-0000-4000-8000-000000000001',title:courseTitle,description:'Synthetic source setup'});await command(`/v1/courses/${course.id}/publish`,{});
+ const login=async(account:Account)=>{await page.goto('/');await page.getByLabel('School email').fill(account.email);await page.getByLabel('Password',{exact:true}).fill(account.password);await page.getByRole('button',{name:'Sign in',exact:true}).click(); await expectTrailWorkspace(page, account.role);await page.locator('.workspace-chrome__navigation').getByRole('button',{name:'Learning',exact:true}).click();await page.getByRole('button',{name:'Assessments',exact:true}).click();};
+ const out=async()=>{await signOutTrailWorkspace(page);await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();};
+ await login(teacher);await page.getByRole('button',{name:'Create assessment',exact:true}).click();const create=page.getByRole('region',{name:'Create assessment',exact:true});await expect(create.getByLabel('Course',{exact:true}).locator('option')).toContainText([courseTitle]);await selectPreparationCourse(create,courseTitle,course.id);await create.getByLabel('Title',{exact:true}).fill(title);await create.getByLabel('Response type',{exact:true}).selectOption({label:'Quiz questions'});await create.getByLabel('Assessment model',{exact:true}).selectOption({label:'School numeric scale'});await create.getByLabel('Maximum score',{exact:true}).fill('10');await create.getByLabel('Instructions',{exact:true}).fill('Choose the checked explanation.');
+ const created=page.waitForResponse(response=>new URL(response.url()).pathname==='/v1/assessments'&&response.request().method()==='POST');await create.getByRole('button',{name:'Save',exact:true}).click();const draft=await(await created).json();expect(draft).toMatchObject({courseId:course.id,title,status:'DRAFT',assignmentState:'CLOSED'});await openCurrentStaffAssessment(page,{id:draft.id,courseId:course.id,title,courseTitle,status:'DRAFT'});
+ let row=page.locator('.assessment-section').filter({has:page.getByRole('heading',{name:title,exact:true})});await expect(row).toBeVisible();const prepare=row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Edit task preparation',exact:true})}).last();await expect(prepare.getByLabel('Approved learning objective',{exact:true}).locator('option')).not.toHaveCount(1);await selectHumanChoice(prepare.getByLabel('Approved learning objective',{exact:true}),humanContextLabel('Synthetic school-authored explanation objective'),'61000000-0000-4000-8000-000000000001');const prepared=page.waitForResponse(response=>new URL(response.url()).pathname===`/v1/assessments/${draft.id}/preparation`&&response.request().method()==='POST');await prepare.getByRole('button',{name:'Save preparation',exact:true}).click();const preparationResponse=await prepared;expect(preparationResponse.status()).toBe(200);expect((await preparationResponse.json()).referenceId).toBe('61000000-0000-4000-8000-000000000001');
+ await row.getByRole('button',{name:'Quiz versions',exact:true}).click();await row.getByRole('button',{name:'Create quiz version',exact:true}).click();const quiz=row.getByRole('region',{name:'Create quiz version',exact:true});await quiz.getByLabel('Question prompt 1',{exact:true}).fill('Which explanation checks the method?');await quiz.getByLabel('Option label 1.1',{exact:true}).fill('Skip checking');await quiz.getByLabel('Option label 1.2',{exact:true}).fill('Explain and check');await quiz.getByLabel('Correct answer 1',{exact:true}).selectOption({label:'Explain and check'});await quiz.getByRole('button',{name:'Save',exact:true}).click();await row.getByRole('region',{name:'Publish quiz version',exact:true}).getByRole('button',{name:'Publish quiz version',exact:true}).click();const publication=page.waitForResponse(response=>new URL(response.url()).pathname===`/v1/assessments/${draft.id}/publish`&&response.request().method()==='POST');await row.locator('.learning-form').filter({has:page.getByRole('heading',{name:'Publish prepared assessment',exact:true})}).last().getByRole('button',{name:'Publish prepared assessment',exact:true}).click();expect((await publication).status()).toBe(200);await expect(row.getByText('Published',{exact:true}).first()).toBeVisible();await out();
+ await login(student);row=page.locator('.assessment-section').filter({has:page.getByRole('heading',{name:title,exact:true})});await expect(row).toBeVisible();await row.getByRole('button',{name:'Open task',exact:true}).click();await row.getByLabel('Which explanation checks the method?',{exact:true}).selectOption({label:'Skip checking'});await row.getByRole('button',{name:'Check my answers',exact:true}).click();await expect(row.getByText('Answers checked — not graded',{exact:true})).toBeVisible();await out();
+ const current=await page.request.get('http://localhost:4000/v1/assessments?limit=100',{headers:{Authorization:`Bearer ${token}`,'X-School-Id':'10000000-0000-4000-8000-000000000001'}});const task=(await current.json()).items.find((item:{id:string})=>item.id===draft.id);await command(`/v1/assessments/${draft.id}/availability`,{availableFrom:null,availableUntil:null,allowLate:false,state:'CLOSED',expectedAvailabilityVersion:task.availabilityVersion});
+ await login(student);await row.getByRole('button',{name:'Open task',exact:true}).click();await expect(row.getByText('Answers checked — not graded',{exact:true})).toBeVisible();await expect(row).toContainText('Incorrect');await expect(row.getByRole('button',{name:'Check my answers',exact:true})).toHaveCount(0);await expect(row).not.toContainText('correctOptionKey');
+});
+
+

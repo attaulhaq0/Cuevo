@@ -1,0 +1,11 @@
+# Focused workspace navigation slot
+
+Status: bounded implementation decision for the founder-selected [focused navigation rule](../design/2026-10-04-focused-workspace-navigation.md). Source and isolated component verification do not establish connected all-role or release acceptance.
+
+The sole Shell WorkspaceChrome supplies a DOM host through `@cuevo/ui` WorkspaceNavigationProvider/Host. Existing six feature root WorkspaceTabs usages portal their actual current controls and Refresh actions to that host; selection, source hooks, forms, command locks and receipts stay with their existing owners. Features do not import Shell internals, and the UI package does not depend on app code. Server HTML and the first client render both wait for the ref-established host.
+
+A different-item click invokes the original owner callback and emits an optional activation hint. Shell schedules one frame, verifies that exact requested section is now current and enabled, then reveals its existing main start and focuses the retained h1. A rejected or disabled selection does not reset scroll; same-item clicks and background Refresh/render/resize effects do not emit the hint. The hint carries presentation intent only and does not grant admission, submit a command, settle a key or clear working input.
+
+Home retains the full permitted rail/dock. Account/Access stay in the existing Profile and full Search route catalogue. Inside workspaces, the chooser projects the admitted product workspace catalogue and dismisses on external scroll/resize, while its own menu can scroll and destination/opener focus follows the existing native popover pattern. Focused desktop has one main scroll below Chrome; mobile stays page flow. At801–1100px readable identity/context rows prevent long school/person labels from leaving the short reading plane clipped.
+
+Verification includes actual SSR/hydration component checks in installed Chromium/Firefox/WebKit, deliberate/same/denied/disabled selection, unchanged working input/background refresh, chooser own/external scrolling and resize, and long Arabic820×500reflow. The authored focused navigation browser suite covers production frontend presentation with intercepted synthetic source responses; connected authorization, original-key recovery and all-role/native zoom acceptance remain separate.

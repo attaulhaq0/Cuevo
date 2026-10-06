@@ -1,0 +1,43 @@
+# Controlled pilot operations
+
+Status: working operational evidence and prerequisites. This runbook does not authorize real-pupil release. Final supported scope and classifications will be set in the acceptance report after verification.
+
+## Environment boundary
+
+Local and development environments contain synthetic data only. Supabase Cuevo uses API56321/DB56322 and network `cuevo-local`; other stacks must remain untouched. Root `.env.local`, `.local/runtime-secrets.json` and `.local/synthetic-accounts.json` are ignored secret-bearing files. Do not include their contents in a support ticket, screenshot, log or repository commit.
+
+Use `npm ci`, `npm run local:bootstrap` and `npm run dev` for a fresh authorized synthetic environment. Bootstrap resets the verified local Cuevo database, applies append-only migrations and provisions fixture identities; it is unsuitable for an existing school database. Local dev starts installed processes with per-service environment recipients. Web receives only public config; API and worker receive their own credentials. The local Docker skeleton is also synthetic, with fixture API settings; it is not a production release manifest.
+
+Acceptance tests create deliberately identifiable records, including random title suffixes. They must not become customer demo content. After final suites finish and applications stop, run the guarded local bootstrap again to restore the fictional reference-school dataset. Confirm readable names/classes, source-locked demo courses and intact synthetic population before demonstration. This local reset does not alter a customer database or rewrite human-authored product content. Test evidence remains in ignored artifacts and committed reports.
+
+Official curriculum activation remains unavailable. Synthetic School Custom packs demonstrate context isolation; they make no British/Qatar awarding-body or accreditation claim. Fixture intelligence requires explicit local or project/origin-bound hosted synthetic staging authority and remains forbidden for production/real populations. The earlier Microsoft Foundry protected-loop test is historical for its numeric contract; current expanded prompts are fixture-tested. Live execution requires explicit provider/data settings plus current school policy. Minimized PostHog synthetic capture now has a real Node/Edge adapter with private policy/operator activation and indexed readback; keys alone still send nothing. Read [current PostHog operations](../../operations/posthog.md).
+
+Separate cuevo web/API Vercel projects are prepared, with no published deployment. Hosted database remains empty and provider-owned Vault/net ACL correction is required before signing-secret/dispatch/recovery activation. The founder sends the [prepared support request](../../operations/supabase-worker-owner-request.md). Follow [current deployment readiness](../../reports/2026-10-03-github-link-and-deployment-readiness.md); no local-only proof becomes hosted acceptance.
+
+During school account provisioning, verify the school-provided display name and class/year context with the school owner. If two guardian-linked records remain indistinguishable using those authorized facts, the UI requires the school to clarify them before selection. It does not invent a birth date/student number or ask a parent to choose a database UUID. An administrator may update a display label only using school-confirmed context. This is an explicit controlled-pilot onboarding requirement; same-label self-service is not established by the current data model.
+
+## Deployment prerequisites
+
+Before any real-pupil pilot, record school/privacy/contractual approval, guardian/child access policy, safeguarding/moderation owners, exact rights and academic review, region/residency decision and approved retention/deletion/export rules. Record deployed commit/migration version and distinct staging/production projects. Provision TLS, restricted non-owner/noBYPASSRLS API/worker roles, separate secret recipients, backups for both database and Storage, private Realtime configuration and school-approved telemetry. Reproduce restore and authorization against that target; local synthetic recovery cannot establish deployed backup guarantees.
+
+Production entrypoints validate their owned configuration: API requires DATABASE_URL, HTTPS API_ALLOWED_ORIGIN/SUPABASE_URL and publishable Auth key; worker requires WORKER_DATABASE_URL. Both Node database recipients enforce certificate-verified TLS for NODE_ENV or deployment-labelled production and reject URL options that could override TLS. Storage is an API-only privileged consumer. Disable fixture flags for production; hosted synthetic staging uses its separate explicit fixture provenance and entirely-synthetic current school guard. Foundry live production requires an approved real-data policy, school purpose/action approval, provider endpoint/model/key and explicit conservative rate configuration. Technical synthetic success does not approve those conditions. Optional product analytics may remain disabled; production alerting is required independently of PostHog.
+
+Model usage records distinguish deterministic fixtures, configured token-rate estimates, unknown billed costs and request budget reservations. The reservation is not an Azure invoice or a proven spend ceiling. Incomplete/failed attempts may still be charged; reconcile resource/time scope through Microsoft Cost Management. Never report unknown billing as free usage. See [Foundry verification](../../reports/foundry-live-intelligence-verification.md).
+
+Do not run local reset/configure/seed scripts against production. Apply reviewed migrations through the controlled release process. Preserve applied SQL history. Roll back application code only to a version compatible with the migrated schema; use a reviewed forward repair for database changes. A backup restore is a distinct recovery operation requiring verified target, snapshot time, database/Storage pairing and current access checks.
+
+## Support and incident triage
+
+For a failed action, record timestamp, role, feature/action, sanitized error code, server request ID and whether the outcome is confirmed or uncertain. Never copy pupil work, answers, prompts, tokens or database exception text. Uncertain writes must reconcile the original request key; creating a new key can repeat business work. Current access denial is resolved by an authorized school administrator reviewing relationship/class/programme/status windows, not by bypassing authorization.
+
+API logs contain route templates, fixed status/duration and request ID. Database metrics contain transaction outcome/timing/waiting count; worker logs contain delivery outcome, pending/failed counts and oldest lag. Check `/health/live` for process presence and `/health/ready` for dependencies. Readiness shares one probe and briefly caches for two seconds; a burst returns429 and Retry-After60. Liveness remains independent. Hosting collectors, log access/retention and alert destinations must be configured and exercised in the deployed environment.
+
+Alert on readiness failure, sustained API5xx/latency, database waiting/saturation, failed jobs and increasing outbox lag. Assign an operator and escalation route. Do not interpret an acknowledged unrelated event as learner-state success; inspect exact source/processing receipt. Failed or review-required source jobs retain bounded diagnostic outcomes; replay only after correcting the source/policy and preserving original provenance.
+
+## Recovery and verification
+
+Stop application workers before rollback SQL fixture tests. Run database, integration, browser and recovery mutation suites sequentially. `npm run verify:technical` executes a guarded clean synthetic bootstrap and source-frozen build/test/recovery/browser sequence; every required step must pass. It is historical Technical MVP evidence, supplemented by the independent customer matrix.
+
+`npm run verify:recovery` requires stopped applications, known local target and dedicated scratch resources. It verifies consistent database table/source hashes, private Storage bytes, competing worker leases, expiry/stale denial, restored restricted roles/RLS/session denial and cleanup. Retained ignored dumps may include synthetic credentials/data; restrict host access and delete/archive them under the approved operator policy. Never expose the backup to browser users.
+
+A production drill must separately demonstrate actual restore time, recovery point, secret rotation/session revocation, private Data API/Realtime/Storage settings, source integrity and school owner acceptance. No such deployed evidence exists in this local runbook.

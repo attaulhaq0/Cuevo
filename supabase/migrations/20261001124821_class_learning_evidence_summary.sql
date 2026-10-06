@@ -1,0 +1,2 @@
+-- Historical no-op: the generated draft was applied before implementation.
+-- Class summary behavior is introduced in a later additive migration.

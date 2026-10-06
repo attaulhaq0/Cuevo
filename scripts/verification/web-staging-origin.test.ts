@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import type { WebBackendBridge } from './web-backend-bridge';
+
+const team='team_Gvw1Dz7IlxIG5evqwlsNkZHb',project='prj_lvJJsVg0WeZAJhCovTlHCPOi0JaR',origin='https://cuevo-beta.vercel.app',sha='a'.repeat(40),deployment='dpl_WebFixture',url='https://cuevo-web-source.vercel.app';
+const bridge={purpose:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION',provenance:'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE',backendIdentity:{repository:'attaulhaq0/Cuevo',sourceSha:sha,ciRunId:'31',web:{teamId:team,projectId:project,target:'preview',origin},transferSha256:'b'.repeat(64),manifestSha256:'c'.repeat(64),settingsSha256:'d'.repeat(64)},backendMutationAllowed:false,privateProofReexecuted:false,customerReady:false,hostedAcceptance:false} as WebBackendBridge;
+
+async function subject(){const api=await import('./web-staging-origin').catch(()=>({}));assert.equal(typeof(api as Record<string,unknown>).bindVerifiedStagingWebOrigin,'function');return api as typeof import('./web-staging-origin');}
+async function fixture(mode:string,run:(api:Awaited<ReturnType<typeof subject>>,input:Record<string,unknown>,calls:string[],root:string)=>Promise<void>){
+ const root=await mkdtemp(join(tmpdir(),'cuevo-web-origin-')),previous=globalThis.fetch,calls:string[]=[];let bound=mode==='same';const api=await subject();
+ try{await mkdir(join(root,'.local/cicd-release'),{recursive:true});const admit=async()=>{calls.push('admission');if(mode==='admission')throw Error('private-token');return{backend:bridge,prepared:{sha256:'e'.repeat(64)}};};
+ globalThis.fetch=async(raw,options)=>{const target=new URL(String(raw)),method=options?.method??'GET';calls.push(method+':'+target.pathname);assert.equal(options?.redirect,'error');
+  if(target.pathname==='/v9/projects/'+project)return Response.json({id:project,accountId:team,rootDirectory:'apps/web'});
+  if(target.pathname==='/v9/projects/'+project+'/domains')return Response.json({domains:[{name:'cuevo-beta.vercel.app',projectId:project,verified:true}],pagination:{next:null}});
+  if(target.pathname==='/v13/deployments/'+deployment)return Response.json({id:deployment,projectId:project,ownerId:team,url:new URL(url).hostname,readyState:'READY',target:mode==='production'?'production':null,meta:{cuevoCommitSha:mode==='source'?'f'.repeat(40):sha}});
+  if(target.pathname==='/v4/aliases/cuevo-beta.vercel.app')return bound||['old','foreign'].includes(mode)?Response.json({uid:'alias_fixture',alias:'cuevo-beta.vercel.app',projectId:mode==='foreign'?'prj_Foreign':project,deploymentId:mode==='old'?'dpl_Old':deployment,redirect:null}):Response.json({error:{code:'alias_not_found'}},{status:404});
+  if(method==='POST'&&target.pathname==='/v2/deployments/'+deployment+'/aliases'){assert.equal(options?.body,JSON.stringify({alias:'cuevo-beta.vercel.app',redirect:null}));assert.equal((options.headers as Record<string,string>).Authorization,'Bearer private-vercel-origin-token');bound=true;if(mode==='uncertain')throw Error('private-write-ack');return Response.json({uid:'alias_fixture',alias:'cuevo-beta.vercel.app'});}
+  throw Error('Unexpected fixed origin request');
+ };
+ const input={repoRoot:root,sourceSha:sha,ciRunId:'31',runId:'81',runAttempt:2,web:{teamId:team,projectId:project,target:'preview'},webDeployment:{id:deployment,url,artifactSha256:'f'.repeat(64)},vercelToken:'private-vercel-origin-token',admit};await run(api,input,calls,root);
+ }finally{globalThis.fetch=previous;assert.equal(resolve(tmpdir()),resolve(root,'..'));await rm(root,{recursive:true,force:true});}
+}
+
+test('verified staging web alias is assigned once after current web approval and exact completed backend',async()=>fixture('normal',async(api,input,calls,root)=>{const result=await api.bindVerifiedStagingWebOrigin(input);assert.equal(result.status,'WEB_ORIGIN_BOUND');assert.equal(result.aliasOperation,'CONFIRMED');assert.equal(result.hostedAcceptance,false);assert.equal(calls.filter(row=>row.startsWith('POST:')).length,1);assert.ok(calls.filter(row=>row==='admission').length>=3);const receipt=await readFile(join(root,'.local/cicd-release/web-origin-result.json'),'utf8');assert.doesNotMatch(receipt,/private-vercel-origin-token/);assert.equal(JSON.parse(receipt).sourceSha,sha);}));
+test('same exact mapping is no-op while foreign old production source or missing approval refuse writes',async()=>{await fixture('same',async(api,input,calls)=>{assert.equal((await api.bindVerifiedStagingWebOrigin(input)).aliasOperation,'NOOP');assert.equal(calls.filter(row=>row.startsWith('POST:')).length,0);});for(const mode of['old','foreign','production','source','admission'])await fixture(mode,async(api,input,calls)=>{assert.equal((await api.bindVerifiedStagingWebOrigin(input)).status,'REQUIRES_REVIEW');assert.equal(calls.filter(row=>row.startsWith('POST:')).length,0);});});
+test('uncertain assignment retains the original intent and cannot create replacement writes',async()=>fixture('uncertain',async(api,input,calls)=>{const first=await api.bindVerifiedStagingWebOrigin(input);assert.equal(first.status,'REQUIRES_REVIEW');assert.equal(first.aliasOperation,'UNKNOWN');assert.equal((await api.bindVerifiedStagingWebOrigin(input)).status,'REQUIRES_REVIEW');assert.equal(calls.filter(row=>row.startsWith('POST:')).length,1);}));
+test('changed source or reserved target refuses before alias assignment',async()=>fixture('normal',async(api,input,calls)=>{input.sourceSha='f'.repeat(40);assert.equal((await api.bindVerifiedStagingWebOrigin(input)).status,'REQUIRES_REVIEW');assert.equal(calls.filter(row=>row.startsWith('POST:')).length,0);input.sourceSha=sha;input.web={teamId:team,projectId:'prj_Else',target:'preview'};assert.equal((await api.bindVerifiedStagingWebOrigin(input)).status,'REQUIRES_REVIEW');assert.equal(calls.filter(row=>row.startsWith('POST:')).length,0);}));

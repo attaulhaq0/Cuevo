@@ -1,0 +1,5 @@
+# Preserve PostHog migration dependency during replay
+
+The applied environment-scope migration20261002204500 precedes the intelligence-observability wrapper's first application, despite its lexical timestamp sorting after20261002195537. The environment filename was manually authored and preserved once applied; changing it now would rewrite migration history. The wrapper has an explicit dependency on its four-argument claim/revalidation functions.
+
+Guarded local replay retains the original native-source prerequisite and adds one finite PostHog stage: apply unchanged pre-intelligence files plus20261002204500, then the unchanged intelligence wrapper and all remaining migrations. Both exact hashes are validated by replay-plan tests. No SQL source, version, function-body checking, grants or academic rule is relaxed; every historical migration remains included once. The actual failed clean replay and repaired run are recorded separately. Hosted migration operators must follow the same ordered manifest; raw lexical reset is not a complete dependency plan.

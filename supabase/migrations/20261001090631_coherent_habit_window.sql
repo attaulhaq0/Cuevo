@@ -1,0 +1,4 @@
+-- Historical no-op: generated while reviewing development-window freshness and applied locally
+-- before the correction was authored. The actual coherent-window implementation is the
+-- later additive migration 20261001090800_habit_window_current_sources.sql.
+-- Preserve this applied version for reproducible history; it defines no schema or product behavior.

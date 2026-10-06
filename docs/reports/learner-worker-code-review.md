@@ -4,7 +4,7 @@ Status: REVIEW COMPLETE — specification and quality pass for the bounded learn
 
 Scope: saved learner-state-worker plan; worker processor/main and constrained pool; learner-state controller/contracts; CLI migrations beginning `20261001002531`, `02733`, `02809`, `02836`, `02931`, `02954` and `03115`; SQL worker golden cases and relevant tests. Source requirements include 04/08/09/11/38/39/42/43/61/81.
 
-Frozen artifact: `.local/review-worker-v2.patch`, SHA-256 `F0974C0EF3CEBE8622AD98AA7FAADE38B61F8D401BEBB29FE19E6386A030E04F`. The reviewer inspected the final source, additive corrections, tests and `docs/reports/learner-state-worker.md`, and checked the artifact includes those changes. This is an independent manual review, not a CodeRabbit report.
+Frozen artifact: `.local/review-worker-v2.patch`, SHA-256 `BCA77124D734889F2B9F802AFABAFDE9F1629E883360343B070AC051043F2858`. The reviewer reread v2 and confirmed its shared freshness/completeness/unknown guards alongside the source, additive corrections, tests and `docs/reports/learner-state-worker.md`. This is an independent manual review, not a CodeRabbit report.
 
 ## Final verdict
 

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1",
+  "version": "checking-v1",
+  "synthetic": true,
+  "interpretation": "TASK_DEMAND_NOT_LEARNER_LEVEL",
+  "authorship": "CUEVO_SYNTHETIC_SCHOOL_AUTHORED",
+  "lesson": {
+    "title": { "en": "Explore a checking method", "ar": "استكشف طريقة للتحقّق" },
+    "body": {
+      "en": "School-authored example: arrange 12 counters in 3 equal rows of 4. Method A counts each counter once. Method B counts 4 + 4 + 4. Check that both methods include every counter exactly once. A useful checking method accounts for all counters without repeating or missing any. These activities explore different kinds of thinking; they are choices, not stages or learner levels.",
+      "ar": "مثال من إعداد المدرسة: رتّب 12 قطعة عدّ في 3 صفوف متساوية، في كل صف 4 قطع. في الطريقة أ نعدّ كل قطعة مرة واحدة. وفي الطريقة ب نحسب 4 + 4 + 4. تحقّق من أن كلتا الطريقتين تشملان كل قطعة مرة واحدة بالضبط. تشمل طريقة التحقّق المناسبة جميع القطع دون تكرار أو إغفال. تستكشف هذه الأنشطة أنواعًا مختلفة من التفكير؛ فهي خيارات وليست مراحل أو مستويات للمتعلّم."
+    }
+  },
+  "tasks": [
+    {
+      "key": "recall-the-example",
+      "title": { "en": "Recall the example", "ar": "تذكّر المثال" },
+      "instructions": { "en": "Read the school example, then look away. Recall the total number of counters, the number of rows and the number of counters in each row. Look back to check your recall.", "ar": "اقرأ مثال المدرسة ثم أبعد نظرك عنه. تذكّر العدد الكلي للقطع وعدد الصفوف وعدد القطع في كل صف. ارجع إلى المثال للتحقّق مما تذكّرته." },
+      "focus": { "taxonomyVersion": "revised-bloom-2001-cuevo-v1", "primaryProcess": "REMEMBER", "additionalProcesses": [] },
+      "rationale": "The task asks for retrieval of the three stated facts, followed by checking against the same example.",
+      "reviewReason": "Synthetic coordinator reviewed the supplied example and the exact recall instructions; no attainment claim is made."
+    },
+    {
+      "key": "explain-the-arrangement",
+      "title": { "en": "Explain the arrangement", "ar": "فسّر ترتيب القطع" },
+      "instructions": { "en": "Explain in your own words why 4 + 4 + 4 describes the 3 equal rows in the school example. Describe how each part of the addition relates to the counters.", "ar": "فسّر بكلماتك لماذا يصف 4 + 4 + 4 الصفوف الثلاثة المتساوية في مثال المدرسة. وضّح كيف يرتبط كل جزء من الجمع بالقطع." },
+      "focus": { "taxonomyVersion": "revised-bloom-2001-cuevo-v1", "primaryProcess": "UNDERSTAND", "additionalProcesses": [] },
+      "rationale": "The task asks the learner to explain the meaning of a represented arrangement in their own words.",
+      "reviewReason": "Synthetic coordinator reviewed the exact explanatory demand and the relationship to the supplied example."
+    },
+    {
+      "key": "use-a-method",
+      "title": { "en": "Use a method in a new example", "ar": "استخدم طريقة في مثال جديد" },
+      "instructions": { "en": "Arrange 15 counters in 3 equal rows of 5. Use Method B from the school example to count them. Show the addition and explain one step you used to check the total.", "ar": "رتّب 15 قطعة في 3 صفوف متساوية، في كل صف 5 قطع. استخدم الطريقة ب من مثال المدرسة لعدّها. اكتب عملية الجمع وفسّر خطوة استخدمتها للتحقّق من المجموع." },
+      "focus": { "taxonomyVersion": "revised-bloom-2001-cuevo-v1", "primaryProcess": "APPLY", "additionalProcesses": ["UNDERSTAND"] },
+      "rationale": "The task asks for use of the supplied counting method on a new arrangement and explanation of a checking step.",
+      "reviewReason": "Synthetic coordinator reviewed the new example and confirmed that the instructions require using the supplied method."
+    },
+    {
+      "key": "compare-the-methods",
+      "title": { "en": "Compare the parts of two methods", "ar": "قارن أجزاء طريقتين" },
+      "instructions": { "en": "Compare Method A and Method B for the 12-counter school example. Identify what is counted in each step and explain how each method keeps track of every counter without repeating one.", "ar": "قارن الطريقة أ بالطريقة ب في مثال المدرسة الذي يحتوي على 12 قطعة. حدّد ما يُعدّ في كل خطوة وفسّر كيف تتابع كل طريقة جميع القطع دون تكرار قطعة واحدة." },
+      "focus": { "taxonomyVersion": "revised-bloom-2001-cuevo-v1", "primaryProcess": "ANALYZE", "additionalProcesses": ["UNDERSTAND"] },
+      "rationale": "The task asks for separating the counting methods into steps and explaining relationships between their parts.",
+      "reviewReason": "Synthetic coordinator reviewed the exact comparison instructions and the two fully supplied methods."
+    },
+    {
+      "key": "judge-a-check",
+      "title": { "en": "Judge a check using evidence", "ar": "قيّم طريقة التحقّق بالشواهد" },
+      "instructions": { "en": "A proposed check counts only 4 + 4 for the 3-row school example. Judge whether it is suitable. Use the given criteria: include every counter exactly once, with none repeated or missed. Explain your judgement using the arrangement.", "ar": "تستخدم طريقة تحقّق مقترحة 4 + 4 فقط للمثال ذي الصفوف الثلاثة. قيّم مدى ملاءمتها. استخدم المعايير المحدّدة: تشمل كل قطعة مرة واحدة بالضبط دون تكرار أو إغفال. فسّر حكمك بالاستناد إلى ترتيب القطع." },
+      "focus": { "taxonomyVersion": "revised-bloom-2001-cuevo-v1", "primaryProcess": "EVALUATE", "additionalProcesses": ["ANALYZE"] },
+      "rationale": "The task asks for a justified judgement against explicit completeness and non-duplication criteria.",
+      "reviewReason": "Synthetic coordinator reviewed the supplied proposed check, criteria and exact demand for an evidence-based judgement."
+    },
+    {
+      "key": "design-a-check",
+      "title": { "en": "Design an arrangement and check", "ar": "ابتكر ترتيبًا وطريقة للتحقّق" },
+      "instructions": { "en": "Design a new arrangement of 18 counters using equal rows. Create a counting plan and a separate check that together account for every counter exactly once. Draw or describe your arrangement and explain why your plan meets that purpose.", "ar": "ابتكر ترتيبًا جديدًا لـ18 قطعة في صفوف متساوية. أنشئ خطة للعدّ وطريقة تحقّق منفصلة تتأكدان معًا من شمول كل قطعة مرة واحدة بالضبط. ارسم ترتيبك أو صفه وفسّر كيف تحقّق خطتك هذا الغرض." },
+      "focus": { "taxonomyVersion": "revised-bloom-2001-cuevo-v1", "primaryProcess": "CREATE", "additionalProcesses": ["EVALUATE"] },
+      "rationale": "The task asks for constructing a new arrangement and checking plan that meet the stated purpose, with a justified design.",
+      "reviewReason": "Synthetic coordinator reviewed the bounded design task and its exact purpose; no difficulty, progression or learner-level claim is made."
+    }
+  ]
+}

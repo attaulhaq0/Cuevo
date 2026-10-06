@@ -1,0 +1,13 @@
+# Reviewed Bloom thinking-focus implementation plan
+
+Founder authorized full database/API/frontend/E2E work on4October. Governing sources04/05/06/07/12/13/14/17/18/38/39/43/58/61/63/69/76/81/85 plus existing content169/native163 and event foundation. Spec: ../specs/2026-10-04-reviewed-thinking-focus-bloom.md.
+
+1. Freeze baseline and preserve other chat source/runtime. Verify source metadata, record original EN/AR vocabulary/reference artifact and hash; no official curriculum/grade claims.
+2. Define strict contracts for category catalogue, source identity, mixed focus, immutable draft/review/current/history, snapshot reading and bounded review queue. Tests reject learner-level/mastery/XP/prerequisite claims and stale/malformed sources.
+3. Add private append-only migration: source-bound immutable revisions/current pointers, authorized draft/review/withdraw/history/current/queue reads, immutable completion/submission snapshots, audit/outbox and scoped acknowledgement. Test cross-school/role/revision/replay/self-review and deny raw grants.
+4. School Learning API implements these routes through existing verified identity/actor transactions, Curriculum validates local catalogue, current course/assessment reads return additive thinkingFocus metadata. Existing academic/result context authorizes snapshots before parent projection.
+5. Feature-owned Learning UI provides author/reviewer workflow and concise learner task explanation; Curriculum offers current course review queue; Academic reads exact historical snapshot on opened evidence. Preserve original mutation/receipt owners, single UI and responsive EN/AR.
+6. Prepare a separate synthetic Supabase test runtime and dedicated connected preview. Apply original migrations in accepted dependency order then new migration; seed isolated identities. No write/reset/role rotation against shared backend DB.
+7. Verify contracts/unit/type/lint/architecture/docs/repository, private SQL/RLS/deny, real Auth/API/Postgres happy/negative/replay/stale/history/native zero/rubric paths, bounded-scale page measurement, browser author/reviewer/student/parent sequence and mobile/RTL/zoom/keyboard/axe/recovery. Independent review fixes precede final frozen exact-source evidence and coherent commit.
+
+Review checkpoints completed for source+contract, database+API, rendered role journey and exact-source E2E. The [local verification report](../../reports/2026-10-04-reviewed-thinking-focus-verification.md) records final build, tests and retained failures/limits. The implementation remains isolated from the backend chat's dirty checkout; hosted and whole-product acceptance are separate.

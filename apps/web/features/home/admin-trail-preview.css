@@ -1,0 +1,17 @@
+/* Admin Storybook chrome only; current runtime shell is unchanged. */
+.admin-trail-preview.workspace { display: block; min-block-size: 100dvh; }
+.admin-trail-preview__header { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-8); background: var(--color-material-chrome); }
+.admin-trail-preview__header .brand__mark { inline-size: 3.5rem; }
+.admin-trail-preview__header .brand__name { font: 900 2.25rem 'Cuevo Nunito Sans', var(--font-sans); }
+.admin-trail-preview__school { gap: var(--space-4); min-inline-size: 18rem; }
+.admin-trail-preview__utilities { display: flex; gap: var(--space-2); align-items: center; margin-inline-start: auto; }
+.admin-trail-preview__utilities > span { display: flex; gap: var(--space-2); align-items: center; font-size: var(--type-xs); color: var(--color-text-secondary); }
+.admin-trail-preview__utilities > .button { padding-inline: var(--space-2); }
+.admin-trail-preview__account { display: flex; gap: var(--space-3); align-items: center; flex: none; }
+.admin-trail-preview__account > svg { inline-size: 3rem; block-size: 3rem; padding: var(--space-3); border-radius: var(--radius-pill); background: var(--color-surface-muted); color: var(--color-text-secondary); }
+.admin-trail-preview__account strong { font-size: var(--type-sm); }
+.admin-trail-preview__account p { margin: 0; font-size: var(--type-xs); color: var(--color-text-secondary); }
+.admin-trail-preview__receipt { position: fixed; z-index: 20; inset-inline-end: var(--space-5); inset-block-end: var(--space-5); display: flex; gap: var(--space-3); align-items: center; padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-material-reading); box-shadow: var(--elevation-floating); max-inline-size: min(34rem, calc(100% - 2rem)); }
+.admin-trail-preview__receipt p { margin: 0; }
+@media (max-width: 1000px) { .admin-trail-preview__header { flex-wrap: wrap; gap: var(--space-4); } .admin-trail-preview__school { min-inline-size: 14rem; } .admin-trail-preview__utilities { margin-inline-start: 0; } .admin-trail-preview__account { margin-inline-start: auto; } }
+@media (max-width: 500px) { .admin-trail-preview__header { padding: var(--space-3) var(--space-4); gap: var(--space-3); } .admin-trail-preview__header .brand__name { font-size: 1.5rem; } .admin-trail-preview__header .brand__mark { inline-size: 2.25rem; } .admin-trail-preview__school { order: 3; inline-size: 100%; } .admin-trail-preview__utilities { order: 4; } .admin-trail-preview__account strong { max-inline-size: 7rem; display: block; overflow-wrap: anywhere; } }

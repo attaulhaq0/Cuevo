@@ -1,0 +1,17 @@
+{
+  "packId": "synthetic-pathway",
+  "version": "synthetic-1",
+  "files": {
+    "snapshot.txt": "10c42173fe372e07d216e306d02d6a2bd7ec9d11d71f53c2e0bd333d71af20b6",
+    "pack.json": "74a86f6385117a255d69cb0a3ead7f91d6e0a9bd0bdcb54f544bb05c6c8d7a26",
+    "sources.json": "df74bb73943539400bd9992cfb8e7377aa524ba5e1569bf18760a7e233b037ac",
+    "normalized.json": "93cf9a500ece9b4d4209ad8575b129b018214b701d8e83f5183282700b400996",
+    "assessment.json": "f16a637d6d9b2aea7a5235bb9482febd2db1c6b327fe6c4997e396e0592b8354",
+    "reporting.json": "c1536ed2c7c48e55961e7fec4e2fc5df960284a5a054bdaeb7a3e917ec73a5fc",
+    "mappings.json": "c21759f9ce56b3290a236a485958a75ee84ee23a76b902648d24adc9b0719b75",
+    "terminology.json": "af3fa26603ce7a2ab9b3fb68b82ea3015b0593858bc9fc13c39575dcbcf6dbe0",
+    "rights.json": "4fce50cfa7ed662d5377c20ee98a66f9e20d0364de1a7dd8288413d4811a9c97",
+    "unknowns.json": "c7ac1e5682fdd53e7e8b2c2761d544df9c883797924643af7281c9d5d8dce70b",
+    "golden-cases.json": "65b9bab53b5f60b90e6a742af10e232aa01f5001aa6ab14e4f3c09609f4e36aa"
+  }
+}

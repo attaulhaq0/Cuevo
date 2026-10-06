@@ -1,0 +1,17 @@
+import { z } from 'zod';
+const text=z.string().trim().min(1).max(4000);const reason=z.string().trim().min(1).max(1000);const title=z.string().trim().min(1).max(200);
+const participantFields={learnerId:z.uuid(),parentId:z.uuid(),teacherId:z.uuid(),classId:z.uuid(),subjectId:z.uuid()};
+export const conversationPolicyInputSchema=z.object({enabled:z.boolean(),expectedVersion:z.number().int().nonnegative(),reason,confirmApproval:z.literal(true)}).strict();
+export const conversationPolicySchema=z.object({id:z.uuid(),version:z.number().int().nonnegative(),enabled:z.boolean(),approvedAt:z.iso.datetime({offset:true}).nullable()}).strict();
+export const conversationCreateSchema=z.object({...participantFields,title,body:text}).strict();
+export const conversationMessageSchema=z.object({body:text}).strict();
+export const conversationReadSchema=z.object({}).strict();
+export const conversationReportSchema=z.object({reason}).strict();
+export const conversationModerationSchema=z.object({action:z.enum(['HIDE','RESTORE']),expectedVersion:z.number().int().nonnegative(),reason,confirmModeration:z.literal(true)}).strict();
+export const conversationStateSchema=z.object({state:z.enum(['OPEN','PAUSED']),expectedVersion:z.number().int().nonnegative(),reason,confirmModeration:z.literal(true)}).strict();
+export const conversationQuerySchema=z.object({limit:z.coerce.number().int().min(1).max(100).default(25),cursor:z.uuid().optional(),learnerId:z.uuid().optional()}).strict();
+export const conversationChoiceSchema=z.object({id:z.uuid(),...participantFields,learnerName:title,parentName:title,teacherName:title,className:title,academicYearName:title,subjectName:title}).strict();
+export const conversationResponseSchema=z.object({id:z.uuid(),...participantFields,title,learnerName:title,parentName:title,teacherName:title,className:title,academicYearName:title,subjectName:title,createdAt:z.iso.datetime({offset:true}),state:z.enum(['OPEN','PAUSED']),stateVersion:z.number().int().nonnegative(),canModerate:z.boolean()}).strict();
+export const conversationMessageResponseSchema=z.object({id:z.uuid(),conversationId:z.uuid(),senderId:z.uuid(),senderName:title,senderRole:z.enum(['parent','teacher']),body:z.string().max(4000).nullable(),sentAt:z.iso.datetime({offset:true}),delivery:z.literal('DELIVERED_IN_APP'),status:z.enum(['VISIBLE','HIDDEN']),moderationVersion:z.number().int().nonnegative(),recipientReadAt:z.iso.datetime({offset:true}).nullable()}).strict().superRefine((value,ctx)=>{if(value.status==='HIDDEN'?value.body!==null:!value.body?.trim())ctx.addIssue({code:'custom',message:'Visible text and hidden source must remain distinct.'});});
+export const conversationReportResponseSchema=z.object({id:z.uuid(),conversationId:z.uuid(),messageId:z.uuid(),reporterName:title,reason,createdAt:z.iso.datetime({offset:true})}).strict();
+export type ConversationChoice=z.infer<typeof conversationChoiceSchema>;export type ParentConversation=z.infer<typeof conversationResponseSchema>;export type ConversationMessage=z.infer<typeof conversationMessageResponseSchema>;

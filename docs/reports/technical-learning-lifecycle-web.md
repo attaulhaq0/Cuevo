@@ -1,0 +1,11 @@
+# Learning submission and quiz frontend
+
+Date: 2026-10-01. Cuevo by E Deviser. Scope: Technical MVP Task 2 learning lifecycle/frontend under sources 09/13/17/38/39/43/63. Existing numeric/rubric result controls and folder moves are preserved.
+
+Learners save private server drafts with expected draft revision, submit immutable text, read explicit teacher feedback, resubmit through the exact return/source revision, and inspect bounded immutable history. Teachers return/close current sources from Learning or Academic; marking uses submission revision/status independently of marking revisions. Returned/closed sources do not expose a grading form. Academic source release and correction remain separate human commands.
+
+Assignment availability has its own version, dates, late allowance and open/closed state. Teacher-authored versioned MCQ quiz definitions include bounded question/options and permitted answer keys; publication is explicit. Student quiz context rejects raw correct-option keys. Learner attempt responses display CHECKED_NOT_GRADED with source-linked checks, never a grade or inferred attainment. Existing shared command journal preserves original-key uncertain retries; no offline protected cache is introduced.
+
+Lifecycle parser tests failed before implementation and pass after validating draft authority, returned/resubmitted source links, student-safe quiz context, explicit availability and checked-not-graded result. A revision observation test also failed before requiring SUBMISSION_REVISION rather than practice completion. All 67 current web cases passed, focused web/root TypeScript/lint passed and Next.js production build passed. Architecture/documentation guards passed. The isolated `npm run e2e -- tests/e2e/learning-lifecycle.spec.ts` passed one journey (20.6 seconds, 24.0 seconds total) after clean synthetic replay and actual integration checks. It created own source, drafted/submitted/returned/resubmitted, checked immutable history, authored/published a quiz and checked safe student answers with Arabic390/axe. The Browser plugin was unavailable; the repository Playwright workflow was used.
+
+Feature ownership/public surfaces are documented in learning/academic READMEs. Full API/database/current-scope/source-version/worker/browser acceptance remains required; pure frontend checks are not a gate-completion claim.

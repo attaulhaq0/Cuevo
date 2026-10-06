@@ -1,0 +1,1128 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-03",
+  "purpose": "Agent reference comparison; never runtime application assets",
+  "count": 80,
+  "references": [
+    {
+      "id": "016-teacher-home-desktop",
+      "role": "teacher",
+      "file": "teacher/016-teacher-home-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\016-teacher-home-desktop.png",
+      "sha256": "9b36c12cad4611554db33d17fd9e00611f654d18c64d561f7dea3e31f74d656f",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "017-teacher-classes-desktop",
+      "role": "teacher",
+      "file": "teacher/017-teacher-classes-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\017-teacher-classes-desktop.png",
+      "sha256": "baa0465823a68de9d091c3a24c3d6bcb87a5f636207a2aaef9c9bb48fdd74e78",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "018-teacher-class-detail-desktop",
+      "role": "teacher",
+      "file": "teacher/018-teacher-class-detail-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\018-teacher-class-detail-desktop.png",
+      "sha256": "6637553ce2c026248cdcda9c6a0fdc364e8ace1ca8aa769cd70986abd8c5785a",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "019-teacher-planning-desktop",
+      "role": "teacher",
+      "file": "teacher/019-teacher-planning-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\019-teacher-planning-desktop.png",
+      "sha256": "4055d2159966dfd239f4007d85b8e685d38c2de1c65c9e99f755fb7b5e5547bd",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "020-teacher-course-unit-lesson-editor-desktop",
+      "role": "teacher",
+      "file": "teacher/020-teacher-course-unit-lesson-editor-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\020-teacher-course-unit-lesson-editor-desktop.png",
+      "sha256": "731b9195aac2355ccfda7944aceff706c37a9b2625e9aa2872a30a697f584c45",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "021-teacher-assessment-builder-desktop",
+      "role": "teacher",
+      "file": "teacher/021-teacher-assessment-builder-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\021-teacher-assessment-builder-desktop.png",
+      "sha256": "45fa4160748802f0447244d19434504f4084217392540291b3c95937a030db70",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "022-teacher-marking-desktop",
+      "role": "teacher",
+      "file": "teacher/022-teacher-marking-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\022-teacher-marking-desktop.png",
+      "sha256": "d90e4d6f25a72613113ccbfdf4577e9ce38291281f787632f05ee371393a36c1",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "023-teacher-evidence-desktop",
+      "role": "teacher",
+      "file": "teacher/023-teacher-evidence-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\023-teacher-evidence-desktop.png",
+      "sha256": "98001f980e2e8c3db8b67a0f2be17703464181add1c837b350354775eb484f9c",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "024-teacher-learner-profile-desktop",
+      "role": "teacher",
+      "file": "teacher/024-teacher-learner-profile-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\024-teacher-learner-profile-desktop.png",
+      "sha256": "d09e3d1493961d86e86ffd1125b8ea0358ba3cebea62086a44fb19b62ad43ab9",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "025-teacher-signals-desktop",
+      "role": "teacher",
+      "file": "teacher/025-teacher-signals-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\025-teacher-signals-desktop.png",
+      "sha256": "08c7ef5976d7889598605dd446965c0b6f12060ab013904fa9178fa43af58125",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "026-teacher-recommendation-review-desktop",
+      "role": "teacher",
+      "file": "teacher/026-teacher-recommendation-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\026-teacher-recommendation-review-desktop.png",
+      "sha256": "706dccf71096d7225bdbe5ceb5371cf5b7881738d34d19f0f298be09bb529892",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "027-teacher-intervention-builder-desktop",
+      "role": "teacher",
+      "file": "teacher/027-teacher-intervention-builder-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\027-teacher-intervention-builder-desktop.png",
+      "sha256": "bb8a2e11b747d32e2aa2f5af4b635bce19c1f7630417243f6e2f066ef911a8ad",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "028-teacher-intervention-tracking-desktop",
+      "role": "teacher",
+      "file": "teacher/028-teacher-intervention-tracking-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\028-teacher-intervention-tracking-desktop.png",
+      "sha256": "9614a2cb0efcac0e32e452bd478c3fef00f061abc64a11f10e24b80cb7e270ab",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "029-teacher-reassessment-desktop",
+      "role": "teacher",
+      "file": "teacher/029-teacher-reassessment-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\029-teacher-reassessment-desktop.png",
+      "sha256": "4473fe3f6e14b36fcc50375eaada89fcfa9d9dd807e21620ee77c31bd97ad87d",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "030-teacher-messages-desktop",
+      "role": "teacher",
+      "file": "teacher/030-teacher-messages-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\030-teacher-messages-desktop.png",
+      "sha256": "174e72d0b7062acf07c57012b81e4e756b8145cd00a1393a425541df0f773259",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "031-teacher-community-desktop",
+      "role": "teacher",
+      "file": "teacher/031-teacher-community-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\031-teacher-community-desktop.png",
+      "sha256": "29ff2664b874610797625b6eeb4670d2564db48844479475788edb496e2cd1f9",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "032-teacher-calendar-desktop",
+      "role": "teacher",
+      "file": "teacher/032-teacher-calendar-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\032-teacher-calendar-desktop.png",
+      "sha256": "84df061c3a4c74dfb829afbdd339fa3049cd29e24066cc4b2196a404176d26ca",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "033-teacher-attendance-desktop",
+      "role": "teacher",
+      "file": "teacher/033-teacher-attendance-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\033-teacher-attendance-desktop.png",
+      "sha256": "a17378ada17a3c5433656a693f39b53c9bc7f3f2edfddcc9057bb4385aefbda1",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "067-teacher-private-assessment-preparation-and-publish-desktop",
+      "role": "teacher",
+      "file": "teacher/067-teacher-private-assessment-preparation-and-publish-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\067-teacher-private-assessment-preparation-and-publish-desktop.png",
+      "sha256": "37b179c4e008629c643a9f59985b449ee7c6e5ca981d367524c384c29c1cc0cc",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "068-teacher-criterion-marking-and-native-result-review-desktop",
+      "role": "teacher",
+      "file": "teacher/068-teacher-criterion-marking-and-native-result-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\068-teacher-criterion-marking-and-native-result-review-desktop.png",
+      "sha256": "c0ca28ed5ccbc529f46faedb3ce777875b5b8b87db4fd020500ba7882e71e0b6",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "069-teacher-release-and-immutable-correction-history-desktop",
+      "role": "teacher",
+      "file": "teacher/069-teacher-release-and-immutable-correction-history-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\069-teacher-release-and-immutable-correction-history-desktop.png",
+      "sha256": "77a3bf47d799fe8af213fb053b9160423c8589150618be6b96bf733fdea299cc",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "070-teacher-proposal-evidence-edit-and-decision-desktop",
+      "role": "teacher",
+      "file": "teacher/070-teacher-proposal-evidence-edit-and-decision-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\070-teacher-proposal-evidence-edit-and-decision-desktop.png",
+      "sha256": "f86e9723f464a556fa236a88139805510ba6871eaa2bf0b14e9530dffe581847",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "071-teacher-compatible-follow-up-and-measurement-desktop",
+      "role": "teacher",
+      "file": "teacher/071-teacher-compatible-follow-up-and-measurement-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\071-teacher-compatible-follow-up-and-measurement-desktop.png",
+      "sha256": "e9be03c36ff175bfc5140633f14a6b19d769e4b8478ac847d4aeb262d9d7e717",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "072-teacher-exact-portfolio-review-and-parent-sharing-desktop",
+      "role": "teacher",
+      "file": "teacher/072-teacher-exact-portfolio-review-and-parent-sharing-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\072-teacher-exact-portfolio-review-and-parent-sharing-desktop.png",
+      "sha256": "52131a73b9e11531716098a54c11fd7761f49506a43d8f9aa441205576615f2d",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "073-teacher-community-report-and-moderation-review-desktop",
+      "role": "teacher",
+      "file": "teacher/073-teacher-community-report-and-moderation-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\073-teacher-community-report-and-moderation-review-desktop.png",
+      "sha256": "5139cc9b51bb3aa37317753fcc5ddad7732564b3f1f8f2dbeca797ce495cd1bd",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "079-teacher-teacher-planning-copilot-desktop",
+      "role": "teacher",
+      "file": "teacher/079-teacher-teacher-planning-copilot-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\079-teacher-teacher-planning-copilot-desktop.png",
+      "sha256": "fa0c26fb64dad7b02ba8f09a58cb7e365b22a40bb5f969d01545af581f58079f",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "080-teacher-assessment-drafting-assistance-desktop",
+      "role": "teacher",
+      "file": "teacher/080-teacher-assessment-drafting-assistance-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\080-teacher-assessment-drafting-assistance-desktop.png",
+      "sha256": "a56fe0a6fb18440bc302b59e8b7abcc0e996e4e7f65522f5d4e58da4ad1adde0",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "085-teacher-native-transcript-and-narrative-report-review-desktop",
+      "role": "teacher",
+      "file": "teacher/085-teacher-native-transcript-and-narrative-report-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\085-teacher-native-transcript-and-narrative-report-review-desktop.png",
+      "sha256": "8bf6890d1357596ac921a5924d50b714b09ff967448fcccf2b694615fb2a165c",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "092-teacher-restricted-pastoral-and-follow-up-desktop",
+      "role": "teacher",
+      "file": "teacher/092-teacher-restricted-pastoral-and-follow-up-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\092-teacher-restricted-pastoral-and-follow-up-desktop.png",
+      "sha256": "33e4875f7d4243ea1766c735516f4993c544f04666b72c740e45af2fa494841d",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "098-teacher-home-mobile",
+      "role": "teacher",
+      "file": "teacher/098-teacher-home-mobile.png",
+      "sourcePath": "G:\\1 approch UI\\098-teacher-home-mobile.png",
+      "sha256": "bc05020f1ade039fef066926b8165d7c916a448828ee6e04ef08740286cb0609",
+      "dimensions": [
+        1024,
+        1536
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "042-parent-home-desktop",
+      "role": "parent",
+      "file": "parent/042-parent-home-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\042-parent-home-desktop.png",
+      "sha256": "5aba732f6913971987d37c077f92342b495e2ec5e5606b06aba19029f4926e9c",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "043-parent-child-overview-desktop",
+      "role": "parent",
+      "file": "parent/043-parent-child-overview-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\043-parent-child-overview-desktop.png",
+      "sha256": "7942bc9e8b0bf38d8deb56888174a08023261eb15a12d0514e2deb435dd6b30f",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "044-parent-progress-desktop",
+      "role": "parent",
+      "file": "parent/044-parent-progress-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\044-parent-progress-desktop.png",
+      "sha256": "392ef9d1369d92c3a4c528f7435246a62024126f29cc5c15ce6d22c21d5eff8e",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "045-parent-upcoming-desktop",
+      "role": "parent",
+      "file": "parent/045-parent-upcoming-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\045-parent-upcoming-desktop.png",
+      "sha256": "e4a36b3e2a602f975ca8116d6867ee4d7a9aa6a6f1cf1954ded08049a8faafac",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "046-parent-approved-portfolio-desktop",
+      "role": "parent",
+      "file": "parent/046-parent-approved-portfolio-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\046-parent-approved-portfolio-desktop.png",
+      "sha256": "13920f110da8fe397a67214e0a984f5fa5b999cefc50ebceb766227cb4811377",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "047-parent-messages-desktop",
+      "role": "parent",
+      "file": "parent/047-parent-messages-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\047-parent-messages-desktop.png",
+      "sha256": "f4111c332bd744c51c29d5176aa127fe0e12c9c907c17c21ffe653441f3624c8",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "048-parent-calendar-desktop",
+      "role": "parent",
+      "file": "parent/048-parent-calendar-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\048-parent-calendar-desktop.png",
+      "sha256": "e8b96a80263c39a3f30c992881da71e6fb7f6bbc20bb350feba3ea243a684e89",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "034-coordinator-home-desktop",
+      "role": "coordinator",
+      "file": "coordinator/034-coordinator-home-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\034-coordinator-home-desktop.png",
+      "sha256": "9f30ab0a5711d0296fd3ea414eab2cb40cc0c66debec7811988ca4e4f56d1e47",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "035-coordinator-programme-overview-desktop",
+      "role": "coordinator",
+      "file": "coordinator/035-coordinator-programme-overview-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\035-coordinator-programme-overview-desktop.png",
+      "sha256": "5c4295277b74222e932a614dfcf088e8becae5bede3e9ada32db4e190e3a1351",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "036-coordinator-curriculum-coverage-desktop",
+      "role": "coordinator",
+      "file": "coordinator/036-coordinator-curriculum-coverage-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\036-coordinator-curriculum-coverage-desktop.png",
+      "sha256": "c2e892bd3002305b8f4ebe382d450259724a06db76c0891e521a33d160d76c1e",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "037-coordinator-assessment-outcomes-desktop",
+      "role": "coordinator",
+      "file": "coordinator/037-coordinator-assessment-outcomes-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\037-coordinator-assessment-outcomes-desktop.png",
+      "sha256": "e41b8cacd68a3e84176712d3d4726a8e03331de120de2daed884b4f681d7c5e6",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "038-coordinator-evidence-gaps-desktop",
+      "role": "coordinator",
+      "file": "coordinator/038-coordinator-evidence-gaps-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\038-coordinator-evidence-gaps-desktop.png",
+      "sha256": "545b11f7f2be4e7994fd6faa9013bc37df7b4c07aa1bb7b2ed59c2802efdfaee",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "039-coordinator-intervention-outcomes-desktop",
+      "role": "coordinator",
+      "file": "coordinator/039-coordinator-intervention-outcomes-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\039-coordinator-intervention-outcomes-desktop.png",
+      "sha256": "3e98cca68670d7edb520fb9df030a301e540d84e96b096deb6db796109c1e60d",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "040-coordinator-cqi-view-desktop",
+      "role": "coordinator",
+      "file": "coordinator/040-coordinator-cqi-view-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\040-coordinator-cqi-view-desktop.png",
+      "sha256": "747cf1ae1d8d5d668c3773ea003331e23ae1e47b9801777af53ff59d23628747",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "041-coordinator-reports-desktop",
+      "role": "coordinator",
+      "file": "coordinator/041-coordinator-reports-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\041-coordinator-reports-desktop.png",
+      "sha256": "3f1dbc580cebddc7322d91f129756371fe15ef2e956d93d981a4e39408e9e8f0",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "081-coordinator-curriculum-mapping-review-desktop",
+      "role": "coordinator",
+      "file": "coordinator/081-coordinator-curriculum-mapping-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\081-coordinator-curriculum-mapping-review-desktop.png",
+      "sha256": "b98345c2fa2fbd3a15f576c941560b2ccf5f61907449b61c2bebbbd5f8826acd",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "082-coordinator-programme-version-comparison-desktop",
+      "role": "coordinator",
+      "file": "coordinator/082-coordinator-programme-version-comparison-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\082-coordinator-programme-version-comparison-desktop.png",
+      "sha256": "010e4650a47574e1cf8be285070d102aea25b08293141b8f3a3b0da7a5b5da1b",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "083-coordinator-family-programme-catalog-and-applicability-desktop",
+      "role": "coordinator",
+      "file": "coordinator/083-coordinator-family-programme-catalog-and-applicability-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\083-coordinator-family-programme-catalog-and-applicability-desktop.png",
+      "sha256": "43197827f992758ddb9d80c90e5dc922a99713f4d28fadd72881bc69f019fdf0",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "086-coordinator-owned-school-improvement-action-desktop",
+      "role": "coordinator",
+      "file": "coordinator/086-coordinator-owned-school-improvement-action-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\086-coordinator-owned-school-improvement-action-desktop.png",
+      "sha256": "56b4e4b6ca1a408a46ef03258dc24b67d2d541ee7e64744f80214e59817525d4",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "087-coordinator-quality-framework-and-evidence-requirement-browser-desktop",
+      "role": "coordinator",
+      "file": "coordinator/087-coordinator-quality-framework-and-evidence-requirement-browser-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\087-coordinator-quality-framework-and-evidence-requirement-browser-desktop.png",
+      "sha256": "5a96e9f15ced106cb89d5fa6b813e468dc14c183ba95ac4bb118193ee8095082",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "088-coordinator-quality-evidence-reuse-and-gap-review-desktop",
+      "role": "coordinator",
+      "file": "coordinator/088-coordinator-quality-evidence-reuse-and-gap-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\088-coordinator-quality-evidence-reuse-and-gap-review-desktop.png",
+      "sha256": "58b0a874bd72b66d9235a22799c704ec2a2b5fec385f6040738635c6db3daea8",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "089-coordinator-self-study-and-stakeholder-reflection-desktop",
+      "role": "coordinator",
+      "file": "coordinator/089-coordinator-self-study-and-stakeholder-reflection-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\089-coordinator-self-study-and-stakeholder-reflection-desktop.png",
+      "sha256": "7ddba21a5c4c1ba49ec0491bd69b6c6520e8aa50e8e547145da89672a0edf906",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "090-coordinator-quality-action-plan-and-review-packet-desktop",
+      "role": "coordinator",
+      "file": "coordinator/090-coordinator-quality-action-plan-and-review-packet-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\090-coordinator-quality-action-plan-and-review-packet-desktop.png",
+      "sha256": "b1718c825074838829130a494b9af3a5cd0f7d3cc3320c56a554ae474ce7a7e0",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "093-coordinator-purpose-limited-school-analytics-inquiry-desktop",
+      "role": "coordinator",
+      "file": "coordinator/093-coordinator-purpose-limited-school-analytics-inquiry-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\093-coordinator-purpose-limited-school-analytics-inquiry-desktop.png",
+      "sha256": "b442a2d81b2c7d6c5719ab2a29d132ddbea1073197e8d9b91f16b7591d1a62de",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "100-coordinator-home-mobile",
+      "role": "coordinator",
+      "file": "coordinator/100-coordinator-home-mobile.png",
+      "sourcePath": "G:\\1 approch UI\\100-coordinator-home-mobile.png",
+      "sha256": "12e12f441e198168bc62b0a490bf364c1e9034f13dce3417e5e28154ccc3403c",
+      "dimensions": [
+        1024,
+        1536
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "105-coordinator-home-dark",
+      "role": "coordinator",
+      "file": "coordinator/105-coordinator-home-dark.png",
+      "sourcePath": "G:\\1 approch UI\\105-coordinator-home-dark.png",
+      "sha256": "dce39755ab2cafa1d4e8a2df2aa43a2f62306b2b5ddd00b1b6f1ba3623eb893e",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "049-admin-home-desktop",
+      "role": "admin",
+      "file": "admin/049-admin-home-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\049-admin-home-desktop.png",
+      "sha256": "61e0fbfdfbc9f4764bfa243e14894a9a55e8651dc8473b899cf7f9cc1137fb3c",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "050-admin-school-setup-desktop",
+      "role": "admin",
+      "file": "admin/050-admin-school-setup-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\050-admin-school-setup-desktop.png",
+      "sha256": "d88b1ed325626e759cb14afd9f5ec04b556040f584d8f7535f8cafb97a71a240",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "051-admin-people-desktop",
+      "role": "admin",
+      "file": "admin/051-admin-people-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\051-admin-people-desktop.png",
+      "sha256": "c6f16b048d8378fc5f46e6938f39a82026ba4694f070d59cdd4260883e7b35a6",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "052-admin-classes-desktop",
+      "role": "admin",
+      "file": "admin/052-admin-classes-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\052-admin-classes-desktop.png",
+      "sha256": "eb20b9ce52194929b2b2b00793c1a76d14186aec65e9f6da89819c471bb4098a",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "053-admin-curriculum-programmes-desktop",
+      "role": "admin",
+      "file": "admin/053-admin-curriculum-programmes-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\053-admin-curriculum-programmes-desktop.png",
+      "sha256": "d8b1d94411ee6623890f7f264aafeb9e29765be557de06c7ab6c8e6be71581da",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "054-admin-modules-entitlements-desktop",
+      "role": "admin",
+      "file": "admin/054-admin-modules-entitlements-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\054-admin-modules-entitlements-desktop.png",
+      "sha256": "1d56ab42619903c2a9ff39e8b8c544b9cfe86151234d3882c9953f5e4f09982d",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "055-admin-permissions-desktop",
+      "role": "admin",
+      "file": "admin/055-admin-permissions-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\055-admin-permissions-desktop.png",
+      "sha256": "51493bb7134e7e859fcd396572ce298d6d04274f19708f71b28c5d3bc0553cbf",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "056-admin-policies-desktop",
+      "role": "admin",
+      "file": "admin/056-admin-policies-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\056-admin-policies-desktop.png",
+      "sha256": "da78fed93bac79b9fcc56d7a8f7156b26441fdcc1a5141cf4b2990588aaa46ff",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "057-admin-automation-desktop",
+      "role": "admin",
+      "file": "admin/057-admin-automation-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\057-admin-automation-desktop.png",
+      "sha256": "3a4172a03f3a97cef0d5c0eff35b416c323eb816448451d861d75d1f57a798d6",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "058-admin-ai-governance-desktop",
+      "role": "admin",
+      "file": "admin/058-admin-ai-governance-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\058-admin-ai-governance-desktop.png",
+      "sha256": "4ae32ccb0781cbd022a6089c5a90ea733183b350e86f99f65125df9d0b317397",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "059-admin-reports-desktop",
+      "role": "admin",
+      "file": "admin/059-admin-reports-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\059-admin-reports-desktop.png",
+      "sha256": "3b59170b2fd1902b16f2fb9862470a1a54457854f8f324c7d0b5d29d9a0e65fc",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "060-admin-audit-desktop",
+      "role": "admin",
+      "file": "admin/060-admin-audit-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\060-admin-audit-desktop.png",
+      "sha256": "c492d5fda82d08f6c6e5d43b777db6b7bb1da5e92048cd30b5dad94f3bfb39ab",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "074-admin-school-policy-and-relationship-confirmation-desktop",
+      "role": "admin",
+      "file": "admin/074-admin-school-policy-and-relationship-confirmation-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\074-admin-school-policy-and-relationship-confirmation-desktop.png",
+      "sha256": "ff8ae72b3efe9ced9fcd19feb6775647b04859398cc49f71466bae0b03dfec9f",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "094-admin-governed-automation-and-ai-evaluation-desktop",
+      "role": "admin",
+      "file": "admin/094-admin-governed-automation-and-ai-evaluation-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\094-admin-governed-automation-and-ai-evaluation-desktop.png",
+      "sha256": "ffd2cdec968d4cf6a6766983ac489e8d163e600e630364ba1c700f42dd04cc37",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "095-admin-integration-retention-and-delivery-review-desktop",
+      "role": "admin",
+      "file": "admin/095-admin-integration-retention-and-delivery-review-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\095-admin-integration-retention-and-delivery-review-desktop.png",
+      "sha256": "8e2ac353458cb45802bd7f8de0e6e5d1e66df4c4013f302b5f6728bbe7f4f64a",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "096-admin-advanced-school-scheduling-and-attendance-desktop",
+      "role": "admin",
+      "file": "admin/096-admin-advanced-school-scheduling-and-attendance-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\096-admin-advanced-school-scheduling-and-attendance-desktop.png",
+      "sha256": "e01da76dc4a972fe117949c8ab2ddf81a91a5d53911239a97e22ae7730144d30",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "101-admin-home-mobile",
+      "role": "admin",
+      "file": "admin/101-admin-home-mobile.png",
+      "sourcePath": "G:\\1 approch UI\\101-admin-home-mobile.png",
+      "sha256": "eec5a1710ef58dc79cb88277a521fbd1d575c3126ec2663a60cd8d57912e4586",
+      "dimensions": [
+        1024,
+        1536
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "106-admin-home-dark",
+      "role": "admin",
+      "file": "admin/106-admin-home-dark.png",
+      "sourcePath": "G:\\1 approch UI\\106-admin-home-dark.png",
+      "sha256": "6aba2de01ff7e2c85507a4dff89f9c7fd61f1918827f990dde4ca210d7baa585",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "061-shared-account-help-and-privacy-desktop",
+      "role": "shared",
+      "file": "shared/061-shared-account-help-and-privacy-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\061-shared-account-help-and-privacy-desktop.png",
+      "sha256": "8a2b3ffb4c4df82ef328389bb5295e9ff9e0b238629d266508c2af40a52547d1",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "062-shared-unavailable-or-denied-access-recovery-desktop",
+      "role": "shared",
+      "file": "shared/062-shared-unavailable-or-denied-access-recovery-desktop.png",
+      "sourcePath": "G:\\1 approch UI\\062-shared-unavailable-or-denied-access-recovery-desktop.png",
+      "sha256": "8ecee7cb4bf0aa6a2621f073f07049a2a3a921f8c468377d8e28ead2ade392ea",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "composition inspiration; adult alternatives require founder selection",
+      "dataAuthority": "fictional reference; current product contracts govern content/actions"
+    },
+    {
+      "id": "student-approved-lower-panels",
+      "role": "student",
+      "file": "student/student-approved-lower-panels.png",
+      "sourcePath": "C:\\Users\\hp\\AppData\\Local\\Temp\\codex-clipboard-3b3a30ad-ef42-45b5-91aa-9aae81c8fbc3.png",
+      "sha256": "f06caaaad26847c6244520fe16b7420091b5403bb2fd1079bdf8e6e5d34b31f3",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "approved lower-section direction",
+      "dataAuthority": "visual only; current product contracts govern content/actions"
+    },
+    {
+      "id": "learning-studio-approved-versus-current",
+      "role": "authentication",
+      "file": "authentication/learning-studio-approved-versus-current.png",
+      "sourcePath": "C:\\Users\\hp\\AppData\\Local\\Temp\\codex-clipboard-caf1bffb-a273-43b8-b6a5-15b2486da1a1.png",
+      "sha256": "85be2d44ceaf52a6c4eeb46d666f873972c529e87355a17832f58bf8ee6da395",
+      "dimensions": [
+        3072,
+        1110
+      ],
+      "kind": "supplied visual reference",
+      "approval": "left-hand composition is founder-approved implementation target; right-hand is current comparison",
+      "dataAuthority": "visual only; current product contracts govern content/actions"
+    },
+    {
+      "id": "student-foxi-task-direction",
+      "role": "student",
+      "file": "student/student-foxi-task-direction.png",
+      "sourcePath": "C:\\Users\\hp\\Downloads\\ChatGPT Image Oct 2, 2026, 03_30_48 AM (1).png",
+      "sha256": "a7ef168ab3fba670090e0b890fd9f043c77ae03b107851ec6f7b9f2bb61339b6",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "supplied visual reference",
+      "approval": "approved task-edge companion reference",
+      "dataAuthority": "visual only; current product contracts govern content/actions"
+    },
+    {
+      "id": "learning-studio-original",
+      "role": "authentication",
+      "file": "authentication/learning-studio-original.png",
+      "sourcePath": "C:\\Users\\hp\\.codex\\visualizations\\2026\\10\\03\\cuevo-trail-implementation\\auth-concepts-15\\images\\08-learning-studio.png",
+      "sha256": "3f27d025ac1a7c6b7683adc9e4456fb310532aa9eeafc9bacb0e100ff41f72c4",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "kind": "unannotated original reference",
+      "approval": "selected static Learning Studio source; compare with latest left-hand layout amendment",
+      "dataAuthority": "visual only; current source/action rules govern"
+    }
+  ]
+}

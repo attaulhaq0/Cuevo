@@ -1,0 +1,8 @@
+import{describe,it,expect}from'vitest';
+import{curriculumVersionInputSchema,curriculumReferenceInputSchema,programmeInstanceInputSchema}from'@cuevo/contracts';
+const id='90000000-0000-4000-8000-000000000001';
+const pack={packId:'synthetic-school-primary',kind:'school_custom',framework:'School Custom',programme:'Synthetic primary',version:'synthetic-1',scope:'synthetic-primary',sourceStatus:'VERIFIED',rightsStatus:'PERMITTED',sourceLocation:'repo:synthetic',sourceChecksum:null,synthetic:true,reason:'Technical reference fixture'};
+describe('curriculum configuration boundaries',()=>{
+ it('allows explicitly synthetic contexts but refuses unreviewed official authority',()=>{expect(curriculumVersionInputSchema.safeParse(pack).success).toBe(true);expect(curriculumVersionInputSchema.safeParse({...pack,synthetic:false,kind:'curriculum',framework:'Cambridge'}).success).toBe(false);expect(curriculumVersionInputSchema.safeParse({...pack,synthetic:false,kind:'curriculum',sourceStatus:'REQUIRES_REVIEW',rightsStatus:'UNKNOWN'}).success).toBe(true);});
+ it('keeps programme scope and explicit human configuration without guessed codes',()=>{expect(curriculumReferenceInputSchema.safeParse({packVersionId:id,parentId:null,type:'objective',title:'Synthetic explanation',description:'School authored',code:null,sequence:1,subjectId:null,yearGroupId:null}).success).toBe(true);expect(programmeInstanceInputSchema.safeParse({packVersionId:id,name:'Synthetic programme',classId:id,subjectId:id,yearGroupId:id,confirmConfiguration:true}).success).toBe(true);expect(programmeInstanceInputSchema.safeParse({packVersionId:id,name:'Synthetic programme',classId:id,subjectId:id,yearGroupId:id}).success).toBe(false);});
+});

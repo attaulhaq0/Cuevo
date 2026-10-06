@@ -1,0 +1,1 @@
+School-authored synthetic curriculum fixture v1. This is not an official national curriculum, qualification syllabus, grading scale or accreditation requirement. Learners explain a school-authored example and demonstrate checking. Numeric scale 0 to 10 is teacher-defined; native rubric records explanation/checking descriptors without scalar normalization.

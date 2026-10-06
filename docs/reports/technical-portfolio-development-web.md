@@ -1,0 +1,15 @@
+# Portfolio and recorded recognition frontend
+
+Date: 2026-10-01. Cuevo by E Deviser. Sources04/09/15/16/18/39/43/58/63/80 govern selected source evidence, human review, exact parent revision approval and observed-action recognition.
+
+The owned portfolio feature selects released numeric/rubric evidence, preserves native source/version and zero values, creates immutable learner reflection revisions, displays teacher feedback/featured state and exposes unchecked exact-revision parent approval/revocation controls. Parents do not query revision history and receive only the API-approved revision. History pagination uses revision IDs to avoid collapsing immutable reflection revisions under the same item ID.
+
+The student-only private file panel bounds approved types and 512 KiB, computes SHA-256, stages metadata then uploads/verifies bytes, and retains original commands in memory on uncertain outcomes. Definitive refusal clears the retry journal. Authenticated downloads verify size/checksum before a short-lived object URL; no protected browser cache or public file URL is introduced. This does not attach raw files to parent-visible evidence or assert malware/publisher approval.
+
+The development feature keeps personal recorded XP/source ledger and achievements separate from academic evidence, supports explicit immutable admin policy/period/backfill and student opt-in/alias/hide, and excludes parent internals. Disabled points remain null; leaderboards query only when explicitly enabled and are class-period alias views, never child-quality or grade rankings. Shared forms/retries/pagination and bilingual token styles are reused.
+
+Regression-first portfolio/development parser tests cover source review/parent state, immutable history identity, file size/types, disabled unknown points, approved observed action types and alias-only leaderboard data. Independent review corrected parent-projection revocation after a later learner edit, read-only sharing state and opt-out availability after school leaderboard disablement.
+
+Fresh configured production build, root/web TypeScript, focused lint and source/docs/repository guards passed. The isolated portfolio browser journey passed (9.6 seconds, 11.2 total): staged/verified own file upload and authenticated checksum-checked download, zero native evidence selection, exact teacher review/parent approval, learner private reflection revision and unchanged former parent projection, Arabic390/axe. The recognition journey passed (6.9 seconds, 8.3 total): explicit school-policy enabling, immutable points/period configuration and student alias opt-in/hide. The Browser plugin was unavailable; repository Playwright ran against stable local web/API/worker processes. No token or private service configuration was displayed.
+
+Root composes public UI/style surfaces and owns full source/revocation/recovery/clean-seed exit verification. These technical journeys passed; they do not certify all record classes, official curriculum/customer acceptance or full MVP exit.
