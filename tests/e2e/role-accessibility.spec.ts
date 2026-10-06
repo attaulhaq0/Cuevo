@@ -17,23 +17,69 @@ const evidence = resolve('.local/technical-mvp-visuals/accessibility');
 const skipNames = /^(Skip to main content|انتقل إلى المحتوى الرئيسي)$/;
 
 async function keyboardActivate(page: Page, target: Locator) {
-  await expect(target).toBeVisible(); await expect(target).toBeEnabled();
-  // The skip link anchors the tab order. Activation always uses real keyboard input.
-  await page.getByRole('link', { name: skipNames }).focus();
-  for (let attempt = 0; attempt < 250; attempt++) {
-    await page.keyboard.press('Tab');
-    if (await target.evaluate(element => element === document.activeElement)) {
-      await expect(target).toBeFocused();
-      expect(await target.evaluate(element => {
-        const style = getComputedStyle(element); const rect = element.getBoundingClientRect();
-        return element.matches(':focus-visible') && parseFloat(style.outlineWidth) >= 2
-          && style.outlineStyle !== 'none' && rect.left >= -1 && rect.right <= innerWidth + 1
-          && rect.top >= -1 && rect.bottom <= innerHeight + 1;
-      }), 'Keyboard focus must have a visible outline inside the current viewport').toBe(true);
-      await page.keyboard.press('Enter'); return;
-    }
+  await expect(target).toHaveCount(1); await expect(target).toBeVisible(); await expect(target).toBeEnabled();
+  const sources = await target.elementHandles();
+  if (sources.length !== 1) {
+    await Promise.all(sources.map(source => source.dispose()));
+    throw new Error('Named keyboard control is no longer unique and current.');
   }
-  throw new Error('Named control was not reachable through the current keyboard tab order.');
+  const source = sources[0];
+  try {
+    const panel = await source.evaluateHandle(element => element instanceof Element ? element.closest('[popover]') : null);
+    try {
+      const inPopover = await panel.evaluate(element => element !== null);
+      const sample = async () => {
+        const state = await target.evaluateAll((elements, original) => {
+          const element = elements[0];
+          if (elements.length !== 1 || element !== original || !element.isConnected) throw new Error('Named keyboard control is no longer unique and current.');
+          const popup = element.closest('[popover]');
+          const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+          if (element.matches(':disabled') || style.display === 'none' || style.visibility !== 'visible' || !element.getClientRects().length || popup && !popup.matches(':popover-open')) throw new Error('Named keyboard control is no longer available.');
+          return { focused: element === document.activeElement, outline: element.matches(':focus-visible') && parseFloat(style.outlineWidth) >= 2
+            && style.outlineStyle !== 'none' && rect.left >= -1 && rect.right <= innerWidth + 1
+            && rect.top >= -1 && rect.bottom <= innerHeight + 1 };
+        }, source);
+        if (inPopover && !await panel.evaluate(element => !!element?.isConnected && element.matches(':popover-open') && element.contains(document.activeElement))) throw new Error('Native popover keyboard scope was lost.');
+        return state;
+      };
+      if (inPopover) {
+        // The native toggle focuses this panel's first control. Restarting at
+        // the global skip link can scroll outside it and legitimately dismiss it.
+        await expect.poll(() => panel.evaluate(element => {
+          if (!element?.isConnected || !element.matches(':popover-open')) throw new Error('Native popover keyboard scope was lost.');
+          return element.contains(document.activeElement);
+        })).toBe(true);
+      } else {
+        // Ordinary controls retain the full real keyboard tab-order traversal.
+        await page.getByRole('link', { name: skipNames }).focus();
+      }
+      for (let attempt = 0; attempt < 250; attempt++) {
+        const state = await sample();
+        if (state.focused) {
+          await expect(target).toBeFocused();
+          expect(state.outline, 'Keyboard focus must have a visible outline inside the current viewport').toBe(true);
+          await page.keyboard.press('Enter'); return;
+        }
+        await page.keyboard.press('Tab');
+      }
+      throw new Error('Named control was not reachable through the current keyboard tab order.');
+    } finally {
+      await panel.dispose();
+    }
+  } finally {
+    await source.dispose();
+  }
+}
+
+async function keyboardWorkspaceAction(page: Page, label: string): Promise<Locator> {
+  const profile = ['Access settings', 'Account'].includes(label);
+  const focused = await page.locator('.workspace-chrome').getAttribute('data-navigation-mode') === 'focused';
+  if (!profile && !focused) return page.locator('.workspace-chrome__navigation').getByRole('button', { name: label, exact: true });
+  const trigger = page.locator(profile ? '.workspace-chrome__person > button' : '.workspace-chrome__workspace-choice');
+  const panel = page.locator(profile ? '.workspace-chrome__profile' : '.workspace-chrome__switcher');
+  if (!await panel.isVisible()) await keyboardActivate(page, trigger);
+  await expect(panel).toBeVisible();
+  return panel.getByRole('button', { name: label, exact: true });
 }
 
 async function signIn(page: Page, role: Role) {
@@ -181,7 +227,7 @@ for (const role of roles) {
     if (role === 'student') expect(names).not.toContain('Curriculum context');
     for (let index = 0; index < names.length; index++) {
       await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
-      const target = await trailWorkspaceAction(page, names[index].trim());
+      const target = await keyboardWorkspaceAction(page, names[index].trim());
       const expectedView = await target.getAttribute('data-workspace-destination');
       const profileView = names[index].trim() === 'Account' ? 'account' : names[index].trim() === 'Access settings' ? 'access' : null;
       if (!profileView) expect(expectedView, 'Every current product workspace choice identifies its exact destination').not.toBeNull();
@@ -258,7 +304,7 @@ test('sign-in keyboard controls, validation errors and bilingual labels remain a
 
 test('command form refusal is associated with named fields and supports keyboard cancellation', async ({ page }) => {
   await signIn(page, 'admin');
-  await keyboardActivate(page, await trailWorkspaceAction(page, 'School')); await settled(page);
+  await keyboardActivate(page, await keyboardWorkspaceAction(page, 'School')); await settled(page);
   await keyboardActivate(page, page.getByRole('button', { name: 'Create academic year', exact: true }));
   const form = page.getByRole('region', { name: 'Create academic year', exact: true });
   await form.getByLabel('Name', { exact: true }).fill('Synthetic refusal case');
@@ -279,7 +325,7 @@ for (const state of [{ status: 403, title: 'School access is unavailable for thi
     const displayName = await signIn(page, 'parent'); await mkdir(evidence, { recursive: true });
     // Fault injection checks presentation/recovery only. API/SQL suites prove actual authorization denial.
     await page.route('**/v1/me', route => route.fulfill({ status: state.status, contentType: 'application/json', body: JSON.stringify({ code: 'TEST_MEMBERSHIP_FAILURE', requestId: `presentation-${state.status}` }), headers: { 'access-control-allow-origin': '*' } }));
-    await keyboardActivate(page, await trailWorkspaceAction(page, 'Access settings'));
+    await keyboardActivate(page, await keyboardWorkspaceAction(page, 'Access settings'));
     await keyboardActivate(page, page.getByRole('button', { name: 'Refresh access', exact: true }));
     await expect(page.getByRole('heading', { name: state.title, exact: true })).toBeVisible(); await expect(page.getByRole('navigation')).toHaveCount(0);
     await expect(page.getByText(displayName, { exact: false })).toHaveCount(0); await expect(page.getByRole('status')).toBeVisible();
@@ -352,4 +398,99 @@ import React,{createContext,useContext,useState}from'react';import{createRoot}fr
  const errors:string[]=[];page.on('pageerror',()=>errors.push('pageerror'));page.on('console',message=>{if(['warning','error'].includes(message.type()))errors.push(message.type());});
  await page.setViewportSize({width:390,height:844});let release!:()=>void;const held=new Promise<void>(done=>release=done);await page.route('http://localhost:4000/v1/classes**',async route=>{await held;await route.fulfill({contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({items:[{id:'30000000-0000-4000-8000-000000000001',name:'Year 1 · Cedar',academicYearName:'2026–2027',yearGroupName:'Year 1'}],nextCursor:null})});});
  await page.setContent('<style>'+css+'</style><a href="#root">Skip to main content</a><div id="root"></div>');await page.addScriptTag({content:compiled.outputFiles[0].text});const select=page.locator('#summary-class');await expect(select).toBeHidden();const choose=chooseCurrentClassByKeyboard(page).then(()=>({ok:true as const}),error=>({ok:false as const,error}));try{await expect(select).toBeVisible();await expect(page.locator('.progress-review-layout')).toHaveAttribute('data-selected','false');}finally{release();}const outcome=await choose;if(!outcome.ok)throw outcome.error;await expect(select).toHaveValue('30000000-0000-4000-8000-000000000001');expect(await page.evaluate(()=>(globalThis as unknown as{mobileClass:{backs:number}}).mobileClass.backs)).toBe(1);await keyboardActivate(page,page.getByRole('button',{name:'Open current learner',exact:true}));await expect(select).toBeHidden();expect(errors).toEqual([]);
+});
+
+// Controlled actual-owner regression: an oversized current header and deep
+// reading make the global skip restart scroll outside an already-open chooser.
+// This proves the helper defect, not the unknown original CI closing trigger.
+async function mountKeyboardChrome(page: Page, { tallHeader = false, disabledEdges = false } = {}) {
+  const root = resolve(import.meta.dirname, '../..');
+  const css = ['packages/ui/src/tokens.css', 'apps/web/app/globals.css', 'apps/web/features/shell/styles.css', 'apps/web/features/shell/workspace-theme.css']
+    .map(file => readFileSync(resolve(root, file), 'utf8').replace(/@import[^;]+;/g, '')).join('\n');
+  const compiled = await build({ stdin: { resolveDir: root, loader: 'tsx', contents: `
+import React,{useState}from'react';import{createRoot}from'react-dom/client';import{WorkspaceChrome}from'./apps/web/features/shell/components/workspace-chrome';
+const labels={overview:'Overview',school:'School',community:'Community',portfolio:'Portfolio',development:'Development',curriculum:'Curriculum context',restricted:'Restricted records',learning:'Learning',academic:'Academic',progress:'Progress',improvement:'Next steps'},icons={overview:'home',school:'school',community:'community',portfolio:'portfolio',development:'development',curriculum:'curriculum',restricted:'shield',learning:'learning',academic:'assessment',progress:'progress',improvement:'arrow'};
+function Harness(){const[view,setView]=useState('progress');function choose(id){history.pushState(null,'','?view='+id);setView(id);requestAnimationFrame(()=>document.querySelector('main h1')?.focus({preventScroll:true}));}const nav=Object.keys(labels).map(id=>({id,label:labels[id],icon:icons[id],disabled:${disabledEdges}&&(id==='overview'||id==='improvement'),onSelect:()=>choose(id)}));return <WorkspaceChrome context={{navigation:nav,selectedId:view,mode:'focused',currentWorkspace:nav.find(item=>item.id===view),navigationLabel:'Workspace navigation',schoolName:'Current reference school',personName:'Current teacher',roleLabel:'Teacher',locale:'en',theme:'light',brand:<a className='brand' href='#'>Cuevo</a>,searchAction:{label:'Search',onClick(){}},languageControl:<div className='language-switch'><button>English</button><button>العربية</button></div>,accountAction:{label:'Account',onClick:()=>choose('account')},settingsAction:{label:'Access settings',onClick:()=>choose('access')}}}><main id='main-content' className='workspace-main' tabIndex={0}><h1 tabIndex={-1}>{view==='improvement'?'Current approved next steps':'Current '+(labels[view]||view)}</h1><div style={{height:2200}}>Current authorized reading context</div><button>Last source control</button></main></WorkspaceChrome>};createRoot(document.getElementById('root')).render(<Harness/>);
+` }, bundle: true, write: false, platform: 'browser', jsx: 'automatic', format: 'iife', plugins: [{ name: 'native-owner-assets', setup(b) {
+    b.onLoad({ filter: /\.(webp|png|svg)$/ }, args => ({ loader: 'js', contents: 'export default ' + JSON.stringify({ src: 'data:image/' + (args.path.endsWith('.svg') ? 'svg+xml' : 'webp') + ';base64,' + readFileSync(args.path).toString('base64'), width: 128, height: 128 }) }));
+  } }] });
+  const blocked: string[] = [];
+  await page.route('**/*', route => {
+    if (route.request().isNavigationRequest() && new URL(route.request().url()).origin === 'https://chooser.fixture.invalid') return route.fulfill({ contentType: 'text/html', body: '<!DOCTYPE html><html lang="en"><head><title>Current chooser keyboard regression</title></head><body><a class="skip-link" href="#main-content">Skip to main content</a><div id="root"></div></body></html>' });
+    blocked.push(new URL(route.request().url()).origin); return route.abort();
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('https://chooser.fixture.invalid/?view=progress');
+  await page.addStyleTag({ content: css + (tallHeader ? '\n.workspace-chrome__header{min-height:1100px!important}' : '') });
+  await page.addScriptTag({ content: compiled.outputFiles[0].text });
+  await expect(page.locator('.workspace-chrome__workspace-choice')).toBeVisible();
+  return blocked;
+}
+
+test('adapter: native chooser keyboard traversal keeps its current focus after deep reading', async ({ page }) => {
+  const blocked = await mountKeyboardChrome(page, { tallHeader: true });
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(900);
+  const target = await trailWorkspaceAction(page, 'Next steps');
+  await page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  await expect(page.locator('.workspace-chrome__switcher').getByRole('button', { name: 'Overview', exact: true })).toBeFocused();
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+  await keyboardActivate(page, target);
+  await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=improvement');
+  await expect(page.getByRole('heading', { name: 'Current approved next steps', exact: true })).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  expect(blocked).toEqual([]);
+});
+
+test('adapter: keyboard workspace opener admits first and last enabled native choices', async ({ page }) => {
+  const blocked = await mountKeyboardChrome(page, { disabledEdges: true });
+  const keys: string[] = [];
+  await page.exposeFunction('recordOpenerKey', (key: string) => keys.push(key));
+  await page.locator('.workspace-chrome__workspace-choice').evaluate(element => element.addEventListener('keydown', event => { void (window as unknown as { recordOpenerKey: (key: string) => Promise<void> }).recordOpenerKey((event as KeyboardEvent).key); }));
+  const first = await keyboardWorkspaceAction(page, 'School');
+  await expect(first).toBeFocused();
+  await expect(page.locator('[data-workspace-destination="overview"]')).toBeDisabled();
+  await keyboardActivate(page, first); await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=school');
+  const last = await keyboardWorkspaceAction(page, 'Progress');
+  await expect(page.locator('[data-workspace-destination="improvement"]')).toBeDisabled();
+  await keyboardActivate(page, last); await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=progress');
+  await expect(page.getByRole('heading', { name: 'Current Progress', exact: true })).toBeFocused();
+  expect(keys.filter(key => key === 'Enter')).toHaveLength(2); expect(blocked).toEqual([]);
+});
+
+test('adapter: profile destinations and ordinary controls retain real keyboard entry', async ({ page }) => {
+  const blocked = await mountKeyboardChrome(page);
+  const seen: string[] = [];
+  await page.exposeFunction('recordKeyboardFocus', (name: string) => seen.push(name));
+  await page.evaluate(() => document.addEventListener('focusin', event => { void (window as unknown as { recordKeyboardFocus: (name: string) => Promise<void> }).recordKeyboardFocus((event.target as HTMLElement).textContent?.trim() ?? ''); }));
+  await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+  expect(seen).toContain('Skip to main content'); expect(seen).toContain('English');
+  await keyboardActivate(page, await keyboardWorkspaceAction(page, 'Account'));
+  await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=account');
+  await keyboardActivate(page, await keyboardWorkspaceAction(page, 'Access settings'));
+  await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=access');
+  await expect(page.getByRole('heading', { name: 'Current access', exact: true })).toBeFocused();
+  expect(blocked).toEqual([]);
+});
+
+for (const change of ['closed', 'removed', 'replaced', 'ambiguous', 'disabled'] as const) test(`adapter: native keyboard traversal refuses a ${change} current choice immediately`, async ({ page }) => {
+  const blocked = await mountKeyboardChrome(page);
+  const target = await keyboardWorkspaceAction(page, 'Next steps');
+  await expect(page.locator('.workspace-chrome__switcher').getByRole('button', { name: 'Overview', exact: true })).toBeFocused();
+  await page.evaluate(change => document.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const panel = document.querySelector<HTMLElement>('.workspace-chrome__switcher')!;
+    const target = panel.querySelector<HTMLButtonElement>('[data-workspace-destination="improvement"]')!;
+    if (change === 'closed') panel.hidePopover();
+    else if (change === 'removed') target.remove();
+    else if (change === 'replaced') target.replaceWith(target.cloneNode(true));
+    else if (change === 'ambiguous') target.after(target.cloneNode(true));
+    else target.disabled = true;
+  }, { once: true }), change);
+  const started = performance.now();
+  await expect(keyboardActivate(page, target)).rejects.toThrow(/Named keyboard control|Native popover keyboard scope/);
+  expect(performance.now() - started).toBeLessThan(2_000);
+  await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=progress');
+  if (change === 'closed') await expect(page.locator('.workspace-chrome__switcher')).toBeHidden();
+  expect(blocked).toEqual([]);
 });
