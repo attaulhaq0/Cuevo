@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Shell owns focused Back reflow in `apps/web/features/shell/styles.css`, preserving the existing label, directional icon and navigation callback. The current Chrome browser fixture covers320/390/834px bilingual enlarged-text bounds, keyboard and pending/draft preservation; native zoom and hosted acceptance remain separate.
+
 Initial hosted runtime role provisioning has one SQL predicate in `scripts/database/hosted-runtime-role-membership.ts`, consumed by the existing database facade and guarded native database fixtures. It preserves the canonical postgres SET grants and managed Supabase creator rows while refusing extra recipients or runtime-role parent memberships; it does not change applied migration history or domain grants.
 
 Shell owns the local delegation story in demo-guide-model.ts and components/demo-guide.tsx, using the shared/session/demo-guide.ts manifest parser and Auth model.ts token parser. The API-only local presentation profile in packages/config reuses the existing Improvement orchestrator. [The local product guide decision](decisions/2026-10-06-local-product-demonstration-guide.md) records source, role handoff and verification limits.

@@ -21,6 +21,8 @@ The latest founder-approved responsive composition uses this same Chrome, catalo
 
 Owns Application and Workspace composition, with public ui.tsx consumed by app/page.tsx. Shell may compose other features only through their ui/copy public surfaces. Common session/context, branding and locale live under shared. No other feature may import shell internals.
 
+The focused Back control wraps its full localized label within the available row width while preserving its directional icon, native target and current Home callback. `workspace-chrome-reflow.spec.ts` exercises English/Arabic at320/390/834px with normal and enlarged root text, keyboard reach, full text bounds, accessibility, unchanged prepared commands and unsent drafts. Root-text enlargement is scoped reflow evidence; native browser zoom and connected hosted acceptance remain separate.
+
 Account access lists resolve existing entitlement codes through the shared English/Arabic capability-label helper. Primary list text uses human feature names; unknown codes show an unavailable label. The original entitlement values still determine presentation eligibility and remain server-authorized independently.
 
 Product source IDs 36, 37, 62 and 63 apply. Browser journeys verify role navigation and app states. Keep route paths, CSS/token hierarchy, accessible landmarks, English/Arabic and current-role navigation stable. Navigation visibility is not backend authorization. Do not move feature policy or persistence into the shell.
