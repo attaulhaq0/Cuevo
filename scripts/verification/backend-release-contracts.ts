@@ -16,7 +16,7 @@ const origin = z.string().refine(value => {
 });
 const vercelTarget = z.object({ teamId: z.string().regex(/^team_[a-zA-Z0-9]+$/), projectId: z.string().regex(/^prj_[a-zA-Z0-9]+$/), origin, target: z.literal('preview') }).strict();
 const targets = z.object({ web: vercelTarget, api: vercelTarget, supabase: z.object({ projectRef: z.string().regex(/^[a-z]{20}$/), authOrigin: origin, edgeOrigin: z.string().max(200) }).strict() }).strict();
-const fingerprints = z.object({ sourceManifestSha256: digest, diffSha256: digest, migrationPlanSha256: digest, migrationHistorySha256: digest, migrationToolchainSha256: digest, operatorStoragePolicySha256: digest, apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest }).strict();
+const fingerprints = z.object({ sourceManifestSha256: digest, diffSha256: digest, migrationPlanSha256: digest, migrationHistorySha256: digest, migrationToolchainSha256: digest, migrationEndpointSha256:digest, operatorStoragePolicySha256: digest, apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest }).strict();
 const assignment = z.object({ category, taskId, reportSha256: digest, evidenceSha256: digest }).strict();
 const review = assignment.extend({ releaseSha: sha, treeSha: sha, baseSha: sha, sourceManifestSha256: digest, diffSha256: digest, reviewedAt: timestamp }).strict();
 const identity = z.object({ repository, releaseSha: sha, treeSha: sha, baseSha: sha, ciRunId: identifier, releaseRunId: identifier, runAttempt: positive, environmentId: positive,

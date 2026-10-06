@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
+import { canonicalReleaseExecutionJson } from '../verification/release-review';
 const projectRef = 'mqxdjvsyckzocokuikmx', token = 'synthetic-private-management-canary';
 const input = { projectRef, boundProjectRef: projectRef, providerToken: token };
 const project = { id: projectRef, name: 'Cuevo', status: 'ACTIVE_HEALTHY', database: { host: `db.${projectRef}.supabase.co`, version: '17.11.0.002', postgres_engine: '17' } };
+const pooler={identifier:projectRef,database_type:'PRIMARY',db_user:'postgres.'+projectRef,db_host:'aws-0-ap-southeast-1.pooler.supabase.com',db_port:6543,db_name:'postgres',pool_mode:'transaction'};
 async function api() {
   let module: Record<string, unknown> = {};
   try { module = await import(pathToFileURL(resolve(import.meta.dirname, 'hosted-migration-provider.ts')).href); }
@@ -16,22 +19,24 @@ async function withFetch(implementation: typeof fetch, run: () => Promise<void>)
   const original = globalThis.fetch; globalThis.fetch = implementation;
   try { await run(); } finally { globalThis.fetch = original; }
 }
-test('provider metadata uses one fixed official project GET and returns only verified direct endpoint identity', async () => {
+test('provider metadata binds official project and pooler configuration without returning connection strings or credentials', async () => {
   const { readHostedMigrationProvider } = await api(); let calls = 0;
   await withFetch(async (url, options) => {
-    calls++; assert.equal(url, `https://api.supabase.com/v1/projects/${projectRef}`);
+    calls++; assert.ok([`https://api.supabase.com/v1/projects/${projectRef}`,`https://api.supabase.com/v1/projects/${projectRef}/config/database/pooler`].includes(String(url)));
     assert.equal(options?.method, 'GET'); assert.equal(options?.redirect, 'error');
     assert.equal((options?.headers as Record<string, string>).Authorization, `Bearer ${token}`);
     assert.ok(options?.signal instanceof AbortSignal);
-    return new Response(JSON.stringify({ ...project, private_unrelated: token }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(String(url).endsWith('/pooler')?[{...pooler,connection_string:token}]:{ ...project, private_unrelated: token }), { headers: { 'Content-Type': 'application/json' } });
   }, async () => {
     const before = Date.now(), result = await readHostedMigrationProvider(input);
-    assert.equal(calls, 1); assert.equal(result.evidence, 'OFFICIAL_SUPABASE_PROJECT_METADATA');
+    assert.equal(calls, 2); assert.equal(result.evidence, 'OFFICIAL_SUPABASE_PROJECT_METADATA');
     assert.ok(result.observedAtMs >= before && result.observedAtMs <= Date.now());
     assert.deepEqual(result.directEndpoint, { projectRef, kind: 'direct', host: project.database.host, port: 5432, database: 'postgres' });
+    assert.deepEqual(result.sessionEndpoint,{projectRef,kind:'session-pooler',host:pooler.db_host,port:5432,database:'postgres'});
     assert.doesNotMatch(JSON.stringify(result), /canary|private_unrelated|dataApi|sslVerified|dispatchDisabled|postgres_engine/);
   });
 });
+test('foreign ambiguous replica host user database or unsupported pooler mode cannot bind session migration authority',async()=>{const{readHostedMigrationProvider}=await api();for(const patch of [{identifier:'a'.repeat(20)},{database_type:'READ_REPLICA'},{db_user:'postgres.other'},{db_host:'attacker.invalid'},{db_port:1234},{db_name:'other'},{pool_mode:'unknown'}])await withFetch(async(url)=>Response.json(String(url).endsWith('/pooler')?[{...pooler,...patch}]:project),async()=>assert.rejects(readHostedMigrationProvider(input)));});
 test('foreign unhealthy unsupported or unknown provider identity cannot authorize a migration endpoint', async () => {
   const { readHostedMigrationProvider } = await api();
   for (const delta of [{ id: 'a'.repeat(20) }, { name: 'Other product' }, { status: 'INACTIVE' }, { database: { ...project.database, host: 'db.other.invalid' } }, { database: { ...project.database, postgres_engine: '16' } }, { database: { ...project.database, version: '16.3' } }, { database: null }]) {
@@ -87,3 +92,4 @@ test('oversized provider headers refuse immediately even if transport cancellati
     assert.equal(result, 'private-failure'); assert.equal(cancelled, true);
   });
 });
+test('selected endpoint binds its reviewed recipe digest and never accepts a transaction port or another project',async()=>{const{readHostedMigrationProvider,requireCurrentHostedMigrationEndpoint}=await api();await withFetch(async url=>Response.json(String(url).endsWith('/pooler')?[pooler]:project),async()=>{const provider=await readHostedMigrationProvider(input),endpoint=provider.sessionEndpoint,fingerprint=createHash('sha256').update(canonicalReleaseExecutionJson(endpoint)).digest('hex');assert.deepEqual(requireCurrentHostedMigrationEndpoint(endpoint,provider,fingerprint),endpoint);for(const delta of [{port:6543},{host:'aws-0-other.pooler.supabase.com'},{projectRef:'a'.repeat(20)}])assert.throws(()=>requireCurrentHostedMigrationEndpoint({...endpoint,...delta},provider,fingerprint));assert.throws(()=>requireCurrentHostedMigrationEndpoint(endpoint,provider,'a'.repeat(64)));});});

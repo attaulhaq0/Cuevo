@@ -13,10 +13,13 @@ import { seedHostedSyntheticPopulation } from '../database/hosted-synthetic-popu
 import { provisionHostedSyntheticAuth } from '../database/hosted-synthetic-auth';
 import { createHostedMigrationDatabase } from '../database/hosted-migration-database';
 import { deployBackendProviders } from './backend-provider-deploy';
+import { verifyHostedBackendPrerequisites } from './backend-hosted-verification';
+import {hostedMigrationEndpointSchema} from '../database/hosted-migration-provider';
+import {canonicalReleaseExecutionJson} from './release-review';
 
 const failure = () => Error('Backend release step requires review; private contents withheld.');
 const digest = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
-const bundleSchema = z.object({ version: z.literal(1), purpose: z.literal('CUEVO_BACKEND_RELEASE_EXECUTION'), repoRoot: z.string(), expected: z.unknown(), preparedApproval: z.unknown(), plan: z.unknown(), stages: z.array(z.unknown()).max(4), toolchainManifestPath: z.string(), operatorStoragePolicyPath: z.string(), artifacts: z.object({ apiRoot: z.string(), edgeRoot: z.string() }).strict() }).strict();
+const bundleSchema = z.object({ version: z.literal(1), purpose: z.literal('CUEVO_BACKEND_RELEASE_EXECUTION'), repoRoot: z.string(), expected: z.unknown(), preparedApproval: z.unknown(), plan: z.unknown(),migrationEndpoint:hostedMigrationEndpointSchema, stages: z.array(z.unknown()).max(4), toolchainManifestPath: z.string(), operatorStoragePolicyPath: z.string(), artifacts: z.object({ apiRoot: z.string(), edgeRoot: z.string() }).strict() }).strict();
 const privateNames = ['CUEVO_MIGRATION_DATABASE_PASSWORD', 'CUEVO_DATABASE_TLS_CA', 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY', 'CUEVO_AUTH_PROVISIONING_KEY', 'CUEVO_SYNTHETIC_PILOT_PASSWORD', 'VERCEL_TOKEN'];
 function required(env: Record<string, string | undefined>, key: string) { const value = env[key]; if (!value?.trim()) throw failure(); return value; }
 async function ownedFile(root: string, path: string, maxBytes: number) {
@@ -34,7 +37,7 @@ async function record(root: string, filename: string, value: unknown) {
 }
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
-export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy'; repoRoot: string; env: Record<string, string | undefined> }) {
+export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify'; repoRoot: string; env: Record<string, string | undefined> }) {
   try {
     if (!isAbsolute(repoRoot) || resolve(repoRoot) !== repoRoot || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw failure();
     if (mode === 'prepare') {
@@ -51,10 +54,17 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const bundle = bundleSchema.parse(parseReleaseExecutionJson(new TextDecoder('utf8', { fatal: true }).decode(bytes)));
     const identity = z.object({ repository: z.literal(required(env, 'GITHUB_REPOSITORY')), releaseSha: z.literal(required(env, 'GITHUB_SHA')), releaseRunId: z.literal(required(env, 'GITHUB_RUN_ID')), runAttempt: z.literal(Number(required(env, 'GITHUB_RUN_ATTEMPT'))), environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging') }).parse(bundle.expected);
     if (bundle.repoRoot !== repoRoot || identity.runAttempt < 1) throw failure();
+    const endpoint=bundle.migrationEndpoint;
+    const endpointFingerprint=z.object({fingerprints:z.object({migrationEndpointSha256:z.literal(digest(canonicalReleaseExecutionJson(endpoint)))})}).parse(bundle.expected);if(!endpointFingerprint)throw failure();
     validatePreparedBackendReleaseIntent(bundle.preparedApproval, { ...bundle.expected as object, now: Date.now() });
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
     await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken });
     if (mode === 'approval') return { status: 'ADMITTED' as const, hostedAcceptance: false };
+    if(mode==='verify'){
+      const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
+      const provider=z.object({status:z.literal('DEPLOYED_INACTIVE'),api:z.object({url:z.string().url(),deploymentId:z.string().startsWith('dpl_')}),edge:z.object({id:z.string(),version:z.number().int().positive()})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
+      const result=await verifyHostedBackendPrerequisites({repoRoot,expected:bundle.expected,preparedApproval:bundle.preparedApproval,githubToken:shared.githubToken,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},edgeDeployment:{id:provider.edge.id,version:provider.edge.version},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});await record(repoRoot,'prerequisites-result.json',result);if(result.status!=='PREREQUISITES_OBSERVED')throw failure();return result;
+    }
     // Validate every needed input before the first provider mutation.
     const migrationPassword = required(env, 'CUEVO_MIGRATION_DATABASE_PASSWORD'), journalStorageKey = required(env, 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'), providerToken = required(env, 'SUPABASE_ACCESS_TOKEN'), ca = required(env, 'CUEVO_DATABASE_TLS_CA');
     if (!ca.includes('-----BEGIN CERTIFICATE-----') || Buffer.byteLength(ca) > 512 * 1024) throw failure();
@@ -67,7 +77,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       const response=await fetch(`https://api.supabase.com/v1/projects/${projectRef}/api-keys?reveal=true`,{headers:{Authorization:'Bearer '+providerToken},signal:AbortSignal.timeout(15000),redirect:'error'});if(!response.ok)throw failure();
       const keys=z.array(z.object({name:z.string(),type:z.string(),api_key:z.string()}).passthrough()).max(50).parse(await response.json());
       const publishable=keys.filter(key=>key.type==='publishable'&&key.name==='default'),storage=keys.filter(key=>key.type==='secret'&&key.name==='default');if(publishable.length!==1||storage.length!==1||storage[0].api_key===journalStorageKey)throw failure();
-      const url=(role:string,password:string)=>{const db=new URL(`postgresql://${role}@db.${projectRef}.supabase.co:5432/postgres`);db.password=password;return db.toString();};
+      const url=(role:string,password:string)=>{const db=new URL(`postgresql://${endpoint.kind==='session-pooler'?role+'.'+projectRef:role}@${endpoint.host}:5432/postgres`);db.password=password;return db.toString();};
       const common={NODE_ENV:'production',CUEVO_DEPLOYMENT_ENVIRONMENT:'synthetic-staging',CUEVO_SYNTHETIC_PROJECT_REF:projectRef,CUEVO_SYNTHETIC_WEB_ORIGIN:webOrigin,SUPABASE_URL:authOrigin,POSTHOG_CAPTURE_MODE:'DISABLED'};
       const runtimeConfig={version:1,purpose:'CUEVO_HOSTED_RUNTIME_CONFIGURATION',sourceSha:identity.releaseSha,projectRef,webOrigin,api:{...common,DATABASE_URL:url('cuevo_api',passwords.api),CUEVO_DATABASE_TLS_CA:ca,SUPABASE_PUBLISHABLE_KEY:publishable[0].api_key,SUPABASE_SERVICE_ROLE_KEY:storage[0].api_key,API_ALLOWED_ORIGIN:webOrigin,AI_GENERATION_MODE:'FIXTURE',AI_FIXTURE_ENABLED:'true'},edge:{...common,CUEVO_WORKER_DATABASE_URL:url('cuevo_worker',passwords.worker),CUEVO_WORKER_TLS_CA:ca,CUEVO_WORKER_EXECUTION_MODE:'synthetic-staging',CUEVO_WORKER_WAKE_KEY:''}};
       const handle=await open(join(repoRoot,'.local/hosted-release/runtime-private.json'),'wx',0o600);try{await handle.writeFile(JSON.stringify(runtimeConfig));await handle.sync();}finally{await handle.close();}
@@ -80,7 +90,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       z.object({ status: z.enum(['COMMITTED', 'NOOP']) }).parse(JSON.parse(schemaBytes.toString('utf8')));
       const certificate = { path: certificatePath, sha256: digest(ca) };
       const finalStage = bundle.stages.at(-1);
-      const population = await seedHostedSyntheticPopulation({ ...shared, providerToken, journalStorageKey, migrationPassword, certificate, plan: bundle.plan, finalStage, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath });
+      const population = await seedHostedSyntheticPopulation({ ...shared, providerToken, journalStorageKey, migrationPassword, certificate, plan: bundle.plan,endpoint, finalStage, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath });
       await record(repoRoot, 'population-result.json', population);
       if (!['POPULATED_CONFIRMED', 'NOOP'].includes(population.status)) throw failure();
       // This operator-only key serves private release receipts and initial Auth
@@ -88,7 +98,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       const privatePath = join(repoRoot, '.local/hosted-release/synthetic-access.json');
       const privateHandle = await open(privatePath, 'wx', 0o600);
       try { await privateHandle.writeFile(JSON.stringify({ purpose: 'SYNTHETIC_PILOT_ACCESS', sourceSha: identity.releaseSha, syntheticPassword })); await privateHandle.sync(); } finally { await privateHandle.close(); }
-      const auth = await provisionHostedSyntheticAuth({ ...shared, providerToken, migrationPassword, certificate, plan: bundle.plan, finalStage, authProvisioningKey: journalStorageKey, syntheticPassword, originalKey: 'cuevo-initial-hosted-synthetic-auth' });
+      const auth = await provisionHostedSyntheticAuth({ ...shared, providerToken, migrationPassword, certificate, plan: bundle.plan,endpoint, finalStage, authProvisioningKey: journalStorageKey, syntheticPassword, originalKey: 'cuevo-initial-hosted-synthetic-auth' });
       await record(repoRoot, 'auth-result.json', auth);
       if (auth.status !== 'CONFIRMED') throw failure();
       const target = z.object({ targets: z.object({ supabase: z.object({ projectRef: z.string().regex(/^[a-z]{20}$/) }) }) }).parse(bundle.expected);
@@ -96,7 +106,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       const runtimePasswords={api:randomBytes(32).toString('hex'),worker:randomBytes(32).toString('hex')};
       const runtimePasswordHandle=await open(join(repoRoot,'.local/hosted-release/runtime-role-passwords.json'),'wx',0o600);
       try{await runtimePasswordHandle.writeFile(JSON.stringify({purpose:'INITIAL_RESTRICTED_RUNTIME_CREDENTIALS',sourceSha:identity.releaseSha,projectRef,...runtimePasswords}));await runtimePasswordHandle.sync();}finally{await runtimePasswordHandle.close();}
-      const database = await createHostedMigrationDatabase({repoRoot,projectRef,databaseUrl:`postgresql://postgres@db.${projectRef}.supabase.co:5432/postgres?sslmode=verify-full`,certificate,password:migrationPassword});
+      const database = await createHostedMigrationDatabase({repoRoot,projectRef,databaseUrl:`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,certificate,password:migrationPassword});
       const referenceState: {status:'CONFIRMED'|'REQUIRES_REVIEW'} = {status:'REQUIRES_REVIEW'};
       const reference = await database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`, async () => {
         await readBackendReleaseAdmission({repoRoot,expected:bundle.expected,prepared:bundle.preparedApproval,githubToken:shared.githubToken});
@@ -116,7 +126,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     if (bucket.status === 'REQUIRES_REVIEW') throw failure();
     const toolchainKeys = ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'ComSpec', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'LANG', 'LC_ALL', 'TZ'];
     const toolchain = Object.fromEntries(toolchainKeys.filter(key => env[key] !== undefined).map(key => [key, env[key]!]));
-    const result = await executeNativeHostedMigrations({ ...shared, providerToken, journalStorageKey, migrationPassword, plan: bundle.plan, stages: bundle.stages, certificate: { path: certificatePath, sha256: digest(ca) }, toolchainManifestPath: bundle.toolchainManifestPath, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath, toolchain });
+    const result = await executeNativeHostedMigrations({ ...shared, providerToken, journalStorageKey, migrationPassword, plan: bundle.plan,endpoint, stages: bundle.stages, certificate: { path: certificatePath, sha256: digest(ca) }, toolchainManifestPath: bundle.toolchainManifestPath, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath, toolchain });
     await record(repoRoot, 'schema-result.json', result);
     if (!['COMMITTED', 'NOOP'].includes(result.status)) throw failure();
     return result;
@@ -124,7 +134,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const mode = process.argv[2];
-  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy'].includes(mode)) throw failure();
-  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
+  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify'].includes(mode)) throw failure();
+  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
   catch { console.error('Cuevo backend step requires review. Inspect retained source-bound receipts; private contents withheld.'); process.exitCode = 1; }
 }
