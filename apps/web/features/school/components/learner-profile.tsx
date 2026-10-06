@@ -1,7 +1,7 @@
 'use client';
 import { WorkspaceState } from '@cuevo/ui';
 import { useCallback, useId, useState } from 'react';
-import { Button, CuevoIcon } from '@cuevo/ui';
+import { CuevoIcon, IconButton } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
@@ -38,7 +38,7 @@ function CurrentLearnerProfile() {
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));
   if (!ready) return null;
   return <section className="school-profile cuevo-record" aria-label={t.title}>
-    <header className="school-day-heading"><CuevoIcon name="person" variant="filled" size={32} /><div><h2>{t.title}</h2><p>{t.note}</p></div><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}><CuevoIcon name="refresh" />{t.refresh}</Button></header>
+    <header className="school-day-heading"><CuevoIcon name="person" variant="filled" size={32} /><div><h2>{t.title}</h2><p>{t.note}</p></div><IconButton icon="refresh" label={t.refresh} onClick={() => setRefresh(value => value + 1)} /></header>
     {parent ? <ChildSelector context={childContext} /> : !own ? <div className="field school-profile-selector"><label htmlFor={`${id}-learner`}>{t.choose}</label><select id={`${id}-learner`} value={selected} onChange={event => setSelected(event.target.value)}><option value="">{t.choose}</option>{choices.map(choice => <option key={choice.value} value={choice.value} disabled={choice.requiresReview}>{choice.label}</option>)}</select><LoadMore query={people} />{people.nextCursor ? <WorkspaceState kind="review" icon="people" description={t.completeChoices}/> : null}{choices.some(choice => choice.requiresReview) ? <WorkspaceState kind="review" icon="people" description={t.ambiguous}/> : null}{people.error ? <LearningError error={people.error} /> : null}</div> : null}
     {!learnerId ? <WorkspaceState kind={parent ? "unknown" : choiceState === 'LOADING' ? "loading" : choiceState === 'FAILED' ? "unavailable" : choiceState === 'INCOMPLETE' || choiceState === 'REQUIRES_REVIEW' ? "review" : choiceState === 'EMPTY' ? "empty" : "unknown"} icon="person" description={parent ? t.chooseChild : choiceState === 'LOADING' ? t.loadingChoices : choiceState === 'FAILED' ? t.choicesUnavailable : choiceState === 'INCOMPLETE' ? t.completeChoices : choiceState === 'EMPTY' ? t.noLearners : choiceState === 'REQUIRES_REVIEW' ? t.ambiguous : t.chooseContext} role="status"/> : read.loading || !profile && !read.error ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : read.error ? <LearningError error={read.error} /> : profile ? <>
       <section className="school-profile-identity"><CuevoIcon name="school" variant="filled" size={32} /><div><h3><bdi>{profile.displayName}</bdi></h3><p><bdi>{profile.schoolName}</bdi></p></div></section>

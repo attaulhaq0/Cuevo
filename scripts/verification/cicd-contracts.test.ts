@@ -38,7 +38,7 @@ test('completed-backend staging frontend includes verified origin and browser ch
  const env=steps[browser].env as Record<string,string>;assert.equal(env.CUEVO_SYNTHETIC_PILOT_PASSWORD,'${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}');assert.equal(env.BACKEND_SELECTION_BASE64,'${{ needs.release-admission.outputs.backend-selection-base64 }}');
  assert.ok(steps.some(step=>step.run==='npx --no-install playwright install --with-deps chromium'&&step.if===condition));
  const evidence=steps.find(step=>(step.with as Record<string,unknown>|undefined)?.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}')!;assert.ok(evidence);assert.equal(evidence.if,"always() && needs.release-admission.outputs.backend-selection-base64 != ''");
- assert.equal((evidence.with as Record<string,unknown>).path,['web-deployment-result.json','web-origin-intent.json','web-origin-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n');
+ assert.equal((evidence.with as Record<string,unknown>).path,['web-deployment-result.json','web-origin-intent.json','web-origin-protection-intent.json','web-origin-result.json','protected-preview-web-intent.json','protected-preview-web-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n');
 });
 
 test('learning-loop evidence stays within its exact metadata directories and conditional retention',async()=>{
@@ -313,11 +313,14 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     const protectedControls={...releaseControls(),environment:{...releaseControls().environment,name:'staging'}};
     const script = (mode: 'manifest' | 'approval' | 'verify') => `
       const cp=(await import('node:module')).createRequire(import.meta.url)('node:child_process');cp.execFileSync=(command,args)=>{if(command!=='git')throw Error('Unexpected executable before verified approval');if(args[0]==='rev-parse')return args[1]==='HEAD'?'${sha}':'${assignments.baseSha}';if(args[0]==='merge-base'||args[0]==='diff'&&args[1]==='--quiet'||args[0]==='ls-files')return '';if(args[0]==='ls-tree')return '${treeBytes}';if(args[0]==='diff')return '${diffBytes}';throw Error('Unexpected source read')};(await import('node:module')).syncBuiltinESMExports();
-            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
+            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/protected-preview.ts'))return{format:'module',shortCircuit:true,source:'export async function createProtectedPreview(input,ports){await ports.admit();return{status:"CONFIRMED"};}export async function protectedPreviewHeaders(input){if(new URL(input.url).origin!==input.binding.origin)throw Error("Foreign web origin");return{"x-vercel-protection-bypass":"private-web-contract-canary"};}'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
       process.argv[2] = '${mode}';
       Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
-      globalThis.fetch = async input => {
+      globalThis.fetch = async (input,options={}) => {
         const url = String(input); console.log('FETCH ' + url);
+        const gateway=new Headers(options.headers).get('x-vercel-protection-bypass');
+        if(url==='https://cuevo-build.vercel.app'){if(gateway!=='private-web-contract-canary')return new Response('Protected web preview',{status:401});}
+        else if(gateway)throw Error('Private web transport forwarded outside its immutable origin');
         if(url==='https://api.github.com/repos/owner/repo')return Response.json({full_name:'owner/repo',name:'repo',owner:{id:1,login:'owner',type:'Organization'}});
         if(url==='https://api.github.com/repos/owner/repo/actions/runs/42')return new Response(JSON.stringify(${JSON.stringify(trustedRun())}));
         if(url==='https://api.github.com/repos/owner/repo/git/ref/heads/main')return new Response(JSON.stringify({object:{type:'commit',sha:'${sha}'}}));

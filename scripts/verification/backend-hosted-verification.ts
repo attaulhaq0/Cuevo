@@ -7,6 +7,7 @@ import { canonicalReleaseExecutionJson } from './release-review';
 import { readBackendReleaseAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from './backend-release-contracts';
 import { prepareHostedRuntimeRecipients } from './backend-provider-deploy';
+import { backendPreviewHeaders } from './backend-preview-transport';
 
 const failure = () => Error('Hosted verification source or observed prerequisite requires review; contents withheld.');
 const hash = (value: Uint8Array | string) => createHash('sha256').update(value).digest('hex');
@@ -30,13 +31,15 @@ export async function verifyHostedBackendPrerequisites(value: unknown): Promise<
   try {
     const input = schema.parse(JSON.parse(canonicalReleaseExecutionJson(value))), expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }), runtime = prepareHostedRuntimeRecipients(input.runtimeConfig, expected);
     const apiUrl = new URL(input.apiDeployment.url); if (apiUrl.protocol !== 'https:' || apiUrl.username || apiUrl.password || apiUrl.pathname !== '/' || apiUrl.search || apiUrl.hash || !apiUrl.hostname.endsWith('.vercel.app')) throw failure();
+    const preview={repoRoot:input.repoRoot,expected,prepared,apiDeployment:input.apiDeployment};
+    const requestApi=async(url:string,method:'GET'|'POST',headers:Record<string,string>,body?:unknown)=>request(url,method,{...await backendPreviewHeaders({...preview,url}),...headers},body);
     const auth = expected.targets.supabase.authOrigin, project = expected.targets.supabase.projectRef, manifestBytes = await readFile(join(input.repoRoot, 'supabase/seed/identities.json')); if (hash(manifestBytes) !== '7464b3487adc3998d8f4ad4582ffd08ebafbdc8fd9a568433ddc687f4f03ac21') throw failure();
     const manifest = z.object({ schoolId: z.uuid(), denialSchoolId: z.uuid(), actors: z.array(z.object({ actorId: z.uuid(), schoolId: z.uuid(), role: z.string(), email: z.email() }).passthrough()).length(133) }).parse(JSON.parse(manifestBytes.toString('utf8')));
     await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken });
     const vercelUrl = `https://api.vercel.com/v13/deployments/${input.apiDeployment.id}?teamId=${expected.targets.api.teamId}`;
     const deployment = z.object({ id: z.literal(input.apiDeployment.id), projectId: z.literal(expected.targets.api.projectId), ownerId: z.literal(expected.targets.api.teamId), url: z.literal(apiUrl.hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), meta: z.object({ cuevoCommitSha: z.literal(expected.releaseSha) }) }).parse((await request(vercelUrl, 'GET', { Authorization: 'Bearer ' + input.vercelToken })).value); if (deployment.id !== input.apiDeployment.id) throw failure();
     const edge = z.object({ id: z.literal(input.edgeDeployment.id), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.literal(input.edgeDeployment.version), verify_jwt: z.literal(false) }).parse((await request(`https://api.supabase.com/v1/projects/${project}/functions/cuevo-worker`, 'GET', { Authorization: 'Bearer ' + input.providerToken })).value); if (edge.version !== input.edgeDeployment.version) throw failure();
-    const ready = await request(apiUrl.origin + '/health/ready', 'GET', {}); result.apiReady = ready.status === 200 && z.object({ status: z.literal('ready'), database: z.literal(true), authentication: z.literal(true) }).safeParse(ready.value).success; if (!result.apiReady) throw failure();
+    const ready = await requestApi(apiUrl.origin + '/health/ready', 'GET', {}); result.apiReady = ready.status === 200 && z.object({ status: z.literal('ready'), database: z.literal(true), authentication: z.literal(true) }).safeParse(ready.value).success; if (!result.apiReady) throw failure();
     const publishable = runtime.api.SUPABASE_PUBLISHABLE_KEY, service = runtime.api.SUPABASE_SERVICE_ROLE_KEY, anonymous = { apikey: publishable }, serviceHeaders = { apikey: service };
     result.dataApi.anonymousRestDenied = denied(await request(auth + '/rest/v1/', 'GET', anonymous));
     result.dataApi.serviceRestDenied = denied(await request(auth + '/rest/v1/', 'GET', serviceHeaders));
@@ -49,8 +52,8 @@ export async function verifyHostedBackendPrerequisites(value: unknown): Promise<
       let operationFailed = false, logoutConfirmed = false;
       try {
         const account = z.object({ access_token: z.literal(token), refresh_token: z.string().min(1), user: z.object({ id: z.literal(actor.actorId), email: z.literal(actor.email), is_anonymous: z.literal(false) }) }).parse(login.value), headers = { Authorization: 'Bearer ' + account.access_token, 'X-School-Id': manifest.schoolId };
-        const current = await request(apiUrl.origin + '/v1/me', 'GET', headers), member = membershipSchema.parse(current.value); if (current.status !== 200 || member.userId !== actor.actorId || member.role !== actor.role || member.schoolId !== manifest.schoolId) throw failure(); result.roleSessions++;
-        const cross = await request(apiUrl.origin + '/v1/me', 'GET', { ...headers, 'X-School-Id': manifest.denialSchoolId }); if (cross.status !== 403) throw failure(); result.crossSchoolDenied = true;
+        const current = await requestApi(apiUrl.origin + '/v1/me', 'GET', headers), member = membershipSchema.parse(current.value); if (current.status !== 200 || member.userId !== actor.actorId || member.role !== actor.role || member.schoolId !== manifest.schoolId) throw failure(); result.roleSessions++;
+        const cross = await requestApi(apiUrl.origin + '/v1/me', 'GET', { ...headers, 'X-School-Id': manifest.denialSchoolId }); if (cross.status !== 403) throw failure(); result.crossSchoolDenied = true;
         if (role === 'admin') result.dataApi.authenticatedRestDenied = denied(await request(auth + '/rest/v1/', 'GET', { apikey: publishable, Authorization: 'Bearer ' + account.access_token }));
       } catch { operationFailed = true; }
       finally { try { const logout = await request(auth + '/auth/v1/logout?scope=local', 'POST', { apikey: publishable, Authorization: 'Bearer ' + token }, {}); logoutConfirmed = [200, 204].includes(logout.status); } catch { logoutConfirmed = false; } }

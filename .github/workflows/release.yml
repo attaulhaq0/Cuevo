@@ -276,7 +276,10 @@ jobs:
           path: |
             .local/cicd-release/web-deployment-result.json
             .local/cicd-release/web-origin-intent.json
+            .local/cicd-release/web-origin-protection-intent.json
             .local/cicd-release/web-origin-result.json
+            .local/cicd-release/protected-preview-web-intent.json
+            .local/cicd-release/protected-preview-web-result.json
             .local/cicd-release/hosted-browser-intent.json
             .local/cicd-release/hosted-browser-result.json
             .local/cicd-release/hosted-browser-cleanup.json

@@ -1,0 +1,13 @@
+# Protected staging preview transport
+
+Status: source implementation under review; actual Vercel execution remains unverified. This continues the existing signed Supabase-first staging release and creates no product endpoint or alternative backend.
+
+Vercel's current web and API projects protect generated preview deployment URLs. An anonymous readiness request to such a URL can reach Vercel Authentication instead of Cuevo. The application still requires its own normal tenant/role/relationship/object authorization after the gateway permits a request.
+
+`scripts/verification/protected-preview.ts` owns one bounded, URL-specific automation capability for an exact reviewed deployment. Current release owners admit their original source/package and verified Vercel team/project/deployment before creating it. A durable original intent precedes the provider PATCH; expiry during that write boundary refuses creation. The capability expires within one hour and the original package lifetime. Unknown acknowledgements cannot allocate another capability automatically.
+
+Only the fixed private ignored file retains its raw value. Public receipts retain binding, digest and original timestamps. The backend transport wrapper selects the header only for the exact immutable API origin, preserving application Bearer, school and original idempotency headers. Supabase Auth/Storage/Realtime, Management APIs, other deployments, browser code, URLs and cookies receive no capability. Existing API verification, private-file/Realtime probes, activation and recovery retain their source and cleanup owners. Web verification has its own exact deployment capability; production release does not acquire this staging capability.
+
+Normal internal-team access uses the already admitted reserved Cuevo aliases. Their existing binding owners can apply Vercel's reversible alias-only protection override after exact alias/deployment/source/package verification. A separate original intent precedes this operation; fresh alias metadata and normal no-bypass application health/access must confirm it. Project-wide protection and immutable preview protection remain enabled. This override establishes a network route to the existing protected application, not authenticated school membership or release acceptance. Uncertain or foreign aliases remain refused.
+
+Artifact paths list only exact safe intent/result files. Raw capability files, credentials and runtime inputs remain excluded. Controlled tests establish the source mechanism and denial behavior; final source CI, actual provider compatibility, normal hosted sign-in and complete MVP/customer acceptance remain separate gates.

@@ -216,6 +216,8 @@ jobs:
             .local/hosted-release/runtime-roles-result.json
             .local/hosted-release/provider-result.json
             .local/hosted-release/provider-deployment-intent.json
+            .local/hosted-release/protected-preview-api-intent.json
+            .local/hosted-release/protected-preview-api-result.json
             .local/hosted-release/prerequisites-result.json
             .local/hosted-release/private-access-result.json
             .local/hosted-release/private-probe-*-intent.json
@@ -237,6 +239,7 @@ jobs:
             .local/hosted-release/database-restore-result.json
             .local/hosted-release/database-restore-cleanup.json
             .local/hosted-release/api-origin-intent.json
+            .local/hosted-release/api-origin-protection-intent.json
             .local/hosted-release/api-origin-result.json
             .local/hosted-release/web-handover-result.json
             .local/hosted-release/web-handover-manifest.json

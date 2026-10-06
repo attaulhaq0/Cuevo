@@ -9,6 +9,7 @@ import { hostedSyntheticRuntime, requireHostedSyntheticDatabase } from '@cuevo/c
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './release-review';
 import { readBackendReleaseAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
+import { createBackendPreviewTransport, backendPreviewHeaders } from './backend-preview-transport';
 
 const failure = () => Error('Backend provider artifact or runtime recipient requires review; contents withheld.');
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -86,9 +87,9 @@ async function responseBytes(response: Response, signal: AbortSignal) {
   const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
   try { while (true) { const part = await new Promise<ReadableStreamReadResult<Uint8Array>>((done, reject) => { const abort = () => { signal.removeEventListener('abort', abort); reject(failure()); }; if (signal.aborted) return abort(); signal.addEventListener('abort', abort, { once: true }); void reader.read().then(value => { signal.removeEventListener('abort', abort); done(value); }, () => { signal.removeEventListener('abort', abort); reject(failure()); }); }); if (signal.aborted) throw failure(); if (part.done) break; size += part.value.byteLength; if (size > 1024 * 1024) throw failure(); chunks.push(part.value); } return Buffer.concat(chunks); } finally { void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* Pending cancelled read owns cleanup. */ } }
 }
-async function providerRequest(url: string, token: string | null, method: 'GET' | 'POST', body?: string | FormData, allowFailure = false) {
+async function providerRequest(url: string, token: string | null, method: 'GET' | 'POST', body?: string | FormData, allowFailure = false, transportHeaders: Record<string,string> = {}) {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-  try { const response = await fetch(url, { method, headers: { ...(token === null ? {} : { Authorization: 'Bearer ' + token }), ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) }, ...(body === undefined ? {} : { body }), redirect: 'error', credentials: 'omit', cache: 'no-store', signal: controller.signal }); if (response.redirected || response.url && response.url !== url || !allowFailure && !response.ok) throw failure();
+  try { const response = await fetch(url, { method, headers: { ...transportHeaders, ...(token === null ? {} : { Authorization: 'Bearer ' + token }), ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) }, ...(body === undefined ? {} : { body }), redirect: 'error', credentials: 'omit', cache: 'no-store', signal: controller.signal }); if (response.redirected || response.url && response.url !== url || !allowFailure && !response.ok) throw failure();
     // The official secrets-create endpoint confirms with bodyless 201. Its
     // immediate fixed GET verifies the values; other endpoints require JSON.
     const expectedEmpty = method === 'POST' && response.status === 201 && /^https:\/\/api\.supabase\.com\/v1\/projects\/[a-z]{20}\/secrets$/.test(url);
@@ -133,7 +134,9 @@ export async function deployBackendProviders(value: DeploymentInput): Promise<Ba
     const afterEnvs = z.object({ envs: z.array(z.object({ key: z.string(), target: z.array(z.literal('preview')).length(1), type: z.literal('encrypted') }).passthrough()) }).parse((await vercel(envPath + '&decrypt=false')).value); if (canonicalReleaseExecutionJson(afterEnvs.envs.map(row => row.key).sort()) !== canonicalReleaseExecutionJson(Object.keys(recipients.api).sort())) throw failure();
     await admission(); built = await artifacts(); const apiUrl = await apiCli(root, built.api, expected, input.vercelToken);
     const deployment = z.object({ id: z.string().startsWith('dpl_'), projectId: z.literal(project), ownerId: z.literal(team), url: z.literal(new URL(apiUrl).hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), meta: z.object({ cuevoCommitSha: z.literal(expected.releaseSha) }) }).parse((await vercel('/v13/deployments/' + new URL(apiUrl).hostname + query)).value);
-    const health = await providerRequest(apiUrl + '/health/live', null, 'GET'); const live = z.object({ status: z.literal('ok'), service: z.literal('cuevo-api') }).safeParse(health.value).success;
+    const preview={repoRoot:root,expected,prepared,apiDeployment:{id:deployment.id,url:apiUrl}};
+    await createBackendPreviewTransport({...preview,vercelToken:input.vercelToken},admission);
+    const health = await providerRequest(apiUrl + '/health/live', null, 'GET', undefined, false, await backendPreviewHeaders({...preview,url:apiUrl+'/health/live'})); const live = z.object({ status: z.literal('ok'), service: z.literal('cuevo-api') }).safeParse(health.value).success;
     result.api = { deploymentId: deployment.id, url: apiUrl, artifactSha256: built.api.sha256, metadataVerified: true, healthVerified: live }; if (!live) throw failure();
     await admission(); built = await artifacts();
     await supabase('secrets', 'POST', JSON.stringify(Object.entries(recipients.edge).map(([name, value]) => ({ name, value }))));
