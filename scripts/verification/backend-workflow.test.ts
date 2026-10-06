@@ -21,13 +21,15 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   assert.equal(map(preparation.env).GH_TOKEN, '${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}');
   const approvalIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts approval');
   const mutationIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts bootstrap-schema'); assert.ok(approvalIndex >= 0 && mutationIndex > approvalIndex);
+  const provisionIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts provision'); assert.ok(provisionIndex > mutationIndex);
+  const deployIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts deploy');assert.ok(deployIndex>provisionIndex);
   for (const [index, step] of schema.entries()) {
-    if (index !== mutationIndex) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
+    if (index !== mutationIndex && index !== provisionIndex && index!==deployIndex) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
     if (step.run) assert.ok(!(step.run as string).includes('${{'));
     if (step.uses) assert.match(step.uses as string, /@[a-f0-9]{40}$/);
   }
   const download = schema.find(step => String(step.uses).startsWith('actions/download-artifact@'))!;
   assert.deepEqual(Object.keys(map(download.with)).sort(), ['name', 'path']); assert.equal(map(download.with).name, 'cuevo-backend-package-${{ github.run_id }}-${{ github.run_attempt }}');
   const retained = schema.find(step => String(step.uses).startsWith('actions/upload-artifact@'))!;
-  assert.equal(retained.if, 'always()'); assert.match(map(retained.with).path as string, /journal-\*\//); assert.doesNotMatch(map(retained.with).path as string, /ca\.pem|process-|backend-bundle|\.env/);
+  assert.equal(retained.if, 'always()'); assert.match(map(retained.with).path as string, /journal-\*\//); assert.doesNotMatch(map(retained.with).path as string, /ca\.pem|process-|backend-bundle|synthetic-access|\.env/);
 });

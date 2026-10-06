@@ -18,6 +18,10 @@ const replacements: Record<string, string> = {
   'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.backendPhaseFixture.validate;',
   'hosted-operator-storage-bootstrap.ts': 'export const createHostedOperatorStorageBootstrap=globalThis.backendPhaseFixture.bootstrap;',
   'hosted-migration-executor.ts': 'export const executeNativeHostedMigrations=globalThis.backendPhaseFixture.schema;',
+  'hosted-synthetic-population.ts': 'export const seedHostedSyntheticPopulation=globalThis.backendPhaseFixture.population;',
+  'hosted-synthetic-auth.ts': 'export const provisionHostedSyntheticAuth=globalThis.backendPhaseFixture.auth;',
+  'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.backendPhaseFixture.database;',
+  'backend-provider-deploy.ts': 'export const deployBackendProviders=globalThis.backendPhaseFixture.deploy;',
 };
 registerHooks({ resolve(specifier, context, next) {
   const name = specifier.split('/').at(-1)!;
@@ -35,6 +39,10 @@ registerHooks({ resolve(specifier, context, next) {
   admission: async () => { state.events.push('approval'); if (state.failApproval) throw Error(secret); return { provenance: 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE', approval: { state: 'approved' } }; },
   bootstrap: async (input: Record<string, unknown>) => { state.events.push('bucket'); assert.equal(input.journalStorageKey, secret); assert.equal(Object.hasOwn(input, 'migrationPassword'), false); return { bootstrap: async () => ({ status: 'CREATED_CONFIRMED', mutation: 'CONFIRMED' }) }; },
   schema: async (input: Record<string, unknown>) => { state.events.push('schema'); assert.equal(input.migrationPassword, secret); assert.equal(input.journalStorageKey, secret); assert.equal(Object.hasOwn(input.toolchain as object, 'SUPABASE_ACCESS_TOKEN'), false); return { status: state.status, schemaHistoryAtomic: false, hostedAcceptance: false }; },
+  population: async () => { state.events.push('population'); return { status: state.status === 'COMMITTED' ? 'POPULATED_CONFIRMED' : 'REQUIRES_REVIEW', commitment: 'CONFIRMED', hostedAcceptance: false }; },
+  auth: async (input: Record<string, unknown>) => { state.events.push('auth'); assert.equal(input.authProvisioningKey, secret); assert.equal(input.syntheticPassword, 'protected-synthetic-pilot-password'); assert.equal(Object.hasOwn(input, 'journalStorageKey'), false); return { status: 'CONFIRMED', created: 133, confirmed: 133, hostedAcceptance: false }; },
+  database: async () => ({ withLock: async (_key: string, run: () => Promise<void>) => { await run(); return { kind: 'RELEASED' }; }, provisionInitialRuntimeRoles: async (input: {apiPassword64hex:string;workerPassword64hex:string}) => { state.events.push('roles'); assert.match(input.apiPassword64hex,/^[a-f0-9]{64}$/); assert.match(input.workerPassword64hex,/^[a-f0-9]{64}$/); return {status:'CONFIRMED',apiLogin:true,workerLogin:true}; }, executeReferenceScenarioSource: async () => { state.events.push('reference'); return { status: 'CONFIRMED' }; } }),
+  deploy: async (input: {runtimeConfig:{api:{DATABASE_URL:string};edge:{CUEVO_WORKER_DATABASE_URL:string}}}) => {state.events.push('deploy');assert.equal(new URL(input.runtimeConfig.api.DATABASE_URL).username,'cuevo_api');assert.equal(new URL(input.runtimeConfig.edge.CUEVO_WORKER_DATABASE_URL).username,'cuevo_worker');return{status:'DEPLOYED_INACTIVE',hostedAcceptance:false};},
 };
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 async function subject() {
@@ -49,7 +57,7 @@ async function fixture(run: (root: string, env: Record<string, string>) => Promi
     await mkdir(join(root, '.local/hosted-release'), { recursive: true });
     state.events = []; state.failApproval = false; state.status = 'COMMITTED';
     const sha = 'a'.repeat(40);
-    state.bundle = { version: 1, purpose: 'CUEVO_BACKEND_RELEASE_EXECUTION', repoRoot: root, expected: { repository: 'attaulhaq0/Cuevo', releaseSha: sha, releaseRunId: '51', runAttempt: 1, ciRunId: '31', environmentName: 'staging', deploymentEnvironment: 'synthetic-staging' }, preparedApproval: {}, plan: {}, stages: [], toolchainManifestPath: join(root, '.local/hosted-release/toolchain.json'), operatorStoragePolicyPath: join(root, '.local/hosted-release/operator-policy.json'), artifacts: { apiRoot: join(root, '.local/runtime-artifacts/api-vercel'), edgeRoot: join(root, '.local/edge-artifacts/cuevo-worker') } };
+    state.bundle = { version: 1, purpose: 'CUEVO_BACKEND_RELEASE_EXECUTION', repoRoot: root, expected: { repository: 'attaulhaq0/Cuevo', releaseSha: sha, releaseRunId: '51', runAttempt: 1, ciRunId: '31', environmentName: 'staging', deploymentEnvironment: 'synthetic-staging', targets: {supabase:{projectRef:'mqxdjvsyckzocokuikmx'}} }, preparedApproval: {}, plan: {}, stages: [], toolchainManifestPath: join(root, '.local/hosted-release/toolchain.json'), operatorStoragePolicyPath: join(root, '.local/hosted-release/operator-policy.json'), artifacts: { apiRoot: join(root, '.local/runtime-artifacts/api-vercel'), edgeRoot: join(root, '.local/edge-artifacts/cuevo-worker') } };
     const path = join(root, '.local/hosted-release/backend-bundle.json'); await writeFile(path, canonicalReleaseReviewJson(state.bundle));
     const env = { GITHUB_REPOSITORY: 'attaulhaq0/Cuevo', GITHUB_SHA: sha, GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_RUN_ID: '51', GITHUB_RUN_ATTEMPT: '1', GITHUB_EVENT_PATH: join(root, 'event.json'), GH_TOKEN: secret, SUPABASE_ACCESS_TOKEN: secret, CUEVO_BACKEND_BUNDLE_PATH: path, CUEVO_BACKEND_BUNDLE_SHA256: digest(canonicalReleaseReviewJson(state.bundle)), CUEVO_BACKEND_RELEASE_INPUT_JSON: '{}', GITHUB_OUTPUT: join(root, 'output.txt'), GITHUB_STEP_SUMMARY: join(root, 'summary.md'), CUEVO_MIGRATION_DATABASE_PASSWORD: secret, CUEVO_RELEASE_JOURNAL_STORAGE_KEY: secret, CUEVO_DATABASE_TLS_CA: '-----BEGIN CERTIFICATE-----\nFixture certificate\n-----END CERTIFICATE-----', PATH: process.env.PATH ?? '' };
     await run(root, env);
@@ -57,6 +65,16 @@ async function fixture(run: (root: string, env: Record<string, string>) => Promi
 }
 test('failed official approval cannot reach bucket or schema even with configured private credentials', async () => {
   const api = await subject(); await fixture(async (repoRoot, env) => { state.failApproval = true; await assert.rejects(api.runBackendReleasePhase({ mode: 'bootstrap-schema', repoRoot, env }), error => error instanceof Error && !error.message.includes(secret)); assert.deepEqual(state.events, ['approval']); });
+});
+test('provider deployment reads confirmed private runtime inputs without returning any credential',async()=>{
+  const api=await subject();await fixture(async(repoRoot,env)=>{
+    const expected=state.bundle.expected as {targets:{supabase:{projectRef:string}};releaseSha:string};
+    Object.assign(expected.targets,{web:{origin:'https://cuevo-beta.vercel.app'}});await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));env.VERCEL_TOKEN=secret;
+    await writeFile(join(repoRoot,'.local/hosted-release/runtime-roles-result.json'),JSON.stringify({status:'CONFIRMED',apiLogin:true,workerLogin:true}));await writeFile(join(repoRoot,'.local/hosted-release/reference-result.json'),JSON.stringify({status:'CONFIRMED',cleanup:'RELEASED'}));
+    await writeFile(join(repoRoot,'.local/hosted-release/runtime-role-passwords.json'),JSON.stringify({purpose:'INITIAL_RESTRICTED_RUNTIME_CREDENTIALS',sourceSha:expected.releaseSha,projectRef:expected.targets.supabase.projectRef,api:'a'.repeat(64),worker:'b'.repeat(64)}));
+    (globalThis as unknown as {backendPhaseProviderKeys:object}).backendPhaseProviderKeys={};const originalFetch=globalThis.fetch;globalThis.fetch=async()=>Response.json([{name:'default',type:'publishable',api_key:'sb_publishable_sourcefixturekey'},{name:'default',type:'secret',api_key:'sb_secret_api_runtime_private'}]);
+    try{const result=await api.runBackendReleasePhase({mode:'deploy',repoRoot,env});assert.equal(result.status,'DEPLOYED_INACTIVE');assert.deepEqual(state.events,['approval','deploy']);assert.equal(JSON.stringify(result).includes(secret),false);}finally{globalThis.fetch=originalFetch;}
+  });
 });
 test('schema workflow consumes complete configuration only after admission and retains native uncertainty', async () => {
   const api = await subject(); await fixture(async (repoRoot, env) => { state.status = 'REQUIRES_REVIEW'; await assert.rejects(api.runBackendReleasePhase({ mode: 'bootstrap-schema', repoRoot, env })); assert.deepEqual(state.events, ['approval', 'bucket', 'schema']); const receipt = JSON.parse(await readFile(join(repoRoot, '.local/hosted-release/schema-result.json'), 'utf8')); assert.equal(receipt.status, 'REQUIRES_REVIEW'); assert.equal(receipt.hostedAcceptance, false); assert.equal(JSON.stringify(receipt).includes(secret), false); });
@@ -67,4 +85,17 @@ test('missing database credential refuses before any provider mutation; changed 
 });
 test('preparation refuses database storage or Vercel deployment credentials and accepts metadata token only', async () => {
   const api = await subject(); await fixture(async (repoRoot, env) => { await assert.rejects(api.runBackendReleasePhase({ mode: 'prepare', repoRoot, env })); assert.deepEqual(state.events, []); delete env.CUEVO_MIGRATION_DATABASE_PASSWORD; delete env.CUEVO_RELEASE_JOURNAL_STORAGE_KEY; delete env.CUEVO_DATABASE_TLS_CA; await api.runBackendReleasePhase({ mode: 'prepare', repoRoot, env }); assert.deepEqual(state.events, ['prepare']); assert.equal((await readFile(env.GITHUB_OUTPUT, 'utf8')).includes(secret), false); });
+});
+test('initial population and Auth remain ordered after confirmed schema and use the protected pilot password', async () => {
+  const api = await subject(); await fixture(async (repoRoot, env) => {
+    env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';
+    await writeFile(join(repoRoot, '.local/hosted-release/schema-result.json'), JSON.stringify({ status: 'COMMITTED', hostedAcceptance: false }));
+    const result = await api.runBackendReleasePhase({ mode: 'provision', repoRoot, env });
+    assert.equal(result.status, 'CONFIRMED'); assert.deepEqual(state.events, ['approval', 'population', 'auth', 'approval', 'roles', 'reference']);
+    assert.equal((await readFile(join(repoRoot, '.local/hosted-release/auth-result.json'), 'utf8')).includes(secret), false);
+  });
+  await fixture(async (repoRoot, env) => {
+    await writeFile(join(repoRoot, '.local/hosted-release/schema-result.json'), JSON.stringify({ status: 'REQUIRES_REVIEW' }));
+    await assert.rejects(api.runBackendReleasePhase({ mode: 'provision', repoRoot, env })); assert.deepEqual(state.events, ['approval']);
+  });
 });

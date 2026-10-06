@@ -74,6 +74,12 @@ const bilingualText = (text: { en: string; ar: string }) => `${text.en}\n\n${tex
  * role grant, grade, completion or reward mechanism is created here. */
 export async function seedReviewedThinkingTasks(client: PoolClient, targetUrl: string, owner: SeedOwner) {
   validateThinkingSeedTarget(targetUrl);
+  return seedReviewedThinkingTasksTransaction(client, owner);
+}
+
+/** Source fixture core for an externally admitted operator client. The caller
+ * owns its transaction, target and connection lifecycle; this core opens none. */
+export async function seedReviewedThinkingTasksTransaction(client: PoolClient, owner: SeedOwner) {
   const fixture = await loadThinkingSeedFixture();
   const manifest = parseThinkingSeedManifest(JSON.parse(await readFile(new URL('../supabase/seed/identities.json', import.meta.url), 'utf8')));
   const admission = await owner.asActor(4, async () => (await client.query(`select

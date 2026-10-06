@@ -70,3 +70,11 @@ test('a confirmed command notice remains on its originating location and cannot 
   assert.equal(navigation.currentWorkspaceNotice(message, '/?view=academic&source=result&id=one', '/?view=academic&source=result&id=two'), null);
   assert.equal(navigation.currentWorkspaceNotice(null, null, '/?'), null);
 });
+test('notifications intent enters only the current authorized Community destination',()=>{
+ const permitted=navigation.workspaceNavigation(member('student'),labels),writes:string[]=[];
+ const history={pushState(_data:unknown,_title:string,url?:string|URL|null){writes.push(String(url));}};
+ assert.equal(navigation.openWorkspaceDestination({view:'community',section:'notifications'},permitted,'/',history),true);
+ assert.deepEqual(writes,['/?view=community&section=notifications']);
+ assert.equal(navigation.openWorkspaceDestination({view:'community',section:'notifications'},navigation.workspaceNavigation(member('student',[]),labels),'/',history),false);
+ assert.equal(writes.length,1);
+});

@@ -55,3 +55,8 @@ test('current class-room refresh presents one loading state while its existing c
  }
  fixture.loading=false;fixture.room=false;
 });
+test('Notifications initial intent uses the same current Community owner for every role',()=>{
+ fixture.loading=false;fixture.error=null;fixture.room=false;fixture.nextCursor=null;
+ for(const role of ['admin','coordinator','teacher','student','parent']){app();fixture.app.membership={...(fixture.app.membership as object),role};const html=renderToStaticMarkup(createElement(CommunityWorkspace as React.ComponentType<{intent:{view:'community';section:'notifications'};notificationActivation:number}>,{intent:{view:'community',section:'notifications'},notificationActivation:1}));assert.match(html,/<h1[^>]*>Notifications<\/h1>/);assert.equal((html.match(/<h1/g)??[]).length,1);assert.doesNotMatch(html,/community-room"|Checking explanations/);}
+});
+test('Community section intents cannot add a parent room or a Student conversation surface',()=>{fixture.loading=false;fixture.error=null;fixture.room=false;fixture.nextCursor=null;app();fixture.app.membership={...(fixture.app.membership as object),role:'parent'};const parent=renderToStaticMarkup(createElement(CommunityWorkspace as React.ComponentType<{intent:{view:'community';section:'rooms'}}>,{intent:{view:'community',section:'rooms'}}));assert.match(parent,/<h1[^>]*>Announcements<\/h1>/);assert.doesNotMatch(parent,/Class rooms and groups<\/h1>/);app();const student=renderToStaticMarkup(createElement(CommunityWorkspace as React.ComponentType<{intent:{view:'community';section:'conversations'}}>,{intent:{view:'community',section:'conversations'}}));assert.match(student,/<h1[^>]*>Class rooms and groups<\/h1>/);assert.doesNotMatch(student,/Parent–teacher conversations/);});

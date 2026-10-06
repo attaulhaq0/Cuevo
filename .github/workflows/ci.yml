@@ -18,6 +18,8 @@ jobs:
         with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '24.16.0', cache: npm }
+      - name: Observe hosted database network reachability without credentials
+        run: node --experimental-strip-types scripts/verification/hosted-connectivity.ts
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
