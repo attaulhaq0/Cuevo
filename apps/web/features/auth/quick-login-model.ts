@@ -1,8 +1,9 @@
 export const quickLoginRoles = ['admin', 'coordinator', 'teacher', 'student', 'parent'] as const;
+import{parseDemoGuideManifest}from'../../shared/session/demo-guide';
 export type QuickLoginRole = typeof quickLoginRoles[number];
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 export function availableQuickLogin(value: unknown): boolean {
-  if (!object(value) || Object.keys(value).length !== 2 || value.available !== true || !Array.isArray(value.roles)) return false;
+  if (!object(value) || Object.keys(value).some(key=>!['available','roles','guide'].includes(key)) || value.available !== true || !Array.isArray(value.roles)||value.guide!==undefined&&!parseDemoGuideManifest(value.guide)) return false;
   const returned = value.roles;
   return returned.length === quickLoginRoles.length && quickLoginRoles.every((role, index) => returned[index] === role);
 }

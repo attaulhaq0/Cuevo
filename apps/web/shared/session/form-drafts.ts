@@ -1,18 +1,29 @@
 export type FormValues = Record<string, string | boolean>;
-type Draft = { values: FormValues; basis: Record<string, unknown> };
+type Draft = { values: FormValues; basis: Record<string, unknown>; workingModelInput?: boolean };
 
 /** Private working input survives only within the current verified browser session. */
 export class FormDrafts {
   private drafts = new Map<string, Draft>();
   get(slot: string): Draft | undefined { return this.drafts.get(slot); }
   first(prefix: string): string | undefined { return [...this.drafts.keys()].find(slot => slot.startsWith(prefix)); }
+  hasWorkingInput(): boolean {
+    return [...this.drafts.entries()].some(([slot, draft]) => {
+      if (Object.keys(draft.values).length > 0) return true;
+      if (draft.workingModelInput !== undefined) return draft.workingModelInput;
+      // Existing authored model owners remain compatible while explicit source
+      // registration is adopted separately. An owner's explicit current
+      // working-input status always precedes this legacy fallback.
+      if (/community-mentions/.test(slot)) return Array.isArray(draft.basis.model) && draft.basis.model.length > 0;
+      return /submission-documents|assessment-response|submission-document-answer|portfolio-documents|\/quiz$|\/rubrics$|review-intent|period-planning/.test(slot);
+    });
+  }
   save(slot: string, values: FormValues, basis: Record<string, unknown>) {
-    this.drafts.set(slot, { values: { ...values }, basis: { ...basis } });
+    this.drafts.set(slot, { values: { ...values }, basis: { ...basis }, workingModelInput: this.drafts.get(slot)?.workingModelInput });
   }
   model<T>(slot: string): T | undefined { return this.drafts.get(slot)?.basis.model as T | undefined; }
-  saveModel(slot: string, model: unknown) {
+  saveModel(slot: string, model: unknown, source?: { workingInput: boolean }) {
     const previous = this.drafts.get(slot);
-    this.drafts.set(slot, { values: previous?.values ?? {}, basis: { ...previous?.basis, model } });
+    this.drafts.set(slot, { values: previous?.values ?? {}, basis: { ...previous?.basis, model }, workingModelInput: source?.workingInput ?? previous?.workingModelInput });
   }
   remove(slot: string) { this.drafts.delete(slot); }
   consume(slot: string, submitted: Draft | undefined): boolean {

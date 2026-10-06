@@ -1,5 +1,7 @@
 # Learning feature
 
+Submitted documents register local artifact/response-type edits as working input. Only the existing receipt-validated Save callback marks its confirmed document baseline clean; later document or type edits become working input again. Source data, text drafts, original command receipts and scope clearing keep their existing owners. The document-draft-status test checks those source-owner callbacks without provider or domain writes.
+
 Opened content and submission histories show an explicit unconfirmed current-source state instead of blank output for zero rows. The existing selected-source histories retain review for terminal zero and unknown for unsettled/continued pages, with original parsing, source/revision/permission and continuation behavior. The source-navigation browser fixture now builds dynamic data through DOM text APIs rather than inline HTML/script construction; all original source/denial/paging assertions and delayed settlement remain. Routine main refresh adopts the shared accessible icon button without changing its request callback. Source tests/rendering are not complete native/hosted acceptance.
 Unavailable Learning access uses the existing `WorkspaceState` with the same localized availability explanation and one content heading. The role/entitlement predicate and all request, authoring and command guards are unchanged. The actual-owner state render test covers English/Arabic across all five roles without mounting authoring controls.
 

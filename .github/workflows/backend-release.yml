@@ -121,6 +121,26 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify
+      - name: Verify restricted database private files and channel access
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts verify-private
+      - name: Verify signed worker execution and scheduled recovery
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON: ${{ vars.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts activate
       - name: Preserve schema status without private runtime inputs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -137,6 +157,16 @@ jobs:
             .local/hosted-release/provider-result.json
             .local/hosted-release/provider-deployment-intent.json
             .local/hosted-release/prerequisites-result.json
+            .local/hosted-release/private-access-result.json
+            .local/hosted-release/private-probe-*-intent.json
+            .local/hosted-release/private-probe-*-asset.json
+            .local/hosted-release/private-probe-*-room.json
+            .local/hosted-release/private-probe-*-result.json
+            .local/hosted-release/data-api-configuration.json
+            .local/hosted-release/worker-activation-intent.json
+            .local/hosted-release/worker-activation-journal.jsonl
+            .local/hosted-release/worker-activation-result.json
+            .local/hosted-release/worker-activation-cleanup.json
             .local/hosted-release/population-*/
           include-hidden-files: true
           if-no-files-found: warn

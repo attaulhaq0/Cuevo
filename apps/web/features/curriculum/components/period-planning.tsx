@@ -55,7 +55,7 @@ function CurrentPeriodPlanning({ onLockedChange,pageHeading }: { onLockedChange?
   useEffect(() => () => onLockedChange?.(false), [onLockedChange]);
   useEffect(()=>{onLockedChange?.(selectionLocked);},[selectionLocked,onLockedChange]);
   const queries = [courses, periods, classes, subjects], error = queries.find(query => query.error || query.moreError), loading = queries.some(query => query.loading), ready = queries.every(query => query.loaded && !query.error && !query.moreError);
-  const choose = (nextCourse: string, nextPeriod: string) => { if (selectionLocked) return; selectionRef.current = null; formDrafts.saveModel(selectionSlot, { courseId: nextCourse, periodId: nextPeriod }); setCourseId(nextCourse); setPeriodId(nextPeriod); };
+  const choose = (nextCourse: string, nextPeriod: string) => { if (selectionLocked) return; selectionRef.current = null; formDrafts.saveModel(selectionSlot, { courseId: nextCourse, periodId: nextPeriod }, { workingInput: false }); setCourseId(nextCourse); setPeriodId(nextPeriod); };
   const sameSelection = selectionRef.current?.courseId === courseId && selectionRef.current.periodId === periodId ? selectionRef.current : null;
   const denied = useCurriculumSourceDenial(queries.map(query => query.sourceRead));
   const periodsEmpty=ready&&!loading&&!denied&&curriculumPageConfirmedEmpty(periods);
@@ -88,7 +88,7 @@ function PlanningCourse({ courseId, periodId, periodRevision, choicesReady, sele
   const editor = intent.editor, path = editor ? periodPlanningPath(courseId, editor) : null, retained = path ? commandJournal.get(path) : undefined;
   const pending = locked || periodPlanningPendingPaths(courseId, editor).some(slot => !!commandJournal.get(slot));
   const canPlan = membership!.role === 'teacher' || membership!.role === 'admin';
-  const updateIntent = (patch: Partial<PeriodPlanningIntent>) => { const next = { ...intent, ...patch }; formDrafts.saveModel(inputSlot, next); setIntent(next); };
+  const updateIntent = (patch: Partial<PeriodPlanningIntent>) => { const next = { ...intent, ...patch }; formDrafts.saveModel(inputSlot, next, { workingInput: next.editor !== null }); setIntent(next); };
   const readRevision = refresh + selectionRefresh;
   const coveragePath = `/v1/curriculum/courses/${courseId}/coverage?periodId=${periodId}&limit=25${intent.cursor ? `&cursor=${intent.cursor}` : ''}`, coverageScope = periodPlanningReadScope(app, coveragePath, readRevision);
   const coverageParser = useCallback((value: unknown) => ({ scope: coverageScope, value: parseCurrentPeriodCoverage(value, courseId, periodId, periodRevision, intent.cursor) }), [coverageScope, courseId, periodId, periodRevision, intent.cursor]);
@@ -98,7 +98,7 @@ function PlanningCourse({ courseId, periodId, periodRevision, choicesReady, sele
     const recovery = periodPlanningRecovery(commandJournal.pending(), courseId, periodId, coverage.items);
     if (recovery) {
       const recovered = { ...emptyPeriodPlanningIntent(), cursor: intent.cursor, editor: recovery.editor };
-      formDrafts.saveModel(inputSlot, recovered); setIntent(recovered);
+      formDrafts.saveModel(inputSlot, recovered, { workingInput: recovered.editor !== null }); setIntent(recovered);
     }
   }, [editor,coverage,canPlan,commandJournal,courseId,periodId,formDrafts,inputSlot,intent.cursor]);
   const references = usePlanningPage(choicesReady && canPlan && editor?.kind === 'create' ? `/v1/courses/${courseId}/academic-references?limit=100` : null, parseReference, readRevision);

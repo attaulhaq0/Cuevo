@@ -1,5 +1,7 @@
 # Curriculum context workspace
 
+Period Planning explicitly keeps course/period navigation and pagination clean in the session draft store. An opened planning change registers working input until its own Save/Cancel removes it; this does not mark planning as approved or turn declared activity into taught coverage. The planning-draft-status test checks the actual navigation/editor/cancel owner functions. Other draft owners retain their separately documented source and command rules.
+
 Opened lifecycle history and declared-plan source disclosures use existing Cuevo states for zero rows. Known selected revision history is unconfirmed/review on terminal zero; a continued page remains unknown. Plan teaching/assessment/evidence arrays are empty only when their current authoritative counts are zero, while positive counts with missing bounded arrays remain unknown. This does not infer teaching, attainment, official mappings or staff action permission. Routine refresh presentation keeps the original locks/callbacks. Owner render/source tests remain distinct from native curriculum and customer acceptance.
 
 Current complete empty record pages use the shared icon state within the existing source owner. Initial loading, current failures, later-page failures and nonterminal pages keep their own loading/recovery/continuation rather than claiming no context records. Existing role actions and Refresh remain unchanged; no empty state creates a curriculum, readiness or source authority claim.

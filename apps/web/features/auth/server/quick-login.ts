@@ -1,5 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import {parseDemoGuideManifest,type DemoGuideManifest}from'../../../shared/session/demo-guide';
 
 const roles = ['admin', 'coordinator', 'teacher', 'student', 'parent'] as const;
 type Role = typeof roles[number];
@@ -91,7 +92,11 @@ export async function testingQuickLogin(request: Request, env: Environment = pro
   if (!target || !['GET', 'POST'].includes(request.method)) return empty(request.method === 'GET' ? 200 : 404);
   try {
     const { accounts, identities } = await loadAccounts(env, io);
-    if (request.method === 'GET') return Response.json({ available: true, roles }, { headers });
+    if (request.method === 'GET') {
+      let guide:DemoGuideManifest|null=null;
+      if(env.CUEVO_TEST_DEMO_GUIDE_FILE){try{const path=env.CUEVO_TEST_DEMO_GUIDE_FILE,accountPath=env.CUEVO_TEST_LOGIN_ACCOUNTS_FILE;if(!accountPath||!isAbsolute(path)||path!==resolve(accountPath,'../demo-guide.json')||await io.real(path)!==path)throw Error('Local demonstration source unavailable');const raw=await io.read(path);if(new TextEncoder().encode(raw).byteLength>8192)throw Error('Local demonstration source unavailable');guide=parseDemoGuideManifest(JSON.parse(raw));if(!guide||guide.schoolId!==identities[0].schoolId||roles.some(role=>identities.find(actor=>actor.role===role&&actor.schoolId===identities[0].schoolId)?.actorId!==guide!.actors[role]))throw Error('Local demonstration source unavailable');}catch{guide=null;}}
+      return Response.json({ available: true, roles,...(guide?{guide}:{}) }, { headers });
+    }
     if (request.headers.get('content-type')?.split(';')[0] !== 'application/json' || Number(request.headers.get('content-length') ?? 0) > 256) return empty(400);
     let body: unknown; try { body = await boundedQuickLoginBody(request); } catch { return empty(400); }
     if (!object(body) || Object.keys(body).length !== 1 || !roles.includes(body.role as Role)) return empty(400);

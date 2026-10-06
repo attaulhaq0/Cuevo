@@ -81,7 +81,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     if (focusedDestination.current === destinationKey) return;
     focusedDestination.current = destinationKey;
     clearNotice();
-    requestAnimationFrame(() => (main.current?.querySelector<HTMLHeadingElement>('h1') ?? heading.current)?.focus());
+    requestAnimationFrame(() => (main.current?.querySelector<HTMLHeadingElement>('h1') ?? heading.current)?.focus({preventScroll:!!document.querySelector('[data-demo-active="true"]')}));
   }, [destinationKey, clearNotice]);
   useEffect(() => { if (requestedView && !navigation.some(item => item.id === requestedView)) window.history.replaceState(null, '', location.pathname); }, [requestedView, membership.role, membership.entitlements]);
 

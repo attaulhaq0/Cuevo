@@ -393,6 +393,14 @@ test('web and API automatic Git builds cannot bypass reviewed Actions deployment
     assert.equal(config.git.deploymentEnabled, false);
   }
 });
+test('web release uses only the scoped metadata credential before approval and keeps provider credentials gated',async()=>{
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ const updated=release.replaceAll('GH_TOKEN: ${{ github.token }}','GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}');
+ assert.deepEqual(validateWorkflows(ci,updated),[]);
+ assert.ok(validateWorkflows(ci,updated.replace('GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}','GH_TOKEN: ${{ secrets.VERCEL_TOKEN }}')).length>0);
+ assert.ok(validateWorkflows(ci,updated.replace('CUEVO_RELEASE_REVIEW_INPUT_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}','CUEVO_RELEASE_REVIEW_INPUT_JSON: ${{ secrets.VERCEL_TOKEN }}')).length>0);
+ assert.ok(validateWorkflows(ci,updated.replaceAll('GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}','GH_TOKEN: ${{ github.token }}')).length>0,'Default workflow token does not attest administration metadata permissions');
+});
 
 test('required CI includes a secret-free full-history scanner with strict success aggregation', async () => {
   const ci = await readFile('.github/workflows/ci.yml', 'utf8'); const release = await readFile('.github/workflows/release.yml', 'utf8');

@@ -57,7 +57,7 @@ function CurrentCourseView({ courseId, onBack, canAuthor, backLabel }: { courseI
   const readerHeading = useRef<HTMLHeadingElement>(null);
   const pageHeading = useRef<HTMLHeadingElement>(null);
   const openedCourse = useRef(false);
-  useEffect(() => { if(!openedCourse.current && !query.loading && (query.data || query.error) && pageHeading.current){openedCourse.current=true;pageHeading.current.focus();} },[query.loading,query.data,query.error]);
+  useEffect(() => { if(!openedCourse.current && !query.loading && (query.data || query.error) && pageHeading.current){openedCourse.current=true;pageHeading.current.focus({preventScroll:!!document.querySelector('[data-demo-active]')});} },[query.loading,query.data,query.error]);
   const shouldFocusReader = useRef(false);
   const focusedReader = useRef<{ context: string; element: HTMLElement; field?: string; button?: string } | null>(null);
   const restoreReaderFocus = useRef<typeof focusedReader.current>(null);
@@ -75,7 +75,7 @@ function CurrentCourseView({ courseId, onBack, canAuthor, backLabel }: { courseI
     const target = candidates.find(element => restore.field ? element.getAttribute('name') === restore.field : restore.button ? element.tagName === 'BUTTON' && (element.getAttribute('aria-label') || element.textContent?.trim()) === restore.button : false);
     (target && !target.matches(':disabled') ? target : readerHeading.current)?.focus();
   }, [query.data, query.loading, selectionContext]);
-  useEffect(() => { const destination = editorIntent ? readerHeading.current : pageHeading.current; if ((query.data || query.error) && !query.loading && shouldFocusReader.current && destination) { destination.focus(); shouldFocusReader.current = false; } }, [query.data, query.error, query.loading, lessonId, activityId, editorIntent, outlineOpen]);
+  useEffect(() => { const destination = editorIntent ? readerHeading.current : pageHeading.current; if ((query.data || query.error) && !query.loading && shouldFocusReader.current && destination) { destination.focus({preventScroll:!!document.querySelector('[data-demo-active]')}); shouldFocusReader.current = false; } }, [query.data, query.error, query.loading, lessonId, activityId, editorIntent, outlineOpen]);
   function saved() { setEditor(null); setRefresh((value) => value + 1); }
   function resetReading() { shouldFocusReader.current = true; setLessonId(null); setActivityId(null); }
   const context = query.data ? courseReadingContext(query.data, lessonId, activityId) : null;
@@ -133,7 +133,7 @@ function EditorForm({ editor, course, onSaved, onCancel }: { editor: NonNullable
 
 function LessonDirectory({ lessons, onOpen, headingRef }: { lessons: Lesson[]; onOpen: (id: string) => void; headingRef?: Ref<HTMLHeadingElement> }) {
   const { t } = useLearningApi();
-  return <div className="learning-lesson-directory"><div className="learning-reading-intro"><img src={trailAssets.lesson} width={104} height={104} alt="" aria-hidden="true" /><div><h3 ref={headingRef} tabIndex={-1}>{t.chooseReading}</h3><p>{t.chooseReadingBody}</p></div></div><h3>{t.lessonsInUnit}</h3><ol>{lessons.map(lesson => <li key={lesson.id}><div><p className="eyebrow">{t.lesson} <bdi>{lesson.sequence}</bdi></p><h4><bdi>{learningTitle(lesson.title, t.lessonUnavailable)}</bdi></h4></div><Button type="button" variant="secondary" aria-label={`${t.openLesson}: ${learningTitle(lesson.title, t.lessonUnavailable)}`} onClick={() => onOpen(lesson.id)}>{t.openLesson}<CuevoIcon name="arrow" size={20} className="directional-icon" /></Button></li>)}</ol></div>;
+  return <div className="learning-lesson-directory"><div className="learning-reading-intro"><img src={trailAssets.lesson} width={104} height={104} alt="" aria-hidden="true" /><div><h3 ref={headingRef} tabIndex={-1}>{t.chooseReading}</h3><p>{t.chooseReadingBody}</p></div></div><h3>{t.lessonsInUnit}</h3><ol>{lessons.map(lesson => <li key={lesson.id}><div><p className="eyebrow">{t.lesson} <bdi>{lesson.sequence}</bdi></p><h4><bdi>{learningTitle(lesson.title, t.lessonUnavailable)}</bdi></h4></div><Button type="button" variant="secondary" data-lesson-choice={lesson.id} aria-label={`${t.openLesson}: ${learningTitle(lesson.title, t.lessonUnavailable)}`} onClick={() => onOpen(lesson.id)}>{t.openLesson}<CuevoIcon name="arrow" size={20} className="directional-icon" /></Button></li>)}</ol></div>;
 }
 
 function LessonView({ courseId, courseTitle, lesson, canAuthor, onAdd, coursePublished, onChanged, activityId = null, onOpenActivity, headingRef }: { courseId: string; lesson: Lesson; canAuthor: boolean; onAdd: () => void; coursePublished: boolean; onChanged: () => void; activityId?: string | null; onOpenActivity?: (id: string | null) => void; headingRef?: Ref<HTMLHeadingElement>; courseTitle?: string }) {

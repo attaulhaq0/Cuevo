@@ -164,17 +164,21 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   const admission = mapping(releaseJobs['release-admission']);
   if (JSON.stringify(admission.outputs) !== JSON.stringify({ sha: '${{ steps.context.outputs.sha }}', 'ci-run-id': '${{ steps.context.outputs.ci-run-id }}', environment: '${{ steps.context.outputs.environment }}', 'review-base64':'${{ steps.review.outputs.review-base64 }}','review-digest':'${{ steps.review.outputs.review-digest }}','environment-id':'${{ steps.review.outputs.environment-id }}' })) issues.push('Release outputs must be validated event context and same-run review package.');
   const admissionSteps = list(admission.steps).map(mapping);
+  const metadataSecret='${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}';
+  const metadataOnly=(step:Mapping)=>Object.entries(mapping(step.env)).every(([key,value])=>!JSON.stringify(value).includes('secrets.')||key==='GH_TOKEN'&&value===metadataSecret);
+  for(const step of admissionSteps){if(!metadataOnly(step))issues.push('Only the scoped metadata credential may reach release admission.');if(String(step.run??'').startsWith('node --import tsx scripts/verification/cicd-release.ts ')&&step.run!=='node --import tsx scripts/verification/cicd-release.ts context'&&mapping(step.env).GH_TOKEN!==metadataSecret)issues.push('Release controls require the scoped GitHub metadata token.');}
   const admissionCheckouts = admissionSteps.filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
   if (admissionCheckouts.length !== 1 || Object.hasOwn(mapping(admissionCheckouts[0]?.with), 'ref')) issues.push('Admission requires one trusted default-branch checkout.');
   if(mapping(admissionCheckouts[0]?.with)['fetch-depth']!==0)issues.push('Release review requires complete immutable source ancestry.');
   if (!admissionSteps.some(step => step.id === 'context' && step.run === 'node --import tsx scripts/verification/cicd-release.ts context')) issues.push('Release requires validated event context.');
   if (!admissionSteps.some(step => step.run === 'node --import tsx scripts/verification/cicd-release.ts controls' && mapping(step.env).RELEASE_ENVIRONMENT === '${{ steps.context.outputs.environment }}')) issues.push('Release requires existing protected environment and main controls.');
   const preparation=admissionSteps.find(step=>step.id==='review'&&step.run==='node --import tsx scripts/verification/cicd-release.ts prepare');
-  if(!preparation||mapping(preparation.env).CUEVO_RELEASE_REVIEW_INPUT_JSON!=='${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}'||mapping(preparation.env).CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON!=='${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}'||JSON.stringify(preparation).includes('secrets.'))issues.push('Release requires secret-free review preparation before environment approval.');
+  if(!preparation||mapping(preparation.env).CUEVO_RELEASE_REVIEW_INPUT_JSON!=='${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}'||mapping(preparation.env).CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON!=='${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}'||!metadataOnly(preparation))issues.push('Release requires provider-credential-free review preparation before environment approval.');
   const webSteps = list(web.steps).map(mapping);
   const credentialCommands=new Set(['build','deploy','verify'].map(mode=>`node --import tsx scripts/verification/cicd-release.ts ${mode}`));
   for(const step of webSteps){const command=String(step.run??'');const env=mapping(step.env);
-    if(JSON.stringify(step).includes('secrets.')&&(!credentialCommands.has(command)||env.VERCEL_TOKEN!=='${{ secrets.VERCEL_TOKEN }}'||Object.keys(env).some(key=>key!=='VERCEL_TOKEN'&&JSON.stringify(env[key]).includes('secrets.'))))issues.push('Deployment credentials may reach only the reviewed release owner after official approval.');
+    if(Object.entries(env).some(([key,value])=>JSON.stringify(value).includes('secrets.')&&!(key==='GH_TOKEN'&&value===metadataSecret)&&!(credentialCommands.has(command)&&key==='VERCEL_TOKEN'&&value==='${{ secrets.VERCEL_TOKEN }}')))issues.push('Deployment credentials may reach only the reviewed release owner after official approval.');
+    if(command.startsWith('node --import tsx scripts/verification/cicd-release.ts ')&&env.GH_TOKEN!==metadataSecret)issues.push('Release controls require the scoped GitHub metadata token.');
     if(/\bvercel\s+(?:deploy|promote|alias|rollback|build|pull)\b/.test(command))issues.push('Provider actions must use the reviewed release owner.');
     if(credentialCommands.has(command)&&step.if!==undefined||command==='node --import tsx scripts/verification/cicd-release.ts approval'&&step.if!==undefined)issues.push('Required release consumers and approval cannot be conditionally skipped.');
   }
@@ -184,14 +188,14 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   if(!webSteps.some(step=>String(step.uses??'').startsWith('actions/checkout@')&&mapping(step.with)['fetch-depth']===0))issues.push('Deployment review requires complete immutable source ancestry.');
   if (webSteps.findIndex(step => step.run === 'node --import tsx scripts/verification/cicd-release.ts ci') < 0 || webSteps.findIndex(step => step.run === 'node --import tsx scripts/verification/cicd-release.ts ci') >= webSteps.findIndex(step => step.run === 'node --import tsx scripts/verification/cicd-release.ts approval')) issues.push('Release must revalidate current main after environment approval.');
   const approval=webSteps.find(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts approval');
-  if(!approval||JSON.stringify(approval).includes('secrets.'))issues.push('Official founder approval must be validated without deployment credentials.');
+  if(!approval||!metadataOnly(approval))issues.push('Official founder approval must be validated without deployment credentials.');
   for (const step of list(web.steps).map(mapping)) {
     const env = mapping(step.env);
     for (const [key, output] of [['RELEASE_SHA', 'sha'], ['CI_RUN_ID', 'ci-run-id'], ['RELEASE_ENVIRONMENT', 'environment']]) if (env[key] !== undefined && env[key] !== `\${{ needs.release-admission.outputs.${output} }}`) issues.push('Deployment identity must consume validated release admission.');
     for(const[key,output]of[['REVIEW_BASE64','review-base64'],['REVIEW_DIGEST','review-digest'],['RELEASE_ENVIRONMENT_ID','environment-id']])if(env[key]!==undefined&&env[key]!==`\${{ needs.release-admission.outputs.${output} }}`)issues.push('Review identity must consume the same validated release package.');
     if(['approval','build','deploy','verify'].some(mode=>step.run===`node --import tsx scripts/verification/cicd-release.ts ${mode}`)&&(['REVIEW_BASE64','REVIEW_DIGEST','RELEASE_ENVIRONMENT_ID','RELEASE_MANIFEST','CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON','GH_TOKEN','CI_RUN_ID'].some(key=>env[key]===undefined)))issues.push('Every credential boundary must re-admit official approval and current dependencies.');
   }
-  for (const [id, value] of Object.entries(releaseJobs)) if (id !== 'web-release' && JSON.stringify(value).includes('secrets.')) issues.push('Deployment credentials must be environment protected.');
+  for (const [id, value] of Object.entries(releaseJobs)) if (id !== 'web-release' && list(mapping(value).steps).map(mapping).some(step=>!metadataOnly(step))) issues.push('Deployment credentials must be environment protected.');
   const commands = list(web.steps).map(mapping).map(step => step.run).filter((run): run is string => typeof run === 'string' && run.startsWith('node --import tsx scripts/verification/cicd-release.ts'));
   if (JSON.stringify(commands) !== JSON.stringify(['ci', 'approval', 'build', 'deploy', 'verify'].map(command => `node --import tsx scripts/verification/cicd-release.ts ${command}`))) issues.push('Release must admit official approval, build, deploy and verify in order.');
   return issues;

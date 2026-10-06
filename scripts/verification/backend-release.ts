@@ -14,6 +14,8 @@ import { provisionHostedSyntheticAuth } from '../database/hosted-synthetic-auth'
 import { createHostedMigrationDatabase } from '../database/hosted-migration-database';
 import { deployBackendProviders } from './backend-provider-deploy';
 import { verifyHostedBackendPrerequisites } from './backend-hosted-verification';
+import { verifyHostedPrivateAccess } from './backend-hosted-private';
+import { activateHostedWorker } from './backend-hosted-activation';
 import {hostedMigrationEndpointSchema} from '../database/hosted-migration-provider';
 import {canonicalReleaseExecutionJson} from './release-review';
 
@@ -37,7 +39,7 @@ async function record(root: string, filename: string, value: unknown) {
 }
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
-export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify'; repoRoot: string; env: Record<string, string | undefined> }) {
+export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify' | 'verify-private' | 'activate'; repoRoot: string; env: Record<string, string | undefined> }) {
   try {
     if (!isAbsolute(repoRoot) || resolve(repoRoot) !== repoRoot || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw failure();
     if (mode === 'prepare') {
@@ -60,9 +62,27 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
     await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken });
     if (mode === 'approval') return { status: 'ADMITTED' as const, hostedAcceptance: false };
-    if(mode==='verify'){
+    if(mode==='verify'||mode==='verify-private'||mode==='activate'){
+      if(mode==='verify-private')z.object({status:z.literal('PREREQUISITES_OBSERVED'),apiReady:z.literal(true),roleSessions:z.literal(5),crossSchoolDenied:z.literal(true),worker:z.object({missingSignatureDenied:z.literal(true),malformedSignatureDenied:z.literal(true),staleSignatureDenied:z.literal(true)})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/prerequisites-result.json'),48*1024)).toString('utf8')));
       const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
       const provider=z.object({status:z.literal('DEPLOYED_INACTIVE'),api:z.object({url:z.string().url(),deploymentId:z.string().startsWith('dpl_')}),edge:z.object({id:z.string(),version:z.number().int().positive()})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
+      if(mode==='activate'){
+        const prerequisitesReceipt=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/prerequisites-result.json'),48*1024)).toString('utf8'));
+        const privateReceipt=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/private-access-result.json'),48*1024)).toString('utf8'));
+        z.object({status:z.literal('PREREQUISITES_OBSERVED'),apiReady:z.literal(true),roleSessions:z.literal(5),crossSchoolDenied:z.literal(true)}).parse(prerequisitesReceipt);
+        z.object({status:z.literal('PRIVATE_PROBES_CONFIRMED'),sessionsClosed:z.literal(true),restrictedDatabaseGrants:z.literal(true),privateStorage:z.literal(true),privateRealtime:z.literal(true)}).parse(privateReceipt);
+        const configuration=z.object({sourceSha:z.literal(identity.releaseSha),dataApi:z.literal('DISABLED'),observer:z.string().min(1),status:z.literal('OBSERVED_PROVIDER_UI'),visibleText:z.literal('Data API is disabled'),observedAt:z.iso.datetime({offset:true}),projectRef:z.literal(endpoint.projectRef),source:z.literal(`https://supabase.com/dashboard/project/${endpoint.projectRef}/integrations/data_api/settings`)}).strict().parse(parseCanonicalReleaseReviewJson(required(env,'CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON')));
+        if(Date.parse(configuration.observedAt)>Date.now()||Date.now()-Date.parse(configuration.observedAt)>3600000)throw failure();
+        const configurationPath=join(repoRoot,'.local/hosted-release/data-api-configuration.json');await record(repoRoot,'data-api-configuration.json',configuration);
+        const configurationBytes=await ownedFile(repoRoot,configurationPath,16384);
+        const operator=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);operator.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;
+        const result=await activateHostedWorker({...shared,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},edgeDeployment:{id:provider.edge.id,version:provider.edge.version},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD'),operatorDatabaseUrl:operator.toString(),operatorPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD'),prerequisitesReceipt,privateReceipt,dataApiConfigurationEvidence:{source:'AUTHENTICATED_DASHBOARD',enabled:false,projectRef:configuration.projectRef,url:configuration.source,artifactPath:configurationPath,evidenceSha256:digest(configurationBytes),observedAt:configuration.observedAt}});
+        if(result.status!=='ACTIVATED_SIGNED_SOURCE_VERIFIED'||result.sourceProcessed!==true||result.duplicateWakeDenied!==true||result.originalCommandReplayed!==true||result.recoveryScheduled!==true||result.scheduledRecoveryVerified!==true||result.sessionsClosed!==true||!result.canonicalReceipt)throw failure();
+        return result;
+      }
+      if(mode==='verify-private'){
+        const result=await verifyHostedPrivateAccess({...shared,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});await record(repoRoot,'private-access-result.json',result);if(result.status!=='PRIVATE_PROBES_CONFIRMED'||result.restrictedDatabaseGrants!==true||result.privateStorage!==true||result.privateRealtime!==true||result.sessionsClosed!==true)throw failure();return result;
+      }
       const result=await verifyHostedBackendPrerequisites({repoRoot,expected:bundle.expected,preparedApproval:bundle.preparedApproval,githubToken:shared.githubToken,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},edgeDeployment:{id:provider.edge.id,version:provider.edge.version},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});await record(repoRoot,'prerequisites-result.json',result);if(result.status!=='PREREQUISITES_OBSERVED')throw failure();return result;
     }
     // Validate every needed input before the first provider mutation.
@@ -134,7 +154,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const mode = process.argv[2];
-  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify'].includes(mode)) throw failure();
-  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
+  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify','verify-private','activate'].includes(mode)) throw failure();
+  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify'|'verify-private'|'activate', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
   catch { console.error('Cuevo backend step requires review. Inspect retained source-bound receipts; private contents withheld.'); process.exitCode = 1; }
 }

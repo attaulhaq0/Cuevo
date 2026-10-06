@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { canonicalReleaseReviewJson } from './release-review';
 
 const secret = 'private-backend-phase-canary';
-const state = { events: [] as string[], failApproval: false, status: 'COMMITTED', bundle: {} as Record<string, unknown> };
+const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED', activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED', bundle: {} as Record<string, unknown> };
 const replacements: Record<string, string> = {
   'backend-release-prepare.ts': 'export const prepareNativeBackendRelease=globalThis.backendPhaseFixture.prepare;',
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.backendPhaseFixture.admission;',
@@ -23,6 +23,8 @@ const replacements: Record<string, string> = {
   'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.backendPhaseFixture.database;',
   'backend-provider-deploy.ts': 'export const deployBackendProviders=globalThis.backendPhaseFixture.deploy;',
   'backend-hosted-verification.ts': 'export const verifyHostedBackendPrerequisites=globalThis.backendPhaseFixture.verify;',
+  'backend-hosted-private.ts': 'export const verifyHostedPrivateAccess=globalThis.backendPhaseFixture.private;',
+  'backend-hosted-activation.ts': 'export const activateHostedWorker=globalThis.backendPhaseFixture.activate;',
 };
 registerHooks({ resolve(specifier, context, next) {
   const name = specifier.split('/').at(-1)!;
@@ -35,6 +37,7 @@ registerHooks({ resolve(specifier, context, next) {
   return next(url, context);
 } });
 (globalThis as unknown as { backendPhaseFixture: object }).backendPhaseFixture = {
+  activate:async(input:{operatorDatabaseUrl:string;operatorPassword:string;dataApiConfigurationEvidence:{artifactPath:string;source:string;enabled:boolean};privateReceipt:{status:string}})=>{state.events.push('activate');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).username,'postgres');assert.equal(new URL(input.operatorDatabaseUrl).password,'');assert.equal(input.privateReceipt.status,'PRIVATE_PROBES_CONFIRMED');assert.ok(input.dataApiConfigurationEvidence.artifactPath.endsWith('data-api-configuration.json'));assert.equal(input.dataApiConfigurationEvidence.source,'AUTHENTICATED_DASHBOARD');assert.equal(input.dataApiConfigurationEvidence.enabled,false);return{status:state.activationStatus,sourceProcessed:true,duplicateWakeDenied:true,originalCommandReplayed:true,recoveryScheduled:true,scheduledRecoveryVerified:true,recoveryVerified:false,sessionsClosed:true,hostedAcceptance:false,canonicalReceipt:'{}'};},
   prepare: async (input: Record<string, unknown>) => { state.events.push('prepare'); assert.equal(input.providerToken, secret); return { ...state.bundle, preparedApproval: { canonicalJson: '{}', comment: 'Source-bound package comment' }, bundlePath: join(input.repoRoot as string, '.local/hosted-release/backend-bundle.json'), bundleSha256: digest(JSON.stringify(state.bundle)) }; },
   validate: (prepared: unknown) => prepared,
   admission: async () => { state.events.push('approval'); if (state.failApproval) throw Error(secret); return { provenance: 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE', approval: { state: 'approved' } }; },
@@ -45,6 +48,7 @@ registerHooks({ resolve(specifier, context, next) {
   database: async () => ({ withLock: async (_key: string, run: () => Promise<void>) => { await run(); return { kind: 'RELEASED' }; }, provisionInitialRuntimeRoles: async (input: {apiPassword64hex:string;workerPassword64hex:string}) => { state.events.push('roles'); assert.match(input.apiPassword64hex,/^[a-f0-9]{64}$/); assert.match(input.workerPassword64hex,/^[a-f0-9]{64}$/); return {status:'CONFIRMED',apiLogin:true,workerLogin:true}; }, executeReferenceScenarioSource: async () => { state.events.push('reference'); return { status: 'CONFIRMED' }; } }),
   deploy: async (input: {runtimeConfig:{api:{DATABASE_URL:string};edge:{CUEVO_WORKER_DATABASE_URL:string}}}) => {state.events.push('deploy');assert.equal(new URL(input.runtimeConfig.api.DATABASE_URL).username,'cuevo_api');assert.equal(new URL(input.runtimeConfig.edge.CUEVO_WORKER_DATABASE_URL).username,'cuevo_worker');return{status:'DEPLOYED_INACTIVE',hostedAcceptance:false};},
   verify: async () => {state.events.push('verify');return{status:'PREREQUISITES_OBSERVED',activationAllowed:false,hostedAcceptance:false};},
+  private: async(input:{vercelToken:string;syntheticPassword:string})=>{state.events.push('private');assert.equal(input.vercelToken,secret);assert.equal(input.syntheticPassword,'protected-synthetic-pilot-password');return{status:state.privateStatus,restrictedDatabaseGrants:true,privateStorage:true,privateRealtime:state.privateStatus==='PRIVATE_PROBES_CONFIRMED',sessionsClosed:true,activationAllowed:false,hostedAcceptance:false};},
 };
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 async function subject() {
@@ -57,7 +61,7 @@ async function fixture(run: (root: string, env: Record<string, string>) => Promi
   const root = await mkdtemp(join(tmpdir(), 'cuevo-backend-phase-'));
   try {
     await mkdir(join(root, '.local/hosted-release'), { recursive: true });
-    state.events = []; state.failApproval = false; state.status = 'COMMITTED';
+    state.events = []; state.failApproval = false; state.status = 'COMMITTED';state.privateStatus='PRIVATE_PROBES_CONFIRMED';state.activationStatus='ACTIVATED_SIGNED_SOURCE_VERIFIED';
     const sha = 'a'.repeat(40);
     state.bundle = { version: 1, purpose: 'CUEVO_BACKEND_RELEASE_EXECUTION', repoRoot: root, expected: { repository: 'attaulhaq0/Cuevo', releaseSha: sha, releaseRunId: '51', runAttempt: 1, ciRunId: '31', environmentName: 'staging', deploymentEnvironment: 'synthetic-staging', targets: {supabase:{projectRef:'mqxdjvsyckzocokuikmx'}} }, preparedApproval: {}, plan: {}, stages: [], toolchainManifestPath: join(root, '.local/hosted-release/toolchain.json'), operatorStoragePolicyPath: join(root, '.local/hosted-release/operator-policy.json'), artifacts: { apiRoot: join(root, '.local/runtime-artifacts/api-vercel'), edgeRoot: join(root, '.local/edge-artifacts/cuevo-worker') } };
     state.bundle.migrationEndpoint={projectRef:'mqxdjvsyckzocokuikmx',kind:'direct',host:'db.mqxdjvsyckzocokuikmx.supabase.co',port:5432,database:'postgres'};
@@ -106,4 +110,20 @@ test('initial population and Auth remain ordered after confirmed schema and use 
 test('hosted verification records observed prerequisites without granting activation or customer acceptance',async()=>{
  const api=await subject();await fixture(async(repoRoot,env)=>{env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');await writeFile(join(repoRoot,'.local/hosted-release/provider-result.json'),JSON.stringify({status:'DEPLOYED_INACTIVE',api:{url:'https://cuevo-api.vercel.app',deploymentId:'dpl_exact'},edge:{id:'edge-exact',version:1}}));const result=await api.runBackendReleasePhase({mode:'verify',repoRoot,env});assert.equal('activationAllowed' in result ? result.activationAllowed : undefined,false);assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','verify']);});
 });
+test('private access phase requires confirmed prerequisite receipt and retains unknown private outcomes',async()=>{
+ const api=await subject();for(const status of ['PRIVATE_PROBES_CONFIRMED','REQUIRES_REVIEW'])await fixture(async(repoRoot,env)=>{env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');await writeFile(join(repoRoot,'.local/hosted-release/provider-result.json'),JSON.stringify({status:'DEPLOYED_INACTIVE',api:{url:'https://cuevo-api.vercel.app',deploymentId:'dpl_exact'},edge:{id:'edge-exact',version:1}}));await writeFile(join(repoRoot,'.local/hosted-release/prerequisites-result.json'),JSON.stringify({status:'PREREQUISITES_OBSERVED',apiReady:true,roleSessions:5,crossSchoolDenied:true,worker:{missingSignatureDenied:true,malformedSignatureDenied:true,staleSignatureDenied:true}}));state.privateStatus=status;if(status==='PRIVATE_PROBES_CONFIRMED'){const result=await api.runBackendReleasePhase({mode:'verify-private',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.equal('activationAllowed' in result ? result.activationAllowed : undefined,false);}else await assert.rejects(api.runBackendReleasePhase({mode:'verify-private',repoRoot,env}));assert.deepEqual(state.events,['approval','private']);const receipt=JSON.parse(await readFile(join(repoRoot,'.local/hosted-release/private-access-result.json'),'utf8'));assert.equal(receipt.status,status);assert.equal(JSON.stringify(receipt).includes(secret),false);});
+ await fixture(async(repoRoot,env)=>{env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/prerequisites-result.json'),JSON.stringify({status:'REQUIRES_REVIEW'}));await assert.rejects(api.runBackendReleasePhase({mode:'verify-private',repoRoot,env}));assert.deepEqual(state.events,['approval']);});
+});
 test('a session endpoint is part of the package and changed endpoint bytes cannot reach credential consumers',async()=>{const api=await subject();await fixture(async(repoRoot,env)=>{const endpoint={projectRef:'mqxdjvsyckzocokuikmx',kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'};state.bundle.migrationEndpoint=endpoint;(state.bundle.expected as {fingerprints:object}).fingerprints={migrationEndpointSha256:digest(canonicalReleaseReviewJson(endpoint))};await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));await api.runBackendReleasePhase({mode:'approval',repoRoot,env});assert.deepEqual(state.events,['approval']);state.events=[];endpoint.host='aws-0-other.pooler.supabase.com';await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));await assert.rejects(api.runBackendReleasePhase({mode:'approval',repoRoot,env}));assert.deepEqual(state.events,[]);});});
+
+test('activation requires current exact Data API observation and confirmed private prerequisites before its consumer',async()=>{
+  const api=await subject();for(const mode of ['confirmed','missing','stale','private','activation'])await fixture(async(repoRoot,env)=>{
+    env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';
+    await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');await writeFile(join(repoRoot,'.local/hosted-release/provider-result.json'),JSON.stringify({status:'DEPLOYED_INACTIVE',api:{url:'https://cuevo-api.vercel.app',deploymentId:'dpl_exact'},edge:{id:'edge-exact',version:1}}));
+    await writeFile(join(repoRoot,'.local/hosted-release/prerequisites-result.json'),JSON.stringify({status:'PREREQUISITES_OBSERVED',apiReady:true,roleSessions:5,crossSchoolDenied:true}));await writeFile(join(repoRoot,'.local/hosted-release/private-access-result.json'),JSON.stringify({status:mode==='private'?'REQUIRES_REVIEW':'PRIVATE_PROBES_CONFIRMED',sessionsClosed:true,restrictedDatabaseGrants:true,privateStorage:true,privateRealtime:true}));
+    if(mode!=='missing')env.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON=canonicalReleaseReviewJson({sourceSha:env.GITHUB_SHA,dataApi:'DISABLED',observer:'Founder delegated operator observation',status:'OBSERVED_PROVIDER_UI',visibleText:'Data API is disabled',observedAt:new Date(Date.now()-(mode==='stale'?7200000:0)).toISOString(),projectRef:'mqxdjvsyckzocokuikmx',source:'https://supabase.com/dashboard/project/mqxdjvsyckzocokuikmx/integrations/data_api/settings'});
+    if(mode==='activation')state.activationStatus='REQUIRES_REVIEW';
+    if(mode==='confirmed'){const result=await api.runBackendReleasePhase({mode:'activate',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.equal('recoveryVerified' in result?result.recoveryVerified:undefined,false);assert.deepEqual(state.events,['approval','activate']);}
+    else{await assert.rejects(api.runBackendReleasePhase({mode:'activate',repoRoot,env}));assert.deepEqual(state.events,mode==='activation'?['approval','activate']:['approval']);}
+  });
+});

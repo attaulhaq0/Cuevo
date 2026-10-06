@@ -32,11 +32,38 @@ test('disabled availability does no file/provider work and enabled availability 
   const body = await response.text(); assert.equal(body.includes('fictional-secret'), false); assert.equal(body.includes('synthetic-001'), false); assert.deepEqual(JSON.parse(body), { available: true, roles: ['admin', 'coordinator', 'teacher', 'student', 'parent'] });
 });
 
+test('hosted deployment never admits local presentation or reads its credentials even with testing flags set', async () => {
+  for (const hosted of [{ VERCEL: '1' }, { VERCEL_ENV: 'preview' }, { VERCEL_ENV: 'production' }, { VERCEL_URL: 'cuevo.vercel.app' }, { CUEVO_DEPLOYMENT_ENVIRONMENT: 'production' }, { CUEVO_DEPLOYMENT_ENVIRONMENT: 'synthetic-staging' }]) {
+    let privateReads = 0, providerCalls = 0;
+    const dependencies = { ...io(), read: async () => { privateReads++; throw Error('Private demo file must stay local'); }, fetch: (async () => { providerCalls++; throw Error('Demo Auth must stay local'); }) as typeof fetch };
+    const deployment = { ...env, ...hosted, CUEVO_TEST_DEMO_GUIDE_FILE: resolve(root, '.local/demo-guide.json') };
+    const availability = await testingQuickLogin(request(), deployment, dependencies);
+    assert.equal(availability.status, 200); assert.deepEqual(await availability.json(), { available: false });
+    const login = await testingQuickLogin(request({ role: 'student' }), deployment, dependencies);
+    assert.equal(login.status, 404); assert.deepEqual(await login.json(), { available: false });
+    assert.equal(privateReads, 0); assert.equal(providerCalls, 0);
+  }
+});
+
 test('strict role command uses the manifested actor and returns only the actual provider tokens', async () => {
   const source = io(); const response = await testingQuickLogin(request({ role: 'student' }), env, source);
   assert.equal(response.status, 200); assert.equal(source.calls, 1);
   assert.deepEqual(await response.json(), { role: 'student', session: { access_token: 'real-session-token', refresh_token: 'real-refresh-token' } });
   for (const body of [{ role: 'owner' }, { role: 'student', email: 'other@example.test' }, { actorId: accounts[0].actorId }, []]) { const source = io(); assert.equal((await testingQuickLogin(request(body), env, source)).status, 400); assert.equal(source.calls, 0); }
+});
+test('an invalid optional presentation guide never removes the verified quick-login controls',async()=>{const response=await testingQuickLogin(request(),{...env,CUEVO_TEST_DEMO_GUIDE_FILE:resolve(root,'.local/demo-guide.json')},io());assert.equal(response.status,200);assert.deepEqual(await response.json(),{available:true,roles:['admin','coordinator','teacher','student','parent']});});
+
+test('optional guide actors match the fixed quick-login actors and another valid learner only omits the guide', async () => {
+  const roles = ['admin', 'coordinator', 'teacher', 'student', 'parent'] as const;
+  const records = ['courseId', 'lessonId', 'activityId', 'proposalId', 'baselineSubmissionId', 'baselineResultId', 'followupResultId', 'assignedPracticeId', 'measuredPracticeId', 'outcomeId', 'portfolioId', 'periodId', 'roomId'];
+  const guide = { version: 1, schoolId: manifest.actors[0].schoolId, actors: Object.fromEntries(roles.map(role => [role, manifest.actors.find(actor => actor.role === role && actor.schoolId === manifest.actors[0].schoolId)!.actorId])), records: Object.fromEntries(records.map((key, index) => [key, 'ce000000-0000-4000-8000-' + String(index + 1).padStart(12, '0')])) };
+  const configured = { ...env, CUEVO_TEST_DEMO_GUIDE_FILE: resolve(root, '.local/demo-guide.json') };
+  const source = (value: unknown) => { const original = io(); return { ...original, read: async (path: string) => path.endsWith('demo-guide.json') ? JSON.stringify(value) : original.read(path) }; };
+  const response = await testingQuickLogin(request(), configured, source(guide));
+  assert.deepEqual(await response.json(), { available: true, roles, guide });
+  const other = manifest.actors.find(actor => actor.role === 'student' && actor.schoolId === guide.schoolId && actor.actorId !== guide.actors.student)!;
+  const mismatch = await testingQuickLogin(request(), configured, source({ ...guide, actors: { ...guide.actors, student: other.actorId } }));
+  assert.deepEqual(await mismatch.json(), { available: true, roles });
 });
 
 test('unknown, changed, duplicate or escaped account sources cannot issue a provider login', async () => {

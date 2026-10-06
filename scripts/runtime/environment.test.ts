@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runtimeEnvironment } from './environment';
+import {parseServerConfig}from'@cuevo/config';
 
 const input = {
   PATH: 'toolchain', SystemRoot: 'windows', NODE_ENV: 'development', NODE_OPTIONS: '--require=unsafe',
@@ -15,6 +16,12 @@ const input = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_example', NEXT_PUBLIC_UNREVIEWED_KEY: 'unreviewed',
   AI_GENERATION_MODE: 'FIXTURE', AI_FIXTURE_ENABLED: 'true', ANALYTICS_FIXTURE_ENABLED: 'true',
 };
+
+test('mapped presentation profile preserves strict local admission and cannot sanitize hosted or provisioning authority',()=>{
+  const local={CUEVO_LOCAL_DEMO_MODE:'INTEGRATION_PRESENTATION',NODE_ENV:'development',CUEVO_DEPLOYMENT_ENVIRONMENT:'local',SUPABASE_URL:'http://127.0.0.1:57421',DATABASE_URL:'postgresql://cuevo_api:fixture@127.0.0.1:57422/cuevo_integration_20261004',API_ALLOWED_ORIGIN:'http://127.0.0.1:54131',API_PORT:'54132',AI_GENERATION_MODE:'FIXTURE',AI_FIXTURE_ENABLED:'true',POSTHOG_CAPTURE_MODE:'DISABLED'};
+  assert.equal(parseServerConfig(runtimeEnvironment('api',local),'api').localDemoMode,'INTEGRATION_PRESENTATION');
+  for(const patch of [{VERCEL:'1'},{VERCEL:''},{VERCEL_ENV:'preview'},{VERCEL_URL:'cuevo.vercel.app'},{CUEVO_AUTH_PROVISIONING_MODE:'HOSTED'},{CUEVO_AUTH_PROVISIONING_KEY:'private-provider-canary'},{CUEVO_AUTH_PROVISIONING_MODE:'DISABLED',CUEVO_AUTH_PROVISIONING_KEY:'private-provider-canary'}])assert.throws(()=>parseServerConfig(runtimeEnvironment('api',{...local,...patch}),'api'),error=>error instanceof Error&&!error.message.includes('private-provider-canary'));
+});
 
 test('web child receives only reviewed public configuration and toolchain environment', () => {
   const child = runtimeEnvironment('web', input);

@@ -44,7 +44,36 @@ const envSchema = z.object({
   AI_GLOBAL_DAILY_BUDGET:z.coerce.number().positive().max(1000000).optional(),
   OPENAI_API_KEY: z.string().optional(), POSTHOG_CAPTURE_MODE: z.enum(['DISABLED', 'LIVE_SYNTHETIC']).default('DISABLED'),
 });
+/** This server-only fixture profile is an exact operator-selected local target.
+ * It changes no school/session/source policy and never admits a live provider. */
+function localPresentationProfile(input: Record<string, string | undefined>, consumer: 'all' | 'api' | 'worker'): 'INTEGRATION_PRESENTATION' | undefined {
+  if (input.CUEVO_LOCAL_DEMO_MODE === undefined) return undefined;
+  const failure = () => { throw new Error('Integration presentation requires the exact isolated API fixture configuration.'); };
+  if (input.CUEVO_LOCAL_DEMO_MODE !== 'INTEGRATION_PRESENTATION' || consumer !== 'api'
+    || input.VERCEL !== undefined || input.VERCEL_ENV !== undefined || input.VERCEL_URL !== undefined
+    || !['development', 'test'].includes(input.NODE_ENV ?? '')
+    || input.CUEVO_DEPLOYMENT_ENVIRONMENT !== undefined && input.CUEVO_DEPLOYMENT_ENVIRONMENT !== 'local'
+    || input.SUPABASE_URL !== 'http://127.0.0.1:57421'
+    || input.API_ALLOWED_ORIGIN !== 'http://127.0.0.1:54131' || input.API_PORT !== '54132'
+    || input.AI_GENERATION_MODE !== 'FIXTURE' || input.AI_FIXTURE_ENABLED !== 'true'
+    || input.POSTHOG_CAPTURE_MODE !== 'DISABLED') return failure();
+  const hasForbiddenAuthority = Object.entries(input).some(([key, value]) => value !== undefined && value !== '' && (
+    key === 'AI_BASE_URL' || key === 'AI_PROVIDER' || key === 'AI_MODEL' || key === 'OPENAI_API_KEY' || /^AZURE.*(?:KEY|TOKEN|SECRET)$/.test(key)
+    || key === 'CUEVO_SYNTHETIC_PROJECT_REF' || key === 'CUEVO_SYNTHETIC_WEB_ORIGIN'
+    || key.startsWith('CUEVO_AUTH_PROVISIONING_') && !(key === 'CUEVO_AUTH_PROVISIONING_MODE' && value === 'DISABLED')
+  ));
+  if (hasForbiddenAuthority) return failure();
+  try {
+    if (!input.DATABASE_URL) return failure();
+    const database = new URL(input.DATABASE_URL), password = decodeURIComponent(database.password);
+    if (!['postgres:', 'postgresql:'].includes(database.protocol) || database.hostname !== '127.0.0.1' || database.port !== '57422'
+      || database.username !== 'cuevo_api' || database.pathname !== '/cuevo_integration_20261004' || database.search || database.hash
+      || !password || password.length > 4096 || [...password].some(character => character.charCodeAt(0) <= 32 || character.charCodeAt(0) === 127)) return failure();
+  } catch { return failure(); }
+  return 'INTEGRATION_PRESENTATION';
+}
 export function parseServerConfig(input: Record<string, string | undefined>, consumer: 'all' | 'api' | 'worker' = 'all') {
+  const localDemoMode = localPresentationProfile(input, consumer);
   const authProvisioning = parseAuthProvisioningConfig(input, consumer);
   const values = Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== undefined && value !== '' && (consumer !== 'api' || !key.startsWith('POSTHOG_'))));
   const parsed = envSchema.safeParse(values);
@@ -70,7 +99,7 @@ export function parseServerConfig(input: Record<string, string | undefined>, con
       pseudonymKey: a.POSTHOG_PSEUDONYM_KEY, keyVersion: a.POSTHOG_PSEUDONYM_KEY_VERSION, environment: a.POSTHOG_ENVIRONMENT };
   }
   const localAuth = e.SUPABASE_URL && new URL(e.SUPABASE_URL).protocol === 'http:' && ['127.0.0.1', 'localhost', 'host.docker.internal'].includes(new URL(e.SUPABASE_URL).hostname) && new URL(e.SUPABASE_URL).port === '56321';
-  if (e.AI_GENERATION_MODE === 'FIXTURE' && (e.AI_FIXTURE_ENABLED !== 'true' || !hosted && (production || !localAuth))) throw new Error('Fixture intelligence requires explicit local or hosted synthetic configuration and is forbidden in production.');
+  if (e.AI_GENERATION_MODE === 'FIXTURE' && (e.AI_FIXTURE_ENABLED !== 'true' || !hosted && (production || !localAuth && !localDemoMode))) throw new Error('Fixture intelligence requires explicit local or hosted synthetic configuration and is forbidden in production.');
   if (e.AI_FIXTURE_ENABLED === 'true' && production && !hosted) throw new Error('Fixture intelligence is forbidden in production.');
   const foundry = e.AI_PROVIDER === 'azure-foundry';
   const syntheticLive = e.AI_DATA_POLICY_STATUS === 'SYNTHETIC_ONLY' && !production && localAuth;
@@ -81,7 +110,7 @@ export function parseServerConfig(input: Record<string, string | undefined>, con
   if (production && [e.API_ALLOWED_ORIGIN, e.SUPABASE_URL].some(value => value && new URL(value).protocol !== 'https:')) throw new Error('Production browser and authentication origins require HTTPS.');
   const databaseTls = production || Boolean(hosted);
   if (databaseTls && [e.DATABASE_URL, e.WORKER_DATABASE_URL].some(value => value && new URL(value).search)) throw new Error('Production TLS database connections forbid URL options.');
-  return { nodeEnv: e.NODE_ENV, deploymentEnvironment: e.CUEVO_DEPLOYMENT_ENVIRONMENT ?? (e.NODE_ENV === 'production' ? 'production' : 'local'), syntheticProjectRef: hosted?.projectRef, databaseTls, databaseTlsCa: e.CUEVO_DATABASE_TLS_CA, apiPort: e.API_PORT, workerPort: e.WORKER_PORT, allowedOrigin: e.API_ALLOWED_ORIGIN ?? 'http://localhost:3000', databaseUrl: e.DATABASE_URL, workerDatabaseUrl: e.WORKER_DATABASE_URL, supabaseUrl: e.SUPABASE_URL, supabasePublishableKey: e.SUPABASE_PUBLISHABLE_KEY,
+  return { nodeEnv: e.NODE_ENV, localDemoMode, deploymentEnvironment: e.CUEVO_DEPLOYMENT_ENVIRONMENT ?? (e.NODE_ENV === 'production' ? 'production' : 'local'), syntheticProjectRef: hosted?.projectRef, databaseTls, databaseTlsCa: e.CUEVO_DATABASE_TLS_CA, apiPort: e.API_PORT, workerPort: e.WORKER_PORT, allowedOrigin: e.API_ALLOWED_ORIGIN ?? 'http://localhost:3000', databaseUrl: e.DATABASE_URL, workerDatabaseUrl: e.WORKER_DATABASE_URL, supabaseUrl: e.SUPABASE_URL, supabasePublishableKey: e.SUPABASE_PUBLISHABLE_KEY,
     aiEnabled: e.AI_GENERATION_MODE === 'FIXTURE' || (e.AI_GENERATION_MODE === 'LIVE' && liveApproved),
     intelligence: { mode: e.AI_GENERATION_MODE, provider: e.AI_GENERATION_MODE === 'FIXTURE' ? 'deterministic-fixture' : e.AI_PROVIDER,
       model: e.AI_GENERATION_MODE === 'FIXTURE' ? 'source-locked-v1' : e.AI_MODEL,

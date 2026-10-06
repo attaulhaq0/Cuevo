@@ -10,6 +10,14 @@ const { ParentTrailHomeView } = await import('../components/parent-trail-home.ts
 function context(): ParentTrailContext { return { availability: 'ready', child: { status: 'ready', key: 'child-a', name: 'Samira', classLabel: 'Year 6', schoolName: 'Current school' }, snapshot: { childKey: 'child-a', status: 'unavailable', feedback: null, portfolio: null, upcoming: [], communication: null, support: null }, selector: createElement('p', null, 'Current child selector') }; }
 function render(value: ParentTrailContext, locale: 'en' | 'ar' = 'en') { return renderToStaticMarkup(createElement(ParentTrailHomeView, { context: value, locale })); }
 
+test('compact upcoming context has one heading while retaining its honest unavailable message', () => {
+  for (const [locale, title] of [['en', 'Upcoming school work'], ['ar', 'العمل المدرسي القادم']] as const) {
+    const html = render(context(), locale);
+    assert.equal((html.match(new RegExp('<h2[^>]*>' + title + '</h2>', 'g')) ?? []).length, 1);
+    assert.ok(html.includes(locale === 'en' ? 'Current shared work and dates are not available yet.' : 'الأعمال والمواعيد المشتركة الحالية غير متاحة بعد.'));
+  }
+});
+
 test('child resolving does not turn disabled content queries into empty approved records', () => {
   const value = context(); value.child = { status: 'resolving' }; const html = render(value);
   assert.match(html, /Checking current child relationships/); assert.match(html, /Current child selector/);

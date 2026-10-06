@@ -29,3 +29,5 @@ Recorded-streak overflow acceptance retains10001 fully pinned source records. It
 The intelligence-quality and intervention-choice Auth/API journeys use explicit60second whole-case deadlines for their multi-step source/analysis/review flows. Each API/database request retains its existing five-second statement budget. Their shared test-only cooperativeCustomerContext wraps request/command/drain/direct fixture queries before and after awaits; cleanup waits for the original body and resets the fixture role before another case. Owner rollback/reset cleanup stays available after cancellation. Controlled-promise units establish this ordering without a database, and no assertion or source-authority rule is reduced.
 
 Product source lookup: [task context map](../../docs/product/context-map.md); numbered IDs resolve through the product registry.
+
+The explicit local INTEGRATION_PRESENTATION fixture uses the existing API and processor, binds 127.0.0.1 and rejects hosted/Vercel/provisioning credentials. Ordinary API hosts retain their existing bind behavior; this profile does not enable a hosted demo or live provider.

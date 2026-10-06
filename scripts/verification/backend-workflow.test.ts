@@ -23,8 +23,10 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   const mutationIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts bootstrap-schema'); assert.ok(approvalIndex >= 0 && mutationIndex > approvalIndex);
   const provisionIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts provision'); assert.ok(provisionIndex > mutationIndex);
   const deployIndex = schema.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts deploy');assert.ok(deployIndex>provisionIndex);
+  const verifyIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts verify'),privateIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts verify-private');assert.ok(verifyIndex>deployIndex&&privateIndex>verifyIndex);assert.deepEqual(Object.keys(map(schema[privateIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_SYNTHETIC_PILOT_PASSWORD','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
+  const activationIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts activate');assert.ok(activationIndex>privateIndex);assert.deepEqual(Object.keys(map(schema[activationIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_SYNTHETIC_PILOT_PASSWORD','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
   for (const [index, step] of schema.entries()) {
-    if (index !== mutationIndex && index !== provisionIndex && index!==deployIndex) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
+    if (index !== mutationIndex && index !== provisionIndex && index!==deployIndex && index!==activationIndex) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
     if (step.run) assert.ok(!(step.run as string).includes('${{'));
     if (step.uses) assert.match(step.uses as string, /@[a-f0-9]{40}$/);
   }
@@ -32,4 +34,6 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   assert.deepEqual(Object.keys(map(download.with)).sort(), ['name', 'path']); assert.equal(map(download.with).name, 'cuevo-backend-package-${{ github.run_id }}-${{ github.run_attempt }}');
   const retained = schema.find(step => String(step.uses).startsWith('actions/upload-artifact@'))!;
   assert.equal(retained.if, 'always()'); assert.match(map(retained.with).path as string, /journal-\*\//); assert.doesNotMatch(map(retained.with).path as string, /ca\.pem|process-|backend-bundle|synthetic-access|\.env/);
+  for(const suffix of ['intent','asset','room','result'])assert.ok((map(retained.with).path as string).includes(`private-probe-*-${suffix}.json`));
+  for(const path of ['worker-activation-intent.json','worker-activation-journal.jsonl','worker-activation-result.json','worker-activation-cleanup.json'])assert.ok((map(retained.with).path as string).includes(path));
 });
