@@ -13,6 +13,7 @@ test('fast and complete technical CI discover the same backend release contract 
  const technical = [...verificationSteps.find(step => step.name === 'cicd-fixtures')!.args].filter(argument => argument.endsWith('.test.ts')).sort();
  assert.deepEqual(technical, fast);
  assert.ok(fast.includes('scripts/verification/backend-hosted-browser.test.ts'));
+ assert.ok(fast.includes('scripts/verification/daily-watchdog.test.ts'));
  const testSource = readFileSync(resolve(root, 'scripts/verification/backend-hosted-browser.test.ts'), 'utf8');
  assert.doesNotMatch(testSource, /chromium\.launch|actual Chromium normal forms/);
  const browserSource = readFileSync(resolve(root, 'tests/e2e/hosted-browser-protocol.spec.ts'), 'utf8');

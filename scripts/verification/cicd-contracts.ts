@@ -116,11 +116,13 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   const issues: string[] = []; let ci: Mapping; let release: Mapping;
   try { ci = mapping(yaml.load(ciText)); release = mapping(yaml.load(releaseText)); } catch { return ['Workflow YAML is invalid.']; }
   const ciTrigger = mapping(ci.on), pushTrigger = mapping(ciTrigger.push);
-  if (Object.keys(ciTrigger).sort().join(',') !== 'pull_request,push,workflow_dispatch'
+  if (Object.keys(ciTrigger).sort().join(',') !== 'pull_request,push,schedule,workflow_dispatch'
     || Object.keys(pushTrigger).join(',') !== 'branches' || JSON.stringify(pushTrigger.branches) !== JSON.stringify(['main'])
     || ciTrigger.pull_request !== null || ciTrigger.workflow_dispatch !== null) {
-    issues.push('CI must verify every PR, main push and manual dispatch without duplicate feature-branch pushes.');
+    issues.push('CI must verify every PR, main push, manual dispatch and daily regression without duplicate feature-branch pushes.');
   }
+  if (!z.array(z.object({ cron: z.literal('17 0 * * *') }).strict()).length(1).safeParse(ciTrigger.schedule).success) issues.push('CI requires exactly one daily full regression at 00:17 UTC.');
+  if (!z.object({ group: z.literal('cuevo-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}'), 'cancel-in-progress': z.literal(true) }).strict().safeParse(ci.concurrency).success) issues.push('CI concurrency must cancel obsolete runs only within the same event and PR/ref.');
   for (const [index, flow] of [ci, release].entries()) {
     const trigger = mapping(flow.on);
     if (Object.hasOwn(trigger, 'pull_request_target') || list(flow.on).some(event => ['pull_request_target', 'workflow_run'].includes(String(event))) || index === 0 && Object.hasOwn(trigger, 'workflow_run')) issues.push('Privileged untrusted triggers are forbidden.');
@@ -142,6 +144,14 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     }
   }
   const ciJobs = mapping(ci.jobs); const technical = mapping(ciJobs['technical-mvp']); const steps = list(technical.steps).map(mapping);
+  for (const owner of ['fast-checks', 'technical-mvp', 'codeql']) {
+    const job = mapping(ciJobs[owner]);
+    const conditionalCleanup = (step: Mapping) => owner === 'technical-mvp' && step.if === 'always()'
+      && (['node --import tsx scripts/verification/cicd-evidence.ts', 'npx --no-install supabase stop --project-id cuevo'].includes(String(step.run))
+        || String(step.uses ?? '').startsWith('actions/upload-artifact@') && mapping(step.with).path === '.local/cicd-safe/');
+    if (!Object.keys(job).length || job.if !== undefined || job['continue-on-error'] !== undefined
+      || list(job.steps).map(mapping).some(step => step['continue-on-error'] !== undefined || step.if !== undefined && !conditionalCleanup(step))) issues.push(`${owner} full verification must remain unconditional without skips or waivers.`);
+  }
   for (const owner of ['fast-checks', 'technical-mvp']) {
     const checkouts = list(mapping(ciJobs[owner]).steps).map(mapping).filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
     if (checkouts.length !== 1 || mapping(checkouts[0]?.with)['fetch-depth'] !== 0 || checkouts[0]?.if !== undefined || checkouts[0]?.['continue-on-error'] !== undefined) issues.push(`${owner} verification requires one unconditional complete-history checkout for canonical source checks.`);
@@ -152,11 +162,13 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   if (!steps.some(step => step.if === 'always()' && step.run === 'node --import tsx scripts/verification/cicd-evidence.ts')) issues.push('Safe evidence must export even on failure.');
   if (JSON.stringify(ci).includes('secrets.')) issues.push('PR verification must not receive external secrets.');
   const codeql = mapping(ciJobs.codeql), codeqlSteps = list(codeql.steps).map(mapping);
+  if (!z.object({ group: z.literal('cuevo-codeql-${{ github.ref }}'), 'cancel-in-progress': z.literal(false), queue: z.literal('max') }).strict().safeParse(codeql.concurrency).success) issues.push('CodeQL concurrency must serialize same-ref uploads and gates with the bounded full pending queue.');
   const analyzerIndex = codeqlSteps.findIndex(step => String(step.uses ?? '').startsWith('github/codeql-action/analyze@'));
   const alertIndex = codeqlSteps.findIndex(step => step.run === 'node --import tsx scripts/verification/codeql-alerts.ts');
   if (analyzerIndex < 0 || alertIndex <= analyzerIndex || codeqlSteps[analyzerIndex]?.id !== 'codeql-analyze'
     || mapping(codeqlSteps[analyzerIndex]?.with)['wait-for-processing'] !== true || codeqlSteps[alertIndex]?.if !== undefined || codeqlSteps[alertIndex]?.['continue-on-error'] !== undefined
-    || mapping(codeqlSteps[alertIndex]?.env).GH_TOKEN !== '${{ github.token }}' || mapping(codeqlSteps[alertIndex]?.env).CUEVO_CODEQL_SARIF_ID !== '${{ steps.codeql-analyze.outputs.sarif-id }}') issues.push('CodeQL must gate current processed same-job security findings without skips.');
+    || mapping(codeqlSteps[alertIndex]?.env).GH_TOKEN !== '${{ github.token }}' || mapping(codeqlSteps[alertIndex]?.env).CUEVO_CODEQL_SARIF_ID !== '${{ steps.codeql-analyze.outputs.sarif-id }}'
+    || mapping(codeqlSteps[alertIndex]?.env).CUEVO_CI_SCHEDULE !== '${{ github.event.schedule }}') issues.push('CodeQL must gate current processed same-job security findings and exact scheduled context without skips.');
   const required = mapping(ciJobs.required);
   if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks', 'technical-mvp', 'dependency-review', 'codeql', 'secret-scan']) || required.if !== 'always()') issues.push('Required status must include all verification jobs, including secret scan.');
   const secretScan = mapping(ciJobs['secret-scan']); const secretSteps = list(secretScan.steps).map(mapping);
@@ -168,7 +180,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   const aggregate = list(required.steps).map(mapping).find(step => step.name === 'Require every verification boundary');
   if (mapping(aggregate?.env).SECRET_SCAN !== '${{ needs.secret-scan.result }}' || !String(aggregate?.run).includes('[ "$SECRET_SCAN" != success ]')) issues.push('Required aggregate must fail unless secret scan succeeds.');
   if (mapping(release.concurrency)['cancel-in-progress'] !== false) issues.push('Unsafe release concurrency.');
-  if (mapping(release.concurrency).group !== "cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}") issues.push('Automatic and manual production must share release concurrency.');
+  if (mapping(release.concurrency).group !== "cuevo-release-${{ github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success' && 'production') || (github.event_name == 'workflow_dispatch' && inputs.environment)) || format('ineligible-{0}', github.run_id) }}") issues.push('Automatic and manual production must share release concurrency while ineligible follow-ons use isolated run groups.');
   const releaseJobs = mapping(release.jobs);
   if(Object.entries(release).some(([key,value])=>key!=='jobs'&&JSON.stringify(value).includes('secrets.')))issues.push('Release secrets must never be inherited from workflow-level configuration.');
   for(const value of Object.values(releaseJobs)){const job=mapping(value);if(Object.entries(job).some(([key,field])=>key!=='steps'&&JSON.stringify(field).includes('secrets.')))issues.push('Release secrets must never be inherited from job-level configuration.');}

@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
 import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-review';
 
@@ -26,7 +27,7 @@ test('CodeQL processing success must be followed by the same-job current securit
  const analyzer=steps.findIndex(step=>String(step.uses??'').startsWith('github/codeql-action/analyze@'));
  const gate=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/codeql-alerts.ts');
  assert.ok(analyzer>=0&&gate>analyzer);assert.equal(steps[analyzer].id,'codeql-analyze');assert.deepEqual(steps[analyzer].with,{'wait-for-processing':true});
- assert.deepEqual(steps[gate].env,{GH_TOKEN:'${{ github.token }}',CUEVO_CODEQL_SARIF_ID:'${{ steps.codeql-analyze.outputs.sarif-id }}'});assert.equal(steps[gate].if,undefined);assert.equal(steps[gate]['continue-on-error'],undefined);
+ assert.deepEqual(steps[gate].env,{GH_TOKEN:'${{ github.token }}',CUEVO_CODEQL_SARIF_ID:'${{ steps.codeql-analyze.outputs.sarif-id }}',CUEVO_CI_SCHEDULE:'${{ github.event.schedule }}'});assert.equal(steps[gate].if,undefined);assert.equal(steps[gate]['continue-on-error'],undefined);
 });
 
 test('completed-backend staging frontend includes verified origin and browser checks with scoped password recipient',async()=>{
@@ -87,7 +88,7 @@ test('release controls require existing protected environment and reviewed signe
 test('automatic release context admits only successful canonical current-main push CI', () => {
   const expected = { sha, ref: 'refs/heads/main', repository: 'owner/repo', eventName: 'workflow_run' };
   assert.deepEqual(releaseContext({ workflow_run: trustedRun() }, expected), { sha, ciRunId: '42', environment: 'production' });
-  for (const fields of [{ event: 'pull_request' }, { conclusion: 'failure' }, { conclusion: 'cancelled' }, { status: 'in_progress' }, { head_branch: 'feature' }, { head_sha: 'c'.repeat(40) }, { path: '.github/workflows/other.yml' }, { repository: { full_name: 'fork/repo' } }, { id: null }]) {
+  for (const fields of [{ event: 'pull_request' }, { event: 'schedule' }, { event: 'workflow_dispatch' }, { conclusion: 'failure' }, { conclusion: 'cancelled' }, { status: 'in_progress' }, { head_branch: 'feature' }, { head_sha: 'c'.repeat(40) }, { path: '.github/workflows/other.yml' }, { repository: { full_name: 'fork/repo' } }, { id: null }]) {
     assert.throws(() => releaseContext({ workflow_run: { ...trustedRun(), ...fields } }, expected));
   }
   for (const fields of [{ ref: 'refs/heads/feature' }, { eventName: 'pull_request' }, { repository: 'other/repo' }]) {
@@ -181,21 +182,22 @@ test('actual required-status Bash rejects every failed, cancelled or skipped req
   const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): { jobs: { required: { steps: { run: string }[] } } } };
   const workflow = yaml.load(await readFile('.github/workflows/ci.yml', 'utf8'));
   const command = workflow.jobs.required.steps[0].run;
-  const execute = (event: 'push' | 'pull_request', fields: Record<string, string> = {}) => {
+  const execute = (event: 'push' | 'pull_request' | 'schedule' | 'workflow_dispatch', fields: Record<string, string> = {}) => {
     const result = spawnSync(bash!, ['--noprofile', '--norc', '-eo', 'pipefail', '-c', command], {
-      env: { ...process.env, BASH_ENV: '', FAST: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
+      env: { ...process.env, BASH_ENV: '', FAST: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'pull_request' ? 'success' : 'skipped', GITHUB_EVENT_NAME: event, ...fields },
       encoding: 'utf8', timeout: 10000,
     });
     assert.equal(result.error, undefined); assert.equal(result.signal, null);
     return result.status;
   };
-  assert.equal(execute('push'), 0); assert.equal(execute('pull_request'), 0);
-  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
+  for (const event of ['push', 'pull_request', 'schedule', 'workflow_dispatch'] as const) assert.equal(execute(event), 0);
+  for (const event of ['push', 'pull_request', 'schedule', 'workflow_dispatch'] as const) for (const job of ['FAST', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
     assert.notEqual(execute(event, { [job]: state }), 0, `${event} ${job} ${state} must fail the required status`);
   }
   assert.notEqual(execute('pull_request', { DEPENDENCY: 'skipped' }), 0);
   assert.notEqual(execute('pull_request', { DEPENDENCY: 'failure' }), 0);
   assert.notEqual(execute('push', { DEPENDENCY: 'success' }), 0);
+  for (const event of ['schedule', 'workflow_dispatch'] as const) for (const state of ['success', 'failure', 'cancelled', '']) assert.notEqual(execute(event, { DEPENDENCY: state }), 0);
 });
 
 test('staging application environment uses supported Vercel preview consistently', () => {
@@ -394,7 +396,7 @@ test('release verify rejects expired Edge evidence or a modified admitted worker
 test('successful CI proof is restricted to this repository main push, exact SHA and canonical workflow', () => {
   const run = { id: 42, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'owner/repo' } };
   validateCiRun(run, { sha, repository: 'owner/repo', ciRunId: '42' });
-  for (const fields of [{ event: 'pull_request' }, { conclusion: 'failure' }, { head_sha: 'c'.repeat(40) }, { path: '.github/workflows/other.yml' }, { repository: { full_name: 'fork/repo' } }]) {
+  for (const fields of [{ event: 'pull_request' }, { event: 'schedule' }, { event: 'workflow_dispatch' }, { conclusion: 'failure' }, { head_sha: 'c'.repeat(40) }, { path: '.github/workflows/other.yml' }, { repository: { full_name: 'fork/repo' } }]) {
     assert.throws(() => validateCiRun({ ...run, ...fields }, { sha, repository: 'owner/repo', ciRunId: '42' }));
   }
 });
@@ -414,7 +416,7 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(ci.replace('timeout-minutes: 90', 'timeout-minutes: 30'), release).some(issue => issue.includes('budget')));
   assert.ok(validateWorkflows(ci.replace('path: .local/cicd-safe/', 'path: .local/'), release).some(issue => issue.includes('artifact')));
   assert.ok(validateWorkflows(ci, release.replace('cancel-in-progress: false', 'cancel-in-progress: true')).some(issue => issue.includes('release concurrency')));
-  assert.ok(validateWorkflows(ci, release.replace("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));
+  assert.ok(validateWorkflows(ci, release.replaceAll("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));
   const triggerYaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
   const privileged=triggerYaml.load(ci);privileged.on={pull_request_target:null};
   assert.ok(validateWorkflows(triggerYaml.dump(privileged), release).some(issue => issue.includes('Privileged')));
@@ -422,7 +424,7 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(ci, release.replace('name: ${{ needs.release-admission.outputs.environment }}', 'name: unprotected')).some(issue => issue.includes('environment')));
   assert.ok(validateWorkflows(ci, release.replace('branches: [main]', 'branches: [feature]')).some(issue => issue.includes('canonical main')));
   assert.ok(validateWorkflows(ci, release.replace('workflows: [Cuevo verification]', 'workflows: [Other workflow]')).some(issue => issue.includes('canonical main')));
-  assert.ok(validateWorkflows(ci, release.replace("github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.conclusion != 'success'")).some(issue => issue.includes('main')));
+  assert.ok(validateWorkflows(ci, release.replaceAll("github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.conclusion != 'success'")).some(issue => issue.includes('main')));
   assert.ok(validateWorkflows(ci, release.replace('id: context', 'id: unvalidated')).some(issue => issue.includes('context')));
   assert.ok(validateWorkflows(ci, release.replace('RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}', 'RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}')).some(issue => issue.includes('validated')));
   assert.ok(validateWorkflows(ci, release.replace('ref: ${{ needs.release-admission.outputs.sha }}', 'ref: main')).some(issue => issue.includes('checkout')));
@@ -441,17 +443,17 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   const inherited=yaml.load(release) as {jobs:{'web-release':{steps:Record<string,unknown>[];env?:Record<string,string>}}};inherited.jobs['web-release'].env={VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'};inherited.jobs['web-release'].steps.unshift({run:'node unreviewed-action.js'});assert.ok(validateWorkflows(ci,yaml.dump(inherited)).some(issue=>issue.includes('job-level')));
 });
 
-test('CI selects one PR run per branch change while preserving main-push release evidence and manual verification', async () => {
+test('CI adds one daily full regression while preserving single PR, main-push and manual verification', async () => {
   const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>};
   const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8'));
-  assert.deepEqual(workflow.on,{push:{branches:['main']},pull_request:null,workflow_dispatch:null});
+  assert.deepEqual(workflow.on,{push:{branches:['main']},pull_request:null,workflow_dispatch:null,schedule:[{cron:'17 0 * * *'}]});
 });
 
 test('workflow guard rejects duplicate branch-push CI, missing release/PR events and unsupported filtered events', async () => {
   const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
   const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
   for(const trigger of [
-    ['push','pull_request','workflow_dispatch'],
+    ['push','pull_request','workflow_dispatch','schedule'],
     {push:null,pull_request:null,workflow_dispatch:null},
     {push:{branches:['main','codex/**']},pull_request:null,workflow_dispatch:null},
     {push:{branches:['main'],tags:['*']},pull_request:null,workflow_dispatch:null},
@@ -462,11 +464,79 @@ test('workflow guard rejects duplicate branch-push CI, missing release/PR events
     {push:{branches:['main']},pull_request:null},
     {push:{branches:['main']},pull_request:{paths:['apps/web/**']},workflow_dispatch:null},
     {push:{branches:['main']},pull_request:{types:['opened']},workflow_dispatch:null},
-    {push:{branches:['main']},pull_request:null,workflow_dispatch:null,schedule:[{cron:'17 0 * * *'}]},
   ]) {
-    const altered=yaml.load(ci);altered.on=trigger;
+    const altered=yaml.load(ci);altered.on=Array.isArray(trigger)?trigger:{...trigger,schedule:[{cron:'17 0 * * *'}]};
     assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('without duplicate feature-branch pushes')),JSON.stringify(trigger));
   }
+});
+
+test('daily trigger contract refuses missing, malformed, altered or additional schedules', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
+  for (const schedule of [undefined,null,[],{},'17 0 * * *',[{cron:'0 0 * * *'}],[{cron:'17 3 * * *'}],[{cron:'17 0 * * 1'}],[{cron:'17 0 * * *',timezone:'Asia/Riyadh'}],[{cron:'17 0 * * *'},{cron:'17 0 * * *'}]]) {
+    const altered=yaml.load(ci),trigger=altered.on as Record<string,unknown>;
+    if(schedule===undefined)delete trigger.schedule;else trigger.schedule=schedule;
+    assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('daily')),JSON.stringify(schedule));
+  }
+});
+
+test('CI cancellation separates schedule/manual/main events while retaining per-PR coalescing', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
+  const group='cuevo-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}';
+  assert.deepEqual(yaml.load(ci).concurrency,{group,'cancel-in-progress':true});
+  for(const concurrency of [undefined,{group:'cuevo-ci-${{ github.event.pull_request.number || github.ref }}','cancel-in-progress':true},{group,'cancel-in-progress':false},{group,'cancel-in-progress':'true'},{group,'cancel-in-progress':true,queue:'max'}]) {
+    const altered=yaml.load(ci);altered.concurrency=concurrency;
+    assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('CI concurrency')));
+  }
+});
+
+test('CodeQL serializes complete same-ref uploads and gates without replacing pending schedule/main jobs', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
+  const group='cuevo-codeql-${{ github.ref }}';
+  assert.deepEqual(yaml.load(ci).jobs.codeql.concurrency,{group,'cancel-in-progress':false,queue:'max'});
+  for(const concurrency of [undefined,{group,'cancel-in-progress':false},{group,'cancel-in-progress':true,queue:'max'},{group,'cancel-in-progress':false,queue:'single'},{group:'cuevo-codeql-${{ github.event_name }}-${{ github.ref }}','cancel-in-progress':false,queue:'max'}]) {
+    const altered=yaml.load(ci);altered.jobs.codeql.concurrency=concurrency;
+    assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('CodeQL concurrency')));
+  }
+});
+
+test('scheduled full verification refuses job skips, bypassed core checks and external provider secrets', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
+  for(const owner of ['fast-checks','technical-mvp','codeql'])for(const field of ['if','continue-on-error']) {
+    const altered=yaml.load(ci);altered.jobs[owner][field]=field==='if'?"github.event_name != 'schedule'":true;
+    assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('unconditional')));
+  }
+  for(const [owner,command]of [['fast-checks','npm run lint && npm run typecheck && npm test'],['technical-mvp','npm run verify:technical'],['codeql','node --import tsx scripts/verification/codeql-alerts.ts']]) {
+    const altered=yaml.load(ci),step=(altered.jobs[owner].steps as Record<string,unknown>[]).find(step=>step.run===command)!;
+    step.if="github.event_name != 'schedule'";
+    assert.ok(validateWorkflows(yaml.dump(altered),release).length>0);
+  }
+  assert.equal(ci.includes('secrets.'),false);
+  assert.ok(validateWorkflows(ci+'\n# ${{ secrets.VERCEL_TOKEN }}\n',release).length===0,'Comments do not receive secrets');
+  const altered=yaml.load(ci);altered.jobs['technical-mvp'].env={VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'};
+  assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('external secrets')));
+});
+
+test('ineligible scheduled release follow-ons cannot enter or displace the official production queue', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{concurrency:{group:string};jobs:Record<string,{if:string}>};dump(value:unknown):string};
+  const workflow=yaml.load(release),group="cuevo-release-${{ github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success' && 'production') || (github.event_name == 'workflow_dispatch' && inputs.environment)) || format('ineligible-{0}', github.run_id) }}";
+  assert.equal(workflow.concurrency.group,group);
+  // The exact authored expression is a fixed JS-compatible subset of Actions operators.
+  const expression=group.slice('cuevo-release-${{ '.length,-' }}'.length);
+  const context=(event='push',fields:Record<string,unknown>={})=>({github:{ref:'refs/heads/main',event_name:'workflow_run',run_id:'43',event:{workflow_run:{...trustedRun(),event}},...fields},inputs:{},format:(_format:string,id:string)=>`ineligible-${id}`});
+  assert.equal(runInNewContext(expression,context(),{timeout:1000}),'production');
+  for(const event of ['schedule','pull_request','workflow_dispatch']) {
+    const value=context(event);assert.equal(runInNewContext(expression,value,{timeout:1000}),'ineligible-43');
+    for(const job of Object.values(workflow.jobs))assert.equal(runInNewContext(job.if,value,{timeout:1000}),false);
+  }
+  for(const fields of [{ref:'refs/heads/feature'},{event:{workflow_run:{...trustedRun(),conclusion:'failure'}}},{event:{workflow_run:{...trustedRun(),head_branch:'feature'}}}])assert.equal(runInNewContext(expression,context('push',fields),{timeout:1000}),'ineligible-43');
+  for(const environment of ['staging','production'])assert.equal(runInNewContext(expression,{...context(),github:{...context().github,event_name:'workflow_dispatch'},inputs:{environment}},{timeout:1000}),environment);
+  const altered=yaml.load(release);altered.concurrency.group="cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}";
+  assert.ok(validateWorkflows(ci,yaml.dump(altered)).some(issue=>issue.includes('ineligible')));
 });
 test('web and API automatic Git builds cannot bypass reviewed Actions deployment', async () => {
   for (const owner of ['web', 'api']) {

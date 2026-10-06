@@ -4,10 +4,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '17 0 * * *' # 03:17 Asia/Riyadh; GitHub schedules in UTC.
 permissions:
   contents: read
 concurrency:
-  group: cuevo-ci-${{ github.event.pull_request.number || github.ref }}
+  group: cuevo-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -74,6 +76,10 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with: { fail-on-severity: moderate, comment-summary-in-pr: never }
   codeql:
+    concurrency:
+      group: cuevo-codeql-${{ github.ref }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions: { contents: read, security-events: write }
@@ -94,6 +100,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CUEVO_CODEQL_SARIF_ID: ${{ steps.codeql-analyze.outputs.sarif-id }}
+          CUEVO_CI_SCHEDULE: ${{ github.event.schedule }}
         run: node --import tsx scripts/verification/codeql-alerts.ts
   secret-scan:
     runs-on: ubuntu-latest

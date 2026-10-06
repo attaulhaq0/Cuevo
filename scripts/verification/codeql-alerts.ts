@@ -30,9 +30,12 @@ export function readCodeqlGateContext(env: Record<string, string | undefined>, c
   validInput(input);
   if (env.CI !== 'true' || env.GITHUB_ACTIONS !== 'true' || env.GITHUB_JOB !== 'codeql'
     || env.GITHUB_SERVER_URL !== 'https://github.com' || env.GITHUB_API_URL !== 'https://api.github.com'
-    || !['push', 'pull_request', 'workflow_dispatch'].includes(env.GITHUB_EVENT_NAME ?? '')
+    || !['push', 'pull_request', 'workflow_dispatch', 'schedule'].includes(env.GITHUB_EVENT_NAME ?? '')
     || (env.GITHUB_EVENT_NAME === 'pull_request') !== input.ref.startsWith('refs/pull/')
     || env.GITHUB_WORKFLOW_REF !== `${input.repository}/.github/workflows/ci.yml@${input.ref}`) throw unavailable();
+  if (env.GITHUB_EVENT_NAME === 'schedule'
+    ? input.ref !== 'refs/heads/main' || env.CUEVO_CI_SCHEDULE !== '17 0 * * *'
+    : env.CUEVO_CI_SCHEDULE !== undefined && env.CUEVO_CI_SCHEDULE !== '') throw unavailable();
   return input;
 }
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {

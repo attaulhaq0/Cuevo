@@ -198,3 +198,18 @@ test('Actions context binds same-job SARIF output and exact workflow path, merge
     assert.throws(() => readCodeqlGateContext({ ...env, ...change }, sha));
   }
 });
+
+test('scheduled CodeQL admits only the exact daily cron on main with same-job source context', () => {
+  const scheduled={...input,ref:'refs/heads/main'};
+  const env={CI:'true',GITHUB_ACTIONS:'true',GITHUB_SERVER_URL:'https://github.com',GITHUB_API_URL:'https://api.github.com',
+    GITHUB_REPOSITORY:input.repository,GITHUB_REF:scheduled.ref,GITHUB_SHA:sha,GITHUB_EVENT_NAME:'schedule',
+    GITHUB_WORKFLOW_REF:'example/cuevo/.github/workflows/ci.yml@refs/heads/main',GITHUB_JOB:'codeql',
+    CUEVO_CODEQL_SARIF_ID:sarifId,GH_TOKEN:input.token,CUEVO_CI_SCHEDULE:'17 0 * * *'};
+  assert.deepEqual(readCodeqlGateContext(env,sha),scheduled);
+  for(const fields of [{CUEVO_CI_SCHEDULE:undefined},{CUEVO_CI_SCHEDULE:''},{CUEVO_CI_SCHEDULE:'17 3 * * *'},{CUEVO_CI_SCHEDULE:'17 0 * * *\n'},
+    {CUEVO_CI_SCHEDULE:'{"schedule":"17 0 * * *"}'},{GITHUB_REF:'refs/heads/feature',GITHUB_WORKFLOW_REF:'example/cuevo/.github/workflows/ci.yml@refs/heads/feature'},
+    {GITHUB_REF:input.ref,GITHUB_WORKFLOW_REF:'example/cuevo/.github/workflows/ci.yml@refs/pull/1/merge'},
+    {GITHUB_WORKFLOW_REF:'example/cuevo/.github/workflows/other.yml@refs/heads/main'},{GITHUB_JOB:'other'},{GITHUB_REPOSITORY:'other/cuevo'},
+    {GITHUB_SHA:headSha},{GITHUB_EVENT_NAME:'workflow_dispatch'}])assert.throws(()=>readCodeqlGateContext({...env,...fields},sha));
+  for(const event of ['push','workflow_dispatch'])assert.deepEqual(readCodeqlGateContext({...env,GITHUB_EVENT_NAME:event,CUEVO_CI_SCHEDULE:''},sha),scheduled);
+});

@@ -38,7 +38,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}
+  group: cuevo-release-${{ github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success' && 'production') || (github.event_name == 'workflow_dispatch' && inputs.environment)) || format('ineligible-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   release-admission:
