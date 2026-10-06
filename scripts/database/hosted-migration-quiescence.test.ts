@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { registerHooks } from 'node:module';
+import { pathToFileURL } from 'node:url';
+
+const hash=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');
+const ref='mqxdjvsyckzocokuikmx',host=`db.${ref}.supabase.co`;
+type Captured={sql:string;values:unknown[]};
+const state={configs:[]as Record<string,unknown>[],clients:[]as FakeClient[],queries:[]as Captured[],authorized:true,history:[]as Record<string,unknown>[],locked:true,badIdentity:false,quiescent:true as boolean|null,values:[] as (boolean|null)[],malformed:false,throwRead:false,late:false,loseTlsOnRead:false,loseTlsOnUnlock:false};
+class FakeClient extends EventEmitter{
+ connection={stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('peer-certificate'),subjectaltname:`DNS:${host}`})}};
+ constructor(config:Record<string,unknown>){super();state.configs.push(config);state.clients.push(this);}
+ async connect(){this.connection.stream.authorized=state.authorized;}
+ async query(query:string|{text:string},values:unknown[]=[]){const sql=typeof query==='string'?query:query.text;state.queries.push({sql,values});if(sql.includes('CUEVO_NATIVE_QUIESCENCE')){if(state.loseTlsOnRead)this.connection.stream.authorized=false;if(state.throwRead)throw Error('read unavailable');if(state.late)await new Promise(done=>setTimeout(done,5050));if(state.malformed)return{rows:[]};return{rows:[{quiescent:state.values.length?state.values.shift():state.quiescent}]};}if(sql.includes('pg_try_advisory_lock'))return{rows:[{locked:state.locked}]};if(sql.includes('pg_advisory_unlock')){if(state.loseTlsOnUnlock)this.connection.stream.authorized=false;return{rows:[{released:true}]};}if(sql.includes('session_user'))return{rows:[{operator:state.badIdentity?'cuevo_api':'postgres',database:'postgres',ssl:true,serverVersion:170011}]};if(sql.includes('to_regclass'))return{rows:[{historyPresent:state.history.length>0}]};if(sql.includes('schema_migrations'))return{rows:state.history};return{rows:[{historyPresent:false}]};}
+ async end(){this.emit('end');}
+}
+Object.assign(globalThis,{nativeDatabaseTestClient:FakeClient});
+registerHooks({load(url,context,next){if(/\/node_modules\/pg\/(?:lib\/index\.js|esm\/index\.mjs)$/.test(url.replaceAll('\\','/')))return{format:'module',shortCircuit:true,source:'export const Client=globalThis.nativeDatabaseTestClient;export default{Client};'};return next(url,context);}});
+async function api(){const p=resolve(import.meta.dirname,'hosted-migration-database.ts');let m:Record<string,unknown>={};try{m=await import(pathToFileURL(p).href);}catch(e){if((e as NodeJS.ErrnoException).code!=='ERR_MODULE_NOT_FOUND')throw e;}assert.equal(typeof m.createHostedMigrationDatabase,'function');return m as typeof import('./hosted-migration-database');}
+async function fixture(run:(input:{repoRoot:string;projectRef:string;databaseUrl:string;certificate:{path:string;sha256:string};password:string})=>Promise<void>){
+ const root=await mkdtemp(join(tmpdir(),'cuevo-migration-database-'));try{await mkdir(join(root,'.local/hosted-release'),{recursive:true});await writeFile(join(root,'.gitignore'),'.local/\n');execFileSync('git',['init','--quiet',root],{stdio:'ignore',windowsHide:true});const path=join(root,'.local/hosted-release/ca.pem');await writeFile(path,'-----BEGIN CERTIFICATE-----\nprivate fixture certificate\n-----END CERTIFICATE-----\n',{mode:0o600});Object.assign(state,{configs:[],clients:[],queries:[],authorized:true,history:[],locked:true,badIdentity:false,quiescent:true,values:[],malformed:false,throwRead:false,late:false,loseTlsOnRead:false,loseTlsOnUnlock:false});await run({repoRoot:root,projectRef:ref,databaseUrl:`postgresql://postgres@${host}:5432/postgres?sslmode=verify-full`,certificate:{path,sha256:hash(await readFile(path))},password:'private-db-fixture-password'});}finally{await rm(root,{recursive:true,force:true});}}
+
+test('a remaining active operator session cannot produce a confirmed migration lock cleanup',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{state.quiescent=false;const db=await createHostedMigrationDatabase(input),start=Date.now();const receipt=await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{});assert.deepEqual(receipt,{kind:'RELEASE_UNCONFIRMED'});assert.ok(Date.now()-start<10000);assert.equal(state.queries.some(q=>q.sql.includes('pg_advisory_unlock')),false);assert.equal(db.signal.aborted,true);});});
+
+test('observed quiescence after earlier active reads permits explicit release without cancelling a session',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{state.values=[false,false,true];const db=await createHostedMigrationDatabase(input);const receipt=await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{});assert.deepEqual(receipt,{kind:'RELEASED'});assert.equal(state.queries.filter(q=>q.sql.includes('CUEVO_NATIVE_QUIESCENCE')).length,3);assert.equal(state.queries.some(q=>/pg_cancel_backend|pg_terminate_backend/.test(q.sql)),false);});});
+test('unknown malformed or failed cleanup observations remain unconfirmed rather than inventing quiescence',async()=>{const{createHostedMigrationDatabase}=await api();for(const mode of['null','malformed','failed'])await fixture(async input=>{state.quiescent=mode==='null'?null:true;state.malformed=mode==='malformed';state.throwRead=mode==='failed';const db=await createHostedMigrationDatabase(input);assert.deepEqual(await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{}),{kind:'RELEASE_UNCONFIRMED'});assert.equal(state.queries.some(q=>q.sql.includes('pg_advisory_unlock')),false);});});
+
+test('callback failure is not relabeled as a successful or quiescence cleanup result',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const db=await createHostedMigrationDatabase(input);await assert.rejects(db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{throw Error('Original callback failed');}),/requires review; contents withheld/);assert.equal(state.queries.some(q=>q.sql.includes('CUEVO_NATIVE_QUIESCENCE')),false);assert.equal(state.queries.some(q=>q.sql.includes('pg_advisory_unlock')),false);});});
+
+test('lost TLS authority during cleanup refuses release without changing the original callback',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const db=await createHostedMigrationDatabase(input);const receipt=await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{state.clients[0].connection.stream.authorized=false;});assert.deepEqual(receipt,{kind:'RELEASE_UNCONFIRMED'});assert.equal(state.queries.some(q=>q.sql.includes('pg_advisory_unlock')),false);});});
+
+test('a late positive cleanup observation cannot confirm release beyond its polling deadline',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{state.late=true;const db=await createHostedMigrationDatabase(input);assert.deepEqual(await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{}),{kind:'RELEASE_UNCONFIRMED'});assert.equal(state.queries.some(q=>q.sql.includes('pg_advisory_unlock')),false);});});
+
+test('TLS authority changed during the successful cleanup read cannot authorize explicit unlock',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{state.loseTlsOnRead=true;const db=await createHostedMigrationDatabase(input);assert.deepEqual(await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{}),{kind:'RELEASE_UNCONFIRMED'});assert.equal(state.queries.some(q=>q.sql.includes('pg_advisory_unlock')),false);});});
+
+test('TLS loss in explicit unlock readback cannot confirm a release receipt',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{state.loseTlsOnUnlock=true;const db=await createHostedMigrationDatabase(input);assert.deepEqual(await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{}),{kind:'RELEASE_UNCONFIRMED'});assert.equal(state.queries.filter(q=>q.sql.includes('pg_advisory_unlock')).length,1);});});

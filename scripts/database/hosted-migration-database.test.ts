@@ -17,7 +17,7 @@ class FakeClient extends EventEmitter{
  connection={stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('peer-certificate'),subjectaltname:`DNS:${host}`})}};
  constructor(config:Record<string,unknown>){super();state.configs.push(config);state.clients.push(this);}
  async connect(){this.connection.stream.authorized=state.authorized;}
- async query(sql:string,values:unknown[]=[]){state.queries.push({sql,values});if(sql.includes('pg_try_advisory_lock'))return{rows:[{locked:state.locked}]};if(sql.includes('pg_advisory_unlock'))return{rows:[{released:true}]};if(sql.includes('session_user'))return{rows:[{operator:state.badIdentity?'cuevo_api':'postgres',database:'postgres',ssl:true,serverVersion:170011}]};if(sql.includes('to_regclass'))return{rows:[{historyPresent:state.history.length>0}]};if(sql.includes('schema_migrations'))return{rows:state.history};return{rows:[{historyPresent:false}]};}
+ async query(query:string|{text:string},values:unknown[]=[]){const sql=typeof query==='string'?query:query.text;state.queries.push({sql,values});if(sql.includes('CUEVO_NATIVE_QUIESCENCE'))return{rows:[{quiescent:true}]};if(sql.includes('pg_try_advisory_lock'))return{rows:[{locked:state.locked}]};if(sql.includes('pg_advisory_unlock'))return{rows:[{released:true}]};if(sql.includes('session_user'))return{rows:[{operator:state.badIdentity?'cuevo_api':'postgres',database:'postgres',ssl:true,serverVersion:170011}]};if(sql.includes('to_regclass'))return{rows:[{historyPresent:state.history.length>0}]};if(sql.includes('schema_migrations'))return{rows:state.history};return{rows:[{historyPresent:false}]};}
  async end(){this.emit('end');}
 }
 Object.assign(globalThis,{nativeDatabaseTestClient:FakeClient});

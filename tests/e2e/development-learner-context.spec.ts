@@ -1,5 +1,5 @@
 import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
-import { test, expect, type APIRequestContext, type Locator, type Response } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Locator, type Response, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
@@ -8,6 +8,7 @@ import { withBrowserRestoration } from './browser-restoration';
 import { schoolPolicyInputSchema } from '@cuevo/contracts';
 import type { Page } from '@playwright/test';
 import { z } from 'zod';
+import { createServer } from 'node:http';
 
 function schoolLearnerPeriodTitle(startsAt: string, endsAt: string) {
   return `School learner context · ${startsAt.slice(0, 16).replace('T', ' ')} UTC – ${endsAt.slice(0, 16).replace('T', ' ')} UTC`;
@@ -43,10 +44,19 @@ test('adapter: learner-context period title uses its exact recorded date window 
 });
 
 async function refreshCurrentDevelopmentSources(page:Page){
- const controller=new AbortController();const parse=async(response:Response)=>{expect(response.ok()).toBe(true);expect(await response.finished()).toBeNull();return response;};
- const observe=(path:string)=>page.waitForEvent('response',{signal:controller.signal,predicate:response=>{const url=new URL(response.url());return url.origin==='http://localhost:4000'&&url.pathname===path&&!url.searchParams.has('cursor')&&response.request().method()==='GET';}}).then(parse).then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
- const periods=observe('/v1/development/periods'),people=observe('/v1/people');
- try{const [periodSource,peopleSource]=await Promise.all([periods,people,page.locator('.development-workspace').getByRole('button',{name:'Refresh development',exact:true}).click()]);if(!periodSource.ok)throw periodSource.error;if(!peopleSource.ok)throw peopleSource.error;return{periods:periodSource.value,people:peopleSource.value};}finally{controller.abort();await Promise.all([periods,people]);}
+ const controller=new AbortController(),paths=['/v1/development/periods','/v1/people'],owned=new Map<Request,string>(),responses=new Map<Request,Response>(),requestedPaths=new Set<string>();
+ const pending=new Map<string,{resolve:(value:Response)=>void;reject:(error:Error)=>void}>();
+ const observe=(path:string)=>new Promise<Response>((resolve,reject)=>pending.set(path,{resolve,reject})).then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
+ const periods=observe(paths[0]),people=observe(paths[1]);
+ const reject=(error:Error)=>{for(const observer of pending.values())observer.reject(error);pending.clear();};
+ const fail=(error:Error)=>{reject(error);controller.abort();};
+ const requested=(request:Request)=>{const url=new URL(request.url());if(url.origin==='http://localhost:4000'&&paths.includes(url.pathname)&&!url.searchParams.has('cursor')&&request.method()==='GET'&&pending.has(url.pathname)&&!requestedPaths.has(url.pathname)){owned.set(request,url.pathname);requestedPaths.add(url.pathname);}};
+ const response=(value:Response)=>{if(owned.has(value.request()))responses.set(value.request(),value);};
+ const finished=(request:Request)=>{const path=owned.get(request);if(!path||!pending.has(path))return;const current=responses.get(request);if(!current||!current.ok()){fail(Error('The refreshed Development source did not complete successfully.'));return;}pending.get(path)!.resolve(current);pending.delete(path);};
+ const failed=(request:Request)=>{const path=owned.get(request);if(path&&pending.has(path))fail(Error('The refreshed Development source request failed or was cancelled.'));};
+ const cancelled=()=>reject(Error('Development source observation was cancelled.'));
+ page.on('request',requested);page.on('response',response);page.on('requestfinished',finished);page.on('requestfailed',failed);page.on('close',cancelled);controller.signal.addEventListener('abort',cancelled,{once:true});
+ try{await page.locator('.development-workspace').getByRole('button',{name:'Refresh development',exact:true}).click();const [periodSource,peopleSource]=await Promise.all([periods,people]);if(!periodSource.ok)throw periodSource.error;if(!peopleSource.ok)throw peopleSource.error;return{periods:periodSource.value,people:peopleSource.value};}finally{controller.abort();page.off('request',requested);page.off('response',response);page.off('requestfinished',finished);page.off('requestfailed',failed);page.off('close',cancelled);await Promise.all([periods,people]);}
 }
 
 async function withSchoolRecognitionApproval(request: Pick<APIRequestContext, 'get' | 'post'>, admin: { email: string; password: string }, publicKey: string, verify: () => Promise<void>) {
@@ -305,4 +315,62 @@ test('adapter: a preserved Development route uses explicit current refresh after
 
 test('adapter: failed Development refresh preserves its click error and settles both current source observers',async({page})=>{
  await page.setContent('<section class="development-workspace"></section>');page.setDefaultTimeout(300);await expect(refreshCurrentDevelopmentSources(page)).rejects.toThrow();
+});
+
+test('adapter: an aborted fresh Development body rejects its own request without waiting for finished forever',async({page})=>{
+ let headers=0;
+ const server=createServer((request,response)=>{response.setHeader('Access-Control-Allow-Origin','*');response.setHeader('Content-Type','application/json');response.writeHead(200);response.write('{"items":');headers++;});
+ await new Promise<void>(done=>server.listen(0,'127.0.0.1',done));const port=(server.address()as{port:number}).port;
+ try{
+  await page.route('http://localhost:4000/**',route=>route.continue({url:route.request().url().replace('localhost:4000','127.0.0.1:'+port)}));
+  await page.setContent('<section class="development-workspace"><button>Refresh development</button></section><script>globalThis.sourceAbort=new AbortController();document.querySelector("button").onclick=()=>{void Promise.all([fetch("http://localhost:4000/v1/development/periods?limit=100",{signal:sourceAbort.signal}),fetch("http://localhost:4000/v1/people?limit=100",{signal:sourceAbort.signal})]).catch(()=>{});};</script>');
+  const read=refreshCurrentDevelopmentSources(page).then(()=>({ok:true}),()=>({ok:false}));
+  await expect.poll(()=>headers).toBe(2);await page.evaluate(()=>(globalThis as unknown as{sourceAbort:AbortController}).sourceAbort.abort());
+  await expect.poll(async()=>Promise.race([read,Promise.resolve({pending:true})])).not.toEqual({pending:true});expect(await read).toEqual({ok:false});
+ }finally{server.closeAllConnections();await new Promise<void>(done=>server.close(()=>done()));await page.unrouteAll({behavior:'ignoreErrors'});}
+});
+
+test('adapter: one aborted Development body rejects promptly while its sibling remains unfinished and removes its listeners',async({page})=>{
+ let headers=0;
+ const server=createServer((request,response)=>{response.setHeader('Access-Control-Allow-Origin','*');response.setHeader('Content-Type','application/json');response.writeHead(200);response.write('{"items":');headers++;});
+ await new Promise<void>(done=>server.listen(0,'127.0.0.1',done));const port=(server.address()as{port:number}).port;
+ try{
+  await page.route('http://localhost:4000/**',route=>route.continue({url:route.request().url().replace('localhost:4000','127.0.0.1:'+port)}));
+  await page.setContent('<section class="development-workspace"><button>Refresh development</button></section><script>globalThis.sourceAbort=new AbortController();document.querySelector("button").onclick=()=>{void fetch("http://localhost:4000/v1/development/periods?limit=100",{signal:sourceAbort.signal}).catch(()=>{});void fetch("http://localhost:4000/v1/people?limit=100").catch(()=>{});};</script>');
+  const events=['request','response','requestfinished','requestfailed','close'];const listenerCounts=()=>events.map(event=>(page as Page&{listenerCount(event:string):number}).listenerCount(event));const baseline=listenerCounts();
+  const read=refreshCurrentDevelopmentSources(page).then(()=>({ok:true as const}),error=>({ok:false as const,error}));
+  await expect.poll(()=>headers).toBe(2);await page.evaluate(()=>(globalThis as unknown as{sourceAbort:AbortController}).sourceAbort.abort());
+  await expect.poll(async()=>Promise.race([read,Promise.resolve({pending:true})])).not.toEqual({pending:true});
+  const result=await read;expect(result.ok).toBe(false);if(!result.ok)expect(result.error.message).toBe('The refreshed Development source request failed or was cancelled.');expect(listenerCounts()).toEqual(baseline);
+ }finally{server.closeAllConnections();await new Promise<void>(done=>server.close(()=>done()));await page.unrouteAll({behavior:'ignoreErrors'});}
+});
+
+test('adapter: a later same-path Development request cannot replace the first owned refresh request',async({page})=>{
+ const current:import('@playwright/test').Route[]=[];
+ await page.route('http://localhost:4000/**',route=>{current.push(route);});
+ await page.setContent('<section class="development-workspace"><button>Refresh development</button></section><script>document.querySelector("button").onclick=()=>{void fetch("http://localhost:4000/v1/development/periods?limit=100").catch(()=>{});void fetch("http://localhost:4000/v1/people?limit=100").catch(()=>{});};</script>');
+ try{
+  let settled=false;const read=refreshCurrentDevelopmentSources(page).then(value=>{settled=true;return value;});
+  await expect.poll(()=>current.length).toBe(2);
+  await page.evaluate(()=>{void fetch('http://localhost:4000/v1/development/periods?limit=100').catch(()=>{});});await expect.poll(()=>current.length).toBe(3);
+  await current[2].fulfill({contentType:'application/json',body:JSON.stringify({items:[],nextCursor:null,later:true})});
+  await current.find(route=>new URL(route.request().url()).pathname==='/v1/people')!.fulfill({contentType:'application/json',body:JSON.stringify({items:[],nextCursor:null,current:true})});
+  await page.evaluate(()=>new Promise<void>(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done()))));expect(settled).toBe(false);
+  await current.find(route=>new URL(route.request().url()).pathname==='/v1/development/periods')!.fulfill({contentType:'application/json',body:JSON.stringify({items:[],nextCursor:null,current:true})});
+  const source=await read;expect(await source.periods.json()).toMatchObject({current:true});expect(await source.people.json()).toMatchObject({current:true});
+ }finally{await page.unrouteAll({behavior:'ignoreErrors'});}
+});
+
+test('adapter: late preceding responses cannot substitute for the explicit refreshed Development requests',async({page})=>{
+ const preceding:import('@playwright/test').Route[]=[];const current:import('@playwright/test').Route[]=[];let phase='old';
+ await page.route('http://localhost:4000/**',route=>{(phase==='old'?preceding:current).push(route);});
+ await page.setContent('<section class="development-workspace"><button>Refresh development</button></section><script>function reads(){void Promise.all([fetch("http://localhost:4000/v1/development/periods?limit=100"),fetch("http://localhost:4000/v1/people?limit=100")]).catch(()=>{})}document.querySelector("button").onclick=reads;reads();</script>');
+ await expect.poll(()=>preceding.length).toBe(2);phase='current';let settled=false;
+ const read=refreshCurrentDevelopmentSources(page).then(value=>{settled=true;return value;});
+ await expect.poll(()=>current.length).toBe(2);
+ for(const route of preceding)await route.fulfill({contentType:'application/json',body:JSON.stringify({items:[],nextCursor:null,preceding:true})});
+ await page.evaluate(()=>new Promise<void>(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done()))));expect(settled).toBe(false);
+ for(const route of current)await route.fulfill({contentType:'application/json',body:JSON.stringify({items:[],nextCursor:null,current:true})});
+ const source=await read;expect(await source.periods.json()).toMatchObject({current:true});expect(await source.people.json()).toMatchObject({current:true});
+ await page.unrouteAll({behavior:'ignoreErrors'});
 });

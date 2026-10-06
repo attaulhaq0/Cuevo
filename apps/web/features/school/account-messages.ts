@@ -17,6 +17,7 @@ export const schoolAccountsEn = {
  member:'Current member',recoverApprove:'Approve account recovery',recoverConfirm:'I reviewed this member identity and approve recovery',
  recoverNote:'Review the current member identity before approval. Recovery changes a password and does not restore suspended or revoked access.',
  loadingMembers:'Loading members…',membersIncomplete:'Load current members and verify their context before approval.',membersReview:'Some member identities require school-record review.',
+ recoveryMembersEmpty:'No active school members are available for recovery.',
  accountRecovery:'Account recovery',
 };
 export const schoolAccountsAr = {
@@ -37,5 +38,6 @@ export const schoolAccountsAr = {
  member:'العضو الحالي',recoverApprove:'الموافقة على استعادة الحساب',recoverConfirm:'راجعت هوية هذا العضو وأوافق على الاستعادة',
  recoverNote:'راجع هوية العضو الحالي قبل الموافقة. تُغيّر الاستعادة كلمة المرور ولا تعيد صلاحيات موقوفة أو ملغاة.',
  loadingMembers:'جارٍ تحميل الأعضاء…',membersIncomplete:'حمّل جميع الأعضاء وتحقق من سياقهم قبل الموافقة.',membersReview:'تحتاج هوية بعض الأعضاء إلى مراجعة سجلات المدرسة.',
+ recoveryMembersEmpty:'لا يتاح أعضاء مدرسة نشطون لاستعادة الحساب.',
  accountRecovery:'استعادة الحساب',
 };

@@ -84,3 +84,16 @@ test('enabled directory refusal stays local and no previous Home conversation ca
   const html = render({ retainedThreads, directoryState: { ...base, error: new LearningApiError('denied') } });
   assert.match(html, /role="alert"/); assert.doesNotMatch(html, /Discuss the explanation/); assert.match(html, /My checked explanation/);
 });
+
+test('Parent Home incomplete conversations use the shared unknown state and retain source continuation without calling absence empty', () => {
+  for (const locale of ['en', 'ar'] as const) {
+    const html = render({ locale, directoryState: { ...base, data: [], nextCursor: 'remaining-conversations' } });
+    const continuation = html.slice(html.indexOf('parent-trail__source-continuation'));
+    assert.match(continuation, /data-state="unknown"/);
+    assert.match(continuation, /data-page-cursor="remaining-conversations"/);
+    assert.match(continuation, locale === 'en' ? /More current records remain/ : /لا تزال هناك سجلات حالية أخرى/);
+    assert.doesNotMatch(continuation, /data-state="empty"/);
+    assert.doesNotMatch(html, /Discuss the explanation/);
+    assert.match(html, /My checked explanation/);
+  }
+});
