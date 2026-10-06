@@ -11,14 +11,15 @@ const learner = '10000000-0000-4000-8000-000000000001', course = '30000000-0000-
 const profile = { id: learner, displayName: 'School learner', schoolName: 'School', enrollments: [], courses: [{ id: course, title: 'Checking course', classId: course, className: 'Year 1 Cedar', subjectName: 'Mathematics' }] };
 const support = { id: 'support', learnerId: learner, learnerName: 'School learner', courseId: course, courseTitle: 'Checking course', assessmentId: null, assessmentTitle: null, title: 'Checking guide', instructions: 'Review one school step.', effectiveFrom: '2026-10-01', effectiveTo: '2026-10-31', revision: 1, state: 'ACTIVE', studentVisible: true, parentVisible: true };
 const fixture = { locale: 'en', role: 'student', rows: [] as Record<string, unknown>[], profileCurrent: true, page: { loaded: true, loading: false, loadingMore: false, nextCursor: null as string | null, error: null as LearningApiError | null, moreError: null as LearningApiError | null } };
-Object.assign(globalThis, { React, supportStateFixture: fixture });
+Object.assign(globalThis, { React, supportStateFixture: fixture, supportStateProfile: profile, supportStateLearner: learner, supportStateCourse: course });
+let generatedFixtureSource = '';
 registerHooks({ load(url, context, next) {
   const path = url.replaceAll('\\', '/');
-  if (path.endsWith('/shared/session/providers.tsx')) return { format: 'module', shortCircuit: true, source: `export function useApp(){const f=globalThis.supportStateFixture;return {locale:f.locale,membership:{schoolId:'${learner}',userId:'${learner}',role:f.role},apiUrl:'',accessToken:'synthetic',accessGeneration:1,online:true,status:'ready'}}` };
-  if (path.endsWith('/shared/hooks/use-api.ts')) return { format: 'module', shortCircuit: true, source: `export function useApiQuery(path,parse){const f=globalThis.supportStateFixture;const data=parse(${JSON.stringify(profile)});return {data:f.profileCurrent?data:{...data,scope:'previous child'},loading:false,error:null}}export function useApi(){return {t:{loadMore:'Load more',loadingMore:'Loading more',errorDenied:'Access denied',errorUnavailable:'Service unavailable'}}}` };
+  if (path.endsWith('/shared/session/providers.tsx')) return { format: 'module', shortCircuit: true, source: `export function useApp(){const f=globalThis.supportStateFixture;return {locale:f.locale,membership:{schoolId:globalThis.supportStateLearner,userId:globalThis.supportStateLearner,role:f.role},apiUrl:'',accessToken:'synthetic',accessGeneration:1,online:true,status:"ready"}}` };
+  if (path.endsWith('/shared/hooks/use-api.ts')) return { format: 'module', shortCircuit: true, source: generatedFixtureSource = `export function useApiQuery(path,parse){const f=globalThis.supportStateFixture;const data=parse(globalThis.supportStateProfile);return {data:f.profileCurrent?data:{...data,scope:'previous child'},loading:false,error:null}}export function useApi(){return {t:{loadMore:'Load more',loadingMore:'Loading more',errorDenied:'Access denied',errorUnavailable:"Service unavailable"}}}` };
   if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: 'export function usePaginatedLearningQuery(path,parse){const f=globalThis.supportStateFixture;return {...f.page,data:path?f.rows.map(parse):[],loadMore(){}}}' };
   // Hold only the explicit chosen course; the real profile/course match and every state remain unchanged.
-  if (path.endsWith('/school/components/parent-learning-support.tsx')) return { format: 'module', shortCircuit: true, source: transformSync(readFileSync(new URL(url), 'utf8').replace("useState('')", `useState('${course}')`), { loader: 'tsx', format: 'esm', jsx: 'automatic' }).code };
+  if (path.endsWith('/school/components/parent-learning-support.tsx')) return { format: 'module', shortCircuit: true, source: transformSync(readFileSync(new URL(url), 'utf8').replace("useState('')", 'useState(globalThis.supportStateCourse)'), { loader: 'tsx', format: 'esm', jsx: 'automatic' }).code };
   return next(url, context);
 } });
 const { TaskLearningSupport } = await import('../components/task-support.tsx');
@@ -71,3 +72,7 @@ test('a previous child profile cannot expose support and current parent-visible 
   reset('en', 'parent'); fixture.rows = [support]; assert.match(parent(), /Review one school step/);
   fixture.profileCurrent = false; const html = parent(); assert.doesNotMatch(html, /Review one school step|Checking guide/); assert.match(html, /role="alert"/);
 });
+
+test('generated fixture modules keep learner profiles as data rather than embedded JavaScript', () => { assert.doesNotMatch(generatedFixtureSource, /School learner|Checking course/); });
+
+test('hostile course titles remain escaped profile data and never execute during rendering', () => { reset('en','parent'); const original=profile.courses[0].title; (globalThis as unknown as {supportFixtureExecuted:number}).supportFixtureExecuted=0; try { profile.courses[0].title='</script><script>globalThis.supportFixtureExecuted=1</script>\u2028\u2029'; const html=parent(); assert.ok(html.includes('&lt;/script&gt;&lt;script&gt;')); assert.doesNotMatch(html,/<script>/); assert.equal((globalThis as unknown as {supportFixtureExecuted:number}).supportFixtureExecuted,0); assert.doesNotMatch(generatedFixtureSource,/supportFixtureExecuted/); } finally { profile.courses[0].title=original; } });
