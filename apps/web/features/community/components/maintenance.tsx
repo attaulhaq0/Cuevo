@@ -24,7 +24,13 @@ export function GroupLifecycle({room,roomId,sourceScope,identityScope,loading=fa
  if(!retained)retryOwner.current=null;
  const retrySafe=['admin','teacher'].includes(membership?.role??'')&&!!retained&&retryOwner.current?.key===retained.key&&retryOwner.current.identityScope===identityScope,sameIntent=!!admitted&&reviewIntent.current?.actorScope===actorScope&&reviewIntent.current.roomId===roomId&&reviewIntent.current.basis===sourceBasis;
  const open=!!current&&!!reviewIntent.current&&(openKey===current.key||sameIntent);
- useEffect(()=>{if(!loading&&(!current||previous.current?.key!==current.key)){if(!sameIntent){formDrafts.remove(workingSlot);setOpenKey(null);reviewIntent.current=null;}else setOpenKey(current?.key??null);}previous.current=current;},[current?.key,loading,sameIntent,formDrafts,workingSlot]);
+ useEffect(()=>{
+  // A visible click can record intent after this render and before its passive
+  // effect. Recheck the latest ref against this source before clearing consent.
+  const latestIntent=reviewIntent.current;
+  const stillCurrent=!!admitted&&latestIntent?.actorScope===actorScope&&latestIntent.roomId===roomId&&latestIntent.basis===sourceBasis;
+  if(!loading&&(!current||previous.current?.key!==current.key)){if(!stillCurrent){formDrafts.remove(workingSlot);setOpenKey(null);reviewIntent.current=null;}else setOpenKey(current?.key??null);}previous.current=current;
+ },[current?.key,loading,sameIntent,admitted,actorScope,roomId,sourceBasis,formDrafts,workingSlot]);
  if(!current&&!retained)return null;
  const saved=()=>{setOpenKey(null);reviewIntent.current=null;onChanged();};
  const retry=retrySafe&&!open?<CommandForm title={t.group} path={path} fields={[]} body={()=>{throw new Error('Current group review required');}} validateReceipt={(receipt,command)=>{confirmCommunityReceipt(receipt,command);}} onSaved={saved}/>:null;

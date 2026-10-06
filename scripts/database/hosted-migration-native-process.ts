@@ -29,12 +29,21 @@ async function admitFiles(input:NativeProcessInput){
 function validateTarget(input:NativeProcessInput){if(!isAbsolute(input.repoRoot)||resolve(input.repoRoot)!==input.repoRoot)throw fail();const url=new URL(input.databaseUrl),direct=url.hostname===`db.${input.projectRef}.supabase.co`&&url.username==='postgres',pooler=/^aws-[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*\.pooler\.supabase\.com$/.test(url.hostname)&&url.username===`postgres.${input.projectRef}`;if(url.protocol!=='postgresql:'||url.password||url.port!=='5432'||url.pathname!=='/postgres'||url.search!=='?sslmode=verify-full'||url.hash||!(direct||pooler)||url.toString()!==input.databaseUrl)throw fail();}
 
 /** Native private CLI port only. Source/approval/TLS/target/history and database lock remain independently admitted by the execution protocol. */
-export async function createHostedMigrationNativeProcess(value:unknown,options:{signal?:AbortSignal}={}):Promise<Pick<HostedExecutionPorts,'runCli'>>{
- let signal:AbortSignal|undefined;try{if(!options||typeof options!=='object'||types.isProxy(options))throw fail();const descriptor=Object.getOwnPropertyDescriptor(options,'signal');if(![Object.prototype,null].includes(Object.getPrototypeOf(options))||Reflect.ownKeys(options).some(key=>key!=='signal')||descriptor&&(!('value'in descriptor)||descriptor.value!==undefined&&!(descriptor.value instanceof AbortSignal)))throw fail();signal=descriptor?.value;}catch{throw fail();}
+export async function createHostedMigrationNativeProcess(value:unknown,options:{signal?:AbortSignal;notAfterMs?:number}={}):Promise<Pick<HostedExecutionPorts,'runCli'>>{
+ let signal:AbortSignal|undefined,notAfterMs:number|undefined;try{
+  if(!options||typeof options!=='object'||types.isProxy(options)||![Object.prototype,null].includes(Object.getPrototypeOf(options))||Reflect.ownKeys(options).some(key=>key!=='signal'&&key!=='notAfterMs'))throw fail();
+  for(const key of ['signal','notAfterMs']as const){const field=Object.getOwnPropertyDescriptor(options,key);if(field&&(!('value'in field)||!field.enumerable))throw fail();
+   if(key==='signal'){if(field?.value!==undefined&&!(field.value instanceof AbortSignal))throw fail();signal=field?.value;}
+   else{if(field?.value!==undefined&&(!Number.isSafeInteger(field.value)||field.value<0))throw fail();notAfterMs=field?.value;}
+  }
+ }catch{throw fail();}
  let input:NativeProcessInput;try{input=inputSchema.parse(own(value));validateTarget(input);await admitFiles(input);}catch{throw fail();}let attempted=false;
  return{runCli:async(args,privateEnvironment)=>{
   if(attempted||signal?.aborted)return{kind:'UNKNOWN'};attempted=true;let shim:string,env:Record<string,string>,argumentsCopy:string[];
   try{argumentsCopy=argumentSnapshot(args);env=z.record(z.string(),z.string()).parse(own(privateEnvironment));if(Object.keys(env).some(key=>!environmentKeys.has(key))||!env.PGPASSWORD?.trim()||env.PGPASSWORD.length>24576||[...env.PGPASSWORD].some(character=>character.charCodeAt(0)<32||character.charCodeAt(0)===127)||Object.entries(env).some(([key,value])=>key!=='PGPASSWORD'&&(value.includes(env.PGPASSWORD)||[...value].some(character=>character.charCodeAt(0)<32||character.charCodeAt(0)===127)))||env.PGSSLROOTCERT!==input.certificate.path||JSON.stringify(argumentsCopy)!==JSON.stringify(argumentsFor(input)))throw fail();shim=await admitFiles(input);const home=join(input.repoRoot,'.local','hosted-release','process-'+randomUUID());await mkdir(home,{mode:0o700});await ownedPath(input.repoRoot,home,'directory');if((await readdir(home)).length)throw fail();env.SUPABASE_HOME=home;env.HOME=home;env.USERPROFILE=home;env.APPDATA=home;env.LOCALAPPDATA=home;if(signal?.aborted)throw fail();}catch{return{kind:'UNKNOWN'};}
+  // The trusted executor supplies its actual earliest observation deadline.
+  // Physical preflight must not launch after that original budget expires.
+  if(signal?.aborted||notAfterMs!==undefined&&Date.now()>=notAfterMs)return{kind:'UNKNOWN'};
   let child:ChildProcess;try{child=spawnOwnedProcess(process.execPath,[shim,...argumentsCopy],{cwd:input.workdir,env,stdio:'ignore',shell:false,windowsHide:true});}catch{return{kind:'UNKNOWN'};}
   return await new Promise<Awaited<ReturnType<HostedExecutionPorts['runCli']>>>((done,reject)=>{
    let settled=false,stopping=false,cancelled=false,closed=false;

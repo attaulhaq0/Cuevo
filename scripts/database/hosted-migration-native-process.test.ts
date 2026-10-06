@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
+import fsPromises from 'node:fs/promises';
+import { mock } from 'node:test';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -34,3 +37,17 @@ test('database-lock cancellation refuses prelaunch and terminates an admitted CL
 test('abort options and argument arrays refuse traps without invoking getters or launching a process',async()=>{const{createHostedMigrationNativeProcess}=await api();await fixture(async f=>{let reads=0;const options=new Proxy({},{getOwnPropertyDescriptor(){reads++;return undefined;}});await assert.rejects(createHostedMigrationNativeProcess(f.input,options));assert.equal(reads,0);const args=[...f.args];Object.defineProperty(args,'2',{get(){reads++;return f.args[2];}});const port=await createHostedMigrationNativeProcess(f.input);assert.deepEqual(await port.runCli(args,f.env),{kind:'UNKNOWN'});assert.equal(reads,0);await assert.rejects(readFile(f.capture));});});
 
 test('public environment values cannot serialize the private password through a second field',async()=>{const{createHostedMigrationNativeProcess}=await api();await fixture(async f=>{const port=await createHostedMigrationNativeProcess(f.input);assert.deepEqual(await port.runCli(f.args,{...f.env,LANG:secret}),{kind:'UNKNOWN'});await assert.rejects(readFile(f.capture));});});
+
+test('orchestrated migration launch admits a valid numeric observation deadline and rejects expired or unverified options before spawn',async()=>{
+ const{createHostedMigrationNativeProcess}=await api();await fixture(async f=>{const port=await createHostedMigrationNativeProcess(f.input,{notAfterMs:Date.now()+30000});assert.deepEqual(await port.runCli(f.args,f.env),{kind:'EXITED',exitCode:0});});
+ await fixture(async f=>{const port=await createHostedMigrationNativeProcess(f.input,{notAfterMs:Date.now()-1});assert.deepEqual(await port.runCli(f.args,f.env),{kind:'UNKNOWN'});await assert.rejects(readFile(f.capture));});
+ await fixture(async f=>{let reads=0;const options={get notAfterMs(){reads++;return Date.now()+30000;}};await assert.rejects(createHostedMigrationNativeProcess(f.input,options));assert.equal(reads,0);for(const notAfterMs of [NaN,Infinity,-1,1.5])await assert.rejects(createHostedMigrationNativeProcess(f.input,{notAfterMs}));await assert.rejects(readFile(f.capture));});
+});
+
+test('a slow final physical CLI preflight cannot spawn after the original observation deadline',async()=>{
+ const{createHostedMigrationNativeProcess}=await api();await fixture(async f=>{const originalNow=Date.now,originalRead=fsPromises.readFile;let now=originalNow();Date.now=()=>now;
+ try{const port=await createHostedMigrationNativeProcess(f.input,{notAfterMs:now+30000});const read=mock.method(fsPromises,'readFile',async(...args:Parameters<typeof readFile>)=>{const result=await originalRead(...args);if(String(args[0])===f.shim)now+=31000;return result;});syncBuiltinESMExports();
+  try{assert.deepEqual(await port.runCli(f.args,f.env),{kind:'UNKNOWN'});await assert.rejects(originalRead(f.capture));}finally{read.mock.restore();syncBuiltinESMExports();}
+ }finally{Date.now=originalNow;}
+ });
+});
