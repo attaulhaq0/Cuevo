@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readCanonicalMigrationSources } from './hosted-migration-plan';
+import { replayPlan } from './replay-plan';
 const hash=(value:Uint8Array|string)=>createHash('sha256').update(value).digest('hex');
 const name='20261006000000_native_history_fixture.sql',version=name.slice(0,14),sql=` \nBEGIN;\n-- retained ; comment\nselect 'العربية; English', E'escaped\\';literal', 0;\n/* body ; comment */\ndo $tag$ begin perform 'inside;literal'; end $tag$;\nCOMMIT; \n`;
 const statements=['BEGIN',"-- retained ; comment\nselect 'العربية; English', E'escaped\\';literal', 0", "/* body ; comment */\ndo $tag$ begin perform 'inside;literal'; end $tag$",'COMMIT'];
@@ -29,4 +30,15 @@ test('literal coverage is bounded by source and statement bytes and returns deta
 
 test('native internal CRLF quote escapes comments and SQL delimiters retain exact literal bytes',async()=>{const{verifyHostedMigrationHistory}=await api();const raw="-- first\r\nselect 'a;''b', E'c\\\\;d', 0;\r\n-- final;",values=["-- first\r\nselect 'a;''b', E'c\\\\;d', 0",'-- final;'];assert.equal(verifyHostedMigrationHistory(input(raw,values)).history.length,1);assert.throws(()=>verifyHostedMigrationHistory(input(raw,values.map(value=>value.replaceAll('\r\n','\n')))));});
 
-test('all canonical original migration bytes and staged expected prefixes produce bounded source coverage without executing SQL',async()=>{const{verifyHostedMigrationHistory}=await api();const root=resolve(import.meta.dirname,'../..'),sha=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),tree=execFileSync('git',['-C',root,'rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),loaded=readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree});assert.equal(loaded.sources.length,229);const included=loaded.sources.map(row=>({name:row.name,version:row.name.slice(0,14),sha256:hash(row.bytes)}));const history=loaded.sources.map(row=>({version:row.name.slice(0,14),name:row.name.slice(15,-4),statements:row.bytes.length?[Buffer.from(row.bytes).toString('utf8').replace(/;+\s*$/u,'').trim()]:[]}));for(const count of[0,123,124,180,229]){const expectedVersions=included.slice(0,count).map(row=>row.version);const result=verifyHostedMigrationHistory({sources:loaded.sources,included,expectedVersions,history:history.slice(0,count)});assert.equal(result.history.length,count);for(const receipt of result.history)assert.equal(receipt.sourceReceiptSha256,included.find(row=>row.version===receipt.version)!.sha256);}const empty=loaded.sources.find(row=>row.name==='20261001211007_intelligence_frozen_policy_reasoning.sql')!;assert.equal(empty.bytes.length,0);});
+test('all canonical original migration bytes and staged expected prefixes produce bounded source coverage without executing SQL',async()=>{
+ const{verifyHostedMigrationHistory}=await api();const root=resolve(import.meta.dirname,'../..'),sha=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),tree=execFileSync('git',['-C',root,'rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),loaded=readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree});
+ const appended={name:'20261007000000_appended_history_fixture.sql',bytes:Buffer.from("BEGIN;\nselect 'Appended; العربية';\nCOMMIT;\n")};
+ for(const sources of[loaded.sources,[...loaded.sources,appended]]){
+  const replay=replayPlan(sources),order=[...replay.before,replay.prerequisite,...replay.remaining];assert.equal(order.length,sources.length);
+  const ordered=order.map(name=>sources.find(row=>row.name===name)!),included=ordered.map(row=>({name:row.name,version:row.name.slice(0,14),sha256:hash(row.bytes)}));
+  const history=ordered.map(row=>({version:row.name.slice(0,14),name:row.name.slice(15,-4),statements:row.bytes.length?[Buffer.from(row.bytes).toString('utf8').replace(/;+\s*$/u,'').trim()]:[]}));
+  for(const count of[0,123,124,180,sources.length]){const expectedVersions=included.slice(0,count).map(row=>row.version);const result=verifyHostedMigrationHistory({sources,included,expectedVersions,history:history.slice(0,count)});assert.equal(result.history.length,count);for(const receipt of result.history)assert.equal(receipt.sourceReceiptSha256,included.find(row=>row.version===receipt.version)!.sha256);}
+  if(sources.length>loaded.sources.length){const expectedVersions=included.map(row=>row.version);assert.throws(()=>verifyHostedMigrationHistory({sources,included,expectedVersions,history:history.slice(0,-1)}));const result=verifyHostedMigrationHistory({sources,included,expectedVersions,history});assert.equal(result.history.at(-1)!.sourceReceiptSha256,hash(appended.bytes));}
+ }
+ const empty=loaded.sources.find(row=>row.name==='20261001211007_intelligence_frozen_policy_reasoning.sql')!;assert.equal(empty.bytes.length,0);
+});

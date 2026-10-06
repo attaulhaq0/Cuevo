@@ -1,0 +1,32 @@
+import { createHash } from 'node:crypto';
+import { prepareBackendReleaseIntent } from './backend-release-contracts';
+import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './release-review';
+import { backendWebTransferEvidenceNames, backendWebTransferProducerPaths, type BackendWebTransfer } from './backend-web-transfer';
+
+export const transferFixtureHash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+/** Test-only synthetic receipts. They never represent an actual hosted gate. */
+export function backendWebTransferFixture({ now = Date.now(), sourceSha = 'a'.repeat(40), treeSha = 'b'.repeat(40), baseSha = 'c'.repeat(40), sourceManifestSha256 = 'd'.repeat(64), diffSha256 = 'e'.repeat(64) } = {}) {
+  const at = new Date(now - 60000).toISOString(), exportedAt = new Date(now - 30000).toISOString(), projectRef = 'mqxdjvsyckzocokuikmx';
+  const ciRun = { id: 31, head_sha: sourceSha, head_branch: 'main' as const, event: 'push' as const, status: 'completed' as const, conclusion: 'success' as const, path: '.github/workflows/ci.yml' as const, repository: { full_name: 'owner/repo' } };
+  const backendRun = { id: 51, run_attempt: 1, head_sha: sourceSha, head_branch: 'main' as const, event: 'workflow_dispatch' as const, status: 'in_progress' as const, conclusion: null, path: '.github/workflows/backend-release.yml' as const, repository: { full_name: 'owner/repo' } };
+  const targets = { web: { teamId: 'team_Cuevo', projectId: 'prj_Web', origin: 'https://cuevo-beta.vercel.app', target: 'preview' as const }, api: { teamId: 'team_Cuevo', projectId: 'prj_Api', origin: 'https://cuevo-api.vercel.app', target: 'preview' as const }, supabase: { projectRef, authOrigin: `https://${projectRef}.supabase.co`, edgeOrigin: `https://${projectRef}.supabase.co/functions/v1/cuevo-worker` } };
+  const assignments = [{ category: 'source-spec-code' as const, taskId: 'source-review', reportSha256: '1'.repeat(64), evidenceSha256: '2'.repeat(64) }, { category: 'qa-regression-operations' as const, taskId: 'qa-review', reportSha256: '3'.repeat(64), evidenceSha256: '4'.repeat(64) }];
+  const fingerprints = { sourceManifestSha256, diffSha256, migrationPlanSha256: '1'.repeat(64), migrationHistorySha256: '2'.repeat(64), migrationToolchainSha256: '3'.repeat(64), migrationEndpointSha256: '4'.repeat(64), operatorStoragePolicySha256: '5'.repeat(64), apiArtifactSha256: '6'.repeat(64), edgeArtifactSha256: '7'.repeat(64), denoLockSha256: '8'.repeat(64) };
+  const identity = { repository: 'owner/repo', releaseSha: sourceSha, treeSha, baseSha, ciRunId: '31', releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: 'staging' as const, deploymentEnvironment: 'synthetic-staging' as const };
+  const expected = { ...identity, targets, fingerprints, reviews: assignments, now: now - 30000, currentMainSha: sourceSha, ciRun, backendRun };
+  const intent = { ...identity, version: 1 as const, purpose: 'BACKEND_SYNTHETIC_STAGING' as const, targets, fingerprints, preparedAt: new Date(now - 120000).toISOString(), expiresAt: new Date(now + 3480000).toISOString(), reviews: assignments.map(row => ({ ...row, releaseSha: sourceSha, treeSha, baseSha, sourceManifestSha256, diffSha256, reviewedAt: new Date(now - 180000).toISOString() })) };
+  const preparedApproval = prepareBackendReleaseIntent(intent, expected), evidenceUrl = 'https://github.com/owner/repo/actions/runs/51';
+  const publicConfig = { apiUrl: targets.api.origin, supabaseUrl: targets.supabase.authOrigin, supabasePublishableKey: 'sb_publishable_controlled_public_key' };
+  const manifest = { version: 2, environment: 'staging', commitSha: sourceSha, ciRunId: '31', verifiedAt: at,
+    api: { kind: 'vercel', origin: targets.api.origin, commitSha: sourceSha, projectId: targets.api.projectId, teamId: targets.api.teamId, deploymentId: 'dpl_Api', deploymentUrl: 'https://cuevo-api-deployment.vercel.app', target: 'preview', artifactSha256: fingerprints.apiArtifactSha256, metadataVerified: true, healthVerified: true, evidenceUrl },
+    worker: { kind: 'supabase-edge', commitSha: sourceSha, projectRef, functionName: 'cuevo-worker', artifactSha256: fingerprints.edgeArtifactSha256, denoLockSha256: fingerprints.denoLockSha256, authVerified: true, queueRecoveryVerified: true, roleGrantsVerified: true, transportPrivateVerified: true, evidenceUrl },
+    database: { projectRef, migrations: [{ version: '20261001000000', sha256: '9'.repeat(64) }], grantsVerified: true, rlsVerified: true, privateStorageVerified: true, privateRealtimeVerified: true, recoveryVerified: true, evidenceUrl, dataApi: { state: 'DISABLED', projectRef, commitSha: sourceSha, verifiedAt: at, configurationVerified: true, anonymousRestDenied: true, authenticatedRestDenied: true, serviceRestDenied: true, graphqlDenied: true, rpcDenied: true, evidenceUrl } },
+    approval: { reviewer: 'attaulhaq0', basis: 'SYNTHETIC_STAGING', evidenceUrl }, publicConfig };
+  const transfer: BackendWebTransfer = { version: 1, purpose: 'CUEVO_COMPLETED_BACKEND_WEB_HANDOVER', status: 'EXPORTED_VERIFIED_BACKEND_HANDOVER', preparedApproval, originalAdmission: { ciRun, backendRun }, manifest,
+    manifestSha256: transferFixtureHash(canonicalReleaseReviewJson(manifest)), settings: { settingsSha256: transferFixtureHash(canonicalReleaseExecutionJson({ NEXT_PUBLIC_API_URL: publicConfig.apiUrl, NEXT_PUBLIC_SUPABASE_URL: publicConfig.supabaseUrl, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publicConfig.supabasePublishableKey })), observedAt: at, operation: 'NOOP' },
+    producers: backendWebTransferProducerPaths.map(path => ({ path, sha256: '0'.repeat(64) })), evidence: backendWebTransferEvidenceNames('dpl_Api').map(name => ({ name, sha256: transferFixtureHash(name) })),
+    exportedAt, originalMutationExpiresAt: intent.expiresAt, earliestProofAt: at, consumptionExpiresAt: new Date(Date.parse(at) + 86400000).toISOString(), receiptScope: 'ORIGINAL_NATIVE_BACKEND_HANDOVER_AND_CLEANUP', privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
+  const completedRun = { ...backendRun, status: 'completed', conclusion: 'success', created_at: new Date(now - 150000).toISOString(), updated_at: new Date(now - 10000).toISOString() };
+  const approvals = [{ state: 'approved', environments: [{ id: 123, name: 'staging' }], user: { id: 95836629, login: 'attaulhaq0', type: 'User' }, comment: preparedApproval.comment }];
+  return { transfer, expected, completedRun, approvals, now };
+}

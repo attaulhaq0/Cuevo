@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { canonicalReleaseReviewJson } from './release-review';
 
 const secret = 'private-backend-phase-canary';
-const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED', activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED',recoveryStatus:'FAULT_RECOVERY_VERIFIED',restoreStatus:'VERIFIED',originStatus:'API_ORIGIN_BOUND',handoverStatus:'PREPARED_STAGING_MANIFEST',webStatus:'WEB_PUBLIC_SETTINGS_CONFIRMED', bundle: {} as Record<string, unknown> };
+const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED', activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED',recoveryStatus:'FAULT_RECOVERY_VERIFIED',restoreStatus:'VERIFIED',originStatus:'API_ORIGIN_BOUND',handoverStatus:'PREPARED_STAGING_MANIFEST',webStatus:'WEB_PUBLIC_SETTINGS_CONFIRMED',transferFailure:false, bundle: {} as Record<string, unknown> };
 const replacements: Record<string, string> = {
   'backend-release-prepare.ts': 'export const prepareNativeBackendRelease=globalThis.backendPhaseFixture.prepare;',
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.backendPhaseFixture.admission;',
@@ -30,6 +30,7 @@ const replacements: Record<string, string> = {
   'backend-hosted-database-restore.ts':'export const verifyNativeHostedDatabaseRestore=globalThis.backendPhaseFixture.restore;',
   'backend-api-origin.ts':'export const bindBackendApiOrigin=globalThis.backendPhaseFixture.origin;',
   'backend-web-settings.ts':'export const configureBackendWebSettings=globalThis.backendPhaseFixture.webSettings;',
+  'backend-web-transfer.ts':'export const exportBackendWebTransfer=globalThis.backendPhaseFixture.webTransfer;',
 };
 registerHooks({ resolve(specifier, context, next) {
   const name = specifier.split('/').at(-1)!;
@@ -42,6 +43,7 @@ registerHooks({ resolve(specifier, context, next) {
   return next(url, context);
 } });
 (globalThis as unknown as { backendPhaseFixture: object }).backendPhaseFixture = {
+  webTransfer:async(input:{repoRoot:string;vercelToken:string})=>{state.events.push('web-transfer');assert.equal(input.vercelToken,secret);if(state.transferFailure)throw Error('Original handover missing');return{transferPath:join(input.repoRoot,'.local/hosted-release/web-transfer.json'),transferSha256:'c'.repeat(64),manifestSha256:'b'.repeat(64),backendRunId:'51',backendRunAttempt:1,hostedAcceptance:false};},
   webSettings:async(input:{vercelToken:string})=>{state.events.push('web-settings');assert.equal(input.vercelToken,secret);return{status:state.webStatus,canonicalReceipt:'{}',pendingGates:state.webStatus==='REQUIRES_REVIEW'?['SOURCE']:[],hostedAcceptance:false};},
   origin:async(input:{syntheticPassword:string;vercelToken:string})=>{state.events.push('origin');assert.equal(input.syntheticPassword,'protected-synthetic-pilot-password');assert.equal(input.vercelToken,secret);return{status:state.originStatus,healthVerified:true,currentActorVerified:true,corsVerified:true,sessionsClosed:true,canonicalReceipt:'{}',hostedAcceptance:false};},
   restore:async(input:{operatorPassword:string;operatorDatabaseUrl:string;apiDeployment:{id:string;url:string}})=>{state.events.push('restore');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).password,'');assert.equal(input.apiDeployment.id,'dpl_exact');return{status:state.restoreStatus,recoveryVerified:state.restoreStatus==='VERIFIED',cleanupConfirmed:true,sessionsClosed:true,lockReleased:true,canonicalReceipt:'{}',hostedAcceptance:false};},
@@ -83,6 +85,18 @@ async function fixture(run: (root: string, env: Record<string, string>) => Promi
 }
 test('failed official approval cannot reach bucket or schema even with configured private credentials', async () => {
   const api = await subject(); await fixture(async (repoRoot, env) => { state.failApproval = true; await assert.rejects(api.runBackendReleasePhase({ mode: 'bootstrap-schema', repoRoot, env }), error => error instanceof Error && !error.message.includes(secret)); assert.deepEqual(state.events, ['approval']); });
+});
+
+test('backend handover export consumes current approval and writes only fixed public handover identity',async()=>{
+ const api=await subject();for(const kind of ['confirmed','missing','approval'])await fixture(async(repoRoot,env)=>{
+  env.VERCEL_TOKEN=secret;env.GITHUB_OUTPUT=join(repoRoot,'transfer-output');state.transferFailure=kind==='missing';state.failApproval=kind==='approval';
+  try{
+   if(kind==='confirmed'){
+    const result=await api.runBackendReleasePhase({mode:'export-web-handover',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','web-transfer']);
+    const output=await readFile(env.GITHUB_OUTPUT,'utf8');assert.match(output,/^transfer-sha256=c{64}\nmanifest-sha256=b{64}\n$/);assert.doesNotMatch(output,/private-backend-phase-canary|password|token|runtime/);
+   }else{await assert.rejects(api.runBackendReleasePhase({mode:'export-web-handover',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','web-transfer']);}
+  }finally{state.transferFailure=false;}
+ });
 });
 test('provider deployment reads confirmed private runtime inputs without returning any credential',async()=>{
   const api=await subject();await fixture(async(repoRoot,env)=>{

@@ -16,6 +16,8 @@ Focused27tests, full1164web tests, canonical typecheck, scoped lint and diff che
 
 CodeQL alert closure and review-thread resolution remain pending a committed-source scan. No alert was dismissed, scanner disabled or unresolved thread marked resolved merely to obtain a green merge. Detailed source/failure/hash evidence is ignored under `.local/integration`.
 
+Later 6 October11:39UTC authenticated readback confirms signed76bd7d05e372cc8d362b38e6504b184f18c73579/tree8e8945995b6dbb04ddb8e5f39fb5181ae101a7f9 contains exactly the three fixture repairs plus this report. CodeQL check112249003276 for that SHA reports no new alerts and zero annotations; current source-branch open-alert query returns zero, and each old alert instance on the source branch is marked fixed. The old PR merge-ref instances still describe prior6b22ea5 source until their analysis is reconciled; they are historical source evidence rather than new76bd findings. PR review-thread readback returns zero unresolved threads, without an operator dismissal or forced resolution. New full PR37457449798/push37457439728 checks remain running, and the final dirty candidate remains separately unverified. The signature blocker below is not resolved by CodeQL closure.
+
 ## Commit signatures
 
 Authenticated PR commit readback:159introducedcommits,21verified,138unsigned. Recent commits, including19b798e, are valid GitHub-signed commits; their signatures do not apply to historical ancestors. Main retains required signatures, strict Actions CI, enforced administrators, PR/conversation controls and no bypass/force push/deletion. The founder is the PR author and cannot merge as administrator under current settings.

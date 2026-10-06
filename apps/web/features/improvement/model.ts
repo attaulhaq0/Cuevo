@@ -1,11 +1,11 @@
 type IntelligenceMetadata={selectedActivityId?:string|null;analysis?:IntelligenceAnalysis|null;promptDigest?:string|null};
 export type Recommendation = IntelligenceMetadata & { id: string; learnerId: string; referenceId: string; baselineResultId: string; origin: 'TEACHER_AUTHORED' | 'AI_GENERATED'; generationMode: 'HUMAN' | 'FIXTURE' | 'LIVE'; intelligenceRunId: string | null; observation: string; evidenceIds: string[]; interpretation: string; recommendation: string; rationale: string; uncertainty: string; activityTitle: string; instructions: string; status: 'AWAITING_HUMAN' | 'APPROVED' | 'REJECTED'; createdAt: string };
 type SourceReview = { requiresReview?: boolean; reviewReason?: 'ACADEMIC_SOURCE_CHANGED' | null };
-export type Intervention = SourceReview & IntelligenceMetadata & { id: string; recommendationId: string; learnerId: string; referenceId: string; baselineResultId: string; title: string; instructions: string; status: 'ASSIGNED' | 'COMPLETED' | 'MEASURED'; createdAt: string; completedAt: string | null; followUpAssessmentId: string | null };
+export type Intervention = SourceReview & IntelligenceMetadata & { id: string; recommendationId: string; learnerId: string; referenceId: string; baselineResultId: string; title: string; instructions: string; status: 'ASSIGNED' | 'COMPLETED' | 'MEASURED'; createdAt: string; completedAt: string | null; followUpAssessmentId: string | null; context?: InterventionDisplayContext };
 export type NumericOutcome = SourceReview & { id: string; interventionId: string; baselineResultId: string; followUpResultId: string; status: 'improved' | 'no_meaningful_change' | 'inconclusive'; difference: number; minimumChange: number; baseline: { score: number; maxScore: number }; followUp: { score: number; maxScore: number }; reason: string; limitation: 'OBSERVED_CHANGE_NOT_CAUSAL_PROOF'; measuredAt: string; context?: OutcomeDisplayContext };
 export type Outcome=NumericOutcome|z.infer<typeof nativeOutcomeDisplaySchema>;
 import { LearningApiError, type Command } from '../../shared/api/client.ts';
-import { insightContextSchema,intelligenceAnalysisSchema,nativeOutcomeDisplaySchema,outcomeDisplayContextSchema,interventionHelpStatusSchema,interventionChoiceStatusSchema,interventionChoiceInputSchema,interventionHelpInputSchema,interventionHelpReplyInputSchema,type OutcomeDisplayContext,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
+import { insightContextSchema,intelligenceAnalysisSchema,nativeOutcomeDisplaySchema,outcomeDisplayContextSchema,interventionDisplayContextSchema,interventionHelpStatusSchema,interventionChoiceStatusSchema,interventionChoiceInputSchema,interventionHelpInputSchema,interventionHelpReplyInputSchema,type InterventionDisplayContext,type OutcomeDisplayContext,type IntelligenceAnalysis, type InsightContext } from '@cuevo/contracts';
 import { z } from 'zod';
 const insightEnvelopeSchema = z.object({ runId: z.uuid(), context: insightContextSchema.nullable() }).strict();
 export type InsightContextEnvelope = { runId: string; context: InsightContext | null };
@@ -39,6 +39,11 @@ export function parseIntervention(value: unknown): Intervention {
   if (typeof value.completedAt === 'string' && Date.parse(value.completedAt) < Date.parse(String(value.createdAt))) throw new LearningApiError('invalid');
   if (!validReview(value)) throw new LearningApiError('invalid');
   if(!validIntelligence(value))throw new LearningApiError('invalid');
+  if (value.context !== undefined) {
+    const context = interventionDisplayContextSchema.safeParse(value.context);
+    if (!context.success || context.data.interventionId !== value.id || context.data.baselineResultId !== value.baselineResultId
+      || context.data.learnerId !== value.learnerId || context.data.referenceId !== value.referenceId) throw new LearningApiError('invalid');
+  }
   return value as Intervention;
 }
 export function parseOutcome(value: unknown, expectedLearnerId?: string): Outcome {

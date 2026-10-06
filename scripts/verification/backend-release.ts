@@ -21,6 +21,7 @@ import {prepareBackendWebHandover} from './backend-web-handover';
 import {verifyNativeHostedDatabaseRestore} from './backend-hosted-database-restore';
 import {bindBackendApiOrigin} from './backend-api-origin';
 import {configureBackendWebSettings} from './backend-web-settings';
+import {exportBackendWebTransfer} from './backend-web-transfer';
 import {hostedMigrationEndpointSchema} from '../database/hosted-migration-provider';
 import {canonicalReleaseExecutionJson} from './release-review';
 
@@ -44,8 +45,9 @@ async function record(root: string, filename: string, value: unknown) {
 }
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
-export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web'; repoRoot: string; env: Record<string, string | undefined> }) {
+export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web' | 'export-web-handover'; repoRoot: string; env: Record<string, string | undefined> }) {
   try {
+    if (!['prepare','approval','bootstrap-schema','provision','deploy','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
     if (!isAbsolute(repoRoot) || resolve(repoRoot) !== repoRoot || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw failure();
     if (mode === 'prepare') {
       if (privateNames.some(key => !!env[key])) throw failure();
@@ -67,6 +69,12 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
     await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken });
     if (mode === 'approval') return { status: 'ADMITTED' as const, hostedAcceptance: false };
+    if(mode==='export-web-handover'){
+      const result=await exportBackendWebTransfer({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
+      if(result.transferPath!==join(repoRoot,'.local/hosted-release/web-transfer.json')||!/^[a-f0-9]{64}$/.test(result.transferSha256)||!/^[a-f0-9]{64}$/.test(result.manifestSha256)||result.hostedAcceptance!==false)throw failure();
+      await writeFile(required(env,'GITHUB_OUTPUT'),`transfer-sha256=${result.transferSha256}\nmanifest-sha256=${result.manifestSha256}\n`,{flag:'a'});
+      return result;
+    }
     if(mode==='handover'){
       const result=await prepareBackendWebHandover({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
       await record(repoRoot,'web-handover-result.json',result);
@@ -191,7 +199,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const mode = process.argv[2];
-  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web'].includes(mode)) throw failure();
-  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify'|'verify-private'|'activate'|'verify-recovery'|'verify-restore'|'bind-api'|'handover'|'configure-web', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
+  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
+  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify'|'verify-private'|'activate'|'verify-recovery'|'verify-restore'|'bind-api'|'handover'|'configure-web'|'export-web-handover', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: 'status' in result ? result.status : 'EXPORTED_VERIFIED_BACKEND_HANDOVER', hostedAcceptance: false })); }
   catch { console.error('Cuevo backend step requires review. Inspect retained source-bound receipts; private contents withheld.'); process.exitCode = 1; }
 }

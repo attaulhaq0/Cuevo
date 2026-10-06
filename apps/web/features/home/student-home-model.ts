@@ -78,7 +78,7 @@ export function selectStudentHomeSources(input: {
   const actions = pendingWork(knownAssessments, submissions, input.learnerId, input.now);
   const practices = current(input.interventions) ? input.interventions.data.filter(item => item.learnerId === input.learnerId && item.status === 'ASSIGNED' && !item.requiresReview) : [];
   const queue: StudentHomeItem[] = [
-    ...practices.map(item => ({ title: item.title, description: item.instructions, course: null, dueAt: null, kind: 'practice' as const, destination: { view: 'improvement', source: 'intervention', id: item.id } as const })),
+    ...practices.map(item => ({ title: item.title, description: item.instructions, course: item.context?.status === 'READY' && !item.context.identityRequiresReview ? item.context.courseTitle : null, dueAt: null, kind: 'practice' as const, destination: { view: 'improvement', source: 'intervention', id: item.id } as const })),
     ...actions.map(item => {
       const source = assessments.find(source => source.id === item.assessmentId)!;
       return { title: item.title, description: source.instructions, course: source.courseTitle || null, dueAt: item.dueAt, kind: item.needsRevision ? 'revision' as const : 'assessment' as const, destination: { view: 'learning', source: 'assessment', id: item.assessmentId } as const };

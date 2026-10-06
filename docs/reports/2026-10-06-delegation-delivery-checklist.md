@@ -6,6 +6,8 @@ The founder corrected the deadline: the delegation is on6October2026, in a few h
 
 Current checkpoint, 6 October: signed candidate `a6c330727cb6dd4a29efeed22daffec79e7a2efc` is pushed to PR #1. Fast checks, CodeQL, dependency review and secret scan passed; technical MVP CI is still running. Read-only provider checks confirm no deployments in the two Cuevo Vercel projects and no applied Cuevo Supabase migrations. Local presentation is separately verified and must remain localhost-only. Earlier commit/build references in the table below are historical checkpoints, superseded by this paragraph and the active delivery ledger.
 
+Later 6 October checkpoint: PR1 commit19b798e15acf9394a2b9905c1f6cd616fcb4306a passed full PR37446902719 and push37446891570 CI. Newer Intervention context, Teacher current-source/identity fixes and CI discovery/hosted browser work remain unstaged and require their own final checks. The founder selected Vercel Hobby for private internal team testing, with Supabase retained and no Pro purchase. Hosted migration history and both Vercel deployment lists remain empty as of11:21UTC. The immediate deliverable is a verified hosted internal test app; institutional customer launch and its product/rights/hosting acceptance are separate. Supabase-first ordering below remains mandatory. Current working tree has230 migration files including one uncommitted additive context migration; the final deployed inventory must come from the admitted committed source, not a stale229 count.
+
 The hosted execution order is:
 
 1. Admit the exact reviewed source and successful required CI.

@@ -4,6 +4,21 @@ import productionConfig from'./playwright.production.config';import{resolve}from
 import customerConfig from './playwright.customer.config';
 import accountConfig from './playwright.accounts.config';
 import ordinaryConfig from './playwright.ordinary.config';
+import { readFileSync } from 'node:fs';
+
+test('fast and complete technical CI discover the same backend release contract tests without starting a browser', () => {
+ const root = resolve(import.meta.dirname, '../..');
+ const packageScripts = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).scripts as Record<string, string>;
+ const fast = packageScripts['test:cicd'].split(/\s+/).filter(argument => argument.endsWith('.test.ts')).sort();
+ const technical = [...verificationSteps.find(step => step.name === 'cicd-fixtures')!.args].filter(argument => argument.endsWith('.test.ts')).sort();
+ assert.deepEqual(technical, fast);
+ assert.ok(fast.includes('scripts/verification/backend-hosted-browser.test.ts'));
+ const testSource = readFileSync(resolve(root, 'scripts/verification/backend-hosted-browser.test.ts'), 'utf8');
+ assert.doesNotMatch(testSource, /chromium\.launch|actual Chromium normal forms/);
+ const browserSource = readFileSync(resolve(root, 'tests/e2e/hosted-browser-protocol.spec.ts'), 'utf8');
+ assert.match(browserSource, /actual Chromium normal forms/);
+ assert.match(browserSource, /runHostedRoleBrowser/);
+});
 test('recovery only accepts dedicated local Cuevo database and scratch name',()=>{assert.doesNotThrow(()=>validateRecoveryTarget('postgresql://postgres:private@127.0.0.1:56322/postgres','cuevo_recovery_123'));for(const[url,name]of[['postgresql://postgres:private@remote.example:5432/postgres','cuevo_recovery_123'],['postgresql://postgres:private@127.0.0.1:54322/postgres','cuevo_recovery_123'],['postgresql://postgres:private@127.0.0.1:56322/postgres','postgres']])assert.throws(()=>validateRecoveryTarget(url!,name!));});
 test('missing skipped or failed evidence cannot yield technical completion',()=>{assert.equal(technicalResult([{name:'unit',exitCode:0,required:true},{name:'db',exitCode:null,required:true}]).status,'NOT_VERIFIED');assert.equal(technicalResult([{name:'unit',exitCode:0,required:true},{name:'db',exitCode:1,required:true}]).status,'FAILED');assert.equal(technicalResult([{name:'unit',exitCode:0,required:true},{name:'db',exitCode:0,required:true}]).status,'VERIFIED');});
 test('configured build and mutation runners load the current bootstrap environment',()=>{for(const name of['build','integration','browser','browser-compatibility','runtime-outage','recovery']){const step=verificationSteps.find(s=>s.name===name)!;assert.equal(commandArgs(step)[0],'--env-file=.env.local');}for(const name of['clean-bootstrap','clean-browser-seed','demo-seed-restore']){const bootstrap=verificationSteps.find(s=>s.name===name)!;assert.notEqual(commandArgs(bootstrap)[0],'--env-file=.env.local');}});

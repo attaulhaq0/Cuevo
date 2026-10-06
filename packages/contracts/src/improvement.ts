@@ -1,5 +1,13 @@
 import{z}from'zod';
 import{nativeAcademicResultSchema}from'./academic';
+const interventionLabel=z.string().min(1).max(200).refine(value=>value.trim().length>0&&!/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{8}|[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value.trim()),'A source label must contain human context.').nullable();
+/** Fresh authorized read context; command receipts and source history remain separate. */
+export const interventionDisplayContextSchema=z.object({
+ interventionId:z.uuid(),baselineResultId:z.uuid(),learnerId:z.uuid(),referenceId:z.uuid(),
+ status:z.enum(['READY','REQUIRES_REVIEW']),labelBasis:z.literal('CURRENT_REGISTERED_NAMES_AND_SOURCE_TASK'),identityRequiresReview:z.boolean(),
+ learnerName:interventionLabel,courseTitle:interventionLabel,className:interventionLabel,yearGroupName:interventionLabel,academicYearName:interventionLabel,
+}).strict().superRefine((value,context)=>{if(value.status==='READY'&&(value.identityRequiresReview||Object.values(value).some(field=>field===null)))context.addIssue({code:'custom',message:'Ready Intervention context requires complete non-ambiguous source labels.'});});
+export type InterventionDisplayContext=z.infer<typeof interventionDisplayContextSchema>;
 const statement=z.string().trim().min(1).max(4000);export const proposalInputSchema=z.object({baselineResultId:z.uuid(),observation:statement,interpretation:statement,recommendation:statement,rationale:statement,uncertainty:statement,activityTitle:z.string().trim().min(1).max(200),instructions:statement}).strict();
 export const recommendationProvenanceSchema=z.object({origin:z.enum(['TEACHER_AUTHORED','AI_GENERATED']),generationMode:z.enum(['HUMAN','FIXTURE','LIVE']),intelligenceRunId:z.uuid().nullable()}).superRefine((value,ctx)=>{if((value.origin==='TEACHER_AUTHORED'&&(value.generationMode!=='HUMAN'||value.intelligenceRunId!==null))||(value.origin==='AI_GENERATED'&&(value.generationMode==='HUMAN'||value.intelligenceRunId===null)))ctx.addIssue({code:'custom',message:'Proposal generation provenance is inconsistent'});});
 export const decisionInputSchema=z.object({decision:z.enum(['APPROVE','REJECT']),reason:statement,editedActivityTitle:z.string().trim().min(1).max(200).optional(),editedInstructions:statement.optional(),learnerNote:z.string().trim().min(1).max(1000).optional(),approvedActivityIds:z.array(z.uuid()).max(3).refine(ids=>new Set(ids).size===ids.length,'Approved choices must be unique.').optional()}).strict().refine(value=>value.decision==='APPROVE'||value.learnerNote===undefined&&!value.approvedActivityIds?.length,'Only an approved task may contain learner notes or choices.');

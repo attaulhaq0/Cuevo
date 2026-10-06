@@ -14,6 +14,26 @@ const resultFields = `r.id,r.submission_id as "submissionId",r.assessment_id as 
 const rubricResultFields = `r.id,r.submission_id as "submissionId",r.assessment_id as "assessmentId",r.learner_id as "learnerId",r.revision,null::float8 as score,null::float8 as "maxScore",r.feedback,'RELEASED' as status,r.policy_version as "policyVersion",r.reference_id as "referenceId",r.reference_version as "referenceVersion",r.evidence_id as "evidenceId",r.created_at as "createdAt",r.created_by as "actorId",r.parent_visible as "parentVisible",r.native_result as "nativeResult",a.title as "assessmentTitle",ref.title as "referenceTitle",'rubric' as model`;
 const resultFrom = `app.result_revisions r join app.assessments a on a.school_id=r.school_id and a.id=r.assessment_id join app.school_custom_references ref on ref.school_id=r.school_id and ref.id=r.reference_id`;
 const rubricResultFrom = `app.rubric_result_revisions r join app.assessments a on a.school_id=r.school_id and a.id=r.assessment_id join app.school_custom_references ref on ref.school_id=r.school_id and ref.id=r.reference_id`;
+/** Bind one native source before context joins; each candidate still executes under current actor RLS. */
+function exactReleasedResultQuery(identity: 'marking_id' | 'id', model?: 'numeric' | 'rubric') {
+  const numeric = model !== 'rubric'; const rubric = model !== 'numeric';
+  const candidates = [
+    ...(numeric ? [`exact_numeric as materialized(select *from app.result_revisions where school_id=$2 and ${identity}=$1)`] : []),
+    ...(rubric ? [`exact_rubric as materialized(select *from app.rubric_result_revisions where school_id=$2 and ${identity}=$1)`] : []),
+  ];
+  const candidateIdentity = (field: 'assessment_id' | 'reference_id') => [
+    ...(numeric ? [`select ${field} from exact_numeric`] : []),
+    ...(rubric ? [`select ${field} from exact_rubric`] : []),
+  ].join(' union all ');
+  candidates.push(`exact_assessment as materialized(select *from app.assessments where school_id=$2 and id=(${candidateIdentity('assessment_id')}))`,
+    `exact_reference as materialized(select *from app.school_custom_references where school_id=$2 and id=(${candidateIdentity('reference_id')}))`);
+  const from = (source: string) => `${source} r join exact_assessment a on a.school_id=r.school_id and a.id=r.assessment_id join exact_reference ref on ref.school_id=r.school_id and ref.id=r.reference_id`;
+  const rows = [
+    ...(numeric ? [`select ${resultFields} from ${from('exact_numeric')} where r.${identity}=$1`] : []),
+    ...(rubric ? [`select ${rubricResultFields} from ${from('exact_rubric')} where r.${identity}=$1`] : []),
+  ];
+  return `with ${candidates.join(',')} select *from(${rows.join(' union all ')})${identity === 'marking_id' ? 'existing_native_result' : 'released_native_result'}`;
+}
 export type AcademicCommand = 'reference.create' | 'reference.approve' | 'assessment.reference' | 'rubric.create' | 'assessment.rubric' | 'marking.create' | 'result.release'|'result.closed-correction';
 const schemas = { 'reference.create': referenceInputSchema, 'reference.approve': publishInputSchema, 'assessment.reference': referenceLinkSchema, 'rubric.create': rubricInputSchema, 'assessment.rubric': assessmentRubricSchema, 'marking.create': markingInputSchema, 'result.release': resultReleaseSchema,'result.closed-correction':closedResultCorrectionSchema };
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -150,14 +170,14 @@ export class AcademicService {
         if (reservation.state !== 'NEW') throw new DomainError('COMMAND_IN_PROGRESS', 409, 'The academic command is already in progress.');
         if (command === 'result.release') {
           await client.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [`${actor.schoolId}:release:${target}`]);
-          const existing = (await client.query(`select *from(select ${resultFields} from ${resultFrom} where r.marking_id=$1 union all select ${rubricResultFields} from ${rubricResultFrom} where r.marking_id=$1)existing_native_result`, [target])).rows[0];
+          const existing = (await client.query(exactReleasedResultQuery('marking_id'), [target, actor.schoolId])).rows[0];
           if (existing) {
             if (existing.revision !== input.expectedRevision || existing.parentVisible !== input.parentVisible) throw new DomainError('ACADEMIC_CONFLICT', 409, 'The released revision or visibility cannot change.');
             const response = nativeResponse(existing);
             await client.query('select internal.finish_command($1,$2,$3,$4::jsonb)', [identity, command, fingerprint, JSON.stringify(response)]); return response;
           }
         }
-        const result = await this.execute(client, command, target, input); const entityId = String(result.id);
+        const result = await this.execute(client, command, target, input, actor.schoolId); const entityId = String(result.id);
         await client.query('select internal.append_audit($1,$2,$3,$4,$5,$6::jsonb)', [command, command.split('.')[0], entityId, requestId, 'succeeded', JSON.stringify({ academic: true, model: result.model ?? null })]);
         const event = command === 'result.release'||command==='result.closed-correction' ? result.model === 'rubric' ? 'rubric.result.released' : 'result.released' : command === 'marking.create' ? result.model === 'rubric' ? 'rubric.assessment.marked' : 'assessment.marked' : command === 'rubric.create' ? 'rubric.created' : command;
         const metadata = command === 'result.release'||command==='result.closed-correction' ? { learnerId: result.learnerId, referenceId: result.referenceId, resultId: result.id, evidenceId: result.evidenceId, revision: result.revision, policyVersion: result.policyVersion } : {};
@@ -179,7 +199,7 @@ export class AcademicService {
     const result = await client.query<{ allowed: boolean }>(`select "authorization".academic_access($1)and(${scope})as allowed`, args);
     if (result.rows[0]?.allowed !== true) throw new DomainError('FORBIDDEN', 403, 'Your current access does not permit this academic action.');
   }
-  private async execute(client: PoolClient, command: AcademicCommand, target: string | undefined, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async execute(client: PoolClient, command: AcademicCommand, target: string | undefined, input: Record<string, unknown>, schoolId: string): Promise<Record<string, unknown>> {
     const row = async (sql: string, args: unknown[]) => { const result = (await client.query(sql, args)).rows[0]; if (!result) unavailable(); return result as Record<string, unknown>; };
     const assessment = () => row(`select a.id,a.course_id as "courseId",a.title,a.instructions,a.max_score::float8 as "maxScore",a.model,a.status,a.due_at as "dueAt",a.policy_version as "policyVersion",a.academic_reference_id as "referenceId",ar.rubric_id as "rubricId"from app.assessments a left join app.assessment_rubrics ar on ar.school_id=a.school_id and ar.assessment_id=a.id where a.id=$1`, [target]).then(nativeResponse);
     let id: string;
@@ -202,7 +222,7 @@ export class AcademicService {
         const source = await row(`select 'numeric'as model from app.marking_revisions where id=$1 union all select 'rubric'as model from app.rubric_marking_revisions where id=$1`, [target]);
         const rubric = source.model === 'rubric';
         id = String((await row(`select internal.${rubric ? 'release_rubric_marking' : 'release_marking'}($1,$2,$3)as id`, [target, input.expectedRevision, input.parentVisible])).id);
-        return nativeResponse(await row(`select ${rubric ? rubricResultFields : resultFields} from ${rubric ? rubricResultFrom : resultFrom} where r.id=$1`, [id]));
+        return nativeResponse(await row(exactReleasedResultQuery('id', rubric ? 'rubric' : 'numeric'), [id, schoolId]));
       }
       case 'result.closed-correction':{id=String((await row('select internal.correct_closed_academic_source($1,$2::jsonb)as id',[target,JSON.stringify(input)])).id);const source=await row(`select 'numeric'as model from app.result_revisions where id=$1 union all select 'rubric'as model from app.rubric_result_revisions where id=$1`,[id]);return nativeResponse(await row(`select ${source.model==='rubric'?rubricResultFields:resultFields} from ${source.model==='rubric'?rubricResultFrom:resultFrom} where r.id=$1`,[id]));}
     }

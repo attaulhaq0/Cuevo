@@ -44,6 +44,26 @@ test('assigned practice remains waiting work with its exact source action and ne
   assert.deepEqual(work[0].destination, { view: 'improvement', source: 'intervention', id: 'practice-waiting' });
 });
 
+test('Teacher practice uses only its confirmed source learner and class context', () => {
+  const id = (number: number) => `24000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
+  const task = { id: id(1), recommendationId: id(2), learnerId: id(3), referenceId: id(4), baselineResultId: id(5), title: 'Compare one explanation', instructions: 'Explain the checking step', status: 'ASSIGNED', createdAt: '2026-10-03T10:00:00Z', completedAt: null, followUpAssessmentId: null };
+  const context = { interventionId: id(1), baselineResultId: id(5), learnerId: id(3), referenceId: id(4), status: 'READY', labelBasis: 'CURRENT_REGISTERED_NAMES_AND_SOURCE_TASK', identityRequiresReview: false, learnerName: 'Lina Hassan', courseTitle: 'Checking ideas', className: 'Cedar', yearGroupName: 'Year 1', academicYearName: '2026–2027' };
+  const assigned = teacherHomeWork([], [parseIntervention({ ...task, context })], [])[0];
+  assert.equal(assigned.learnerName, 'Lina Hassan');
+  assert.equal(assigned.classLabel, 'Cedar · Year 1 · 2026–2027');
+  assert.equal(assigned.state, 'waiting');
+  assert.deepEqual(assigned.destination, { view: 'improvement', source: 'intervention', id: id(1) });
+  const completed = teacherHomeWork([], [parseIntervention({ ...task, context, status: 'COMPLETED', completedAt: '2026-10-03T11:00:00Z' })], [])[0];
+  assert.equal(completed.learnerName, 'Lina Hassan');
+  assert.equal(completed.kind, 'reassessment');
+  assert.equal(completed.state, 'needs-review');
+  const review = teacherHomeWork([], [parseIntervention({ ...task, context: { ...context, status: 'REQUIRES_REVIEW', identityRequiresReview: true } })], [])[0];
+  assert.equal(review.learnerName, null);
+  assert.equal(review.classLabel, null);
+  assert.equal(review.title, 'Compare one explanation');
+  assert.deepEqual(teacherHomeWork([], [parseIntervention({ ...task, context, requiresReview: true, reviewReason: 'ACADEMIC_SOURCE_CHANGED' })], []), []);
+});
+
 test('teacher pages cannot retain source rows from a previous token, access generation or refresh', () => {
   const row = { ...parseMarkingItem(marking), sourceScope: 'current' };
   assert.equal(currentTeacherHomeRows([row], 'current').length, 1);

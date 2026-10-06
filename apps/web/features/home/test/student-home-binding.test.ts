@@ -3,6 +3,7 @@ import test from 'node:test';
 import { LearningApiError } from '../../../shared/api/client.ts';
 import { parseAssessment, parseSubmission } from '../../learning/model.ts';
 import { parseReleasedResult } from '../../academic/model.ts';
+import { parseIntervention } from '../../improvement/model.ts';
 import { parseLearnerGoal } from '../../development/model.ts';
 import { selectStudentHomeSources, studentHomePagingOnly, studentRecognition, currentStudentHomeSummary, currentNativeFeedbackDisclosure, currentStudentHomeDenial, studentHomeReadFrame, type HomeSourcePage } from '../student-home-model.ts';
 import type { LearnerGoal } from '../../development/model.ts';
@@ -12,6 +13,23 @@ const assessment = { id: 'task', courseId: 'course', courseTitle: 'Methods · Ye
 const submission = { id: 'submission', assessmentId: 'task', learnerId, content: 'My work', status: 'SUBMITTED', revision: 1, submittedAt: '2026-10-01T00:00:00Z', assessmentTitle: 'Compare explanations', learnerName: 'Learner' };
 const page = <T,>(data: T[]): HomeSourcePage<T> => ({ data, loaded: true, loading: false, nextCursor: null, error: null, moreError: null });
 const sources = () => ({ learnerId, now: Date.parse('2026-10-03T00:00:00Z'), assessments: page([parseAssessment({ ...assessment, currentSubmission: null })]), submissions: page<ReturnType<typeof parseSubmission>>([]), interventions: page([]), results: page<ReturnType<typeof parseReleasedResult>>([]), goals: page<ReturnType<typeof parseLearnerGoal>>([]) });
+
+test('Student practice uses its exact confirmed course and preserves unknown source context', () => {
+  const id = (number: number) => `24000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
+  const task = { id: id(1), recommendationId: id(2), learnerId, referenceId: id(4), baselineResultId: id(5), title: 'Explain one checking step', instructions: 'Compare the two methods.', status: 'ASSIGNED', createdAt: '2026-10-01T10:00:00Z', completedAt: null, followUpAssessmentId: null };
+  const context = { interventionId: id(1), baselineResultId: id(5), learnerId, referenceId: id(4), status: 'READY', labelBasis: 'CURRENT_REGISTERED_NAMES_AND_SOURCE_TASK', identityRequiresReview: false, learnerName: 'Lina Hassan', courseTitle: 'Checking ideas', className: 'Cedar', yearGroupName: 'Year 1', academicYearName: '2026–2027' };
+  const select = (record: unknown, source: Partial<HomeSourcePage<ReturnType<typeof parseIntervention>>> = {}) => selectStudentHomeSources({ ...sources(), interventions: { ...page([parseIntervention(record)]), ...source } }).queue.filter(item => item.kind === 'practice');
+  const current = select({ ...task, context })[0];
+  assert.equal(current.course, 'Checking ideas');
+  assert.equal(current.title, 'Explain one checking step');
+  assert.deepEqual(current.destination, { view: 'improvement', source: 'intervention', id: id(1) });
+  assert.equal(select(task)[0].course, null);
+  assert.equal(select({ ...task, context: { ...context, status: 'REQUIRES_REVIEW', identityRequiresReview: true } })[0].course, null);
+  assert.deepEqual(select({ ...task, context, requiresReview: true, reviewReason: 'ACADEMIC_SOURCE_CHANGED' }), []);
+  assert.deepEqual(select({ ...task, context }, { error: new LearningApiError('denied') }), []);
+  assert.deepEqual(select({ ...task, context }, { moreError: new LearningApiError('denied') }), []);
+  assert.deepEqual(select({ ...task, learnerId: id(9), context: { ...context, learnerId: id(9) } }), []);
+});
 
 test('Student current read frame changes immediately on token API actor role and access changes without clearing presentation preference identity', () => {
   const app = { apiUrl: 'https://api.invalid', accessToken: 'one', membership: { schoolId: 'school', userId: learnerId, role: 'student' }, accessGeneration: 1, status: 'ready', online: true };

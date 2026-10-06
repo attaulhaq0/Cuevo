@@ -185,6 +185,22 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts configure-web
+      - name: Export the verified public handover for the separate web release
+        id: web-transfer
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts export-web-handover
+      - name: Retain only the completed backend public handover
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/hosted-release/web-transfer.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
       - name: Preserve schema status without private runtime inputs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

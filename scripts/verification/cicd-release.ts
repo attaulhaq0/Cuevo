@@ -8,6 +8,9 @@ import { z } from 'zod';
 import { validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
 import { runtimeEnvironment } from '../runtime/environment';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, prepareReleaseReviewPackage, readPreparedReleaseReviewPackage, validateFounderReleaseApproval, type ReleaseReviewExpected } from './release-review';
+import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, readWebBackendBridge, bindWebReviewToBackend, readCanonicalWebOutput } from './web-backend-bridge';
+import { bindVerifiedStagingWebOrigin } from './web-staging-origin';
+import { verifyHostedBrowserAccess } from './backend-hosted-browser';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -64,6 +67,7 @@ const inspectDeployment = async (identity: { teamId: string; projectId: string; 
     if (!response.ok) throw Error('Unavailable'); inspected = await response.json();
   } catch { throw Error('Team-scoped Vercel deployment evidence is unavailable; response contents withheld.'); }
   validateVercelDeployment(inspected, { sha: required('RELEASE_SHA'), ...identity, target: vercelTarget(required('RELEASE_ENVIRONMENT')) });
+  return z.object({ id: z.string().regex(/^dpl_[A-Za-z0-9]+$/), url: z.string(), projectId: z.string(), ownerId: z.string() }).parse(inspected);
 };
 const assertCurrentMain = async () => {
   const current = await github('git/ref/heads/main');
@@ -118,23 +122,40 @@ const reviewExpected = async (manifest: unknown) => {
   const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...sourceEvidence(assignments.baseSha), reviews: assignments.reviews };
   return { expected, run };
 };
+const backendBridge = async () => {
+  const encoded = process.env.BACKEND_SELECTION_BASE64 ?? '';
+  const selection = readWebBackendSelection(encoded);
+  if (!selection && (process.env.BACKEND_MANIFEST_BASE64 || process.env.BACKEND_BRIDGE_BASE64)) throw Error('Backend evidence outputs require their exact admitted selection.');
+  // Actual dispatch input and the validated context output must agree. A caller
+  // cannot omit an invalid bridge and fall back to manually supplied variables.
+  if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' && process.env.GITHUB_EVENT_PATH) {
+    const actual = backendSelectionForWebEvent(await json<unknown>(required('GITHUB_EVENT_PATH')), required('GITHUB_EVENT_NAME'), required('RELEASE_ENVIRONMENT'));
+    if (encodeWebBackendSelection(actual) !== encoded) throw Error('Backend selection changed after release context admission.');
+  }
+  if (!selection) return null;
+  return readWebBackendBridge({ selection, repoRoot: process.cwd(), githubToken: required('GH_TOKEN'), releaseSha: required('RELEASE_SHA'), ciRunId: required('CI_RUN_ID'), environment: required('RELEASE_ENVIRONMENT'), web: webIdentity() });
+};
 const approvalEvidence = async (credentialFree: boolean) => {
   if (credentialFree && process.env.VERCEL_TOKEN) throw Error('Credential-free release approval must receive no deployment token.');
   await currentCi();
-  const protectedManifest = parseCanonicalReleaseReviewJson(required('RELEASE_MANIFEST'));
+  const bridge = await backendBridge();
+  const protectedManifest = bridge ? readCanonicalWebOutput(required('BACKEND_MANIFEST_BASE64')) : parseCanonicalReleaseReviewJson(required('RELEASE_MANIFEST'));
+  if (bridge && (canonicalReleaseReviewJson(protectedManifest) !== canonicalReleaseReviewJson(bridge.manifest)
+    || canonicalReleaseReviewJson(readCanonicalWebOutput(required('BACKEND_BRIDGE_BASE64'))) !== canonicalReleaseReviewJson(bridge))) throw Error('Completed backend evidence changed after web package preparation.');
   const publicConfig = await admitManifest(protectedManifest, required('CI_RUN_ID'));
   if(publicConfig.api.kind==='vercel'&&publicConfig.api.projectId===webIdentity().projectId)throw Error('API and web must use separate Vercel projects before credential consumption.');
   const { expected, run } = await reviewExpected(protectedManifest);
   if (String(expected.environmentId) !== required('RELEASE_ENVIRONMENT_ID')) throw Error('Release environment changed after package preparation.');
   const prepared = readPreparedReleaseReviewPackage(required('REVIEW_BASE64'), expected);
+  if (bridge) bindWebReviewToBackend(parseCanonicalReleaseReviewJson(prepared.canonicalJson), parseCanonicalReleaseReviewJson(required('CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON')), bridge);
   if (prepared.sha256 !== required('REVIEW_DIGEST')) throw Error('Release review package digest changed.');
   const receipt = validateFounderReleaseApproval(prepared, run, await github(`actions/runs/${expected.releaseRunId}/approvals`), expected);
-  return { manifest: protectedManifest, publicConfig, prepared, receipt, ciRunId: required('CI_RUN_ID') };
+  return { manifest: protectedManifest, publicConfig, prepared, receipt, ciRunId: required('CI_RUN_ID'), ...(bridge ? { backend: bridge } : {}) };
 };
 const readmitApproval = async () => {
   const savedText = await readFile(reviewPath, 'utf8');
   if (Buffer.byteLength(savedText, 'utf8') > 192 * 1024) throw Error('Saved release approval exceeds its bounded receipt size.');
-  const saved = z.object({ manifest: z.unknown(), publicConfig: z.unknown(), prepared: z.unknown(), receipt: z.unknown(), ciRunId: z.string() }).strict().parse(parseJson<unknown>(savedText));
+  const saved = z.object({ manifest: z.unknown(), publicConfig: z.unknown(), prepared: z.unknown(), receipt: z.unknown(), ciRunId: z.string(), backend: z.unknown().optional() }).strict().parse(parseJson<unknown>(savedText));
   const current = await approvalEvidence(false);
   // Review validators return JSON-only null-prototype snapshots. Saved JSON must compare its
   // validated values, not prototype identity introduced by decoding the receipt file.
@@ -142,10 +163,22 @@ const readmitApproval = async () => {
   if (!isDeepStrictEqual(await json<unknown>(publicPath), current.publicConfig) || !isDeepStrictEqual(await json<unknown>(join(directory, 'manifest.json')), { manifest: current.manifest, ciRunId: current.ciRunId })) throw Error('Saved release manifest or public dependencies changed before consumption.');
   return current;
 };
+const currentWebDeploymentReceipt = async (admitted: Awaited<ReturnType<typeof readmitApproval>>) => {
+  if(!admitted.backend||required('RELEASE_ENVIRONMENT')!=='staging')throw Error('Hosted staging checks require the completed backend handover.');
+  const identity=webIdentity();
+  const receipt=z.object({version:z.literal(1),purpose:z.literal('CUEVO_VERIFIED_WEB_DEPLOYMENT'),status:z.literal('WEB_DEPLOYMENT_VERIFIED'),repository:z.literal(required('GITHUB_REPOSITORY')),sourceSha:z.literal(required('RELEASE_SHA')),ciRunId:z.literal(required('CI_RUN_ID')),runId:z.literal(required('GITHUB_RUN_ID')),runAttempt:z.literal(Number(required('GITHUB_RUN_ATTEMPT'))),environment:z.literal('staging'),teamId:z.literal(identity.teamId),projectId:z.literal(identity.projectId),target:z.literal('preview'),deploymentId:z.string().regex(/^dpl_[A-Za-z0-9]+$/),url:z.string().url(),artifactSha256:z.string().regex(/^[a-f0-9]{64}$/),manifestSha256:z.literal(createHash('sha256').update(canonicalReleaseReviewJson(admitted.manifest)).digest('hex')),reviewSha256:z.literal(admitted.prepared.sha256),backend:z.unknown(),observedAt:z.iso.datetime({offset:true}),coreLearningLoopVerified:z.literal(false),customerReady:z.literal(false),hostedAcceptance:z.literal(false)}).strict().parse(await json<unknown>(join(directory,'web-deployment-result.json')));
+  if(canonicalReleaseReviewJson(receipt.backend)!==canonicalReleaseReviewJson(admitted.backend.backendIdentity)||receipt.artifactSha256!==await artifactDigest()||Date.parse(receipt.observedAt)>Date.now()||Date.now()-Date.parse(receipt.observedAt)>3600000)throw Error('Verified web deployment receipt changed or expired.');
+  const upload=z.object({url:z.literal(receipt.url),commitSha:z.literal(receipt.sourceSha)}).strict().parse(await json<unknown>(join(directory,'deployment.json')));if(!upload)throw Error('Web upload receipt is unavailable.');
+  await inspectDeployment({teamId:receipt.teamId,projectId:receipt.projectId,deploymentId:receipt.deploymentId,url:receipt.url});
+  return receipt;
+};
 const mode = process.argv[2];
 if (mode === 'context') {
-  const context = releaseContext(await json<unknown>(required('GITHUB_EVENT_PATH')), { sha: required('GITHUB_SHA'), ref: required('GITHUB_REF'), repository: required('GITHUB_REPOSITORY'), eventName: required('GITHUB_EVENT_NAME') });
+  const event = await json<unknown>(required('GITHUB_EVENT_PATH'));
+  const context = releaseContext(event, { sha: required('GITHUB_SHA'), ref: required('GITHUB_REF'), repository: required('GITHUB_REPOSITORY'), eventName: required('GITHUB_EVENT_NAME') });
+  const selection = backendSelectionForWebEvent(event, required('GITHUB_EVENT_NAME'), context.environment);
   await writeFile(required('GITHUB_OUTPUT'), `sha=${context.sha}\nci-run-id=${context.ciRunId}\nenvironment=${context.environment}\n`, { flag: 'a' });
+  if (selection) await writeFile(required('GITHUB_OUTPUT'), `backend-selection-base64=${encodeWebBackendSelection(selection)}\n`, { flag: 'a' });
   console.log('Release context bound to the current main checkout and canonical CI run.');
 } else if (mode === 'controls') {
   await controlEvidence();
@@ -154,11 +187,14 @@ if (mode === 'context') {
   if (process.env.VERCEL_TOKEN) throw Error('Release package preparation must receive no deployment token.');
   await currentCi();
   const input = z.object({ manifest: z.unknown(), review: z.unknown() }).strict().parse(parseCanonicalReleaseReviewJson(required('CUEVO_RELEASE_REVIEW_INPUT_JSON')));
+  const bridge = await backendBridge();
+  if (bridge) { input.review = bindWebReviewToBackend(input.review, parseCanonicalReleaseReviewJson(required('CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON')), bridge); input.manifest = bridge.manifest; }
   const admitted = await admitManifest(input.manifest, required('CI_RUN_ID'));
   if(admitted.api.kind==='vercel'&&admitted.api.projectId===webIdentity().projectId)throw Error('API and web must use separate Vercel projects before release preparation.');
   const { expected } = await reviewExpected(input.manifest);
   const prepared = prepareReleaseReviewPackage(input.review, expected);
   await writeFile(required('GITHUB_OUTPUT'), `review-base64=${prepared.base64}\nreview-digest=${prepared.sha256}\nenvironment-id=${expected.environmentId}\n`, { flag: 'a' });
+  if (bridge) await writeFile(required('GITHUB_OUTPUT'), `backend-manifest-base64=${Buffer.from(canonicalReleaseReviewJson(bridge.manifest)).toString('base64')}\nbackend-bridge-base64=${Buffer.from(canonicalReleaseReviewJson(bridge)).toString('base64')}\n`, { flag: 'a' });
   await writeFile(required('GITHUB_STEP_SUMMARY'), `## Cuevo pre-build release admission\n\nThis package contains operator-attested independent review digests. It does not approve a future web artifact or domain promotion.\n\n\`\`\`json\n${JSON.stringify(parseCanonicalReleaseReviewJson(prepared.canonicalJson), null, 2)}\n\`\`\`\n\nThe following dependency manifest is bound by the package's manifest SHA-256:\n\n\`\`\`json\n${JSON.stringify(input.manifest, null, 2)}\n\`\`\`\n\nCopy this exact approval comment:\n\n\`${prepared.comment}\`\n`, { flag: 'a' });
   console.log('Exact secret-free release review package prepared before founder approval.');
 } else if (mode === 'approval') {
@@ -211,7 +247,7 @@ if (mode === 'context') {
   if (!isDeepStrictEqual(await json<unknown>(publicPath), publicConfig)) throw Error('Admitted release dependencies changed before verification.');
   if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/i.test(deployment.url)) throw Error('Invalid Vercel deployment URL.');
   const teamId = required('VERCEL_ORG_ID'); const projectId = required('VERCEL_PROJECT_ID');
-  await inspectDeployment({ projectId, teamId, url: deployment.url });
+  const webDeployment = await inspectDeployment({ projectId, teamId, url: deployment.url });
   if (deployment.commitSha !== required('RELEASE_SHA')) throw Error('Stored deployment receipt names another source commit.');
   if (publicConfig.api.kind === 'vercel') {
     if (publicConfig.api.projectId === projectId) throw Error('API and web must use separate Vercel projects.');
@@ -228,4 +264,20 @@ if (mode === 'context') {
   } else {
     console.log('Vercel source SHA/team/project and web/API readiness verified. Edge worker security/queue evidence remains admitted attestations within 24 hours; artifact/lock hashes are operator evidence, with no fresh Edge network or source verification. Full staged actor/security/AI and domain promotion remain operator gates.');
   }
-} else throw Error('Expected context, ci, controls, prepare, approval, manifest, build, deploy or verify release operation.');
+  const admitted = await readmitApproval();
+  const artifactSha256 = await readFile(join(directory, 'artifact.sha256'), 'utf8');
+  if (!/^[a-f0-9]{64}$/.test(artifactSha256) || artifactSha256 !== await artifactDigest()) throw Error('Web artifact changed before verification receipt.');
+  const receipt = { version: 1, purpose: 'CUEVO_VERIFIED_WEB_DEPLOYMENT', status: 'WEB_DEPLOYMENT_VERIFIED', repository: required('GITHUB_REPOSITORY'), sourceSha: required('RELEASE_SHA'), ciRunId: required('CI_RUN_ID'), runId: required('GITHUB_RUN_ID'), runAttempt: Number(required('GITHUB_RUN_ATTEMPT')), environment: required('RELEASE_ENVIRONMENT'), teamId, projectId, target: vercelTarget(required('RELEASE_ENVIRONMENT')), deploymentId: webDeployment.id, url: deployment.url,
+    artifactSha256, manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(admitted.manifest)).digest('hex'), reviewSha256: admitted.prepared.sha256, backend: admitted.backend?.backendIdentity ?? null, observedAt: new Date().toISOString(), coreLearningLoopVerified: false, customerReady: false, hostedAcceptance: false };
+  await writeFile(join(directory, 'web-deployment-result.json'), canonicalReleaseReviewJson(receipt), { flag: 'wx', mode: 0o600 });
+} else if(mode==='bind-staging-origin'){
+  const admitted=await readmitApproval();if(!admitted.backend)throw Error('Staging origin requires an admitted completed backend.');
+  const receipt=await currentWebDeploymentReceipt(admitted);
+  const result=await bindVerifiedStagingWebOrigin({repoRoot:process.cwd(),sourceSha:receipt.sourceSha,ciRunId:receipt.ciRunId,runId:receipt.runId,runAttempt:receipt.runAttempt,web:{teamId:receipt.teamId,projectId:receipt.projectId,target:'preview'},webDeployment:{id:receipt.deploymentId,url:receipt.url,artifactSha256:receipt.artifactSha256},vercelToken:required('VERCEL_TOKEN'),admit:readmitApproval});
+  if(result.status!=='WEB_ORIGIN_BOUND'||!result.canonicalReceipt)throw Error('Staging web origin requires current verification.');await readmitApproval();await currentWebDeploymentReceipt(admitted);
+} else if(mode==='verify-browser'){
+  const admitted=await readmitApproval(),receipt=await currentWebDeploymentReceipt(admitted),selection=readWebBackendSelection(required('BACKEND_SELECTION_BASE64'));if(!selection||!admitted.backend)throw Error('Hosted browser check requires selected completed backend.');
+  const result=await verifyHostedBrowserAccess({...selection,repoRoot:process.cwd(),releaseSha:receipt.sourceSha,ciRunId:receipt.ciRunId,web:{teamId:receipt.teamId,projectId:receipt.projectId,target:'preview'},githubToken:required('GH_TOKEN'),vercelToken:required('VERCEL_TOKEN'),syntheticPassword:required('CUEVO_SYNTHETIC_PILOT_PASSWORD'),webDeployment:{id:receipt.deploymentId,url:receipt.url}});
+  if(result.status!=='HOSTED_ROLE_ACCESS_VERIFIED'||!result.canonicalReceipt||!result.sessionsClosed)throw Error('Hosted role access requires review; full learning-loop/customer acceptance remains separate.');
+  await readmitApproval();await currentWebDeploymentReceipt(admitted);
+} else throw Error('Expected context, ci, controls, prepare, approval, manifest, build, deploy, verify, bind-staging-origin or verify-browser release operation.');

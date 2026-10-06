@@ -15,6 +15,7 @@ import { parseAnnouncement } from '../../community/model';
 import type { HomeDestination, HomeTarget } from '../model';
 import { currentTeacherHomeRows, teacherHomeNextWork, teacherHomeWork } from '../teacher-home-binding-model';
 import { teacherHomeAr, teacherHomeEn } from '../teacher-home-binding-messages';
+import { parentHomeSourceDenial, parentHomeSourceUsable, type ParentHomeSourceDenial } from '../parent-home-binding-model';
 import type { TeacherTrailContext } from '../teacher-trail-model';
 import { TeacherTrailHomeView } from './teacher-trail-home';
 
@@ -38,7 +39,11 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
   const calendarParser = useCallback((value: unknown) => ({ ...parseSchedule(value), title: parseSchedule(value).title, sourceScope: scope }), [scope]);
   const announcementParser = useCallback((value: unknown) => ({ ...parseAnnouncement(value), sourceScope: scope }), [scope]);
   const marking = usePaginatedLearningQuery(can('academic') ? '/v1/marking?limit=25' : null, markingParser, refresh);
-  const practices = usePaginatedLearningQuery(can('improvement') ? '/v1/interventions?limit=25' : null, practiceParser, refresh);
+  const practiceRead = usePaginatedLearningQuery(can('improvement') ? '/v1/interventions?limit=25' : null, practiceParser, refresh);
+  const [practiceDenial, setPracticeDenial] = useState<ParentHomeSourceDenial | null>(null);
+  const currentPracticeDenial = parentHomeSourceDenial(practiceDenial, can('improvement') ? scope : null, practiceRead);
+  if (currentPracticeDenial !== practiceDenial) setPracticeDenial(currentPracticeDenial);
+  const practices = { ...practiceRead, data: parentHomeSourceUsable(practiceRead, currentPracticeDenial) ? practiceRead.data : [], error: currentPracticeDenial?.error ?? practiceRead.error };
   const portfolio = usePaginatedLearningQuery(can('portfolio') ? '/v1/portfolio/items?limit=25' : null, portfolioParser, refresh);
   const proposals = usePaginatedLearningQuery(can('improvement') ? '/v1/recommendations?limit=25' : null, proposalParser, refresh);
   const calendar = usePaginatedLearningQuery(can('school') ? '/v1/school/calendar?limit=25' : null, calendarParser, refresh);
@@ -54,7 +59,7 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
   const action = (label: string, target: HomeDestination) => ({ label, onClick: () => onNavigate(target) });
   const workActionLabel = (kind: typeof work[number]['kind']) => kind === 'marking' ? t.work : kind === 'reassessment' ? t.followUp : kind === 'support' ? t.reviewPractice : t.portfolio;
   const nextWork = teacherHomeNextWork(work);
-  const sourceNextActions = nextWork.map(row => ({ key: row.key, title: row.learnerName ? `${row.title} · ${row.learnerName}` : row.title, icon: row.kind === 'portfolio' ? 'portfolio' as const : row.kind === 'marking' ? 'assessment' as const : 'help' as const, action: action(workActionLabel(row.kind), row.destination) }));
+  const sourceNextActions = nextWork.map(row => ({ key: row.key, title: [row.title, row.learnerName, row.classLabel].filter(Boolean).join(' · '), icon: row.kind === 'portfolio' ? 'portfolio' as const : row.kind === 'marking' ? 'assessment' as const : 'help' as const, action: action(workActionLabel(row.kind), row.destination) }));
   if (proposal) sourceNextActions.push({ key: `proposal:${proposal.id}`, title: proposal.activityTitle, icon: 'help', action: action(t.support, 'improvement') });
   const areas = [
     { target: 'academic', title: t.marking, description: t.markingBody, icon: 'assessment' },
@@ -76,7 +81,7 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
         key: row.key, kind: row.kind, title: row.title, learnerName: row.learnerName, classLabel: row.classLabel,
         state: row.state, statusLabel: row.kind === 'marking' ? row.state === 'in-progress' ? (locale === 'ar' ? 'مراجعة محفوظة' : 'Review saved') : t.work : row.kind === 'reassessment' ? t.followUp : row.kind === 'support' ? t.waitingPractice : t.portfolio,
         nativeKind: row.nativeKind, dateLabel: date(row.date),
-        action: { ...action(workActionLabel(row.kind), row.destination), accessibleLabel: `${workActionLabel(row.kind)}: ${row.title}${row.learnerName ? ` · ${row.learnerName}` : ''}` },
+        action: { ...action(workActionLabel(row.kind), row.destination), accessibleLabel: `${workActionLabel(row.kind)}: ${[row.title, row.learnerName, row.classLabel].filter(Boolean).join(' · ')}` },
         ...(row.currentText ? { currentSubmission: { text: row.currentText, dateLabel: null, action: action(`${t.work}: ${row.title}`, row.destination) } } : {}),
       })),
       ...(can('academic') ? { viewAll: action(t.allWork, 'academic') } : {}),

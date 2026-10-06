@@ -25,13 +25,15 @@ const migration = '-- synthetic release process migration\n';
 const tree = Buffer.concat([Buffer.from('100644 blob ' + digest.slice(0, 40) + '\t'), Buffer.from([0xff]), Buffer.from('\0')]);
 const diff = Buffer.from('diff --git a/source.ts b/source.ts\n+source\n');
 const hash = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
-type Mode = 'prepare' | 'approval' | 'build' | 'deploy' | 'verify';
+type Mode = 'prepare' | 'approval' | 'build' | 'deploy' | 'verify' | 'bind-staging-origin' | 'verify-browser';
 type Injection = {
   at?: number; environmentId?: number; runAttempt?: number; currentSha?: string; ciConclusion?: string;
   approval?: 'missing' | 'generic' | 'rejected' | 'duplicate' | 'wrong-founder' | 'malformed';
   unavailable?: string; invalidJson?: string; treeChanged?: boolean; diffChanged?: boolean;
   dirty?: boolean; untracked?: boolean; ancestorDenied?: boolean; controlsChanged?: boolean;
-  afterPull?: 'main' | 'controls' | 'expiry'|'owner'; pullPublicChanged?: boolean;
+  afterPull?: 'main' | 'controls' | 'expiry'|'owner'|'bridge'; pullPublicChanged?: boolean;
+  backendBridge?: 'missing' | 'changed';
+  stagingConsumerFailure?: boolean;
   apiSameProject?:boolean;
   repositoryOwner?:'User'|'Organization'|'Bot';repositoryName?:string;repositoryUnavailable?:boolean;bypassMetadata?:'omitted'|'null'|'unsafe';
 };
@@ -52,8 +54,8 @@ function fixtureManifest(environment: 'staging' | 'production') {
   };
 }
 
-async function withFixture(run: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>, environment: 'staging' | 'production' = 'staging') {
-  const fixture = await createFixture(environment);
+async function withFixture(run: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>, environment: 'staging' | 'production' = 'staging', bridge = false) {
+  const fixture = await createFixture(environment, bridge);
   try { await run(fixture); }
   finally {
     assert.equal(dirname(fixture.directory), resolve(tmpdir()));
@@ -62,7 +64,7 @@ async function withFixture(run: (fixture: Awaited<ReturnType<typeof createFixtur
   }
 }
 
-async function createFixture(environment: 'staging' | 'production') {
+async function createFixture(environment: 'staging' | 'production', bridgeEnabled = false) {
   const directory = await mkdtemp(join(tmpdir(), 'cuevo-release-process-'));
   await mkdir(join(directory, 'supabase/migrations'), { recursive: true });
   await writeFile(join(directory, 'supabase/migrations/20261006000000_process.sql'), migration);
@@ -76,6 +78,11 @@ async function createFixture(environment: 'staging' | 'production') {
   const web = { teamId: 'team_cuevo', projectId: 'prj_cuevo', target: environment === 'staging' ? 'preview' as const : 'production' as const };
   const review = { version: 1 as const, repository: 'owner/repo', releaseSha: sha, baseSha, ciRunId: '42', web, manifestSha256: hash(canonicalReleaseReviewJson(manifest)), sourceManifestSha256: hash(tree), diffSha256: hash(diff), reviews };
   const prepared = prepareReleaseReviewPackage(review, { repository: review.repository, releaseSha: sha, baseSha, ciRunId: '42', web, manifestSha256: review.manifestSha256, sourceManifestSha256: review.sourceManifestSha256, diffSha256: review.diffSha256, releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: environment, now, reviews: assignments.reviews });
+  const bridge = { purpose: 'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION', provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE', manifest, publicConfig: manifest.publicConfig,
+    reviewFacts: reviews.map(row => ({ category: row.category, taskId: row.taskId, releaseSha: row.releaseSha, baseSha: row.baseSha, sourceManifestSha256: row.sourceManifestSha256, diffSha256: row.diffSha256, reportSha256: row.reportSha256, evidenceSha256: row.evidenceSha256, reviewedAt: row.reviewedAt, treeSha: 'd'.repeat(40) })), assignments: assignments.reviews,
+    backendIdentity: { repository: 'owner/repo', sourceSha: sha, baseSha, ciRunId: '42', manifestSha256: review.manifestSha256, web: { ...web, origin: 'https://cuevo-beta.vercel.app' } },
+    privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
+  const bridgeSelection = Buffer.from(canonicalReleaseReviewJson({ backendRunId: '61', backendRunAttempt: 1, artifactId: '71', transferSha256: digest })).toString('base64');
   const env = {
     PATH: process.env.PATH, SystemRoot: process.env.SystemRoot,
     GITHUB_REPOSITORY: 'owner/repo', GITHUB_SHA: sha, GITHUB_REF: 'refs/heads/main', GITHUB_RUN_ID: '51', GITHUB_RUN_ATTEMPT: '1',
@@ -86,6 +93,7 @@ async function createFixture(environment: 'staging' | 'production') {
     CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: canonicalReleaseReviewJson(assignments),
     RELEASE_MANIFEST: canonicalReleaseReviewJson(manifest), RELEASE_ENVIRONMENT_ID: '123',
     REVIEW_BASE64: prepared.base64, REVIEW_DIGEST: prepared.sha256,
+    ...(bridgeEnabled ? { BACKEND_SELECTION_BASE64: bridgeSelection, BACKEND_MANIFEST_BASE64: Buffer.from(canonicalReleaseReviewJson(manifest)).toString('base64'), BACKEND_BRIDGE_BASE64: Buffer.from(canonicalReleaseReviewJson(bridge)).toString('base64'), CUEVO_CONTROLLED_BRIDGE_JSON: canonicalReleaseReviewJson(bridge) } : {}),
   };
   const execute = (mode: Mode, injection: Injection = {}, extra: Record<string, string> = {}) => {
     const script = `
@@ -99,8 +107,13 @@ async function createFixture(environment: 'staging' | 'production') {
       const originalTree = Buffer.from(${JSON.stringify(tree.toString('base64'))}, 'base64');
       const originalDiff = Buffer.from(${JSON.stringify(diff.toString('base64'))}, 'base64');
       let pulled = false;
+      globalThis.cuevoControlledBridgeRead = async()=>{ console.log('BRIDGE_REIMPORT'); if(state.backendBridge==='missing')throw Error('Missing exact artifact');const result=JSON.parse(process.env.CUEVO_CONTROLLED_BRIDGE_JSON); if(state.backendBridge==='changed'||pulled&&state.afterPull==='bridge')result.backendIdentity.manifestSha256='0'.repeat(64);return{...result,observedAt:new Date(Date.now()).toISOString()}; };
+      globalThis.cuevoControlledOrigin = async input=>{ console.log('STAGING_ORIGIN_CONSUMER');if(input.vercelToken!==process.env.VERCEL_TOKEN||input.webDeployment.id!=='dpl_cuevo'||input.sourceSha!==process.env.RELEASE_SHA)throw Error('Incorrect staging origin identity');await input.admit();return{status:state.stagingConsumerFailure?'REQUIRES_REVIEW':'WEB_ORIGIN_BOUND',canonicalReceipt:'{}',hostedAcceptance:false};};
+      globalThis.cuevoControlledBrowser = async input=>{ console.log('STAGING_BROWSER_CONSUMER');if(input.vercelToken!==process.env.VERCEL_TOKEN||input.syntheticPassword!==process.env.CUEVO_SYNTHETIC_PILOT_PASSWORD||input.webDeployment.id!=='dpl_cuevo')throw Error('Incorrect browser identity');return{status:state.stagingConsumerFailure?'REQUIRES_REVIEW':'HOSTED_ROLE_ACCESS_VERIFIED',canonicalReceipt:'{}',sessionsClosed:true,hostedAcceptance:false};};
+      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/backend-web-transfer-admission.ts'))return{format:'module',shortCircuit:true,source:'export async function readCompletedBackendWebTransferAdmission(){return globalThis.cuevoControlledBridgeRead();}'};if(url.endsWith('/web-staging-origin.ts'))return{format:'module',shortCircuit:true,source:'export const bindVerifiedStagingWebOrigin=globalThis.cuevoControlledOrigin;'};if(url.endsWith('/backend-hosted-browser.ts'))return{format:'module',shortCircuit:true,source:'export const verifyHostedBrowserAccess=globalThis.cuevoControlledBrowser;'};return next(url,context);}});
       Object.defineProperty(process, 'platform', { value: 'linux' });
       Date.now = () => state.at ?? (pulled && state.afterPull === 'expiry' ? ${now + 86400000} : ${now});
+      const FixedDate = Date; globalThis.Date = class extends FixedDate { constructor(value) { super(value === undefined ? Date.now() : value); } static now(){return state.at ?? (pulled && state.afterPull === 'expiry' ? ${now + 86400000} : ${now});} };
       process.argv[2] = ${JSON.stringify(mode)};
       if(state.apiSameProject){const input=JSON.parse(process.env.CUEVO_RELEASE_REVIEW_INPUT_JSON);input.manifest=manifest;process.env.CUEVO_RELEASE_REVIEW_INPUT_JSON=(await import(${JSON.stringify(pathToFileURL(resolve('scripts/verification/release-review.ts')).href)})).canonicalReleaseReviewJson(input);process.env.RELEASE_MANIFEST=(await import(${JSON.stringify(pathToFileURL(resolve('scripts/verification/release-review.ts')).href)})).canonicalReleaseReviewJson(manifest);}
       child.execFileSync = (binary, args, options) => {
@@ -153,7 +166,7 @@ async function createFixture(environment: 'staging' | 'production') {
       };
       await import(${JSON.stringify(pathToFileURL(resolve('scripts/verification/cicd-release.ts')).href)});
     `;
-    const providerEnv = ['build', 'deploy', 'verify'].includes(mode) ? { VERCEL_TOKEN: 'synthetic-vercel-token', VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo', DATABASE_URL: 'PRIVATE_DATABASE_SENTINEL' } : {};
+    const providerEnv = ['build', 'deploy', 'verify','bind-staging-origin','verify-browser'].includes(mode) ? { VERCEL_TOKEN: 'synthetic-vercel-token', VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo', DATABASE_URL: 'PRIVATE_DATABASE_SENTINEL',...mode==='verify-browser'?{CUEVO_SYNTHETIC_PILOT_PASSWORD:'synthetic-private-pilot-password'}:{} } : {};
     const result = spawnSync(process.execPath, ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href, '--input-type=module', '--eval', script], { cwd: directory, env: { ...env, ...providerEnv, ...extra }, encoding: 'utf8', timeout: 20000 });
     assert.equal(result.error, undefined, String(result.error));
     for (const sentinel of ['synthetic-vercel-token', 'PRIVATE_DATABASE_SENTINEL', 'PRIVATE_RESPONSE_SENTINEL']) assert.equal((result.stdout + result.stderr).includes(sentinel), false, 'private responses and credentials stay withheld');
@@ -203,7 +216,36 @@ test('credential-free official founder approval is admitted and the complete pro
     assert.ok(build.stdout.indexOf('/approvals') < build.stdout.indexOf('SINK'));
     const deploy = fixture.execute('deploy'); passed(deploy); assert.match(deploy.stdout, /"--prebuilt"/); assert.doesNotMatch(deploy.stdout, /"promote"|"alias"/);
     const verify = fixture.execute('verify'); passed(verify); assert.ok(verify.stdout.indexOf('/approvals') < verify.stdout.indexOf('PROVIDER'));
+    const deployment = JSON.parse(await readFile(join(fixture.directory, '.local/cicd-release/web-deployment-result.json'), 'utf8'));
+    assert.equal(deployment.status, 'WEB_DEPLOYMENT_VERIFIED'); assert.equal(deployment.deploymentId, 'dpl_cuevo'); assert.equal(deployment.sourceSha, sha); assert.equal(deployment.coreLearningLoopVerified, false);
+    assert.doesNotMatch(JSON.stringify(deployment), /synthetic-vercel-token|PRIVATE_DATABASE_SENTINEL/);
   });
+});
+
+test('actual staging wrapper reimports completed bridge at every boundary while keeping its separate web approval', async () => {
+  await withFixture(async fixture => {
+    const preparation = fixture.execute('prepare'); passed(preparation); assert.match(preparation.stdout, /BRIDGE_REIMPORT/);
+    const output = await readFile(join(fixture.directory, 'output.txt'), 'utf8'); assert.match(output, /backend-manifest-base64=/); assert.match(output, /backend-bridge-base64=/);
+    const approval = fixture.execute('approval'); passed(approval); assert.match(approval.stdout, /BRIDGE_REIMPORT/); assert.doesNotMatch(approval.stdout, /SINK |PROVIDER /);
+    const build = fixture.execute('build'); passed(build); assert(build.stdout.split('BRIDGE_REIMPORT').length >= 3);
+    const deploy = fixture.execute('deploy'); passed(deploy); assert.match(deploy.stdout, /BRIDGE_REIMPORT/);
+    const verify = fixture.execute('verify'); passed(verify); assert.match(verify.stdout, /BRIDGE_REIMPORT/);
+    const receipt = JSON.parse(await readFile(join(fixture.directory, '.local/cicd-release/web-deployment-result.json'), 'utf8'));
+    assert.equal(receipt.backend.sourceSha, sha); assert.equal(receipt.deploymentId, 'dpl_cuevo'); assert.equal(receipt.customerReady, false);
+  }, 'staging', true);
+});
+
+test('missing or changed completed bridge never falls back to supplied manifest and drift after pull prevents build', async () => {
+  await withFixture(async fixture => {
+    for (const backendBridge of ['missing', 'changed'] as const) { noProvider(fixture.execute('approval', { backendBridge })); noProvider(fixture.execute('prepare', { backendBridge })); }
+    passed(fixture.execute('approval'));
+    const failed = fixture.execute('build', { afterPull: 'bridge' }); assert.equal(failed.status, 1); assert.match(failed.stdout, /SINK \["pull"/); assert.doesNotMatch(failed.stdout, /SINK \["build"/);
+    noProvider(fixture.execute('deploy', { backendBridge: 'missing' }));
+  }, 'staging', true);
+});
+
+test('orphaned backend evidence outputs cannot bypass selection admission into the legacy manifest path', async () => {
+  await withFixture(async fixture => { noProvider(fixture.execute('approval', {}, { BACKEND_BRIDGE_BASE64: Buffer.from('{}').toString('base64') })); });
 });
 
 test('approval refuses missing, wrong, ambiguous or unavailable official founder evidence without provider consumption', async () => {
@@ -266,3 +308,16 @@ test('live personal repository metadata admits unsupported omission and is read 
  });
 });
 function noProviderAfterPull(result:ReturnType<Awaited<ReturnType<typeof createFixture>>['execute']>){assert.equal(result.status,1);assert.match(result.stdout,/SINK \["pull"/);assert.doesNotMatch(result.stdout,/SINK \["build"|SINK \["deploy"|PROVIDER /);}
+
+test('staging origin and browser consumers require original verified web artifact and completed handover under current approval',async()=>{
+ await withFixture(async fixture=>{
+  passed(fixture.execute('approval'));passed(fixture.execute('build'));passed(fixture.execute('deploy'));passed(fixture.execute('verify'));
+  const bound=fixture.execute('bind-staging-origin');passed(bound);assert.match(bound.stdout,/STAGING_ORIGIN_CONSUMER/);
+  const browser=fixture.execute('verify-browser');passed(browser);assert.match(browser.stdout,/STAGING_BROWSER_CONSUMER/);
+  for(const mode of['bind-staging-origin','verify-browser'] as const){
+   const unavailable=fixture.execute(mode,{backendBridge:'missing'});assert.equal(unavailable.status,1);assert.doesNotMatch(unavailable.stdout,/STAGING_ORIGIN_CONSUMER|STAGING_BROWSER_CONSUMER/);
+   const failure=fixture.execute(mode,{stagingConsumerFailure:true});assert.equal(failure.status,1);
+  }
+  await fixture.changeSaved('web-deployment-result.json',value=>{value.runAttempt=2;});for(const mode of['bind-staging-origin','verify-browser'] as const){const changed=fixture.execute(mode);assert.equal(changed.status,1);assert.doesNotMatch(changed.stdout,/STAGING_ORIGIN_CONSUMER|STAGING_BROWSER_CONSUMER/);}
+ },'staging',true);
+});

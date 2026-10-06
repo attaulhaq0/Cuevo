@@ -12,6 +12,27 @@ import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest
 import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-review';
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
+
+test('CodeQL processing success must be followed by the same-job current security-alert gate',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{codeql:{steps:Record<string,unknown>[]}}}};
+ const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')),steps=workflow.jobs.codeql.steps;
+ const analyzer=steps.findIndex(step=>String(step.uses??'').startsWith('github/codeql-action/analyze@'));
+ const gate=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/codeql-alerts.ts');
+ assert.ok(analyzer>=0&&gate>analyzer);assert.equal(steps[analyzer].id,'codeql-analyze');assert.deepEqual(steps[analyzer].with,{'wait-for-processing':true});
+ assert.deepEqual(steps[gate].env,{GH_TOKEN:'${{ github.token }}',CUEVO_CODEQL_SARIF_ID:'${{ steps.codeql-analyze.outputs.sarif-id }}'});assert.equal(steps[gate].if,undefined);assert.equal(steps[gate]['continue-on-error'],undefined);
+});
+
+test('completed-backend staging frontend includes verified origin and browser checks with scoped password recipient',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{'web-release':{steps:Record<string,unknown>[]}}}};
+ const steps=yaml.load(await readFile('.github/workflows/release.yml','utf8')).jobs['web-release'].steps;
+ const verified=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify'),bound=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts bind-staging-origin'),browser=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify-browser');
+ assert.ok(bound>verified&&browser>bound);
+ const condition="needs.release-admission.outputs.backend-selection-base64 != ''";assert.equal(steps[bound].if,condition);assert.equal(steps[browser].if,condition);
+ const env=steps[browser].env as Record<string,string>;assert.equal(env.CUEVO_SYNTHETIC_PILOT_PASSWORD,'${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}');assert.equal(env.BACKEND_SELECTION_BASE64,'${{ needs.release-admission.outputs.backend-selection-base64 }}');
+ assert.ok(steps.some(step=>step.run==='npx --no-install playwright install --with-deps chromium'&&step.if===condition));
+ const evidence=steps.find(step=>(step.with as Record<string,unknown>|undefined)?.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}')!;assert.ok(evidence);assert.equal(evidence.if,"always() && needs.release-admission.outputs.backend-selection-base64 != ''");
+ assert.equal((evidence.with as Record<string,unknown>).path,['web-deployment-result.json','web-origin-intent.json','web-origin-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n');
+});
 const manifest = () => ({
   version: 2, environment: 'staging', commitSha: sha, ciRunId: '42', verifiedAt: '2026-10-02T11:00:00Z',
   api: { origin: 'https://api.stage.example.com', commitSha: sha, imageDigest: `sha256:${digest}`, healthVerified: true, evidenceUrl: 'https://github.com/owner/repo/actions/runs/41' },
@@ -259,6 +280,9 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     await writeFile(join(migrationDirectory, '20261002074258_contract.sql'), sql);
     value.database.migrations = [{ version: '20261002074258', sha256: createHash('sha256').update(sql).digest('hex') }];
     await writeFile(join(releaseDirectory, 'deployment.json'), JSON.stringify({ url: 'https://cuevo-build.vercel.app', commitSha: sha }));
+    const webArtifactPath = join(directory, '.vercel/output/static/index.html'), webArtifact = '<p>Controlled immutable web output</p>';
+    await mkdir(dirname(webArtifactPath), { recursive: true }); await writeFile(webArtifactPath, webArtifact);
+    await writeFile(join(releaseDirectory, 'artifact.sha256'), createHash('sha256').update('/static/index.html').update(createHash('sha256').update(webArtifact).digest()).digest('hex'));
     const assignments={baseSha:'c'.repeat(40),reviews:[{category:'source-spec-code' as const,taskId:'/root/source-review',reportSha256:'d'.repeat(64),evidenceSha256:'e'.repeat(64)},{category:'qa-regression-operations' as const,taskId:'/root/qa-review',reportSha256:'f'.repeat(64),evidenceSha256:'0'.repeat(64)}]};
     const treeBytes='exact synthetic tree',diffBytes='exact synthetic diff';
     const sourceManifestSha256=createHash('sha256').update(treeBytes).digest('hex'),diffSha256=createHash('sha256').update(diffBytes).digest('hex'),manifestSha256=createHash('sha256').update(canonicalReleaseReviewJson(value)).digest('hex');
@@ -382,6 +406,8 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   for(const field of ['REVIEW_BASE64','REVIEW_DIGEST','RELEASE_ENVIRONMENT_ID','CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON'])assert.ok(validateWorkflows(ci,release.replaceAll(field,`OMITTED_${field}`)).length>0,`${field} must remain admitted at every boundary`);
   assert.ok(validateWorkflows(ci,release.replace('run: node --import tsx scripts/verification/cicd-release.ts approval','run: node --import tsx scripts/verification/cicd-release.ts approval-omitted')).some(issue=>issue.includes('approval')));
   assert.ok(validateWorkflows(ci,release.replace('review-base64: ${{ steps.review.outputs.review-base64 }}','review-base64: unverified')).some(issue=>issue.includes('outputs')));
+  for (const field of ['BACKEND_SELECTION_BASE64','BACKEND_MANIFEST_BASE64','BACKEND_BRIDGE_BASE64']) assert.ok(validateWorkflows(ci, release.replaceAll(field, `OMITTED_${field}`)).some(issue => issue.includes('backend') || issue.includes('Backend')));
+  assert.ok(validateWorkflows(ci, release.replace('path: .local/cicd-release/web-deployment-result.json','path: .local/cicd-release/')).some(issue => issue.includes('artifact')));
   const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{'web-release':{steps:Record<string,unknown>[]}}};dump(value:unknown):string};
   const altered=yaml.load(release);altered.jobs['web-release'].steps.splice(3,0,{name:'Unexpected direct upload',env:{VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'},run:'vercel deploy --prebuilt --yes --prod'});
   assert.ok(validateWorkflows(ci,yaml.dump(altered)).length>0,'A direct credential consumer must not bypass the release owner or approval');

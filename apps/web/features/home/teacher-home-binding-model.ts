@@ -28,7 +28,9 @@ export function teacherHomeWork(marking: MarkingItem[], tasks: Intervention[], p
     })),
     ...tasks.filter(row => ['ASSIGNED', 'COMPLETED'].includes(row.status) && !row.requiresReview).map((row): TeacherHomeWork => ({
       key: `practice:${row.id}`, kind: row.status === 'COMPLETED' ? 'reassessment' : 'support', title: row.title,
-      learnerName: null, classLabel: null, state: row.status === 'COMPLETED' ? 'needs-review' : 'waiting', date: row.completedAt ?? row.createdAt,
+      learnerName: row.context?.status === 'READY' && !row.context.identityRequiresReview ? row.context.learnerName : null,
+      classLabel: row.context?.status === 'READY' && !row.context.identityRequiresReview ? [row.context.className, row.context.yearGroupName, row.context.academicYearName].filter(Boolean).join(' · ') || null : null,
+      state: row.status === 'COMPLETED' ? 'needs-review' : 'waiting', date: row.completedAt ?? row.createdAt,
       destination: { view: 'improvement', source: 'intervention', id: row.id },
     })),
     ...portfolio.filter(row => row.approvalState === 'AWAITING_REVIEW').map((row): TeacherHomeWork => ({

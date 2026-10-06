@@ -12,10 +12,12 @@ export function scaleSqlStage(value: unknown): ScaleSqlStage {
   if (value === 'select internal.require_curriculum_academic_write($1)') return 'CURRICULUM_WRITE';
   if (value === 'select internal.begin_command($1,$2,$3)as reservation') return 'IDEMPOTENCY_BEGIN';
   if (value === 'select pg_advisory_xact_lock(hashtextextended($1,0))') return 'RELEASE_LOCK';
+  if (value.startsWith('with exact_numeric as materialized(select *from app.result_revisions where school_id=$2 and marking_id=$1)') && value.endsWith(')existing_native_result')) return 'RELEASE_EXISTING';
   if (value.startsWith('select *from(select r.id,r.submission_id') && value.endsWith(')existing_native_result')) return 'RELEASE_EXISTING';
   if (value === "select 'numeric'as model from app.marking_revisions where id=$1 union all select 'rubric'as model from app.rubric_marking_revisions where id=$1") return 'RELEASE_KIND';
   if (value === 'select internal.release_marking($1,$2,$3)as id' || value === 'select internal.release_rubric_marking($1,$2,$3)as id') return 'RELEASE_NATIVE';
   if (value.startsWith('select r.id,r.submission_id') && value.endsWith(' where r.id=$1')) return 'RELEASE_PROJECTION';
+  if ((value.startsWith('with exact_numeric as materialized(select *from app.result_revisions where school_id=$2 and id=$1)') || value.startsWith('with exact_rubric as materialized(select *from app.rubric_result_revisions where school_id=$2 and id=$1)')) && value.endsWith(')released_native_result')) return 'RELEASE_PROJECTION';
   if (value === 'select internal.append_audit($1,$2,$3,$4,$5,$6::jsonb)') return 'AUDIT';
   if (value === 'select internal.enqueue_event($1,$2,$3,$4,$5::jsonb,$6)') return 'OUTBOX';
   if (value === 'select internal.finish_command($1,$2,$3,$4::jsonb)') return 'IDEMPOTENCY_FINISH';

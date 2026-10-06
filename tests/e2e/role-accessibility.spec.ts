@@ -108,9 +108,20 @@ async function chooseCurrentClassByKeyboard(page:Page){
   await more.click();const response=await received;expect(response.ok()).toBe(true);expect(await response.finished()).toBeNull();const current=await response.json() as {items:{id:string}[];nextCursor:string|null};expect(Array.isArray(current.items)&&current.items.length<=100).toBe(true);const ids=current.items.map(row=>row.id);expect(new Set(ids).size).toBe(ids.length);for(const id of ids){expect(id).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);await expect(select.locator(`option[value="${id}"]`)).toBeAttached();}if(current.nextCursor===null)await expect(more).toHaveCount(0);else{expect(current.nextCursor).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i);expect(current.nextCursor).not.toBe(cursor);await expect(more).toHaveAttribute('data-page-cursor',current.nextCursor);}
  }
  await expect(more).toHaveCount(0);await expect(select).toBeEnabled();
- await expect.poll(()=>select.locator('option[value]:not([value=""]):not([disabled])').count()).toBeGreaterThan(0);
- const option=select.locator('option[value]:not([value=""]):not([disabled])').first(),expected=await option.getAttribute('value');expect((await option.textContent())?.trim()).toBeTruthy();
- await select.focus();await expect(select).toBeFocused();await select.press('Home');await select.press('ArrowDown');await select.press('Tab');await expect(select).toHaveValue(expected!);await settled(page);
+ let expected='';
+ // Membership revalidation can disable the current source after an earlier
+ // enabled check. Read its current option and acquire focus in one DOM turn;
+ // an enabled control that refuses focus still fails immediately.
+ await expect.poll(async()=>{
+  const current=await select.evaluate(element=>{
+   const control=element as HTMLSelectElement;if(control.disabled)return null;
+   const option=control.querySelector<HTMLOptionElement>('option[value]:not([value=""]):not([disabled])');if(!option)return null;
+   control.focus();if(document.activeElement!==control)throw Error('Current enabled class selector did not accept focus.');
+   return{value:option.value,label:option.textContent};
+  });
+  if(!current)return false;expect(current.label?.trim()).toBeTruthy();expected=current.value;return true;
+ }).toBe(true);
+ await expect(select).toBeFocused();await select.press('Home');await select.press('ArrowDown');await select.press('Tab');await expect(select).toHaveValue(expected);await settled(page);
 }
 
 async function semanticSmoke(page: Page) {
@@ -316,6 +327,21 @@ import React,{createContext,useContext}from'react';import{createRoot}from'react-
  let release!:()=>void;const held=new Promise<void>(done=>release=done);await page.route('http://localhost:4000/v1/classes**',async route=>{await held;await route.fulfill({contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({items:[{id:'30000000-0000-4000-8000-000000000001',name:'Year 1 · Cedar',academicYearName:'2026–2027',yearGroupName:'Year 1'}],nextCursor:null})})});
  await page.setContent('<div id="root"></div>');await page.addScriptTag({content:compiled.outputFiles[0].text});const select=page.locator('#summary-class');await expect(select).toBeVisible();await select.focus();await select.press('ArrowDown');await select.press('Enter');await expect(select).toHaveValue('');release();
  await chooseCurrentClassByKeyboard(page);await expect(select).toHaveValue('30000000-0000-4000-8000-000000000001');
+});
+
+test('adapter: coordinator class keyboard focus waits for the current access generation after an earlier enabled sample',async({page})=>{
+ const root=resolve(import.meta.dirname,'../..');
+ const compiled=await build({stdin:{resolveDir:root,loader:'tsx',contents:`
+import React,{createContext,useContext,useState}from'react';import{createRoot}from'react-dom/client';import{ClassLearningSummaryPanel}from'./apps/web/features/progress/components/class-learning-summary';const C=createContext(null);globalThis.classFocusC=C;globalThis.classFocusUC=useContext;globalThis.classFocus={};const base={locale:'en',apiUrl:'http://localhost:4000',accessToken:'synthetic',online:true,status:'ready',membership:{schoolId:'10000000-0000-4000-8000-000000000001',userId:'20000000-0000-4000-8000-000000000002',role:'coordinator'},formDrafts:{clearRead(){}}};globalThis.classFocusAPI={t:{loadMore:'Load more',loadingMore:'Loading more…'},request:async path=>(await fetch('http://localhost:4000'+path)).json(),parseResponse:(_path,value,parse)=>parse(value)};function H(){const[g,setG]=useState(1);globalThis.classFocus.revalidate=()=>setG(value=>value+1);return<C.Provider value={{...base,accessGeneration:g}}><main><ClassLearningSummaryPanel refresh={0} onReviewLearner={()=>{}} selectedLearnerId={null} labelContext='current' onLearnerContext={()=>{}}/></main></C.Provider>}createRoot(document.getElementById('root')).render(<H/>);
+`},bundle:true,write:false,platform:'browser',format:'iife',jsx:'automatic',loader:{'.webp':'dataurl','.png':'dataurl','.svg':'dataurl'},plugins:[{name:'current-class-generation-input',setup(b){b.onLoad({filter:/shared[\\/]session[\\/]providers\.tsx$/},()=>({loader:'js',contents:'export function useApp(){return globalThis.classFocusUC(globalThis.classFocusC)}'}));b.onLoad({filter:/shared[\\/]hooks[\\/]use-api\.ts$/},()=>({loader:'js',contents:'export function useApi(){return globalThis.classFocusAPI}export function useApiQuery(path,parse){return{data:path?parse({schoolId:"10000000-0000-4000-8000-000000000001",classId:"30000000-0000-4000-8000-000000000001",generatedAt:"2026-10-06T00:00:00Z",scope:"CURRENT_CLASS_PAGE",coverage:"NOT_ESTABLISHED",observationCoverage:"RECORDED_ONLY",windowStart:null,windowEnd:null,items:[],nextCursor:null}):null,loading:false,error:null}}'}));}}]});
+ let requests=0,release!:()=>void;const held=new Promise<void>(done=>release=done);
+ await page.route('http://localhost:4000/v1/classes**',async route=>{if(++requests>1)await held;await route.fulfill({contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({items:[{id:'30000000-0000-4000-8000-000000000001',name:'Cedar',academicYearName:'2026–2027',yearGroupName:'Year 1'}],nextCursor:null})});});
+ await page.setContent('<div id="root"></div>');await page.addScriptTag({content:compiled.outputFiles[0].text});const select=page.locator('#summary-class');await expect(select).toBeEnabled();
+ let changed=false,waitingSamples=0;
+ const revalidate=async()=>{if(changed)return;changed=true;await page.evaluate(()=>{(globalThis as unknown as{classFocus:{revalidate:()=>void}}).classFocus.revalidate()});await expect(select).toBeDisabled();};
+ const wrapped=new Proxy(page,{get(target,key){if(key==='locator')return(selector:string)=>{const located=target.locator(selector);if(selector!=='#summary-class')return located;return new Proxy(located,{get(control,method){if(method==='focus')return async()=>{await revalidate();await control.focus();release();};if(method==='evaluate')return async(...args:Parameters<Locator['evaluate']>)=>{await revalidate();const result=await control.evaluate(...args);if(result===null){waitingSamples++;release();}return result;};const value=Reflect.get(control,method);return typeof value==='function'?value.bind(control):value;}});};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});
+ try{await chooseCurrentClassByKeyboard(wrapped);}finally{release();}
+ expect(changed).toBe(true);expect(waitingSamples).toBeGreaterThan(0);expect(requests).toBe(2);await expect(select).toHaveValue('30000000-0000-4000-8000-000000000001');
 });
 
 test('adapter: mobile staff class selection returns to the current browse plane before learner detail hides it',async({page})=>{

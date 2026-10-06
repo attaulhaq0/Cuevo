@@ -13,6 +13,16 @@ test('backend schema workflow uses exact main manual dispatch and one serialized
   const jobs = map(workflow.jobs); assert.deepEqual(Object.keys(jobs), ['prepare', 'schema']);
   assert.equal(map(jobs.prepare).if, "github.ref == 'refs/heads/main'"); assert.equal(map(jobs.schema).if, "github.ref == 'refs/heads/main'"); assert.equal(map(jobs.schema).environment, 'staging'); assert.equal(map(jobs.schema).needs, 'prepare');
 });
+
+test('completed backend exports exactly one public handover after web settings and never uploads runtime secrets with it',async()=>{
+ const workflow=await source(),schema=(map(map(workflow.jobs).schema).steps as unknown[]).map(map);
+ const configure=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts configure-web');
+ const exported=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts export-web-handover');
+ assert.ok(exported>configure&&configure>=0);
+ const step=schema[exported];assert.equal(step.id,'web-transfer');assert.deepEqual(Object.keys(map(step.env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','GH_TOKEN','VERCEL_TOKEN']);
+ const uploaded=schema.findIndex(row=>map(row.with).name==='cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}');assert.ok(uploaded>exported);
+ const upload=schema[uploaded];assert.equal(map(upload.with).path,'.local/hosted-release/web-transfer.json');assert.equal(map(upload.with)['if-no-files-found'],'error');assert.equal(upload.if,undefined);
+});
 test('only metadata token reaches preparation; schema credentials arrive after package approval and never enter shell input', async () => {
   const workflow = await source(), jobs = map(workflow.jobs), prepare = (map(jobs.prepare).steps as unknown[]).map(map), schema = (map(jobs.schema).steps as unknown[]).map(map);
   const preparation = prepare.find(step => step.id === 'prepare')!;
@@ -37,7 +47,7 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   }
   const download = schema.find(step => String(step.uses).startsWith('actions/download-artifact@'))!;
   assert.deepEqual(Object.keys(map(download.with)).sort(), ['name', 'path']); assert.equal(map(download.with).name, 'cuevo-backend-package-${{ github.run_id }}-${{ github.run_attempt }}');
-  const retained = schema.find(step => String(step.uses).startsWith('actions/upload-artifact@'))!;
+  const retained = schema.find(step => String(step.uses).startsWith('actions/upload-artifact@') && map(step.with).name === 'cuevo-backend-schema-result-${{ github.run_id }}-${{ github.run_attempt }}')!;
   assert.equal(retained.if, 'always()'); assert.match(map(retained.with).path as string, /journal-\*\//); assert.doesNotMatch(map(retained.with).path as string, /ca\.pem|process-|backend-bundle|synthetic-access|\.env/);
   for(const suffix of ['intent','asset','room','result'])assert.ok((map(retained.with).path as string).includes(`private-probe-*-${suffix}.json`));
   for(const path of ['worker-activation-intent.json','worker-activation-journal.jsonl','worker-activation-result.json','worker-activation-cleanup.json'])assert.ok((map(retained.with).path as string).includes(path));
