@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { registerHooks } from 'node:module';
 import { transformSync } from 'esbuild';
+import { runInNewContext } from 'node:vm';
 
 const project='prj_QtcVui11hMayZcqBF3KAxZcLaocs',team='team_Gvw1Dz7IlxIG5evqwlsNkZHb',sha='a'.repeat(40),ref='abcdefghijklmnopqrst',apiOrigin='https://cuevo-api.vercel.app',deployment='dpl_Fixture',url='https://cuevo-api-generated.vercel.app',web='https://cuevo-beta.vercel.app';
 const hash=(v:unknown)=>createHash('sha256').update(typeof v==='string'?v:JSON.stringify(v,Object.keys(v as object).sort())).digest('hex');
@@ -52,3 +53,24 @@ test('uncertain alias acknowledgement retains original intent and never performs
 test('wrong cleanup source or changed reserved target cannot reach assignment even when receipt flags are true',async()=>{const api=await subject();await fixture('normal',async(input,calls,root)=>{const path=join(root,'.local/hosted-release/worker-fault-recovery-cleanup.json'),value=JSON.parse(await readFile(path,'utf8'));value.runId='99';await writeFile(path,JSON.stringify(value));assert.equal((await api.bindBackendApiOrigin(input)).status,'REQUIRES_REVIEW');assert(!calls.some(v=>v.startsWith('POST:/v2/')));});await fixture('normal',async(input,calls)=>{(input.expected as{targets:{api:{origin:string}}}).targets.api.origin='https://other.vercel.app';assert.equal((await api.bindBackendApiOrigin(input)).status,'REQUIRES_REVIEW');assert.equal(calls.length,0);});});
 
 test('uncertain alias-specific protection override preserves one original mutation and never retries',async()=>{const api=await subject();await fixture('override-unknown',async(input,calls)=>{const first=await api.bindBackendApiOrigin(input);assert.equal(first.status,'REQUIRES_REVIEW');assert.equal((await api.bindBackendApiOrigin(input)).status,'REQUIRES_REVIEW');assert.equal(calls.filter(v=>v==='PATCH:/aliases/alias/protection-bypass').length,1);});});
+
+test('API alias assignment consumes the original expiry after provider reads and never issues an expired POST',async()=>{
+ const source=readFileSync(resolve(import.meta.dirname,'backend-api-origin.ts'),'utf8');
+ const start=source.indexOf("  if(prior){r.aliasOperation='NOOP'"),end=source.indexOf('  const overridePresent=',start);
+ assert(start>=0&&end>start);const block=source.slice(start,end);
+ for(const expiryPhase of ['valid','deployment','alias','deadline']){
+  const expired=expiryPhase!=='valid';
+  const calls:string[]=[],r:{aliasOperation:string;apiDeploymentId:string;aliasId?:string}={aliasOperation:'NONE',apiDeploymentId:deployment};
+  let now=1000;const prepared=Object.freeze({expiresAt:1500});
+  const work=runInNewContext(`(async()=>{${block}})()`,{prior:null,r,root:'fixture-root',expected:{now:1000},prepared,input:{githubToken:'private-fixture'},scope:'?teamId=fixture',credentials:{},
+   Date:{now:()=>now},fail:()=>Error('original expiry'),
+   readBackendReleaseAdmission:async()=>{calls.push('admission');assert(now<prepared.expiresAt);},
+   exact:async()=>{calls.push('deployment-read');now=expiryPhase==='deployment'?1600:1200;},
+   alias:async()=>{calls.push('alias-read');if(expiryPhase==='alias')now=1600;if(expiryPhase==='deadline')now=1500;return r.aliasOperation==='NONE'?null:{uid:'fixture-alias'};},
+   validatePreparedBackendReleaseIntent:(value:unknown,context:{now:number})=>{calls.push('original-expiry');assert.equal(value,prepared);assert(context.now<prepared.expiresAt);return value;},
+   http:async(_url:string,method:string)=>{calls.push(method);return{status:200,value:{uid:'fixture-alias',alias:'cuevo-api.vercel.app'}};},z:{object:()=>({parse:()=>undefined}),string:()=>({min:()=>({})}),literal:()=>({}),undefined:()=>({optional:()=>({})})},
+  });
+  if(expired){await assert.rejects(work);assert(!calls.includes('POST'));assert.equal(r.aliasOperation,'NONE');}
+  else{await work;assert.equal(r.aliasOperation,'CONFIRMED');assert.equal(calls.filter(value=>value==='POST').length,1);assert(calls.indexOf('original-expiry')>calls.indexOf('alias-read'));assert(calls.indexOf('original-expiry')<calls.indexOf('POST'));}
+ }
+});

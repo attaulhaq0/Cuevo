@@ -415,7 +415,9 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(ci.replace('path: .local/cicd-safe/', 'path: .local/'), release).some(issue => issue.includes('artifact')));
   assert.ok(validateWorkflows(ci, release.replace('cancel-in-progress: false', 'cancel-in-progress: true')).some(issue => issue.includes('release concurrency')));
   assert.ok(validateWorkflows(ci, release.replace("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));
-  assert.ok(validateWorkflows(ci.replace('on: [push, pull_request, workflow_dispatch]', 'on: [pull_request_target]'), release).some(issue => issue.includes('Privileged')));
+  const triggerYaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
+  const privileged=triggerYaml.load(ci);privileged.on={pull_request_target:null};
+  assert.ok(validateWorkflows(triggerYaml.dump(privileged), release).some(issue => issue.includes('Privileged')));
   assert.ok(validateWorkflows(ci, release.replace('needs: release-admission', 'needs: other-job')).some(issue => issue.includes('admission')));
   assert.ok(validateWorkflows(ci, release.replace('name: ${{ needs.release-admission.outputs.environment }}', 'name: unprotected')).some(issue => issue.includes('environment')));
   assert.ok(validateWorkflows(ci, release.replace('branches: [main]', 'branches: [feature]')).some(issue => issue.includes('canonical main')));
@@ -437,6 +439,34 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   const altered=yaml.load(release);altered.jobs['web-release'].steps.splice(3,0,{name:'Unexpected direct upload',env:{VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'},run:'vercel deploy --prebuilt --yes --prod'});
   assert.ok(validateWorkflows(ci,yaml.dump(altered)).length>0,'A direct credential consumer must not bypass the release owner or approval');
   const inherited=yaml.load(release) as {jobs:{'web-release':{steps:Record<string,unknown>[];env?:Record<string,string>}}};inherited.jobs['web-release'].env={VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'};inherited.jobs['web-release'].steps.unshift({run:'node unreviewed-action.js'});assert.ok(validateWorkflows(ci,yaml.dump(inherited)).some(issue=>issue.includes('job-level')));
+});
+
+test('CI selects one PR run per branch change while preserving main-push release evidence and manual verification', async () => {
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>};
+  const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8'));
+  assert.deepEqual(workflow.on,{push:{branches:['main']},pull_request:null,workflow_dispatch:null});
+});
+
+test('workflow guard rejects duplicate branch-push CI, missing release/PR events and unsupported filtered events', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
+  for(const trigger of [
+    ['push','pull_request','workflow_dispatch'],
+    {push:null,pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main','codex/**']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main'],tags:['*']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main'],paths:['apps/web/**']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['feature']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main']},workflow_dispatch:null},
+    {pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main']},pull_request:null},
+    {push:{branches:['main']},pull_request:{paths:['apps/web/**']},workflow_dispatch:null},
+    {push:{branches:['main']},pull_request:{types:['opened']},workflow_dispatch:null},
+    {push:{branches:['main']},pull_request:null,workflow_dispatch:null,schedule:[{cron:'17 0 * * *'}]},
+  ]) {
+    const altered=yaml.load(ci);altered.on=trigger;
+    assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('without duplicate feature-branch pushes')),JSON.stringify(trigger));
+  }
 });
 test('web and API automatic Git builds cannot bypass reviewed Actions deployment', async () => {
   for (const owner of ['web', 'api']) {

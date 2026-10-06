@@ -1,5 +1,9 @@
 # Technical verification scripts
 
+CI verifies every pull request, pushes to `main`, and explicit manual dispatch. Feature-branch pushes no longer start a duplicate full run beside their PR. The workflow guard and tests require this exact event boundary without path-filter skips; final-main push admission, mandatory technical/security results and deployment trust remain unchanged. Daily regression and broader affected-test lanes require their own reviewed event/evidence change.
+
+The first reserved API alias assignment rechecks the original package expiry after the final deployment/alias reads and immediately before its POST, matching the existing protection-override boundary. Slow provider reads cannot renew approval. A controlled clock regression exercises valid and expired assignment with zero expired POST; retained intent and uncertain-write recovery remain unchanged.
+
 `scripts/test-web.ts` discovers the complete feature/shared web-test inventory and passes paths relative to its fixed web working directory. This keeps the same tests and asset loader while avoiding Windows process-command limits in long isolated checkout paths. A missing process status or interrupted spawn remains a failed run with a minimized diagnostic; discovered files alone never establish passing tests.
 
 `git-source-digest.ts` hashes the complete binary Git review diff as a bounded stream. Backend source admission reads every committed blob and physical file in size-bounded batches; source/diff identities, immutable base, clean working tree and original byte checks remain required. The retained reference archive exceeded the former in-memory limits; bounded processing preserves those sources instead of omitting them. These local source checks establish no provider, CI or release approval.

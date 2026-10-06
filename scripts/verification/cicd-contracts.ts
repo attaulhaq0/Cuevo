@@ -115,6 +115,12 @@ const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 export function validateWorkflows(ciText: string, releaseText: string): string[] {
   const issues: string[] = []; let ci: Mapping; let release: Mapping;
   try { ci = mapping(yaml.load(ciText)); release = mapping(yaml.load(releaseText)); } catch { return ['Workflow YAML is invalid.']; }
+  const ciTrigger = mapping(ci.on), pushTrigger = mapping(ciTrigger.push);
+  if (Object.keys(ciTrigger).sort().join(',') !== 'pull_request,push,workflow_dispatch'
+    || Object.keys(pushTrigger).join(',') !== 'branches' || JSON.stringify(pushTrigger.branches) !== JSON.stringify(['main'])
+    || ciTrigger.pull_request !== null || ciTrigger.workflow_dispatch !== null) {
+    issues.push('CI must verify every PR, main push and manual dispatch without duplicate feature-branch pushes.');
+  }
   for (const [index, flow] of [ci, release].entries()) {
     const trigger = mapping(flow.on);
     if (Object.hasOwn(trigger, 'pull_request_target') || list(flow.on).some(event => ['pull_request_target', 'workflow_run'].includes(String(event))) || index === 0 && Object.hasOwn(trigger, 'workflow_run')) issues.push('Privileged untrusted triggers are forbidden.');
