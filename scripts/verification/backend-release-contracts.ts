@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson } from './release-review';
+import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, validateOfficialFounderApproval } from './release-review';
 import { validateCiRun } from './cicd-contracts';
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/), digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -73,4 +73,11 @@ export function validatePreparedBackendReleaseIntent(value: unknown, expectedVal
   const current = prepareBackendReleaseIntent(body, expectedValue);
   if (canonicalReleaseReviewJson(current) !== canonicalReleaseReviewJson(prepared)) fail();
   return prepared;
+}
+
+/** Backend purpose is independently prepared and re-admitted; a web approval cannot authorize this package. No official network read occurs here. */
+export function validateFounderBackendApproval(preparedValue:PreparedBackendReleaseIntent,rawRun:unknown,rawApprovals:unknown,expectedValue:unknown){
+ const expected=parse(expectedSchema,expectedValue),prepared=validatePreparedBackendReleaseIntent(preparedValue,expected);
+ const receipt=validateOfficialFounderApproval(rawRun,rawApprovals,{purpose:'BACKEND_SYNTHETIC_STAGING',repository:expected.repository,releaseSha:expected.releaseSha,releaseRunId:expected.releaseRunId,runAttempt:expected.runAttempt,environmentId:expected.environmentId,environmentName:expected.environmentName,packageSha256:prepared.sha256,comment:prepared.comment});
+ return{purpose:'BACKEND_SYNTHETIC_STAGING' as const,...receipt};
 }

@@ -20,7 +20,7 @@ async function desk(page: Page, mode: Mode) {
       else if(url.pathname==='/v1/me')data={userId:learner,schoolId:school,membershipId:id(9),role:'student',displayName:'Lina Hassan',school:{id:school,name:'Reference school'},entitlements:['learning','assessment','curriculum','learner.state','improvement','portfolio','community','school.operations']};
       else if(url.pathname==='/v1/diagnostics/config')data={enabled:false};
       else if(url.pathname==='/v1/assessments'){const current=mode==='unknown_work'?Object.fromEntries(Object.entries(work).filter(([key])=>key!=='currentSubmission')):work;data={items:[current,{...work,id:id(11),title:'Compare your next explanation'}],nextCursor:mode==='partial'?id(82):null};}
-      else if(url.pathname==='/v1/submissions')data={items:[],nextCursor:mode==='unknown_work'?id(83):null};
+      else if(url.pathname==='/v1/submissions')data={items:[],nextCursor:mode==='unknown_work'&&!url.searchParams.has('cursor')?id(83):null};
       else if(url.pathname==='/v1/results'){
         if(mode==='feedback_failure'&&url.searchParams.has('cursor')){status=503;data={code:'REQUEST_UNAVAILABLE'};}
         else data={items:[result],nextCursor:mode==='feedback_failure'?id(81):null};
@@ -37,7 +37,7 @@ async function desk(page: Page, mode: Mode) {
   });
   await page.goto('/');await page.getByRole('button',{name:'English',exact:true}).click();
   await page.getByLabel('School email',{exact:true}).fill('learner@example.invalid');await page.getByLabel('Password',{exact:true}).fill('fictional-presentation-only');await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await expectTrailWorkspace(page,'student');await expect(page.getByRole('heading',{name:work.title,exact:true})).toBeVisible();
+  await expectTrailWorkspace(page,'student');await expect(page.getByRole('heading',{name:mode==='unknown_work'?'Compare your next explanation':work.title,exact:true})).toBeVisible();
   return ()=>portfolioReads;
 }
 
@@ -89,7 +89,9 @@ test('paged Student work keeps its source continuations without a redundant refr
 });
 
 test('unknown submitted-work context retains its Home notice and recovery',async({page})=>{
- await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .cuevo-workspace-state');await expect(notice).toBeVisible();await expect(notice.getByRole('button')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');
+ await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .cuevo-workspace-state');
+ for(const locale of['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();await expect(notice).toBeVisible();await expect(notice.getByRole('button')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');await expect(page.getByRole('heading',{name:work.title,exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Compare your next explanation',exact:true})).toBeVisible();}
+ await page.getByRole('button',{name:'English',exact:true}).click();const sources=page.locator('.student-home__source-continuations');await sources.locator('summary').click();await sources.getByRole('button',{name:'Load more: My available work',exact:true}).click();await expect(page.getByRole('heading',{name:work.title,exact:true})).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','ready');await expect(notice).toHaveCount(0);
 });
 
 for(const mode of['empty','denied','wrong','partial']as const)test(`Student Portfolio ${mode} remains honest without hiding independent current work`,async({page})=>{

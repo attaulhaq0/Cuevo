@@ -86,7 +86,9 @@ test('denied and malformed current bodies fail completion without admitting or w
   for (const option of [{ deny: 'people:more' }, { invalid: 'people:first' }]) {
     const fixture = await mount(page, 'daily', option);
     await expect(completeObservedSchoolSources(page, 'daily')).rejects.toThrow();
-    await expect(page.getByRole('button', { name: 'Create calendar event', exact: true })).toBeDisabled();
+    await expect(page.locator('.school-workspace [role="alert"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create calendar event', exact: true })).toHaveCount(0);
+    await expect(page.locator('.school-workspace form')).toHaveCount(0);
     expect(fixture.writes).toEqual([]); await page.unrouteAll({ behavior: 'ignoreErrors' });
   }
 });

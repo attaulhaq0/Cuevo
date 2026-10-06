@@ -87,3 +87,14 @@ test('the public web sink identity is bound before approval and cannot drift at 
   assert.throws(()=>subject.validatePreparedReleaseReviewPackage(prepared,{...expected(),web}));
  }
 });
+
+test('official approval seam admits only fixed web and backend purposes without changing the existing web receipt',()=>{
+ assert.equal(typeof subject.validateOfficialFounderApproval,'function');const prepared=subject.prepareReleaseReviewPackage(input(),expected());const binding={purpose:'PREBUILD_RELEASE_ADMISSION' as const,repository:expected().repository,releaseSha:sha,releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging' as const,packageSha256:prepared.sha256,comment:prepared.comment};
+ assert.deepEqual(subject.validateOfficialFounderApproval(run(),approvals(prepared.comment),binding),subject.validateFounderReleaseApproval(prepared,run(),approvals(prepared.comment),expected()));
+ for(const patch of[{purpose:'UNKNOWN'},{comment:'Approved unrelated content'},{purpose:'BACKEND_SYNTHETIC_STAGING'},{workflowPath:'.github/workflows/other.yml'}])assert.throws(()=>subject.validateOfficialFounderApproval(run(),approvals(prepared.comment),{...binding,...patch}));
+});
+
+test('official seam preserves bounded permissive provider fields and cannot invent timestamps or waive array limits',()=>{
+ const prepared=subject.prepareReleaseReviewPackage(input(),expected()),binding={purpose:'PREBUILD_RELEASE_ADMISSION' as const,repository:expected().repository,releaseSha:sha,releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging' as const,packageSha256:prepared.sha256,comment:prepared.comment},entry={...approvals(prepared.comment)[0],approvedAt:'caller timestamp'};
+ const receipt=subject.validateOfficialFounderApproval({...run(),extraProviderField:'retained'},[entry],binding);assert.equal('approvedAt'in receipt,false);assert.throws(()=>subject.validateOfficialFounderApproval(run(),Array.from({length:101},()=>entry),binding));assert.throws(()=>subject.validateOfficialFounderApproval({...run(),oversize:'x'.repeat(49*1024)},[entry],binding));
+});

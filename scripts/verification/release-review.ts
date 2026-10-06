@@ -187,7 +187,7 @@ export function validatePreparedReleaseReviewPackage(preparedValue: unknown, exp
 
 const officialRunSchema = z.object({
   id: positive, run_attempt: positive, repository: z.object({ full_name: repository }),
-  head_sha: sha, head_branch: z.literal('main'), path: z.literal('.github/workflows/release.yml'),
+  head_sha: sha, head_branch: z.literal('main'), path: z.enum(['.github/workflows/release.yml','.github/workflows/backend-release.yml']),
   event: z.enum(['workflow_dispatch', 'workflow_run']), status: z.enum(['in_progress', 'waiting']),
   conclusion: z.null(),
 });
@@ -198,25 +198,26 @@ const officialApprovalSchema = z.object({
   comment: z.string().max(2000),
 });
 
+const officialExpectedSchema=z.object({purpose:z.enum(['PREBUILD_RELEASE_ADMISSION','BACKEND_SYNTHETIC_STAGING']),repository,releaseSha:sha,releaseRunId:identifier,runAttempt:positive,environmentId:positive,environmentName:z.enum(['staging','production']),packageSha256:digest,comment:z.string().max(300)}).strict();
+export type OfficialFounderApprovalExpected=z.infer<typeof officialExpectedSchema>;
+
+/** Shared official JSON boundary only. Each purpose has its fixed run path/comment and must be preceded by its own package validation. */
+export function validateOfficialFounderApproval(rawRun:unknown,rawApprovals:unknown,expectedValue:unknown){
+ const expected=parse(officialExpectedSchema,expectedValue);
+ const backend=expected.purpose==='BACKEND_SYNTHETIC_STAGING';
+ const comment=backend?`Cuevo backend staging admission approved: sha=${expected.releaseSha}; run=${expected.releaseRunId}; attempt=${expected.runAttempt}; package=sha256:${expected.packageSha256}`:approvalComment(expected.releaseSha,expected.releaseRunId,expected.runAttempt,expected.packageSha256);
+ if(expected.comment!==comment||backend&&expected.environmentName!=='staging')fail();
+ const run=parse(officialRunSchema,rawRun);
+ if(String(run.id)!==expected.releaseRunId||run.run_attempt!==expected.runAttempt||run.repository.full_name!==expected.repository||run.head_sha!==expected.releaseSha||run.path!==(backend?'.github/workflows/backend-release.yml':'.github/workflows/release.yml')||backend&&run.event!=='workflow_dispatch')fail();
+ const approvals=parse(z.array(officialApprovalSchema).max(100),rawApprovals,512*1024);
+ const matching=approvals.filter(row=>row.environments.some(environment=>environment.id===expected.environmentId||environment.name===expected.environmentName));
+ if(matching.length!==1)fail();const approval=matching[0];
+ if(approval.environments.length!==1||approval.environments[0].id!==expected.environmentId||approval.environments[0].name!==expected.environmentName||approval.state!=='approved'||approval.user.id!==95836629||approval.user.login!=='attaulhaq0'||approval.user.type!=='User'||approval.comment!==comment)fail();
+ return{state:'approved' as const,repository:expected.repository,releaseSha:expected.releaseSha,releaseRunId:expected.releaseRunId,runAttempt:expected.runAttempt,environmentId:expected.environmentId,environmentName:expected.environmentName,founderId:95836629,founderLogin:'attaulhaq0',packageSha256:expected.packageSha256};
+}
+
 /** Official approvals provide no approval time or attempt. The exact comment binds the separately read run attempt. */
-export function validateFounderReleaseApproval(preparedValue: PreparedReleaseReviewPackage, rawRun: unknown,
-  rawApprovals: unknown, expectedValue: ReleaseReviewExpected) {
-  const expected = parse(expectedSchema, expectedValue);
-  const preparedPackage = validatePreparedReleaseReviewPackage(preparedValue, expected);
-  const comment = approvalComment(expected.releaseSha, expected.releaseRunId, expected.runAttempt, preparedPackage.sha256);
-  if (preparedPackage.comment !== comment) fail();
-  const run = parse(officialRunSchema, rawRun);
-  if (String(run.id) !== expected.releaseRunId || run.run_attempt !== expected.runAttempt
-    || run.repository.full_name !== expected.repository || run.head_sha !== expected.releaseSha) fail();
-  const approvals = parse(z.array(officialApprovalSchema).max(100), rawApprovals, 512 * 1024);
-  const matching = approvals.filter(row => row.environments.some(environment => environment.id === expected.environmentId || environment.name === expected.environmentName));
-  if (matching.length !== 1) fail();
-  const approval = matching[0];
-  if (approval.environments.length !== 1 || approval.environments[0].id !== expected.environmentId
-    || approval.environments[0].name !== expected.environmentName || approval.state !== 'approved'
-    || approval.user.id !== 95836629 || approval.user.login !== 'attaulhaq0' || approval.user.type !== 'User'
-    || approval.comment !== comment) fail();
-  return { state: 'approved' as const, repository: expected.repository, releaseSha: expected.releaseSha,
-    releaseRunId: expected.releaseRunId, runAttempt: expected.runAttempt, environmentId: expected.environmentId,
-    environmentName: expected.environmentName, founderId: 95836629, founderLogin: 'attaulhaq0', packageSha256: preparedPackage.sha256 };
+export function validateFounderReleaseApproval(preparedValue:PreparedReleaseReviewPackage,rawRun:unknown,rawApprovals:unknown,expectedValue:ReleaseReviewExpected){
+ const expected=parse(expectedSchema,expectedValue),preparedPackage=validatePreparedReleaseReviewPackage(preparedValue,expected);
+ return validateOfficialFounderApproval(rawRun,rawApprovals,{purpose:'PREBUILD_RELEASE_ADMISSION',repository:expected.repository,releaseSha:expected.releaseSha,releaseRunId:expected.releaseRunId,runAttempt:expected.runAttempt,environmentId:expected.environmentId,environmentName:expected.environmentName,packageSha256:preparedPackage.sha256,comment:preparedPackage.comment});
 }
