@@ -13,6 +13,13 @@ import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
 
+test('hosted web source and browser budget cannot silently return to the shorter pre-loop limit',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
+ const root=resolve(import.meta.dirname,'../..'),ci=await readFile(join(root,'.github/workflows/ci.yml'),'utf8'),release=await readFile(join(root,'.github/workflows/release.yml'),'utf8');
+ assert.equal(validateWorkflows(ci,release).some(issue=>issue.includes('budget')),false);
+ for(const minutes of [30,59,61]){const changed=yaml.load(release);changed.jobs['web-release']['timeout-minutes']=minutes;assert(validateWorkflows(ci,yaml.dump(changed)).some(issue=>issue.includes('60-minute')));}
+});
+
 test('CodeQL processing success must be followed by the same-job current security-alert gate',async()=>{
  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{codeql:{steps:Record<string,unknown>[]}}}};
  const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')),steps=workflow.jobs.codeql.steps;
@@ -25,13 +32,27 @@ test('CodeQL processing success must be followed by the same-job current securit
 test('completed-backend staging frontend includes verified origin and browser checks with scoped password recipient',async()=>{
  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{'web-release':{steps:Record<string,unknown>[]}}}};
  const steps=yaml.load(await readFile('.github/workflows/release.yml','utf8')).jobs['web-release'].steps;
- const verified=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify'),bound=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts bind-staging-origin'),browser=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify-browser');
- assert.ok(bound>verified&&browser>bound);
- const condition="needs.release-admission.outputs.backend-selection-base64 != ''";assert.equal(steps[bound].if,condition);assert.equal(steps[browser].if,condition);
+ const verified=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify'),bound=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts bind-staging-origin'),browser=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify-browser'),learning=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify-learning-loop');
+ assert.ok(bound>verified&&browser>bound&&learning>browser);
+ const condition="needs.release-admission.outputs.backend-selection-base64 != ''";assert.equal(steps[bound].if,condition);assert.equal(steps[browser].if,condition);assert.equal(steps[learning].if,condition);
  const env=steps[browser].env as Record<string,string>;assert.equal(env.CUEVO_SYNTHETIC_PILOT_PASSWORD,'${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}');assert.equal(env.BACKEND_SELECTION_BASE64,'${{ needs.release-admission.outputs.backend-selection-base64 }}');
  assert.ok(steps.some(step=>step.run==='npx --no-install playwright install --with-deps chromium'&&step.if===condition));
  const evidence=steps.find(step=>(step.with as Record<string,unknown>|undefined)?.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}')!;assert.ok(evidence);assert.equal(evidence.if,"always() && needs.release-admission.outputs.backend-selection-base64 != ''");
  assert.equal((evidence.with as Record<string,unknown>).path,['web-deployment-result.json','web-origin-intent.json','web-origin-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n');
+});
+
+test('learning-loop evidence stays within its exact metadata directories and conditional retention',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:{'web-release':{steps:Record<string,unknown>[]}}};dump(value:unknown):string};
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),source=await readFile('.github/workflows/release.yml','utf8');
+ const name='cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}';
+ const current=yaml.load(source),step=current.jobs['web-release'].steps.find(row=>(row.with as Record<string,unknown>|undefined)?.name===name)!;
+ assert.ok(step);assert.equal((step.with as Record<string,unknown>).path,'.local/cicd-release/hosted-learning-loop/\n.local/cicd-release/hosted-learning-loop-ui/\n');
+ const omitted=yaml.load(source);omitted.jobs['web-release'].steps=omitted.jobs['web-release'].steps.filter(row=>(row.with as Record<string,unknown>|undefined)?.name!==name);
+ assert.ok(validateWorkflows(ci,yaml.dump(omitted)).includes('Learning-loop original evidence must be retained exactly once after its consumer.'));
+ for(const mutate of[(row:Record<string,unknown>)=>{(row.with as Record<string,unknown>).path='.local/';},(row:Record<string,unknown>)=>{delete row.if;},(row:Record<string,unknown>)=>{row['continue-on-error']=true;}]){
+  const altered=yaml.load(source),selected=altered.jobs['web-release'].steps.find(row=>(row.with as Record<string,unknown>|undefined)?.name===name)!;mutate(selected);
+  assert.ok(validateWorkflows(ci,yaml.dump(altered)).includes('Unsafe artifact path.'));
+ }
 });
 const manifest = () => ({
   version: 2, environment: 'staging', commitSha: sha, ciRunId: '42', verifiedAt: '2026-10-02T11:00:00Z',
@@ -292,6 +313,7 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     const protectedControls={...releaseControls(),environment:{...releaseControls().environment,name:'staging'}};
     const script = (mode: 'manifest' | 'approval' | 'verify') => `
       const cp=(await import('node:module')).createRequire(import.meta.url)('node:child_process');cp.execFileSync=(command,args)=>{if(command!=='git')throw Error('Unexpected executable before verified approval');if(args[0]==='rev-parse')return args[1]==='HEAD'?'${sha}':'${assignments.baseSha}';if(args[0]==='merge-base'||args[0]==='diff'&&args[1]==='--quiet'||args[0]==='ls-files')return '';if(args[0]==='ls-tree')return '${treeBytes}';if(args[0]==='diff')return '${diffBytes}';throw Error('Unexpected source read')};(await import('node:module')).syncBuiltinESMExports();
+            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
       process.argv[2] = '${mode}';
       Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
       globalThis.fetch = async input => {

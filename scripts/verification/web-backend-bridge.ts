@@ -40,7 +40,7 @@ export async function readWebBackendBridge(input: { selection: WebBackendSelecti
     if (input.environment !== 'staging' || input.web.target !== 'preview') throw fail();
     const result = await readCompletedBackendWebTransferAdmission({ ...selectionSchema.parse(input.selection), repoRoot: input.repoRoot, githubToken: input.githubToken, releaseSha: input.releaseSha, ciRunId: input.ciRunId, web: input.web });
     // Consumer read times change. Every original proof and identity stays bound.
-    return { purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments,
+    return { purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,
       backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
   } catch { throw fail(); }
 }

@@ -11,6 +11,8 @@ import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, prepareRel
 import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, readWebBackendBridge, bindWebReviewToBackend, readCanonicalWebOutput } from './web-backend-bridge';
 import { bindVerifiedStagingWebOrigin } from './web-staging-origin';
 import { verifyHostedBrowserAccess } from './backend-hosted-browser';
+import { readGitBinaryDiffDigest } from './git-source-digest';
+import { verifyHostedLearningLoop, type HostedLearningLoopWebAdmission } from './backend-hosted-learning-loop';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -98,7 +100,7 @@ const currentCi = async () => {
   await assertCurrentMain();
 };
 const assignmentSchema = z.object({ baseSha: z.string().regex(/^[a-f0-9]{40}$/), reviews: z.array(z.object({ category: z.enum(['source-spec-code', 'qa-regression-operations']), taskId: z.string().min(1).max(200).regex(/^[a-zA-Z0-9_./:-]+$/), reportSha256: z.string().regex(/^[a-f0-9]{64}$/), evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict()).length(2) }).strict();
-const sourceEvidence = (baseSha: string) => {
+const sourceEvidence = async (baseSha: string) => {
   const sourceSha = required('RELEASE_SHA');
   const git = (args: string[]) => {
     try { return execFileSync('git', args, { stdio: ['ignore', 'pipe', 'pipe'], shell: false, env: sourceEnvironment(), timeout: 15000, maxBuffer: 32 * 1024 * 1024 }); }
@@ -110,8 +112,11 @@ const sourceEvidence = (baseSha: string) => {
   if (git(['ls-files', '--others', '--exclude-standard']).length) throw Error('Release checkout contains unreviewed authored files.');
   const tree = git(['ls-tree', '-r', '-z', sourceSha]);
   if (!tree.length) throw Error('Release source tree is empty.');
-  const diff = git(['diff', '--no-ext-diff', '--no-textconv', '--binary', baseSha, sourceSha, '--']);
-  return { sourceManifestSha256: createHash('sha256').update(tree).digest('hex'), diffSha256: createHash('sha256').update(diff).digest('hex') };
+  const diff = await readGitBinaryDiffDigest({ repoRoot: process.cwd(), baseSha, sourceSha });
+  if (git(['rev-parse', 'HEAD']).toString('utf8').trim() !== sourceSha) throw Error('Release source changed during source verification.');
+  git(['diff', '--quiet', '--no-ext-diff', '--no-textconv', sourceSha, '--']);
+  if (git(['ls-files', '--others', '--exclude-standard']).length) throw Error('Release checkout contains unreviewed authored files.');
+  return { sourceManifestSha256: createHash('sha256').update(tree).digest('hex'), diffSha256: diff.sha256 };
 };
 const reviewExpected = async (manifest: unknown) => {
   const assignments = assignmentSchema.parse(parseCanonicalReleaseReviewJson(required('CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON')));
@@ -119,7 +124,8 @@ const reviewExpected = async (manifest: unknown) => {
   const run = await github(`actions/runs/${required('GITHUB_RUN_ID')}`);
   const identity = z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), run_attempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), repository: z.object({ full_name: z.literal(required('GITHUB_REPOSITORY')) }), head_sha: z.literal(required('RELEASE_SHA')), head_branch: z.literal('main'), path: z.literal('.github/workflows/release.yml'), event: z.enum(['workflow_dispatch', 'workflow_run']), status: z.enum(['in_progress', 'waiting']), conclusion: z.null() }).parse(run);
   if (String(identity.id) !== required('GITHUB_RUN_ID') || String(identity.run_attempt) !== required('GITHUB_RUN_ATTEMPT')) throw Error('Release run attempt does not match current execution.');
-  const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...sourceEvidence(assignments.baseSha), reviews: assignments.reviews };
+  const fingerprints = await sourceEvidence(assignments.baseSha);
+  const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...fingerprints, reviews: assignments.reviews };
   return { expected, run };
 };
 const backendBridge = async () => {
@@ -280,4 +286,18 @@ if (mode === 'context') {
   const result=await verifyHostedBrowserAccess({...selection,repoRoot:process.cwd(),releaseSha:receipt.sourceSha,ciRunId:receipt.ciRunId,web:{teamId:receipt.teamId,projectId:receipt.projectId,target:'preview'},githubToken:required('GH_TOKEN'),vercelToken:required('VERCEL_TOKEN'),syntheticPassword:required('CUEVO_SYNTHETIC_PILOT_PASSWORD'),webDeployment:{id:receipt.deploymentId,url:receipt.url}});
   if(result.status!=='HOSTED_ROLE_ACCESS_VERIFIED'||!result.canonicalReceipt||!result.sessionsClosed)throw Error('Hosted role access requires review; full learning-loop/customer acceptance remains separate.');
   await readmitApproval();await currentWebDeploymentReceipt(admitted);
-} else throw Error('Expected context, ci, controls, prepare, approval, manifest, build, deploy, verify, bind-staging-origin or verify-browser release operation.');
+} else if(mode==='verify-learning-loop'){
+  const admitted=await readmitApproval(),receipt=await currentWebDeploymentReceipt(admitted),selection=readWebBackendSelection(required('BACKEND_SELECTION_BASE64'));
+  if(!selection||!admitted.backend)throw Error('Hosted learning-loop verification requires the original completed backend.');
+  const population=admitted.backend.originalEvidence.filter(row=>row.name==='population-result.json');
+  if(population.length!==1)throw Error('Original synthetic population evidence is unavailable.');
+  const readmitWeb=async():Promise<HostedLearningLoopWebAdmission>=>{
+    const current=await readmitApproval(),deployment=await currentWebDeploymentReceipt(current);
+    if(!current.backend||deployment.deploymentId!==receipt.deploymentId||deployment.artifactSha256!==receipt.artifactSha256||current.backend.originalEvidence.filter(row=>row.name==='population-result.json'&&row.sha256===population[0].sha256).length!==1)throw Error('Hosted learning-loop source or population evidence changed.');
+    const publicConfig=z.object({publicConfig:z.object({apiUrl:z.string().url(),supabaseUrl:z.string().url()})}).parse(current.manifest).publicConfig;
+    return{purpose:'PREBUILD_RELEASE_ADMISSION',sourceSha:deployment.sourceSha,treeSha:current.backend.backendIdentity.treeSha,ciRunId:deployment.ciRunId,runId:deployment.runId,runAttempt:deployment.runAttempt,webDeploymentId:deployment.deploymentId,artifactSha256:deployment.artifactSha256,packageSha256:current.prepared.sha256,webPackageExpiresAt:new Date(Date.parse(z.object({preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson(current.prepared.canonicalJson)).preparedAt)+86400000).toISOString(),backendTransferSha256:current.backend.backendIdentity.transferSha256,populationReceiptSha256:population[0].sha256,apiOrigin:publicConfig.apiUrl,authOrigin:publicConfig.supabaseUrl,webOrigin:current.backend.backendIdentity.web.origin,observedAt:new Date().toISOString()};
+  };
+  const result=await verifyHostedLearningLoop({...selection,repoRoot:process.cwd(),releaseSha:receipt.sourceSha,ciRunId:receipt.ciRunId,web:{teamId:receipt.teamId,projectId:receipt.projectId,target:'preview'},webDeployment:{id:receipt.deploymentId,url:receipt.url},populationReceiptSha256:population[0].sha256,selectedActorIds:{admin:'20000000-0000-4000-8000-000000000001',coordinator:'20000000-0000-4000-8000-000000000002',teacher:'20000000-0000-4000-8000-000000000004',student:'20000000-0000-4000-8000-000000000012',parent:'20000000-0000-4000-8000-000000000072'},githubToken:required('GH_TOKEN'),vercelToken:required('VERCEL_TOKEN'),syntheticPassword:required('CUEVO_SYNTHETIC_PILOT_PASSWORD')},{readmitWeb});
+  if(result.status!=='UI_LOOP_VERIFIED'||!result.canonicalReceipt||!result.sessionsClosed)throw Error('Hosted learning-loop UI verification requires review; persisted native proof remains separate.');
+  await readmitWeb();
+} else throw Error('Expected context, ci, controls, prepare, approval, manifest, build, deploy, verify, bind-staging-origin, verify-browser or verify-learning-loop release operation.');

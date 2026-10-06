@@ -93,7 +93,7 @@ jobs:
     needs: release-admission
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment:
       name: ${{ needs.release-admission.outputs.environment }}
       url: ${{ steps.deploy.outputs.url }}
@@ -229,6 +229,37 @@ jobs:
           BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
           BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
         run: node --import tsx scripts/verification/cicd-release.ts verify-browser
+      - name: Verify the hosted synthetic learning-loop UI
+        if: needs.release-admission.outputs.backend-selection-base64 != ''
+        env:
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
+          RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
+          CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
+          RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
+          REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
+          REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
+          CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
+          BACKEND_SELECTION_BASE64: ${{ needs.release-admission.outputs.backend-selection-base64 }}
+          BACKEND_MANIFEST_BASE64: ${{ needs.release-admission.outputs.backend-manifest-base64 }}
+          BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
+        run: node --import tsx scripts/verification/cicd-release.ts verify-learning-loop
+      - name: Preserve the scoped original learning-loop evidence
+        if: always() && needs.release-admission.outputs.backend-selection-base64 != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/cicd-release/hosted-learning-loop/
+            .local/cicd-release/hosted-learning-loop-ui/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
       - name: Retain only the verified public web deployment identity
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

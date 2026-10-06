@@ -146,6 +146,7 @@ test('controlled official completed artifact source and review reader sends no t
     const result = await api.readCompletedBackendWebTransferAdmission(fixture.input);
     assert.equal(result.provenance, 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE'); assert.equal(result.backendMutationAllowed, false); assert.equal(result.privateProofReexecuted, false);
     assert.equal(result.backendIdentity.artifactId, '71'); assert(!JSON.stringify(result).includes('private-github-canary'));
+    assert.equal(result.originalEvidence.filter((row: { name: string }) => row.name === 'population-result.json').length, 1);
     assert(fixture.calls.includes('productionresultssafixture.blob.core.windows.net/artifacts/archive'));
   });
 });

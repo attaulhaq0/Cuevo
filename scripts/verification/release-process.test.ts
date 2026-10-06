@@ -25,12 +25,13 @@ const migration = '-- synthetic release process migration\n';
 const tree = Buffer.concat([Buffer.from('100644 blob ' + digest.slice(0, 40) + '\t'), Buffer.from([0xff]), Buffer.from('\0')]);
 const diff = Buffer.from('diff --git a/source.ts b/source.ts\n+source\n');
 const hash = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
-type Mode = 'prepare' | 'approval' | 'build' | 'deploy' | 'verify' | 'bind-staging-origin' | 'verify-browser';
+type Mode = 'prepare' | 'approval' | 'build' | 'deploy' | 'verify' | 'bind-staging-origin' | 'verify-browser' | 'verify-learning-loop';
 type Injection = {
   at?: number; environmentId?: number; runAttempt?: number; currentSha?: string; ciConclusion?: string;
   approval?: 'missing' | 'generic' | 'rejected' | 'duplicate' | 'wrong-founder' | 'malformed';
   unavailable?: string; invalidJson?: string; treeChanged?: boolean; diffChanged?: boolean;
   dirty?: boolean; untracked?: boolean; ancestorDenied?: boolean; controlsChanged?: boolean;
+  afterSourceStream?: 'dirty' | 'untracked';
   afterPull?: 'main' | 'controls' | 'expiry'|'owner'|'bridge'; pullPublicChanged?: boolean;
   backendBridge?: 'missing' | 'changed';
   stagingConsumerFailure?: boolean;
@@ -80,7 +81,8 @@ async function createFixture(environment: 'staging' | 'production', bridgeEnable
   const prepared = prepareReleaseReviewPackage(review, { repository: review.repository, releaseSha: sha, baseSha, ciRunId: '42', web, manifestSha256: review.manifestSha256, sourceManifestSha256: review.sourceManifestSha256, diffSha256: review.diffSha256, releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: environment, now, reviews: assignments.reviews });
   const bridge = { purpose: 'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION', provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE', manifest, publicConfig: manifest.publicConfig,
     reviewFacts: reviews.map(row => ({ category: row.category, taskId: row.taskId, releaseSha: row.releaseSha, baseSha: row.baseSha, sourceManifestSha256: row.sourceManifestSha256, diffSha256: row.diffSha256, reportSha256: row.reportSha256, evidenceSha256: row.evidenceSha256, reviewedAt: row.reviewedAt, treeSha: 'd'.repeat(40) })), assignments: assignments.reviews,
-    backendIdentity: { repository: 'owner/repo', sourceSha: sha, baseSha, ciRunId: '42', manifestSha256: review.manifestSha256, web: { ...web, origin: 'https://cuevo-beta.vercel.app' } },
+    originalEvidence: [{name:'population-result.json',sha256:digest}],
+    backendIdentity: { repository: 'owner/repo', sourceSha: sha, treeSha:'d'.repeat(40), baseSha, ciRunId: '42', manifestSha256: review.manifestSha256, transferSha256:digest, web: { ...web, origin: 'https://cuevo-beta.vercel.app' } },
     privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
   const bridgeSelection = Buffer.from(canonicalReleaseReviewJson({ backendRunId: '61', backendRunAttempt: 1, artifactId: '71', transferSha256: digest })).toString('base64');
   const env = {
@@ -106,11 +108,13 @@ async function createFixture(environment: 'staging' | 'production', bridgeEnable
       if(state.apiSameProject)manifest.api={kind:'vercel',origin:manifest.api.origin,commitSha:manifest.commitSha,projectId:'prj_cuevo',teamId:'team_cuevo',deploymentId:'dpl_cuevoApi',deploymentUrl:'https://cuevo-api-build.vercel.app',target:'${environment==='staging'?'preview':'production'}',artifactSha256:'${digest}',metadataVerified:true,healthVerified:true,evidenceUrl:manifest.api.evidenceUrl};
       const originalTree = Buffer.from(${JSON.stringify(tree.toString('base64'))}, 'base64');
       const originalDiff = Buffer.from(${JSON.stringify(diff.toString('base64'))}, 'base64');
+      globalThis.cuevoControlledSourceDiff = async()=>{if(state.afterSourceStream==='dirty')state.dirty=true;if(state.afterSourceStream==='untracked')state.untracked=true;const bytes=state.diffChanged?Buffer.from('changed diff'):originalDiff;return{sha256:(await import('node:crypto')).createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length};};
       let pulled = false;
       globalThis.cuevoControlledBridgeRead = async()=>{ console.log('BRIDGE_REIMPORT'); if(state.backendBridge==='missing')throw Error('Missing exact artifact');const result=JSON.parse(process.env.CUEVO_CONTROLLED_BRIDGE_JSON); if(state.backendBridge==='changed'||pulled&&state.afterPull==='bridge')result.backendIdentity.manifestSha256='0'.repeat(64);return{...result,observedAt:new Date(Date.now()).toISOString()}; };
       globalThis.cuevoControlledOrigin = async input=>{ console.log('STAGING_ORIGIN_CONSUMER');if(input.vercelToken!==process.env.VERCEL_TOKEN||input.webDeployment.id!=='dpl_cuevo'||input.sourceSha!==process.env.RELEASE_SHA)throw Error('Incorrect staging origin identity');await input.admit();return{status:state.stagingConsumerFailure?'REQUIRES_REVIEW':'WEB_ORIGIN_BOUND',canonicalReceipt:'{}',hostedAcceptance:false};};
       globalThis.cuevoControlledBrowser = async input=>{ console.log('STAGING_BROWSER_CONSUMER');if(input.vercelToken!==process.env.VERCEL_TOKEN||input.syntheticPassword!==process.env.CUEVO_SYNTHETIC_PILOT_PASSWORD||input.webDeployment.id!=='dpl_cuevo')throw Error('Incorrect browser identity');return{status:state.stagingConsumerFailure?'REQUIRES_REVIEW':'HOSTED_ROLE_ACCESS_VERIFIED',canonicalReceipt:'{}',sessionsClosed:true,hostedAcceptance:false};};
-      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/backend-web-transfer-admission.ts'))return{format:'module',shortCircuit:true,source:'export async function readCompletedBackendWebTransferAdmission(){return globalThis.cuevoControlledBridgeRead();}'};if(url.endsWith('/web-staging-origin.ts'))return{format:'module',shortCircuit:true,source:'export const bindVerifiedStagingWebOrigin=globalThis.cuevoControlledOrigin;'};if(url.endsWith('/backend-hosted-browser.ts'))return{format:'module',shortCircuit:true,source:'export const verifyHostedBrowserAccess=globalThis.cuevoControlledBrowser;'};return next(url,context);}});
+      globalThis.cuevoControlledLearningLoop = async(input,ports)=>{console.log('STAGING_LEARNING_LOOP_CONSUMER');if(input.vercelToken!==process.env.VERCEL_TOKEN||input.syntheticPassword!==process.env.CUEVO_SYNTHETIC_PILOT_PASSWORD||input.webDeployment.id!=='dpl_cuevo'||input.populationReceiptSha256!=='${digest}')throw Error('Incorrect learning loop identity');const tuple=await ports.readmitWeb();if(tuple.webDeploymentId!=='dpl_cuevo'||tuple.populationReceiptSha256!==input.populationReceiptSha256||tuple.sourceSha!==input.releaseSha)throw Error('Current web tuple mismatch');return{status:state.stagingConsumerFailure?'REQUIRES_REVIEW':'UI_LOOP_VERIFIED',canonicalReceipt:'{}',sessionsClosed:true,hostedAcceptance:false};};
+      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/backend-hosted-learning-loop.ts'))return{format:'module',shortCircuit:true,source:'export const verifyHostedLearningLoop=globalThis.cuevoControlledLearningLoop;'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export const readGitBinaryDiffDigest=globalThis.cuevoControlledSourceDiff;'};if(url.endsWith('/backend-web-transfer-admission.ts'))return{format:'module',shortCircuit:true,source:'export async function readCompletedBackendWebTransferAdmission(){return globalThis.cuevoControlledBridgeRead();}'};if(url.endsWith('/web-staging-origin.ts'))return{format:'module',shortCircuit:true,source:'export const bindVerifiedStagingWebOrigin=globalThis.cuevoControlledOrigin;'};if(url.endsWith('/backend-hosted-browser.ts'))return{format:'module',shortCircuit:true,source:'export const verifyHostedBrowserAccess=globalThis.cuevoControlledBrowser;'};return next(url,context);}});
       Object.defineProperty(process, 'platform', { value: 'linux' });
       Date.now = () => state.at ?? (pulled && state.afterPull === 'expiry' ? ${now + 86400000} : ${now});
       const FixedDate = Date; globalThis.Date = class extends FixedDate { constructor(value) { super(value === undefined ? Date.now() : value); } static now(){return state.at ?? (pulled && state.afterPull === 'expiry' ? ${now + 86400000} : ${now});} };
@@ -166,7 +170,7 @@ async function createFixture(environment: 'staging' | 'production', bridgeEnable
       };
       await import(${JSON.stringify(pathToFileURL(resolve('scripts/verification/cicd-release.ts')).href)});
     `;
-    const providerEnv = ['build', 'deploy', 'verify','bind-staging-origin','verify-browser'].includes(mode) ? { VERCEL_TOKEN: 'synthetic-vercel-token', VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo', DATABASE_URL: 'PRIVATE_DATABASE_SENTINEL',...mode==='verify-browser'?{CUEVO_SYNTHETIC_PILOT_PASSWORD:'synthetic-private-pilot-password'}:{} } : {};
+    const providerEnv = ['build', 'deploy', 'verify','bind-staging-origin','verify-browser','verify-learning-loop'].includes(mode) ? { VERCEL_TOKEN: 'synthetic-vercel-token', VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo', DATABASE_URL: 'PRIVATE_DATABASE_SENTINEL',...['verify-browser','verify-learning-loop'].includes(mode)?{CUEVO_SYNTHETIC_PILOT_PASSWORD:'synthetic-private-pilot-password'}:{} } : {};
     const result = spawnSync(process.execPath, ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href, '--input-type=module', '--eval', script], { cwd: directory, env: { ...env, ...providerEnv, ...extra }, encoding: 'utf8', timeout: 20000 });
     assert.equal(result.error, undefined, String(result.error));
     for (const sentinel of ['synthetic-vercel-token', 'PRIVATE_DATABASE_SENTINEL', 'PRIVATE_RESPONSE_SENTINEL']) assert.equal((result.stdout + result.stderr).includes(sentinel), false, 'private responses and credentials stay withheld');
@@ -233,6 +237,16 @@ test('actual staging wrapper reimports completed bridge at every boundary while 
     const receipt = JSON.parse(await readFile(join(fixture.directory, '.local/cicd-release/web-deployment-result.json'), 'utf8'));
     assert.equal(receipt.backend.sourceSha, sha); assert.equal(receipt.deploymentId, 'dpl_cuevo'); assert.equal(receipt.customerReady, false);
   }, 'staging', true);
+});
+
+test('source changes during streamed diff verification prevent provider consumption', async () => {
+  await withFixture(async fixture => {
+    for (const afterSourceStream of ['dirty', 'untracked'] as const) {
+      const preparation = fixture.execute('prepare', { afterSourceStream });
+      assert.notEqual(preparation.status, 0);
+      assert.doesNotMatch(preparation.stdout, /SINK |PROVIDER /);
+    }
+  });
 });
 
 test('missing or changed completed bridge never falls back to supplied manifest and drift after pull prevents build', async () => {
@@ -314,10 +328,11 @@ test('staging origin and browser consumers require original verified web artifac
   passed(fixture.execute('approval'));passed(fixture.execute('build'));passed(fixture.execute('deploy'));passed(fixture.execute('verify'));
   const bound=fixture.execute('bind-staging-origin');passed(bound);assert.match(bound.stdout,/STAGING_ORIGIN_CONSUMER/);
   const browser=fixture.execute('verify-browser');passed(browser);assert.match(browser.stdout,/STAGING_BROWSER_CONSUMER/);
-  for(const mode of['bind-staging-origin','verify-browser'] as const){
+  const learningLoop=fixture.execute('verify-learning-loop');passed(learningLoop);assert.match(learningLoop.stdout,/STAGING_LEARNING_LOOP_CONSUMER/);
+  for(const mode of['bind-staging-origin','verify-browser','verify-learning-loop'] as const){
    const unavailable=fixture.execute(mode,{backendBridge:'missing'});assert.equal(unavailable.status,1);assert.doesNotMatch(unavailable.stdout,/STAGING_ORIGIN_CONSUMER|STAGING_BROWSER_CONSUMER/);
    const failure=fixture.execute(mode,{stagingConsumerFailure:true});assert.equal(failure.status,1);
   }
-  await fixture.changeSaved('web-deployment-result.json',value=>{value.runAttempt=2;});for(const mode of['bind-staging-origin','verify-browser'] as const){const changed=fixture.execute(mode);assert.equal(changed.status,1);assert.doesNotMatch(changed.stdout,/STAGING_ORIGIN_CONSUMER|STAGING_BROWSER_CONSUMER/);}
+  await fixture.changeSaved('web-deployment-result.json',value=>{value.runAttempt=2;});for(const mode of['bind-staging-origin','verify-browser','verify-learning-loop'] as const){const changed=fixture.execute(mode);assert.equal(changed.status,1);assert.doesNotMatch(changed.stdout,/STAGING_ORIGIN_CONSUMER|STAGING_BROWSER_CONSUMER/);}
  },'staging',true);
 });

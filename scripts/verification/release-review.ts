@@ -199,7 +199,7 @@ export function validatePreparedReleaseReviewPackage(preparedValue: unknown, exp
 
 const officialRunSchema = z.object({
   id: positive, run_attempt: positive, repository: z.object({ full_name: repository }),
-  head_sha: sha, head_branch: z.literal('main'), path: z.enum(['.github/workflows/release.yml','.github/workflows/backend-release.yml']),
+  head_sha: sha, head_branch: z.literal('main'), path: z.enum(['.github/workflows/release.yml','.github/workflows/backend-release.yml','.github/workflows/hosted-learning-qa.yml']),
   event: z.enum(['workflow_dispatch', 'workflow_run']), status: z.enum(['in_progress', 'waiting']),
   conclusion: z.null(),
 });
@@ -210,17 +210,17 @@ const officialApprovalSchema = z.object({
   comment: z.string().max(2000),
 });
 
-const officialExpectedSchema=z.object({purpose:z.enum(['PREBUILD_RELEASE_ADMISSION','BACKEND_SYNTHETIC_STAGING']),repository,releaseSha:sha,releaseRunId:identifier,runAttempt:positive,environmentId:positive,environmentName:z.enum(['staging','production']),packageSha256:digest,comment:z.string().max(300)}).strict();
+const officialExpectedSchema=z.object({purpose:z.enum(['PREBUILD_RELEASE_ADMISSION','BACKEND_SYNTHETIC_STAGING','CUEVO_HOSTED_LEARNING_LOOP_NATIVE']),repository,releaseSha:sha,releaseRunId:identifier,runAttempt:positive,environmentId:positive,environmentName:z.enum(['staging','production']),packageSha256:digest,comment:z.string().max(300)}).strict();
 export type OfficialFounderApprovalExpected=z.infer<typeof officialExpectedSchema>;
 
 /** Shared official JSON boundary only. Each purpose has its fixed run path/comment and must be preceded by its own package validation. */
 export function validateOfficialFounderApproval(rawRun:unknown,rawApprovals:unknown,expectedValue:unknown){
  const expected=parse(officialExpectedSchema,expectedValue);
- const backend=expected.purpose==='BACKEND_SYNTHETIC_STAGING';
- const comment=backend?`Cuevo backend staging admission approved: sha=${expected.releaseSha}; run=${expected.releaseRunId}; attempt=${expected.runAttempt}; package=sha256:${expected.packageSha256}`:approvalComment(expected.releaseSha,expected.releaseRunId,expected.runAttempt,expected.packageSha256);
- if(expected.comment!==comment||backend&&expected.environmentName!=='staging')fail();
+ const backend=expected.purpose==='BACKEND_SYNTHETIC_STAGING',native=expected.purpose==='CUEVO_HOSTED_LEARNING_LOOP_NATIVE';
+ const comment=backend?`Cuevo backend staging admission approved: sha=${expected.releaseSha}; run=${expected.releaseRunId}; attempt=${expected.runAttempt}; package=sha256:${expected.packageSha256}`:native?`Cuevo hosted learning native QA approved: sha=${expected.releaseSha}; run=${expected.releaseRunId}; attempt=${expected.runAttempt}; package=sha256:${expected.packageSha256}`:approvalComment(expected.releaseSha,expected.releaseRunId,expected.runAttempt,expected.packageSha256);
+ if(expected.comment!==comment||(backend||native)&&expected.environmentName!=='staging')fail();
  const run=parse(officialRunSchema,rawRun);
- if(String(run.id)!==expected.releaseRunId||run.run_attempt!==expected.runAttempt||run.repository.full_name!==expected.repository||run.head_sha!==expected.releaseSha||run.path!==(backend?'.github/workflows/backend-release.yml':'.github/workflows/release.yml')||backend&&run.event!=='workflow_dispatch')fail();
+ if(String(run.id)!==expected.releaseRunId||run.run_attempt!==expected.runAttempt||run.repository.full_name!==expected.repository||run.head_sha!==expected.releaseSha||run.path!==(backend?'.github/workflows/backend-release.yml':native?'.github/workflows/hosted-learning-qa.yml':'.github/workflows/release.yml')||(backend||native)&&run.event!=='workflow_dispatch')fail();
  const approvals=parse(z.array(officialApprovalSchema).max(100),rawApprovals,512*1024);
  const matching=approvals.filter(row=>row.environments.some(environment=>environment.id===expected.environmentId||environment.name===expected.environmentName));
  if(matching.length!==1)fail();const approval=matching[0];

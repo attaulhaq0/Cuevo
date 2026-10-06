@@ -13,6 +13,7 @@ import { readHostedMigrationProvider, type HostedMigrationEndpoint } from '../da
 import { prepareHostedOperatorStoragePolicy } from '../database/hosted-operator-storage-policy';
 import { buildRuntimeArtifact } from '../runtime/build-artifacts';
 import { buildEdgeArtifact } from '../runtime/build-edge-artifact';
+import { readGitBinaryDiffDigest } from './git-source-digest';
 
 const builderRepoRoot = resolve(import.meta.dirname, '../..');
 const failure = () => Error('Native backend preparation requires review; contents withheld.');
@@ -144,7 +145,7 @@ export async function prepareNativeBackendRelease(value: unknown): Promise<Prepa
     if (root !== builderRepoRoot) throw failure(); await physical(root, root, 'directory');
     const event = eventSchema.parse(JSON.parse((await file(parse(input.eventPath).root, input.eventPath, 48 * 1024)).toString('utf8')));
     if (event.inputs.commit_sha !== input.sha || event.inputs.ci_run_id !== input.input.ciRunId || event.repository.full_name !== input.repository) throw failure();
-    const treeSha = sha.parse(git(root, ['rev-parse', input.sha + '^{tree}']).toString().trim()), sourceManifestSha256 = digest(git(root, ['ls-tree', '-r', '-z', input.sha])), diffSha256 = digest(git(root, ['diff', '--no-ext-diff', '--no-textconv', '--binary', input.input.baseSha, input.sha, '--']));
+    const treeSha = sha.parse(git(root, ['rev-parse', input.sha + '^{tree}']).toString().trim()), sourceManifestSha256 = digest(git(root, ['ls-tree', '-r', '-z', input.sha])), diffSha256 = (await readGitBinaryDiffDigest({ repoRoot: root, baseSha: input.input.baseSha, sourceSha: input.sha })).sha256;
     const source = { releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, fingerprints: { sourceManifestSha256, diffSha256 } };
     await readBackendReleaseSourceEvidence(root, source as Parameters<typeof readBackendReleaseSourceEvidence>[1]);
     const current = await authority(input, treeSha), placeholder = '0'.repeat(64), now = Date.now();

@@ -98,3 +98,13 @@ test('official seam preserves bounded permissive provider fields and cannot inve
  const prepared=subject.prepareReleaseReviewPackage(input(),expected()),binding={purpose:'PREBUILD_RELEASE_ADMISSION' as const,repository:expected().repository,releaseSha:sha,releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging' as const,packageSha256:prepared.sha256,comment:prepared.comment},entry={...approvals(prepared.comment)[0],approvedAt:'caller timestamp'};
  const receipt=subject.validateOfficialFounderApproval({...run(),extraProviderField:'retained'},[entry],binding);assert.equal('approvedAt'in receipt,false);assert.throws(()=>subject.validateOfficialFounderApproval(run(),Array.from({length:101},()=>entry),binding));assert.throws(()=>subject.validateOfficialFounderApproval({...run(),oversize:'x'.repeat(49*1024)},[entry],binding));
 });
+
+test('native QA approval has a distinct fixed purpose workflow and package comment',()=>{
+ const prepared=subject.prepareReleaseReviewPackage(input(),expected());
+ const binding={purpose:'CUEVO_HOSTED_LEARNING_LOOP_NATIVE',repository:expected().repository,releaseSha:sha,releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging',packageSha256:prepared.sha256,comment:`Cuevo hosted learning native QA approved: sha=${sha}; run=51; attempt=1; package=sha256:${prepared.sha256}`};
+ const nativeRun={...run(),path:'.github/workflows/hosted-learning-qa.yml',event:'workflow_dispatch'};
+ assert.equal(subject.validateOfficialFounderApproval(nativeRun,approvals(binding.comment),binding).packageSha256,prepared.sha256);
+ for(const changed of [{...nativeRun,path:'.github/workflows/release.yml'},{...nativeRun,event:'workflow_run'},{...nativeRun,run_attempt:2}])assert.throws(()=>subject.validateOfficialFounderApproval(changed,approvals(binding.comment),binding));
+ assert.throws(()=>subject.validateOfficialFounderApproval(nativeRun,approvals(binding.comment),{...binding,environmentName:'production'}));
+ assert.throws(()=>subject.validateOfficialFounderApproval(nativeRun,approvals(prepared.comment),{...binding,comment:prepared.comment}));
+});
