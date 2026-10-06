@@ -4,6 +4,20 @@ The founder corrected the deadline: the delegation is on6October2026, in a few h
 
 ## Critical path
 
+Current checkpoint, 6 October: signed candidate `a6c330727cb6dd4a29efeed22daffec79e7a2efc` is pushed to PR #1. Fast checks, CodeQL, dependency review and secret scan passed; technical MVP CI is still running. Read-only provider checks confirm no deployments in the two Cuevo Vercel projects and no applied Cuevo Supabase migrations. Local presentation is separately verified and must remain localhost-only. Earlier commit/build references in the table below are historical checkpoints, superseded by this paragraph and the active delivery ledger.
+
+The hosted execution order is:
+
+1. Admit the exact reviewed source and successful required CI.
+2. Apply the original Supabase schema migrations; verify migration history, restricted grants and RLS.
+3. Provision normal Auth identities and the source-locked fictional school population; verify relationships and permissions.
+4. Deploy the existing API and inactive Edge worker against that database.
+5. Verify hosted Auth, private files/channels, signed execution, worker recovery and backup restoration.
+6. Deploy the approved frontend against the verified API/Auth endpoints; presentation-only screens remain unavailable.
+7. Exercise the actual hosted five-role learning chain and remaining nested workflow gates before customer promotion.
+
+Building Vercel artifacts and confirming target domains can happen before step 2; those actions are preparation, not a running hosted release. Frontend deployment cannot substitute for backend provisioning or end-to-end acceptance.
+
 | Priority | Task | Current state | Required evidence |
 |---|---|---|---|
 | 1 | Finish reviewed source and required CI | Signed3344992 contains schema runner and compact Development. Its exact PR/push checks run; earlier efdc checks both passed. | Exact final source, current required checks, signed commit/remote/local agreement; retain failures. |

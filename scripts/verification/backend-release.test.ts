@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { canonicalReleaseReviewJson } from './release-review';
 
 const secret = 'private-backend-phase-canary';
-const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED', activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED', bundle: {} as Record<string, unknown> };
+const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED', activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED',recoveryStatus:'FAULT_RECOVERY_VERIFIED',restoreStatus:'VERIFIED',originStatus:'API_ORIGIN_BOUND',handoverStatus:'PREPARED_STAGING_MANIFEST',webStatus:'WEB_PUBLIC_SETTINGS_CONFIRMED', bundle: {} as Record<string, unknown> };
 const replacements: Record<string, string> = {
   'backend-release-prepare.ts': 'export const prepareNativeBackendRelease=globalThis.backendPhaseFixture.prepare;',
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.backendPhaseFixture.admission;',
@@ -25,6 +25,11 @@ const replacements: Record<string, string> = {
   'backend-hosted-verification.ts': 'export const verifyHostedBackendPrerequisites=globalThis.backendPhaseFixture.verify;',
   'backend-hosted-private.ts': 'export const verifyHostedPrivateAccess=globalThis.backendPhaseFixture.private;',
   'backend-hosted-activation.ts': 'export const activateHostedWorker=globalThis.backendPhaseFixture.activate;',
+  'backend-hosted-fault-recovery-native.ts':'export const verifyNativeWorkerFaultRecovery=globalThis.backendPhaseFixture.recovery;',
+  'backend-web-handover.ts':'export const prepareBackendWebHandover=globalThis.backendPhaseFixture.handover;',
+  'backend-hosted-database-restore.ts':'export const verifyNativeHostedDatabaseRestore=globalThis.backendPhaseFixture.restore;',
+  'backend-api-origin.ts':'export const bindBackendApiOrigin=globalThis.backendPhaseFixture.origin;',
+  'backend-web-settings.ts':'export const configureBackendWebSettings=globalThis.backendPhaseFixture.webSettings;',
 };
 registerHooks({ resolve(specifier, context, next) {
   const name = specifier.split('/').at(-1)!;
@@ -37,6 +42,11 @@ registerHooks({ resolve(specifier, context, next) {
   return next(url, context);
 } });
 (globalThis as unknown as { backendPhaseFixture: object }).backendPhaseFixture = {
+  webSettings:async(input:{vercelToken:string})=>{state.events.push('web-settings');assert.equal(input.vercelToken,secret);return{status:state.webStatus,canonicalReceipt:'{}',pendingGates:state.webStatus==='REQUIRES_REVIEW'?['SOURCE']:[],hostedAcceptance:false};},
+  origin:async(input:{syntheticPassword:string;vercelToken:string})=>{state.events.push('origin');assert.equal(input.syntheticPassword,'protected-synthetic-pilot-password');assert.equal(input.vercelToken,secret);return{status:state.originStatus,healthVerified:true,currentActorVerified:true,corsVerified:true,sessionsClosed:true,canonicalReceipt:'{}',hostedAcceptance:false};},
+  restore:async(input:{operatorPassword:string;operatorDatabaseUrl:string;apiDeployment:{id:string;url:string}})=>{state.events.push('restore');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).password,'');assert.equal(input.apiDeployment.id,'dpl_exact');return{status:state.restoreStatus,recoveryVerified:state.restoreStatus==='VERIFIED',cleanupConfirmed:true,sessionsClosed:true,lockReleased:true,canonicalReceipt:'{}',hostedAcceptance:false};},
+  handover:async(input:{repoRoot:string;bundleSha256:string;vercelToken:string})=>{state.events.push('handover');assert.equal(input.vercelToken,secret);assert.match(input.bundleSha256,/^[a-f0-9]{64}$/);return{status:state.handoverStatus,manifestPath:join(input.repoRoot,'.local/hosted-release/web-handover-manifest.json'),manifestSha256:'b'.repeat(64),publicConfigurationPath:join(input.repoRoot,'.local/hosted-release/web-handover-public.json'),pendingGates:state.handoverStatus==='REQUIRES_REVIEW'?['DATABASE_BACKUP_RESTORE']:[],hostedAcceptance:false};},
+  recovery:async(input:{operatorDatabaseUrl:string;operatorPassword:string})=>{state.events.push('recovery');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).password,'');return{status:state.recoveryStatus,expiredLeaseRecoveryVerified:true,eventRetryVerified:true,dispatchBackoffVerified:true,cleanupStatus:'RELEASED',sessionsClosed:true,lockReleased:true,ownedControlVerified:true,canonicalReceipt:'{}',hostedAcceptance:false};},
   activate:async(input:{operatorDatabaseUrl:string;operatorPassword:string;dataApiConfigurationEvidence:{artifactPath:string;source:string;enabled:boolean};privateReceipt:{status:string}})=>{state.events.push('activate');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).username,'postgres');assert.equal(new URL(input.operatorDatabaseUrl).password,'');assert.equal(input.privateReceipt.status,'PRIVATE_PROBES_CONFIRMED');assert.ok(input.dataApiConfigurationEvidence.artifactPath.endsWith('data-api-configuration.json'));assert.equal(input.dataApiConfigurationEvidence.source,'AUTHENTICATED_DASHBOARD');assert.equal(input.dataApiConfigurationEvidence.enabled,false);return{status:state.activationStatus,sourceProcessed:true,duplicateWakeDenied:true,originalCommandReplayed:true,recoveryScheduled:true,scheduledRecoveryVerified:true,recoveryVerified:false,sessionsClosed:true,hostedAcceptance:false,canonicalReceipt:'{}'};},
   prepare: async (input: Record<string, unknown>) => { state.events.push('prepare'); assert.equal(input.providerToken, secret); return { ...state.bundle, preparedApproval: { canonicalJson: '{}', comment: 'Source-bound package comment' }, bundlePath: join(input.repoRoot as string, '.local/hosted-release/backend-bundle.json'), bundleSha256: digest(JSON.stringify(state.bundle)) }; },
   validate: (prepared: unknown) => prepared,
@@ -61,7 +71,7 @@ async function fixture(run: (root: string, env: Record<string, string>) => Promi
   const root = await mkdtemp(join(tmpdir(), 'cuevo-backend-phase-'));
   try {
     await mkdir(join(root, '.local/hosted-release'), { recursive: true });
-    state.events = []; state.failApproval = false; state.status = 'COMMITTED';state.privateStatus='PRIVATE_PROBES_CONFIRMED';state.activationStatus='ACTIVATED_SIGNED_SOURCE_VERIFIED';
+    state.events = []; state.failApproval = false; state.status = 'COMMITTED';state.privateStatus='PRIVATE_PROBES_CONFIRMED';state.activationStatus='ACTIVATED_SIGNED_SOURCE_VERIFIED';state.recoveryStatus='FAULT_RECOVERY_VERIFIED';state.restoreStatus='VERIFIED';state.originStatus='API_ORIGIN_BOUND';state.handoverStatus='PREPARED_STAGING_MANIFEST';state.webStatus='WEB_PUBLIC_SETTINGS_CONFIRMED';
     const sha = 'a'.repeat(40);
     state.bundle = { version: 1, purpose: 'CUEVO_BACKEND_RELEASE_EXECUTION', repoRoot: root, expected: { repository: 'attaulhaq0/Cuevo', releaseSha: sha, releaseRunId: '51', runAttempt: 1, ciRunId: '31', environmentName: 'staging', deploymentEnvironment: 'synthetic-staging', targets: {supabase:{projectRef:'mqxdjvsyckzocokuikmx'}} }, preparedApproval: {}, plan: {}, stages: [], toolchainManifestPath: join(root, '.local/hosted-release/toolchain.json'), operatorStoragePolicyPath: join(root, '.local/hosted-release/operator-policy.json'), artifacts: { apiRoot: join(root, '.local/runtime-artifacts/api-vercel'), edgeRoot: join(root, '.local/edge-artifacts/cuevo-worker') } };
     state.bundle.migrationEndpoint={projectRef:'mqxdjvsyckzocokuikmx',kind:'direct',host:'db.mqxdjvsyckzocokuikmx.supabase.co',port:5432,database:'postgres'};
@@ -125,5 +135,45 @@ test('activation requires current exact Data API observation and confirmed priva
     if(mode==='activation')state.activationStatus='REQUIRES_REVIEW';
     if(mode==='confirmed'){const result=await api.runBackendReleasePhase({mode:'activate',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.equal('recoveryVerified' in result?result.recoveryVerified:undefined,false);assert.deepEqual(state.events,['approval','activate']);}
     else{await assert.rejects(api.runBackendReleasePhase({mode:'activate',repoRoot,env}));assert.deepEqual(state.events,mode==='activation'?['approval','activate']:['approval']);}
+  });
+});
+
+test('native recovery phase preserves unknown outcome and validates source before its credential consumer',async()=>{
+  const api=await subject();for(const kind of ['confirmed','unverified','approval'])await fixture(async(repoRoot,env)=>{
+    env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');state.recoveryStatus=kind==='unverified'?'REQUIRES_REVIEW':'FAULT_RECOVERY_VERIFIED';state.failApproval=kind==='approval';
+    if(kind==='confirmed'){const result=await api.runBackendReleasePhase({mode:'verify-recovery',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','recovery']);}
+    else{await assert.rejects(api.runBackendReleasePhase({mode:'verify-recovery',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','recovery']);}
+  });
+});
+
+test('frontend handover preserves missing backend gates as failure with a retained safe result',async()=>{
+  const api=await subject();for(const kind of ['confirmed','missing','approval'])await fixture(async(repoRoot,env)=>{
+    env.VERCEL_TOKEN=secret;state.handoverStatus=kind==='missing'?'REQUIRES_REVIEW':'PREPARED_STAGING_MANIFEST';state.failApproval=kind==='approval';
+    if(kind==='confirmed'){const result=await api.runBackendReleasePhase({mode:'handover',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','handover']);}
+    else await assert.rejects(api.runBackendReleasePhase({mode:'handover',repoRoot,env}));
+    if(kind==='missing'){const result=JSON.parse(await readFile(join(repoRoot,'.local/hosted-release/web-handover-result.json'),'utf8'));assert.equal(result.status,'REQUIRES_REVIEW');assert.deepEqual(result.pendingGates,['DATABASE_BACKUP_RESTORE']);}
+  });
+});
+
+test('database restore consumer is bound to the admitted API and cannot promote an unverified restore',async()=>{
+  const api=await subject();for(const kind of ['verified','review','approval'])await fixture(async(repoRoot,env)=>{
+    env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');await writeFile(join(repoRoot,'.local/hosted-release/provider-result.json'),JSON.stringify({status:'DEPLOYED_INACTIVE',api:{url:'https://cuevo-api.vercel.app',deploymentId:'dpl_exact'}}));state.restoreStatus=kind==='review'?'REQUIRES_REVIEW':'VERIFIED';state.failApproval=kind==='approval';
+    if(kind==='verified'){const result=await api.runBackendReleasePhase({mode:'verify-restore',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','restore']);}
+    else{await assert.rejects(api.runBackendReleasePhase({mode:'verify-restore',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','restore']);}
+  });
+});
+
+test('fixed staging origin binding consumes only current runtime and preserves failed verification',async()=>{
+  const api=await subject();for(const kind of ['verified','review','approval'])await fixture(async(repoRoot,env)=>{
+    env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');state.originStatus=kind==='review'?'REQUIRES_REVIEW':'API_ORIGIN_BOUND';state.failApproval=kind==='approval';
+    if(kind==='verified'){const result=await api.runBackendReleasePhase({mode:'bind-api',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','origin']);}
+    else{await assert.rejects(api.runBackendReleasePhase({mode:'bind-api',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','origin']);}
+  });
+});
+
+test('public frontend settings cannot bypass current backend approval or missing handover evidence',async()=>{
+  const api=await subject();for(const kind of ['confirmed','review','approval'])await fixture(async(repoRoot,env)=>{env.VERCEL_TOKEN=secret;state.webStatus=kind==='review'?'REQUIRES_REVIEW':'WEB_PUBLIC_SETTINGS_CONFIRMED';state.failApproval=kind==='approval';
+    if(kind==='confirmed'){const result=await api.runBackendReleasePhase({mode:'configure-web',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','web-settings']);}
+    else{await assert.rejects(api.runBackendReleasePhase({mode:'configure-web',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','web-settings']);}
   });
 });

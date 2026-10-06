@@ -1,0 +1,213 @@
+import { createHash } from 'node:crypto';
+import { lstat, open, readFile, realpath, readdir } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+import { z } from 'zod';
+import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson, parseReleaseExecutionJson } from './release-review';
+import { readBackendReleaseAdmission } from './backend-release-admission';
+import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from './backend-release-contracts';
+import { prepareHostedRuntimeRecipients } from './backend-provider-deploy';
+import { validateReleaseManifest, validateVercelDeployment } from './cicd-contracts';
+import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, type HostedMigrationPlanV1 } from '../database/hosted-migration-plan';
+import { createHostedMigrationJournal } from '../database/hosted-migration-journal';
+
+const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+const digest = z.string().regex(/^[a-f0-9]{64}$/), sha = z.string().regex(/^[a-f0-9]{40}$/), time = z.iso.datetime({ offset: true });
+const origin = z.string().refine(value => { try { const url = new URL(value); return url.protocol === 'https:' && url.origin === value && !url.username && !url.password && !url.port; } catch { return false; } });
+const fail = () => Error('Backend web handover requires current native evidence; contents withheld.');
+const bindingSchema = z.object({ repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/), sourceSha: sha, ciRunId: z.string().regex(/^[1-9][0-9]*$/), runId: z.string().regex(/^[1-9][0-9]*$/), runAttempt: z.number().int().positive(), packageSha256: digest, runtimeSha256: digest, apiDeploymentId: z.string().regex(/^dpl_[A-Za-z0-9]+$/), apiDeploymentUrl: origin, apiOrigin: origin, apiProjectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), webProjectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), webOrigin: origin, projectRef: z.string().regex(/^[a-z]{20}$/), edgeId: z.string().min(1), edgeVersion: z.number().int().positive(), apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest, supabasePublishableKey: z.string().startsWith('sb_publishable_').min(20), migrations: z.array(z.object({ version: z.string().regex(/^\d{14}$/), sha256: digest }).strict()).min(1) }).strict();
+export type BackendWebHandoverBinding = z.infer<typeof bindingSchema>;
+const producer = (path: string) => z.object({ path: z.literal(path), sha256: digest }).strict();
+function current(value: string, now: number) { const at = Date.parse(value); if (!Number.isSafeInteger(at) || at > now || now - at > 3600000) throw fail(); }
+
+/** Required future native receipt contracts. A producer hash names reviewed
+ * source; it does not prove that source ran. Native owners must supply bound
+ * source/audit/cleanup observations. Scheduled recovery is insufficient. */
+export function validateBackendWebHandoverReceipts(raw: Record<string, unknown>, bindingValue: unknown, now: number) {
+  const b = bindingSchema.parse(JSON.parse(canonicalReleaseExecutionJson(bindingValue)));
+  const rows = JSON.parse(canonicalReleaseExecutionJson(raw)) as Record<string, unknown>, pendingGates: string[] = [];
+  if (!Number.isSafeInteger(now) || now < 0 || b.webProjectId === b.apiProjectId || b.webOrigin === b.apiOrigin || !new URL(b.apiDeploymentUrl).hostname.endsWith('.vercel.app')) throw fail();
+  const id = z.object({ sourceSha: z.literal(b.sourceSha), projectRef: z.literal(b.projectRef), runId: z.literal(b.runId), runAttempt: z.literal(b.runAttempt), packageSha256: z.literal(b.packageSha256), runtimeSha256: z.literal(b.runtimeSha256), apiDeploymentId: z.literal(b.apiDeploymentId) });
+  const gate = <T>(name: string, read: () => T): T | null => { try { return read(); } catch { pendingGates.push(name); return null; } };
+  const provider = gate('PROVIDER_DEPLOYMENT', () => z.object({ status: z.literal('DEPLOYED_INACTIVE'), purpose: z.literal('CUEVO_BACKEND_PROVIDER_DEPLOYMENT'), mutation: z.literal('ATTEMPTED'), hostedAcceptance: z.literal(false), api: z.object({ deploymentId: z.literal(b.apiDeploymentId), url: z.literal(b.apiDeploymentUrl), artifactSha256: z.literal(b.apiArtifactSha256), metadataVerified: z.literal(true), healthVerified: z.literal(true) }), edge: z.object({ id: z.literal(b.edgeId), version: z.literal(b.edgeVersion), artifactSha256: z.literal(b.edgeArtifactSha256), denoLockSha256: z.literal(b.denoLockSha256), customAuthenticationVerified: z.literal(true), state: z.literal('INACTIVE') }) }).parse(rows.provider));
+  const prerequisites = gate('ROLE_AND_ENDPOINT_DENIALS', () => z.object({ status: z.literal('PREREQUISITES_OBSERVED'), apiReady: z.literal(true), roleSessions: z.literal(5), crossSchoolDenied: z.literal(true), dataApi: z.object({ anonymousRestDenied: z.literal(true), authenticatedRestDenied: z.literal(true), serviceRestDenied: z.literal(true), graphqlDenied: z.literal(true), rpcDenied: z.literal(true) }), worker: z.object({ missingSignatureDenied: z.literal(true), malformedSignatureDenied: z.literal(true), staleSignatureDenied: z.literal(true) }) }).parse(rows.prerequisites));
+  const privateProof = gate('FRESH_PRIVATE_SOURCE_AND_CLEANUP', () => {
+    const identitySha256 = hash(canonicalReleaseExecutionJson({ purpose: 'PRE_ACTIVATION', sourceSha: b.sourceSha, projectRef: b.projectRef, apiDeployment: { url: b.apiDeploymentUrl, id: b.apiDeploymentId }, runtimeSha256: b.runtimeSha256 }));
+    const intent = z.object({ purpose: z.literal('PRE_ACTIVATION'), identitySha256: z.literal(identitySha256), createdAt: time }).parse(rows.privateIntent);
+    const proof = z.object({ identitySha256: z.literal(identitySha256), createdAt: z.literal(intent.createdAt), verifiedAt: time, result: z.object({ status: z.literal('PRIVATE_PROBES_CONFIRMED'), freshProof: z.literal(true), restrictedDatabaseGrants: z.literal(true), privateStorage: z.literal(true), privateRealtime: z.literal(true), storageProbe: z.object({ assetId: z.uuid(), objectPath: z.string().min(1), retired: z.literal(true), removed: z.literal(true) }).strict(), realtimeProbe: z.object({ roomId: z.uuid(), closed: z.literal(true) }).strict(), sessionsClosed: z.literal(true), activationAllowed: z.literal(false), hostedAcceptance: z.literal(false) }).strict() }).strict().parse(rows.privateProof);
+    current(intent.createdAt, now); current(proof.verifiedAt, now); if (Date.parse(proof.verifiedAt) < Date.parse(intent.createdAt)) throw fail(); return proof;
+  });
+  const configuration = gate('MANUAL_DATA_API_CONFIGURATION', () => { const value = z.object({ sourceSha: z.literal(b.sourceSha), projectRef: z.literal(b.projectRef), dataApi: z.literal('DISABLED'), observer: z.string().min(1), status: z.literal('OBSERVED_PROVIDER_UI'), visibleText: z.literal('Data API is disabled'), observedAt: time, source: z.literal('https://supabase.com/dashboard/project/' + b.projectRef + '/integrations/data_api/settings') }).parse(rows.configuration); current(value.observedAt, now); return value; });
+  const activation = gate('SIGNED_WORKER_AND_TERMINAL_CLEANUP', () => {
+    const value = id.extend({ purpose: z.literal('CUEVO_HOSTED_WORKER_ACTIVATION'), status: z.literal('ACTIVATED_SIGNED_SOURCE_VERIFIED'), phase: z.literal('FINAL'), observedAt: time, sourceProcessed: z.literal(true), duplicateWakeDenied: z.literal(true), originalCommandReplayed: z.literal(true), recoveryScheduled: z.literal(true), scheduledRecoveryVerified: z.literal(true), recoveryVerified: z.literal(false), configurationEvidenceObservedManual: z.literal(true), sessionsClosed: z.literal(true), keyOperation: z.literal('CONFIRMED'), dispatchOperation: z.literal('CONFIRMED'), edgeVersion: z.literal(b.edgeVersion), hostedAcceptance: z.literal(false), canonicalReceipt: z.null() }).passthrough().parse(rows.activation);
+    const clean = z.object({ purpose: z.literal('CUEVO_HOSTED_WORKER_ACTIVATION_CLEANUP'), sourceSha: z.literal(b.sourceSha), projectRef: z.literal(b.projectRef), runId: z.literal(b.runId), runAttempt: z.literal(b.runAttempt), status: z.literal(value.status), lockReleased: z.literal(true), sessionsClosed: z.literal(true), resultSha256: z.literal(hash(canonicalReleaseExecutionJson(value))), observedAt: time }).strict().parse(rows.activationCleanup);
+    current(value.observedAt, now); current(clean.observedAt, now); if (Date.parse(clean.observedAt) < Date.parse(value.observedAt)) throw fail(); return value;
+  });
+  const recovery = gate('FULL_WORKER_RECOVERY', () => {
+    const recoverySchema = id.extend({ observedAt: time, purpose: z.literal('CUEVO_HOSTED_WORKER_FAULT_RECOVERY'), evidence: z.literal('NATIVE_HOSTED_OWNER'), producerPath: z.literal('scripts/verification/backend-hosted-fault-recovery-native.ts'), producerSha256: digest, edgeVersion: z.literal(b.edgeVersion), status: z.literal('FAULT_RECOVERY_VERIFIED'), basis: z.literal('ORIGINAL_WORKER_LEASE_RETRY_REVIEW_BACKOFF'), expiredLeaseRecoveryVerified: z.literal(true), eventRetryVerified: z.literal(true), dispatchBackoffVerified: z.literal(true), originalKey: z.string().min(1), eventIds: z.array(z.uuid()).min(1), faultInjectionBasis: z.literal('EXACT_SYNTHETIC_REQUESTED_GENERATION'), ownedControlVerified: z.literal(true), sessionsClosed: z.literal(true), lockReleased: z.literal(true), dispatchDisabledOnFailure: z.null(), cleanupStatus: z.literal('RELEASED'), hostedAcceptance: z.literal(false), canonicalReceipt: z.null() }).strict();
+    const value = recoverySchema.parse(rows.fullRecovery), provisional = recoverySchema.extend({ lockReleased: z.literal(false) }).parse(rows.fullRecoveryProvisional);
+    if (provisional.producerSha256 !== value.producerSha256 || provisional.originalKey !== value.originalKey) throw fail();
+    if (canonicalReleaseExecutionJson(provisional.eventIds) !== canonicalReleaseExecutionJson(value.eventIds)) throw fail();
+    const cleanup = z.object({ purpose: z.literal('CUEVO_HOSTED_WORKER_FAULT_RECOVERY_CLEANUP'), sourceSha: z.literal(b.sourceSha), projectRef: z.literal(b.projectRef), runId: z.literal(b.runId), runAttempt: z.literal(b.runAttempt), status: z.literal(value.status), sessionsClosed: z.literal(true), lockReleased: z.literal(true), cleanupStatus: z.literal('RELEASED'), provisionalSha256: z.literal(hash(canonicalReleaseExecutionJson(provisional))), resultSha256: z.literal(hash(canonicalReleaseExecutionJson(value))), observedAt: time }).strict().parse(rows.fullRecoveryCleanup);
+    current(value.observedAt, now); current(provisional.observedAt, now); current(cleanup.observedAt, now); if (Date.parse(cleanup.observedAt) < Math.max(Date.parse(value.observedAt), Date.parse(provisional.observedAt))) throw fail(); return value;
+  });
+  const restored = gate('DATABASE_BACKUP_RESTORE', () => {
+    const value = id.extend({ observedAt: time, purpose: z.literal('CUEVO_HOSTED_DATABASE_RESTORE'), evidence: z.literal('NATIVE_HOSTED_OWNER'), producer: producer('scripts/verification/backend-hosted-database-restore.ts'), status: z.literal('VERIFIED'), backupVerified: z.literal(true), restoredDatabaseVerified: z.literal(true), restoredRestrictedGrantsVerified: z.literal(true), restoredRlsVerified: z.literal(true), restoredAuthVerified: z.literal(true), restoredPrivateStorageVerified: z.literal(true), recoveryVerified: z.literal(true), cleanupConfirmed: z.literal(true), hostedAcceptance: z.literal(false), archiveSha256: digest, catalogueSha256: digest, fingerprints: z.array(z.object({ table: z.string().min(1), rows: z.number().int().nonnegative(), sha256: digest }).strict()).min(1), scratchImage: z.string().regex(/^public\.ecr\.aws\/supabase\/postgres@sha256:[a-f0-9]{64}$/), operationalExclusions: z.array(z.string()).min(1), sourceSnapshot: z.string().min(1), assetId: z.uuid(), assetRetired: z.literal(true), assetRemoved: z.literal(true), sessionsClosed: z.literal(true), lockReleased: z.literal(true), limitations: z.array(z.string().min(1)).min(1), canonicalReceipt: z.null() }).strict().parse(rows.databaseRestore);
+    const cleanup = z.object({ purpose: z.literal('CUEVO_HOSTED_DATABASE_RESTORE_CLEANUP'), sourceSha: z.literal(b.sourceSha), projectRef: z.literal(b.projectRef), runId: z.literal(b.runId), runAttempt: z.literal(b.runAttempt), status: z.literal(value.status), cleanupConfirmed: z.literal(true), sessionsClosed: z.literal(true), lockReleased: z.literal(true), assetRetired: z.literal(true), assetRemoved: z.literal(true), resultSha256: z.literal(hash(canonicalReleaseExecutionJson(value))), observedAt: time }).strict().parse(rows.databaseRestoreCleanup);
+    current(value.observedAt, now); current(cleanup.observedAt, now); if (Date.parse(cleanup.observedAt) < Date.parse(value.observedAt) || new Set(value.fingerprints.map(row => row.table)).size !== value.fingerprints.length) throw fail();
+    return value;
+  });
+  const empty = { status: 'REQUIRES_REVIEW' as const, pendingGates, manifest: null, activationAllowed: false as const, hostedAcceptance: false as const };
+  if (pendingGates.length || !provider || !prerequisites || !privateProof || !configuration || !activation || !recovery || !restored) return empty;
+  if (Date.parse(privateProof.verifiedAt) > Date.parse(activation.observedAt) || Date.parse(configuration.observedAt) > Date.parse(activation.observedAt) || Date.parse(recovery.observedAt) < Date.parse(activation.observedAt)) {
+    pendingGates.push('NATIVE_PROOF_ORDER'); return empty;
+  }
+  const evidenceUrl = 'https://github.com/' + b.repository + '/actions/runs/' + b.runId;
+  const manifest = { version: 2 as const, environment: 'staging' as const, commitSha: b.sourceSha, ciRunId: b.ciRunId, verifiedAt: activation.observedAt, api: { kind: 'vercel' as const, origin: b.apiOrigin, commitSha: b.sourceSha, projectId: b.apiProjectId, teamId: b.teamId, deploymentId: b.apiDeploymentId, deploymentUrl: b.apiDeploymentUrl, target: 'preview' as const, artifactSha256: b.apiArtifactSha256, metadataVerified: true as const, healthVerified: true as const, evidenceUrl }, worker: { kind: 'supabase-edge' as const, commitSha: b.sourceSha, projectRef: b.projectRef, functionName: 'cuevo-worker' as const, artifactSha256: b.edgeArtifactSha256, denoLockSha256: b.denoLockSha256, authVerified: true as const, queueRecoveryVerified: recovery.expiredLeaseRecoveryVerified && recovery.eventRetryVerified && recovery.dispatchBackoffVerified && activation.scheduledRecoveryVerified, roleGrantsVerified: privateProof.result.restrictedDatabaseGrants, transportPrivateVerified: recovery.ownedControlVerified, evidenceUrl }, database: { projectRef: b.projectRef, migrations: b.migrations, grantsVerified: privateProof.result.restrictedDatabaseGrants, rlsVerified: restored.restoredRlsVerified, privateStorageVerified: privateProof.result.privateStorage, privateRealtimeVerified: privateProof.result.privateRealtime, recoveryVerified: restored.recoveryVerified, evidenceUrl, dataApi: { state: 'DISABLED' as const, projectRef: b.projectRef, commitSha: b.sourceSha, verifiedAt: configuration.observedAt, configurationVerified: true as const, ...prerequisites.dataApi, evidenceUrl } }, approval: { reviewer: 'attaulhaq0', basis: 'SYNTHETIC_STAGING' as const, evidenceUrl }, publicConfig: { apiUrl: b.apiOrigin, supabaseUrl: 'https://' + b.projectRef + '.supabase.co', supabasePublishableKey: b.supabasePublishableKey } };
+  validateReleaseManifest(manifest, { sha: b.sourceSha, environment: 'staging', ciRunId: b.ciRunId, now, migrations: b.migrations });
+  return { status: 'READY_FOR_FRONTEND_REVIEW' as const, pendingGates, manifest, restorationLimitations: restored.limitations, activationAllowed: false as const, hostedAcceptance: false as const };
+}
+
+async function file(root: string, path: string, maximum = 1024 * 1024) {
+  const rel = relative(root, path); if (!isAbsolute(path) || resolve(path) !== path || !rel || isAbsolute(rel) || rel.split(/[\\/]/).some(part => !part || part === '.' || part === '..')) throw fail();
+  let currentPath = root;
+  for (const [index, part] of rel.split(/[\\/]/).entries()) { currentPath = join(currentPath, part); const stat = await lstat(currentPath); if (stat.isSymbolicLink() || await realpath(currentPath) !== currentPath || (index < rel.split(/[\\/]/).length - 1 ? !stat.isDirectory() : !stat.isFile() || stat.nlink !== 1 || stat.size > maximum)) throw fail(); }
+  const before = await lstat(path), bytes = await readFile(path), after = await lstat(path);
+  if (bytes.length > maximum || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw fail(); return bytes;
+}
+async function official(url: string, token: string) {
+  const signal = AbortSignal.timeout(10000), response = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, redirect: 'error', credentials: 'omit', cache: 'no-store', signal });
+  if (!response.ok || response.redirected || response.url && response.url !== url) throw fail();
+  if (!response.body) throw fail(); const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
+  try {
+    while (true) {
+      const part = await new Promise<ReadableStreamReadResult<Uint8Array>>((done, reject) => {
+        const abort = () => { signal.removeEventListener('abort', abort); reject(fail()); }; if (signal.aborted) return abort();
+        signal.addEventListener('abort', abort, { once: true }); void reader.read().then(value => { signal.removeEventListener('abort', abort); done(value); }, () => { signal.removeEventListener('abort', abort); reject(fail()); });
+      });
+      if (signal.aborted) throw fail(); if (part.done) break; size += part.value.byteLength; if (size > 512 * 1024) throw fail(); chunks.push(part.value);
+    }
+    return JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks))) as unknown;
+  } finally { void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* A pending cancelled read owns cleanup. */ } }
+}
+/** Both outputs are re-admitted by the caller before this source-owned writer
+ * runs. Exact existing bytes are reusable; partial or conflicting output is
+ * retained for review and is never rewritten. */
+async function persistHandoverOutputs(root: string, manifest: unknown, publicConfig: unknown) {
+  const directory = join(root, '.local/hosted-release'), manifestText = canonicalReleaseReviewJson(manifest), publicText = canonicalReleaseReviewJson(publicConfig), manifestPath = join(directory, 'web-handover-manifest.json'), publicPath = join(directory, 'web-handover-public.json');
+  const exists = async (path: string) => { try { await lstat(path); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw fail(); } };
+  const manifestExists = await exists(manifestPath), publicExists = await exists(publicPath);
+  if (manifestExists || publicExists) {
+    if (!manifestExists || !publicExists || !(await file(root, manifestPath)).equals(Buffer.from(manifestText)) || !(await file(root, publicPath, 16384)).equals(Buffer.from(publicText))) throw fail();
+  } else {
+    const first = await open(manifestPath, 'wx', 0o600); let second: Awaited<ReturnType<typeof open>> | null = null;
+    try { second = await open(publicPath, 'wx', 0o600); await second.writeFile(publicText); await second.sync(); await first.writeFile(manifestText); await first.sync(); }
+    finally { await second?.close(); await first.close(); }
+  }
+  return { manifestPath, publicConfigurationPath: publicPath, manifestSha256: hash(manifestText) };
+}
+export type BackendWebHandoverResult = { status: 'REQUIRES_REVIEW' | 'PREPARED_STAGING_MANIFEST'; pendingGates: string[]; manifestPath: string | null; publicConfigurationPath: string | null; manifestSha256: string | null; receiptScope: 'BOUNDED_NATIVE_BACKUP_ISOLATED_DATABASE_SESSION_AND_OWNED_PRIVATE_BYTES'; restorationLimitations: string[]; activationAllowed: false; hostedAcceptance: false };
+
+/** Collect actual confined receipts and current official admission. Missing
+ * native producers remain pending. This helper never deploys, grants approval,
+ * runs a recovery drill or changes a provider/database. */
+export async function prepareBackendWebHandover(value: unknown): Promise<BackendWebHandoverResult> {
+  const result: BackendWebHandoverResult = { status: 'REQUIRES_REVIEW', pendingGates: [], manifestPath: null, publicConfigurationPath: null, manifestSha256: null, receiptScope: 'BOUNDED_NATIVE_BACKUP_ISOLATED_DATABASE_SESSION_AND_OWNED_PRIVATE_BYTES', restorationLimitations: [], activationAllowed: false, hostedAcceptance: false };
+  const gate = async <T>(name: string, read: () => Promise<T>): Promise<T | null> => { try { return await read(); } catch { result.pendingGates.push(name); return null; } };
+  try {
+    const input = z.object({ repoRoot: z.string(), bundleSha256: digest, githubToken: z.string().min(1), vercelToken: z.string().min(20) }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value))), root = input.repoRoot;
+    if (!isAbsolute(root) || resolve(root) !== root || await realpath(root) !== root || (await lstat(root)).isSymbolicLink()) throw fail();
+    const directory = join(root, '.local/hosted-release'), read = async (name: string) => {
+      const bytes = await file(root, join(directory, name)), text = new TextDecoder('utf8', { fatal: true }).decode(bytes);
+      // Native owners retain either canonical JSON or JSON.stringify plus one
+      // newline. Normalize data only after parsing bounded exact bytes; source
+      // and cleanup fingerprints still use each owner's declared hash form.
+      return JSON.parse(canonicalReleaseExecutionJson(JSON.parse(text))) as unknown;
+    };
+    const raw = await file(root, join(directory, 'backend-bundle.json')); if (hash(raw) !== input.bundleSha256) throw fail();
+    const bundle = z.object({ version: z.literal(1), purpose: z.literal('CUEVO_BACKEND_RELEASE_EXECUTION'), repoRoot: z.literal(root), expected: z.unknown(), preparedApproval: z.unknown(), plan: z.unknown(), migrationEndpoint: z.unknown(), stages: z.array(z.unknown()).length(4), toolchainManifestPath: z.string(), operatorStoragePolicyPath: z.string(), artifacts: z.object({ apiRoot: z.string(), edgeRoot: z.string() }).strict() }).strict().parse(parseReleaseExecutionJson(raw.toString('utf8')));
+    const expected = bundle.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(bundle.preparedApproval, { ...expected, now: Date.now() });
+    const admit = () => readBackendReleaseAdmission({ repoRoot: root, expected, prepared, githubToken: input.githubToken }); await admit();
+    const plan = bundle.plan as HostedMigrationPlanV1, planned = canonicalHostedMigrationPlan(plan), sources = readCanonicalMigrationSources({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha });
+    if (plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== expected.targets.supabase.projectRef || planned.sha256 !== expected.fingerprints.migrationPlanSha256 || hash(canonicalReleaseExecutionJson(bundle.migrationEndpoint)) !== expected.fingerprints.migrationEndpointSha256 || plan.migrations.length !== sources.sources.length || plan.migrations.some(row => !sources.sources.some(source => source.name === row.name && hash(source.bytes) === row.sha256))) throw fail();
+    const rawRuntime = await gate('RUNTIME_CONFIGURATION', () => read('runtime-private.json'));
+    const runtime = rawRuntime ? await gate('RUNTIME_CONFIGURATION_ADMISSION', async () => prepareHostedRuntimeRecipients(rawRuntime, expected)) : null;
+    const deployment = await gate('PROVIDER_DEPLOYMENT', () => read('provider-result.json'));
+    await gate('RUNTIME_ARTIFACT_SOURCE', async () => {
+      for (const [folder, expectedHash, service] of [[bundle.artifacts.apiRoot, expected.fingerprints.apiArtifactSha256, 'api'], [bundle.artifacts.edgeRoot, expected.fingerprints.edgeArtifactSha256, 'cuevo-worker']]) {
+        if (folder !== join(root, service === 'api' ? '.local/runtime-artifacts/api-vercel' : '.local/edge-artifacts/cuevo-worker')) throw fail();
+        const bytes = await file(root, join(folder, 'artifact.json'), 4 * 1024 * 1024); if (hash(JSON.stringify(JSON.parse(bytes.toString('utf8')))) !== expectedHash) throw fail();
+        const manifest = z.object({ schemaVersion: z.literal(1), service: z.literal(service), sourceLockSha256: digest, files: z.array(z.object({ path: z.string(), sha256: digest })).min(1).max(20000), denoLockSha256: digest.optional() }).passthrough().parse(JSON.parse(bytes.toString('utf8')));
+        if (hash(await file(root, join(root, 'package-lock.json'), 16 * 1024 * 1024)) !== manifest.sourceLockSha256) throw fail();
+        if (new Set(manifest.files.map(row => row.path)).size !== manifest.files.length) throw fail();
+        for (const row of manifest.files) { if (row.path.includes('\\') || row.path.split('/').some(part => !part || part === '.' || part === '..') || row.path.startsWith('/') || hash(await file(root, join(folder, row.path), 32 * 1024 * 1024)) !== row.sha256) throw fail(); }
+        const names = async (directory: string): Promise<string[]> => { const stat = await lstat(directory); if (!stat.isDirectory() || stat.isSymbolicLink() || await realpath(directory) !== directory) throw fail(); const rows: string[] = []; for (const item of await readdir(directory, { withFileTypes: true })) { const path = join(directory, item.name); if (item.isDirectory()) rows.push(...await names(path)); else { await file(root, path, 32 * 1024 * 1024); rows.push(relative(folder, path).replaceAll('\\', '/')); } } return rows; };
+        if (canonicalReleaseExecutionJson((await names(folder)).sort()) !== canonicalReleaseExecutionJson(['artifact.json', ...manifest.files.map(row => row.path)].sort())) throw fail();
+        if (service === 'cuevo-worker' && (manifest.denoLockSha256 !== expected.fingerprints.denoLockSha256 || hash(await file(root, join(folder, 'deno.lock'), 2 * 1024 * 1024)) !== expected.fingerprints.denoLockSha256)) throw fail();
+      }
+    });
+    await gate('NATIVE_SCHEMA_AND_JOURNALS', async () => {
+      const rawSchema = await read('schema-result.json');
+      const schema = z.object({ status: z.enum(['COMMITTED', 'NOOP']), evidence: z.literal('NATIVE_ADAPTER_AGGREGATE_EXECUTION'), cleanupCode: z.null(), compositionCode: z.null(), stages: z.array(z.object({ status: z.enum(['COMMITTED', 'NOOP']), protocol: z.object({ commitment: z.literal('CONFIRMED'), primaryCode: z.null(), journalCode: z.null(), cleanupCode: z.null(), identity: z.object({ sourceSha: z.literal(expected.releaseSha), treeSha: z.literal(expected.treeSha), projectRef: z.literal(plan.projectRef), planSha256: z.literal(planned.sha256), approvalDigest: z.literal(prepared.sha256), ciRunId: z.literal(expected.ciRunId), stageId: z.enum(['prefix', 'native', 'pre-observability', 'remaining']), stageSha256: digest, databaseUrl: z.string(), certificateSha256: digest }).passthrough() }) })).length(4) }).parse(rawSchema);
+      if (schema.stages.map(stage => stage.protocol.identity.stageId).join('|') !== 'prefix|native|pre-observability|remaining') throw fail();
+      const endpoint = z.object({ kind: z.enum(['direct', 'session-pooler']), host: z.string() }).parse(bundle.migrationEndpoint), url = new URL('postgresql://' + endpoint.host + ':5432/postgres?sslmode=verify-full'); url.username = endpoint.kind === 'direct' ? 'postgres' : 'postgres.' + plan.projectRef;
+      const journalIdentity = z.object({ projectRef: z.literal(plan.projectRef), sourceSha: z.literal(expected.releaseSha), treeSha: z.literal(expected.treeSha), planSha256: z.literal(planned.sha256), stageId: z.enum(['prefix', 'native', 'pre-observability', 'remaining']), stageSha256: digest, databaseUrl: z.string(), approvalDigest: z.literal(prepared.sha256), ciRunId: z.literal(expected.ciRunId), certificateSha256: digest }).strict();
+      const rawStages = z.object({ stages: z.array(z.object({ protocol: z.object({ identity: z.unknown() }) })) }).parse(rawSchema).stages;
+      for (const [index, stage] of schema.stages.entries()) {
+        const plannedStage = z.object({ included: z.array(z.object({ name: z.string(), version: z.string(), sha256: digest })), configSha256: digest }).parse(bundle.stages[index]);
+        // The source owner derives its journal folder from JSON.stringify in
+        // this declared identity order; canonical receipt files sort keys.
+        const identity = journalIdentity.parse(rawStages[index].protocol.identity);
+        if (stage.protocol.identity.stageSha256 !== hash(JSON.stringify({ included: plannedStage.included, configSha256: plannedStage.configSha256 })) || stage.protocol.identity.databaseUrl !== url.toString()) throw fail();
+        const certificate = await file(root, join(directory, 'database-ca.pem'), 512 * 1024); if (stage.protocol.identity.certificateSha256 !== hash(certificate)) throw fail();
+        const folder = join(directory, 'journal-' + plan.projectRef + '-' + identity.stageId + '-' + hash(JSON.stringify(identity)).slice(0, 32)), journal = await createHostedMigrationJournal({ repoRoot: root, journalRoot: folder, identity }), record = await journal.readJournal();
+        if (!record || (record as { state: string }).state !== 'COMMITTED') throw fail();
+      }
+    });
+    await gate('SYNTHETIC_POPULATION_AND_AUTH', async () => {
+      const population = z.object({ status: z.enum(['POPULATED_CONFIRMED', 'NOOP']), commitment: z.literal('CONFIRMED'), operationSha256: digest, receiptPath: z.string(), cleanupCode: z.null(), hostedAcceptance: z.literal(false) }).parse(await read('population-result.json'));
+      const outcome = z.object({ version: z.literal(1), status: z.literal('POPULATED_CONFIRMED'), operation: z.object({ sourceSha: z.literal(expected.releaseSha), treeSha: z.literal(expected.treeSha), projectRef: z.literal(plan.projectRef), planSha256: z.literal(planned.sha256), approvalDigest: z.literal(prepared.sha256), ciRunId: z.literal(expected.ciRunId) }).passthrough(), operationSha256: z.literal(population.operationSha256) }).parse(JSON.parse((await file(root, population.receiptPath, 48 * 1024)).toString('utf8')));
+      if (hash(canonicalReleaseExecutionJson(outcome.operation)) !== population.operationSha256) throw fail();
+      z.object({ status: z.literal('CONFIRMED'), evidence: z.literal('NATIVE_HOSTED_SYNTHETIC_AUTH'), confirmed: z.literal(133), receiptSha256: digest, cleanupCode: z.null(), hostedAcceptance: z.literal(false) }).parse(await read('auth-result.json'));
+    });
+    const provider = z.object({ api: z.object({ deploymentId: z.string(), url: z.string() }), edge: z.object({ id: z.string(), version: z.number() }) }).safeParse(deployment);
+    if (!runtime || !rawRuntime || !provider.success) {
+      // Collect missing receipts even before endpoint binding is available.
+      for (const [name, filename] of [['ROLE_AND_ENDPOINT_DENIALS', 'prerequisites-result.json'], ['SIGNED_WORKER_AND_TERMINAL_CLEANUP', 'worker-activation-result.json'], ['FULL_WORKER_RECOVERY', 'worker-fault-recovery-result.json'], ['DATABASE_BACKUP_RESTORE', 'database-restore-result.json']]) await gate(name, () => read(filename));
+      return result;
+    }
+    await gate('CURRENT_PROJECT_ORIGIN_AND_DEPLOYMENT', async () => {
+      for (const [owner, rootDirectory] of [[expected.targets.web, 'apps/web'], [expected.targets.api, null]] as const) {
+        const project = z.object({ id: z.literal(owner.projectId), accountId: z.literal(owner.teamId), rootDirectory: z.literal(rootDirectory) }).parse(await official('https://api.vercel.com/v9/projects/' + owner.projectId + '?teamId=' + owner.teamId, input.vercelToken)); if (!project) throw fail();
+        const domains = z.object({ domains: z.array(z.object({ name: z.string(), projectId: z.literal(owner.projectId), verified: z.boolean() })), pagination: z.object({ next: z.null() }).passthrough().optional() }).parse(await official('https://api.vercel.com/v9/projects/' + owner.projectId + '/domains?teamId=' + owner.teamId, input.vercelToken));
+        if (domains.domains.filter(domain => domain.name === new URL(owner.origin).hostname && domain.verified).length !== 1) throw fail();
+      }
+      validateVercelDeployment(await official('https://api.vercel.com/v13/deployments/' + provider.data.api.deploymentId + '?teamId=' + expected.targets.api.teamId, input.vercelToken), { sha: expected.releaseSha, projectId: expected.targets.api.projectId, teamId: expected.targets.api.teamId, target: 'preview', url: provider.data.api.url, deploymentId: provider.data.api.deploymentId });
+      if (expected.targets.api.origin !== provider.data.api.url) {
+        const aliases = z.object({ aliases: z.array(z.object({ alias: z.string() })), pagination: z.object({ next: z.null() }).passthrough().optional() }).parse(await official('https://api.vercel.com/v2/deployments/' + provider.data.api.deploymentId + '/aliases?teamId=' + expected.targets.api.teamId, input.vercelToken));
+        if (aliases.aliases.filter(row => row.alias === new URL(expected.targets.api.origin).hostname).length !== 1) throw fail();
+      }
+    });
+    const receiptNames = { prerequisites: 'prerequisites-result.json', privateIntent: 'private-probe-pre-activation-' + provider.data.api.deploymentId + '-intent.json', privateProof: 'private-probe-pre-activation-' + provider.data.api.deploymentId + '-result.json', configuration: 'data-api-configuration.json', activation: 'worker-activation-result.json', activationCleanup: 'worker-activation-cleanup.json', fullRecovery: 'worker-fault-recovery-result.json', fullRecoveryProvisional: 'worker-fault-recovery-provisional.json', fullRecoveryCleanup: 'worker-fault-recovery-cleanup.json', databaseRestore: 'database-restore-result.json', databaseRestoreCleanup: 'database-restore-cleanup.json' };
+    const receipts: Record<string, unknown> = { provider: deployment };
+    for (const [key, name] of Object.entries(receiptNames)) receipts[key] = await gate(key.toUpperCase(), () => read(name));
+    await gate('PRIVATE_PROBE_SOURCE_RECORDS', async () => {
+      const proof = z.object({ identitySha256: digest, result: z.object({ storageProbe: z.object({ assetId: z.uuid(), objectPath: z.string() }), realtimeProbe: z.object({ roomId: z.uuid() }) }) }).parse(receipts.privateProof);
+      const prefix = 'private-probe-pre-activation-' + provider.data.api.deploymentId;
+      z.object({ identitySha256: z.literal(proof.identitySha256), assetId: z.literal(proof.result.storageProbe.assetId), objectPath: z.literal(proof.result.storageProbe.objectPath) }).strict().parse(await read(prefix + '-asset.json'));
+      z.object({ identitySha256: z.literal(proof.identitySha256), roomId: z.literal(proof.result.realtimeProbe.roomId) }).strict().parse(await read(prefix + '-room.json'));
+    });
+    await gate('ACTIVATION_CONFIGURATION_BINDING', async () => {
+      const configurationBytes = await file(root, join(directory, 'data-api-configuration.json'), 16384);
+      z.object({ sourceSha: z.literal(expected.releaseSha), projectRef: z.literal(plan.projectRef), apiDeploymentId: z.literal(provider.data.api.deploymentId), packageSha256: z.literal(prepared.sha256), runtimeSha256: z.literal(runtime.runtimeSha256), edgeDeployment: z.object({ id: z.literal(provider.data.edge.id), version: z.literal(provider.data.edge.version) }).strict(), configurationEvidenceSha256: z.literal(hash(configurationBytes)), endpoint: z.literal(expected.targets.supabase.edgeOrigin) }).parse(await read('worker-activation-intent.json'));
+    });
+    await gate('FULL_RECOVERY_NATIVE_PRODUCER', async () => { const native = z.object({ evidence: z.literal('NATIVE_HOSTED_OWNER'), producerPath: z.literal('scripts/verification/backend-hosted-fault-recovery-native.ts'), producerSha256: digest }).parse(receipts.fullRecovery); if (hash(await file(root, join(root, native.producerPath))) !== native.producerSha256) throw fail(); });
+    await gate('DATABASE_RESTORE_NATIVE_PRODUCER', async () => { const path = 'scripts/verification/backend-hosted-database-restore.ts', native = z.object({ evidence: z.literal('NATIVE_HOSTED_OWNER'), producer: producer(path) }).parse(receipts.databaseRestore); if (hash(await file(root, join(root, path))) !== native.producer.sha256) throw fail(); });
+    await gate('DATABASE_RESTORE_ARCHIVE_BYTES', async () => { const native = z.object({ archiveSha256: digest }).parse(receipts.databaseRestore); if (hash(await file(root, join(directory, 'database-restore-private.dump'), 128 * 1024 * 1024)) !== native.archiveSha256) throw fail(); });
+    const b: BackendWebHandoverBinding = { repository: expected.repository, sourceSha: expected.releaseSha, ciRunId: expected.ciRunId, runId: expected.releaseRunId, runAttempt: expected.runAttempt, packageSha256: prepared.sha256, runtimeSha256: hash(canonicalReleaseExecutionJson(rawRuntime)), apiDeploymentId: provider.data.api.deploymentId, apiDeploymentUrl: provider.data.api.url, apiOrigin: expected.targets.api.origin, apiProjectId: expected.targets.api.projectId, teamId: expected.targets.api.teamId, webProjectId: expected.targets.web.projectId, webOrigin: expected.targets.web.origin, projectRef: plan.projectRef, edgeId: provider.data.edge.id, edgeVersion: provider.data.edge.version, apiArtifactSha256: expected.fingerprints.apiArtifactSha256, edgeArtifactSha256: expected.fingerprints.edgeArtifactSha256, denoLockSha256: expected.fingerprints.denoLockSha256, supabasePublishableKey: runtime.api.SUPABASE_PUBLISHABLE_KEY, migrations: plan.migrations.map(({ version, sha256 }) => ({ version, sha256 })) };
+    const validated = validateBackendWebHandoverReceipts(receipts, b, Date.now()); result.pendingGates = [...new Set([...result.pendingGates, ...validated.pendingGates])]; if ('restorationLimitations' in validated) result.restorationLimitations = validated.restorationLimitations;
+    if (result.pendingGates.length || !validated.manifest) return result;
+    await admit();
+    const output = await persistHandoverOutputs(root, validated.manifest, validated.manifest.publicConfig);
+    return { ...result, ...output, status: 'PREPARED_STAGING_MANIFEST' };
+  } catch { result.pendingGates.push('SOURCE_OR_NATIVE_RECEIPT_REQUIRES_REVIEW'); return result; }
+}

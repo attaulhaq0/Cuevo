@@ -141,6 +141,50 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts activate
+      - name: Verify original worker lease retry and backoff recovery
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts verify-recovery
+      - name: Acquire the exact isolated restoration image
+        run: docker pull public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53
+      - name: Verify isolated database and owned private-file restoration
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts verify-restore
+      - name: Bind the verified API to its reserved staging origin
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts bind-api
+      - name: Prepare the frontend manifest from verified backend receipts
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts handover
+      - name: Configure only verified public frontend settings
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts configure-web
       - name: Preserve schema status without private runtime inputs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -167,6 +211,22 @@ jobs:
             .local/hosted-release/worker-activation-journal.jsonl
             .local/hosted-release/worker-activation-result.json
             .local/hosted-release/worker-activation-cleanup.json
+            .local/hosted-release/worker-fault-recovery-intent.json
+            .local/hosted-release/worker-fault-recovery-journal.jsonl
+            .local/hosted-release/worker-fault-recovery-provisional.json
+            .local/hosted-release/worker-fault-recovery-result.json
+            .local/hosted-release/worker-fault-recovery-cleanup.json
+            .local/hosted-release/database-restore-intent.json
+            .local/hosted-release/database-restore-asset.json
+            .local/hosted-release/database-restore-result.json
+            .local/hosted-release/database-restore-cleanup.json
+            .local/hosted-release/api-origin-intent.json
+            .local/hosted-release/api-origin-result.json
+            .local/hosted-release/web-handover-result.json
+            .local/hosted-release/web-handover-manifest.json
+            .local/hosted-release/web-handover-public.json
+            .local/hosted-release/web-settings-intent.json
+            .local/hosted-release/web-settings-result.json
             .local/hosted-release/population-*/
           include-hidden-files: true
           if-no-files-found: warn

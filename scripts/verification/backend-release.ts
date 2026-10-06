@@ -16,6 +16,11 @@ import { deployBackendProviders } from './backend-provider-deploy';
 import { verifyHostedBackendPrerequisites } from './backend-hosted-verification';
 import { verifyHostedPrivateAccess } from './backend-hosted-private';
 import { activateHostedWorker } from './backend-hosted-activation';
+import {verifyNativeWorkerFaultRecovery} from './backend-hosted-fault-recovery-native';
+import {prepareBackendWebHandover} from './backend-web-handover';
+import {verifyNativeHostedDatabaseRestore} from './backend-hosted-database-restore';
+import {bindBackendApiOrigin} from './backend-api-origin';
+import {configureBackendWebSettings} from './backend-web-settings';
 import {hostedMigrationEndpointSchema} from '../database/hosted-migration-provider';
 import {canonicalReleaseExecutionJson} from './release-review';
 
@@ -39,7 +44,7 @@ async function record(root: string, filename: string, value: unknown) {
 }
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
-export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify' | 'verify-private' | 'activate'; repoRoot: string; env: Record<string, string | undefined> }) {
+export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web'; repoRoot: string; env: Record<string, string | undefined> }) {
   try {
     if (!isAbsolute(repoRoot) || resolve(repoRoot) !== repoRoot || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw failure();
     if (mode === 'prepare') {
@@ -62,6 +67,38 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
     await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken });
     if (mode === 'approval') return { status: 'ADMITTED' as const, hostedAcceptance: false };
+    if(mode==='handover'){
+      const result=await prepareBackendWebHandover({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
+      await record(repoRoot,'web-handover-result.json',result);
+      if(result.status!=='PREPARED_STAGING_MANIFEST'||!result.manifestPath||!result.manifestSha256||!result.publicConfigurationPath)throw failure();
+      return result;
+    }
+    if(mode==='configure-web'){
+      const result=await configureBackendWebSettings({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
+      if(result.status!=='WEB_PUBLIC_SETTINGS_CONFIRMED'||!result.canonicalReceipt||result.pendingGates.length)throw failure();
+      return result;
+    }
+    if(mode==='bind-api'){
+      const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
+      const result=await bindBackendApiOrigin({...shared,runtimeConfig,vercelToken:required(env,'VERCEL_TOKEN'),syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});
+      if(result.status!=='API_ORIGIN_BOUND'||result.healthVerified!==true||result.currentActorVerified!==true||result.corsVerified!==true||result.sessionsClosed!==true||!result.canonicalReceipt)throw failure();
+      return result;
+    }
+    if(mode==='verify-recovery'){
+      const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
+      const operator=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);operator.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;
+      const result=await verifyNativeWorkerFaultRecovery({...shared,runtimeConfig,operatorDatabaseUrl:operator.toString(),operatorPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD'),providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});
+      if(result.status!=='FAULT_RECOVERY_VERIFIED'||result.expiredLeaseRecoveryVerified!==true||result.eventRetryVerified!==true||result.dispatchBackoffVerified!==true||result.cleanupStatus!=='RELEASED'||result.sessionsClosed!==true||result.lockReleased!==true||result.ownedControlVerified!==true||!result.canonicalReceipt)throw failure();
+      return result;
+    }
+    if(mode==='verify-restore'){
+      const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
+      const provider=z.object({status:z.literal('DEPLOYED_INACTIVE'),api:z.object({url:z.string().url(),deploymentId:z.string().regex(/^dpl_[A-Za-z0-9]+$/)})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
+      const operator=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);operator.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;
+      const result=await verifyNativeHostedDatabaseRestore({...shared,runtimeConfig,operatorDatabaseUrl:operator.toString(),operatorPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD'),providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD'),apiDeployment:{id:provider.api.deploymentId,url:provider.api.url}});
+      if(result.status!=='VERIFIED'||result.recoveryVerified!==true||result.cleanupConfirmed!==true||result.sessionsClosed!==true||result.lockReleased!==true||!result.canonicalReceipt)throw failure();
+      return result;
+    }
     if(mode==='verify'||mode==='verify-private'||mode==='activate'){
       if(mode==='verify-private')z.object({status:z.literal('PREREQUISITES_OBSERVED'),apiReady:z.literal(true),roleSessions:z.literal(5),crossSchoolDenied:z.literal(true),worker:z.object({missingSignatureDenied:z.literal(true),malformedSignatureDenied:z.literal(true),staleSignatureDenied:z.literal(true)})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/prerequisites-result.json'),48*1024)).toString('utf8')));
       const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
@@ -154,7 +191,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const mode = process.argv[2];
-  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify','verify-private','activate'].includes(mode)) throw failure();
-  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify'|'verify-private'|'activate', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
+  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web'].includes(mode)) throw failure();
+  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify'|'verify-private'|'activate'|'verify-recovery'|'verify-restore'|'bind-api'|'handover'|'configure-web', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: result.status, hostedAcceptance: false })); }
   catch { console.error('Cuevo backend step requires review. Inspect retained source-bound receipts; private contents withheld.'); process.exitCode = 1; }
 }

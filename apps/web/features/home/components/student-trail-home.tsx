@@ -5,6 +5,8 @@ import { Button } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { canOpenWorkspace } from '../../../shared/session/capabilities';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
+import { useApiQuery } from '../../../shared/hooks/use-api';
+import { LearningApiError } from '../../../shared/api/client';
 import { LearningError } from '../../../shared/components/feedback';
 import { LoadMore } from '../../../shared/components/load-more';
 import { trailAssets } from '../../../shared/characters/assets';
@@ -23,6 +25,7 @@ import { currentNativeFeedbackDisclosure, currentStudentHomeDenial, currentStude
 import { parentHomeSourceDenial, type ParentHomeSourceDenial } from '../parent-home-binding-model';
 import type { StudentTrailAction, StudentTrailContext } from '../trail-model';
 import { StudentTrailView } from './student-trail';
+import { currentHomeFeedbackEvidence, homeFeedbackEvidenceScope, parseHomeFeedbackEvidence } from '../home-source-context';
 
 const actionLabel = (item: StudentHomeItem, t: typeof studentHomeEn) => item.kind === 'practice' ? t.practiceAction : item.kind === 'revision' ? t.reviseAction : item.kind === 'submitted' || item.kind === 'submitted-unresolved' ? t.submittedAction : t.taskAction;
 const disabledPage: HomeSourcePage<never> = { data: [], loaded: true, loading: false, error: null, moreError: null, nextCursor: null };
@@ -87,6 +90,11 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, pres
   const queue = available && now !== null ? selected.queue.filter(item => can(item.destination.view)) : [];
   const first = queue[0] ?? (available && now !== null ? selected.submittedTask : null); const next = queue[1]; const result = available ? selected.results[0] : null;
   const nativeSource = result ? `${result.id}:${result.revision}` : null;
+  const evidenceScope=homeFeedbackEvidenceScope(available&&canLearn?JSON.stringify([studentHomeReadFrame(app),refresh]):null,result??null);
+  const evidenceParser=useCallback((value:unknown)=>{if(!result)throw new LearningApiError('invalid');return{scope:evidenceScope,value:parseHomeFeedbackEvidence(value,result,{role:'student',userId:learnerId,learnerId})};},[evidenceScope,learnerId]);
+  const feedbackEvidence=useApiQuery(evidenceScope&&result?`/v1/evidence/${result.evidenceId}`:null,evidenceParser,refresh);
+  const feedbackIdentity=currentHomeFeedbackEvidence(feedbackEvidence.data,evidenceScope,feedbackEvidence.loading,feedbackEvidence.error);
+  const feedbackIdentityError=feedbackEvidence.error;
   useEffect(() => { if (nativeSource && nativeDisclosure && nativeSource !== nativeDisclosure.resultId) setNativeDisclosure(null); }, [nativeSource, nativeDisclosure, setNativeDisclosure]);
   const action = (label: string, destination: HomeDestination): StudentTrailAction => ({ label, onClick: () => onNavigate(destination) });
   const recovery = { label: t.refresh, onClick: reload };
@@ -105,7 +113,7 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, pres
       { key: 'reflect', title: t.reflect, description: t.reflectBody, state: can('portfolio') ? 'available' : 'unknown', action: can('portfolio') ? action(t.portfolio, 'portfolio') : undefined },
       { key: 'grow', title: t.grow, description: t.growBody, state: recognition.status === 'recorded' ? 'available' : 'unknown', action: canDevelop ? action(t.recognition, 'development') : undefined },
     ],
-    feedback: result ? { teacherName: null, teacherContext: result.assessmentTitle || null, dateLabel: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(result.createdAt)), text: result.feedback, action: action(home.evidence, { view: 'academic', source: 'result', id: result.id }) } : null,
+    feedback: result ? { teacherName: feedbackIdentity?.teacherName??null, teacherContext: feedbackIdentity?.contextLabel??result.assessmentTitle??null, dateLabel: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(result.createdAt)), text: result.feedback, action: action(home.evidence, { view: 'academic', source: 'result', id: result.id }) } : null,
     portfolio: can('portfolio') ? { ...portfolioPreview, action: action(t.portfolio, 'portfolio') } : undefined,
     upcoming: next ? { title: next.title, description: next.description, availabilityLabel: next.dueAt ? `${t.due} · ${new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(next.dueAt))}` : null, action: action(actionLabel(next, t), next.destination), viewAll: action(t.tasks, 'learning') } : null,
     recognition, classChallenge: null,
@@ -117,7 +125,7 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, pres
   const failedContinuations = continuingSources.filter(({query})=>query.moreError);
   const additionalSources = continuingSources.filter(({query})=>!query.moreError);
   return <div className="student-home" data-presentation={presentation}>
-    <StudentTrailView compactOverview hidePagingNotice={context.availability==='partial'&&studentHomePagingOnly(queries.filter(query=>'loaded'in query),assessments,submissions)} context={context} assets={trailAssets} locale={locale} headingRef={headingRef} portfolioControls={portfolioControls} upcomingControls={available && (assessments.nextCursor || assessments.moreError) ? <LoadMore query={assessments} label={t.tasks} /> : null} presentationAction={available ? { label: presentation === 'quiet' ? t.standard : t.quiet, onClick: () => setPresentation(value => value === 'quiet' ? 'standard' : 'quiet') } : undefined} nativeFeedback={result && nativeSource ? <details className="student-home__native" open={currentNativeFeedbackDisclosure(nativeDisclosure, nativeSource)} onToggle={event => setNativeDisclosure({ resultId: nativeSource, open: event.currentTarget.open })}><summary>{t.nativeFeedback}</summary><NativeResultView result={result.nativeResult} /></details> : null} />
+    <StudentTrailView compactOverview hidePagingNotice={context.availability==='partial'&&studentHomePagingOnly(queries.filter(query=>'loaded'in query),assessments,submissions)} context={context} assets={trailAssets} locale={locale} headingRef={headingRef} portfolioControls={portfolioControls} upcomingControls={available && (assessments.nextCursor || assessments.moreError) ? <LoadMore query={assessments} label={t.tasks} /> : null} presentationAction={available ? { label: presentation === 'quiet' ? t.standard : t.quiet, onClick: () => setPresentation(value => value === 'quiet' ? 'standard' : 'quiet') } : undefined} nativeFeedback={<>{result && nativeSource ? <details className="student-home__native" open={currentNativeFeedbackDisclosure(nativeDisclosure, nativeSource)} onToggle={event => setNativeDisclosure({ resultId: nativeSource, open: event.currentTarget.open })}><summary>{t.nativeFeedback}</summary><NativeResultView result={result.nativeResult} /></details> : null}{feedbackIdentityError?<LearningError error={feedbackIdentityError}/>:null}</>} />
     {available ? <div className="student-home__records">
       {failedContinuations.length ? <div className="home-overview-continuations student-home__source-recovery">{failedContinuations.map(({query,label},index)=><section key={index} aria-label={label}><h2>{label}</h2><LoadMore query={query} label={label}/></section>)}</div> : null}
       {additionalSources.length ? <details className="student-home__source-continuations"><summary>{t.summarySources}</summary><p>{t.summarySourcesBody}</p><div className="home-overview-continuations">{additionalSources.map(({query,label},index)=><LoadMore key={index} query={query} label={label}/>)}</div></details> : null}
