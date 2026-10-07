@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { validateReleaseControls } from './cicd-contracts';
 import { validateBackendVerificationRun } from './staging-verification';
 import { readStagingVerificationJobs } from './staging-verification-jobs';
+import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
+import { createGithubCodeqlArtifactReader } from './staging-security';
 import { canonicalReleaseReviewJson } from './release-review';
 import { validatePreparedBackendReleaseIntent, validateFounderBackendApproval, type BackendReleaseExpected } from './backend-release-contracts';
 import { readGitBinaryDiffDigest } from './git-source-digest';
@@ -60,13 +62,16 @@ export async function readBackendReleaseAdmission(value:unknown):Promise<NativeB
   try{
    const [repository,main,ciRaw,runRaw,environment,branches,protection,signatures,commit,approvals]=await Promise.all([github(''),github('git/ref/heads/main'),github('actions/runs/'+expected.ciRunId),github('actions/runs/'+expected.releaseRunId),github('environments/staging'),github('environments/staging/deployment-branch-policies'),github('branches/main/protection'),github('branches/main/protection/required_signatures'),github('git/commits/'+expected.releaseSha),github('actions/runs/'+expected.releaseRunId+'/approvals')]);
    const ci=validateBackendVerificationRun(ciRaw,{sha:expected.releaseSha,repository:expected.repository,ciRunId:expected.ciRunId}),backend=runSchema.parse(runRaw),mainSha=mainSchema.parse(main).object.sha;
-   const jobs=await readStagingVerificationJobs(ci,github);
+   const artifactReader=createGithubCodeqlArtifactReader(expected.repository,input.githubToken,controller.signal);
+   const jobs=await readStagingVerificationJobs(ci,github,artifactReader),canonicalProof=ci.path==='.github/workflows/ci.yml'?await readCanonicalRuntimeJobs(ciRaw,github):undefined;
+   if(canonicalReleaseReviewJson(canonicalProof??null)!==canonicalReleaseReviewJson(expected.canonicalRuntimeVerification??null))throw failure();
    const focusedProof=jobs?{scope:'SCHEMA_AND_SYNTHETIC_AUTH' as const,...jobs}:undefined;
    if(canonicalReleaseReviewJson(focusedProof??null)!==canonicalReleaseReviewJson(expected.stagingVerification??null))throw failure();
    validateReleaseControls({repository,environment,branches,main:protection,signatures},{repository:expected.repository,environment:'staging'});if(z.object({total_count:z.literal(1)}).safeParse(branches).success!==true)throw failure();const environmentId=z.object({id:z.number().int().positive(),name:z.literal('staging')}).parse(environment).id;if(mainSha!==expected.releaseSha||environmentId!==expected.environmentId||String(backend.id)!==expected.releaseRunId||backend.run_attempt!==expected.runAttempt)throw failure();const verified=z.object({sha:z.literal(expected.releaseSha),tree:z.object({sha:z.literal(expected.treeSha)}),verification:z.object({verified:z.literal(true),reason:z.literal('valid'),signature:z.string().min(1),payload:z.string().min(1)})}).safeParse(commit);if(!verified.success)throw failure();
    const current:BackendReleaseExpected={...expected,currentMainSha:mainSha,environmentId,ciRun:ci,backendRun:{...backend,repository:{full_name:backend.repository.full_name}},now:Date.now()};const approval=validateFounderBackendApproval(prepared,runRaw,approvals,current);await readBackendReleaseSourceEvidence(input.repoRoot,current);const finalRun=runSchema.parse(await github('actions/runs/'+current.releaseRunId));if(canonicalReleaseReviewJson(finalRun)!==canonicalReleaseReviewJson(backend))throw failure();
-   const finalCi=validateBackendVerificationRun(await github('actions/runs/'+current.ciRunId),{sha:current.releaseSha,repository:current.repository,ciRunId:current.ciRunId});if(canonicalReleaseReviewJson(finalCi)!==canonicalReleaseReviewJson(ci))throw failure();
-   const finalJobs=await readStagingVerificationJobs(finalCi,github);if(canonicalReleaseReviewJson(finalJobs??null)!==canonicalReleaseReviewJson(jobs??null))throw failure();
+   const finalCiRaw=await github('actions/runs/'+current.ciRunId),finalCi=validateBackendVerificationRun(finalCiRaw,{sha:current.releaseSha,repository:current.repository,ciRunId:current.ciRunId});if(canonicalReleaseReviewJson(finalCi)!==canonicalReleaseReviewJson(ci))throw failure();
+   const finalCanonicalProof=finalCi.path==='.github/workflows/ci.yml'?await readCanonicalRuntimeJobs(finalCiRaw,github):undefined;if(canonicalReleaseReviewJson(finalCanonicalProof??null)!==canonicalReleaseReviewJson(canonicalProof??null))throw failure();
+   const finalJobs=await readStagingVerificationJobs(finalCi,github,artifactReader);if(canonicalReleaseReviewJson(finalJobs??null)!==canonicalReleaseReviewJson(jobs??null))throw failure();
    current.ciRun=finalCi;if(mainSchema.parse(await github('git/ref/heads/main')).object.sha!==current.releaseSha)throw failure();if(controller.signal.aborted)throw failure();current.now=Date.now();validatePreparedBackendReleaseIntent(prepared,current);return{expected:current,approval,observedAt:new Date(current.now).toISOString(),provenance:'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE'};
   }finally{clearTimeout(timer);controller.abort();}
  }catch{throw failure();}

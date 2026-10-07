@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './release-review';
 import { stagingVerificationJobPolicy, stagingVerificationWorkflowPath, validateBackendVerificationRun } from './staging-verification';
-import { readCanonicalStagingSecurity } from './staging-security';
+import { readCanonicalStagingSecurity, type GithubArtifactReader } from './staging-security';
 
 const unavailable = () => new Error('Focused staging job evidence is unavailable or requires review; contents withheld.');
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -12,7 +12,7 @@ const pageSchema = z.object({ total_count: positive.max(1000), jobs: z.array(job
 type GithubReader = (path: string) => Promise<unknown>;
 
 /** Official GET facade supplied by the native admission owner. Canonical CI keeps its original admission behavior. */
-export async function readStagingVerificationJobs(value: unknown, github: GithubReader): Promise<{ runAttempt: number; jobsSha256: string } | undefined> {
+export async function readStagingVerificationJobs(value: unknown, github: GithubReader, artifact?:GithubArtifactReader): Promise<{ runAttempt: number; jobsSha256: string } | undefined> {
   try {
     const identity = z.object({ id: positive, head_sha: z.string().regex(/^[a-f0-9]{40}$/), repository: z.object({ full_name: z.string() }) }).parse(JSON.parse(canonicalReleaseReviewJson(value)));
     const expected = { sha: identity.head_sha, repository: identity.repository.full_name, ciRunId: String(identity.id) };
@@ -46,7 +46,7 @@ export async function readStagingVerificationJobs(value: unknown, github: Github
       if (canonicalReleaseReviewJson(authored) !== canonicalReleaseReviewJson(policy.steps)) throw unavailable();
       return { id: row.id, name: row.name, status: row.status, conclusion: row.conclusion, steps: row.steps };
     }).sort((a, b) => a.name.localeCompare(b.name));
-    const canonicalSecurity = await readCanonicalStagingSecurity({ sha: run.head_sha, repository: run.repository.full_name }, github);
+    const canonicalSecurity = await readCanonicalStagingSecurity({ sha: run.head_sha, repository: run.repository.full_name }, github,artifact);
     if (canonicalSecurity.status !== 'VERIFIED') throw unavailable();
     await current();
     const jobsSha256 = createHash('sha256').update(canonicalReleaseReviewJson({ runId: run.id, runAttempt: run.run_attempt, commitSha: run.head_sha, repository: run.repository.full_name, canonicalSecurity, jobs: normalized })).digest('hex');

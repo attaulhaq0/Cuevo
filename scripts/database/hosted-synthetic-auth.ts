@@ -54,6 +54,31 @@ async function boundedResponse(response: Response, signal: AbortSignal, maximum 
 }
 export type HostedSyntheticAuthResult = { status: 'CONFIRMED' | 'OUTCOME_UNKNOWN' | 'REQUIRES_REVIEW'; evidence: 'NATIVE_HOSTED_SYNTHETIC_AUTH'; hostedAcceptance: false; created: number; confirmed: number; receiptSha256: string | null; cleanupCode: 'LOCK_RELEASE_UNCONFIRMED' | null };
 
+/** Handover only observes the original completed Auth ledger and current identities.
+ * It has no Auth admin key or password and cannot create an account or checkpoint. */
+export async function revalidateInstalledSyntheticAuth(value:unknown):Promise<HostedSyntheticAuthResult>{
+ const result:HostedSyntheticAuthResult={status:'REQUIRES_REVIEW',evidence:'NATIVE_HOSTED_SYNTHETIC_AUTH',hostedAcceptance:false,created:0,confirmed:0,receiptSha256:null,cleanupCode:null};
+ try{
+  const input=inputSchema.omit({authProvisioningKey:true,syntheticPassword:true}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value))),expected=input.expected as BackendReleaseExpected;
+  if(!expected.installedSource||input.originalKey!=='cuevo-initial-hosted-synthetic-auth')throw failure();const prepared=validatePreparedBackendReleaseIntent(input.preparedApproval,{...expected,now:Date.now()}),plan=input.plan as HostedMigrationPlanV1;
+  if(plan.source.sha!==expected.releaseSha||plan.source.tree!==expected.treeSha||plan.projectRef!==expected.targets.supabase.projectRef||canonicalHostedMigrationPlan(plan).sha256!==expected.fingerprints.migrationPlanSha256)throw failure();
+  git(input.repoRoot,['merge-base','--is-ancestor',expected.installedSource.sourceSha,expected.releaseSha]);if(git(input.repoRoot,['rev-parse',expected.installedSource.sourceSha+'^{tree}']).toString().trim()!==expected.installedSource.treeSha)throw failure();
+  const source=await manifest(input.repoRoot,expected.installedSource.sourceSha),manifestSha256=hash(canonicalReleaseReviewJson(source.value));if(manifestSha256!==expected.installedSource.manifestSha256)throw failure();
+  const identity:SyntheticAuthAttemptIdentity={projectRef:plan.projectRef,sourceSha:expected.installedSource.sourceSha,treeSha:expected.installedSource.treeSha,originalKey:input.originalKey,manifestSha256,fingerprint:hash(canonicalReleaseReviewJson({purpose:'CUEVO_HOSTED_INITIAL_SYNTHETIC_AUTH',projectRef:plan.projectRef,sourceSha:expected.installedSource.sourceSha,treeSha:expected.installedSource.treeSha,manifestSha256,rawManifestSha256:source.rawSha256,originalKey:input.originalKey}))};
+  await readBackendReleaseAdmission({repoRoot:input.repoRoot,expected,prepared,githubToken:input.githubToken});const provider=await readHostedMigrationProvider({projectRef:plan.projectRef,boundProjectRef:plan.projectRef,providerToken:input.providerToken});fresh(provider.observedAtMs);const endpoint=requireCurrentHostedMigrationEndpoint(input.endpoint,provider,expected.fingerprints.migrationEndpointSha256);
+  const connection=prepareHostedMigrationConnection({projectRef:plan.projectRef,repoRoot:input.repoRoot,endpoint:{...endpoint,provenance:'CALLER_SUPPLIED_PROVIDER_METADATA'},password:input.migrationPassword,certificate:{path:input.certificate.path,provenance:'CALLER_SUPPLIED_OWNED_PATH'},toolchain:{}});
+  const db=await createHostedMigrationDatabase({repoRoot:input.repoRoot,projectRef:plan.projectRef,databaseUrl:connection.publicRecipe.databaseUrl,password:input.migrationPassword,certificate:input.certificate});
+  const released=await db.withLock(`${plan.projectRef}:HOSTED_SCHEMA_MIGRATION`,async()=>{
+   const observed=await db.observe();if(observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.certificate.sha256||observed.operator!=='postgres'||observed.database!=='postgres')throw failure();
+   const files=await admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage:input.finalStage as HostedMigrationWorkdirs['stages'][number]});verifyHostedMigrationHistory({sources:files.sources,included:plan.migrations,expectedVersions:plan.migrations.map(row=>row.version).sort(),history:observed.historyPresent?observed.history:null});
+   const initial=await db.readAuthSeedAttempt(identity);if(!initial||initial.status!=='CONFIRMED'||initial.actors.length!==133||initial.originalKey!==identity.originalKey||initial.manifestSha256!==manifestSha256||initial.actors.some((row,index)=>row.state!=='CONFIRMED'||row.actorId!==source.value.actors[index].actorId||row.emailSha256!==hash(source.value.actors[index].email)))throw failure();
+   if(population(populationSchema.parse(await db.observeSyntheticPopulation()),source.value)!==133)throw failure();
+   await readBackendReleaseAdmission({repoRoot:input.repoRoot,expected,prepared,githubToken:input.githubToken});if(!same(await db.readAuthSeedAttempt(identity),initial))throw failure();
+   result.status='CONFIRMED';result.confirmed=133;result.receiptSha256=hash(canonicalReleaseReviewJson(initial));
+  });if(released.kind!=='RELEASED'){result.status='OUTCOME_UNKNOWN';result.cleanupCode='LOCK_RELEASE_UNCONFIRMED';}return result;
+ }catch{return result;}
+}
+
 /** One source-bound initial Auth consumer. The fixed database owner retains
  * original attempts; Auth creation stays in the accepted seed core. */
 export async function provisionHostedSyntheticAuth(value: unknown): Promise<HostedSyntheticAuthResult> {
@@ -62,10 +87,13 @@ export async function provisionHostedSyntheticAuth(value: unknown): Promise<Host
   try {
     const input = inputSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value))), root = input.repoRoot, expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }) as PreparedBackendReleaseIntent;
     const plan = JSON.parse(canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1).json) as HostedMigrationPlanV1, finalStage = input.finalStage as HostedMigrationWorkdirs['stages'][number], projectRef = expected.targets.supabase.projectRef;
-    if (plan.mode !== 'EMPTY_INITIAL' || plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== projectRef || canonicalHostedMigrationPlan(plan).sha256 !== expected.fingerprints.migrationPlanSha256 || finalStage.id !== 'remaining' || finalStage.included.length !== plan.migrations.length || !same(finalStage.included, plan.migrations)) throw failure();
+    if ((plan.mode !== 'EMPTY_INITIAL' && (plan.mode!=='INCREMENTAL'||!(expected.installedSource||expected.installedSchema))) || plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== projectRef || canonicalHostedMigrationPlan(plan).sha256 !== expected.fingerprints.migrationPlanSha256 || finalStage.id !== 'remaining' || finalStage.included.length !== plan.migrations.length || !same(finalStage.included, plan.migrations)) throw failure();
     await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage: finalStage });
-    const source = await manifest(root, expected.releaseSha), manifestSha256 = hash(canonicalReleaseReviewJson(source.value));
-    const identity: SyntheticAuthAttemptIdentity = { projectRef, sourceSha: expected.releaseSha, treeSha: expected.treeSha, originalKey: input.originalKey, manifestSha256, fingerprint: hash(canonicalReleaseReviewJson({ purpose: 'CUEVO_HOSTED_INITIAL_SYNTHETIC_AUTH', projectRef, sourceSha: expected.releaseSha, treeSha: expected.treeSha, manifestSha256, rawManifestSha256: source.rawSha256, originalKey: input.originalKey })) };
+    const originalSource=expected.installedSource??{sourceSha:expected.releaseSha,treeSha:expected.treeSha};
+    if(expected.installedSource){if(input.originalKey!=='cuevo-initial-hosted-synthetic-auth')throw failure();git(root,['merge-base','--is-ancestor',originalSource.sourceSha,expected.releaseSha]);if(git(root,['rev-parse',originalSource.sourceSha+'^{tree}']).toString().trim()!==originalSource.treeSha)throw failure();}
+    const source = await manifest(root, originalSource.sourceSha), manifestSha256 = hash(canonicalReleaseReviewJson(source.value));
+    if(expected.installedSource&&manifestSha256!==expected.installedSource.manifestSha256)throw failure();
+    const identity: SyntheticAuthAttemptIdentity = { projectRef, sourceSha: originalSource.sourceSha, treeSha: originalSource.treeSha, originalKey: input.originalKey, manifestSha256, fingerprint: hash(canonicalReleaseReviewJson({ purpose: 'CUEVO_HOSTED_INITIAL_SYNTHETIC_AUTH', projectRef, sourceSha: originalSource.sourceSha, treeSha: originalSource.treeSha, manifestSha256, rawManifestSha256: source.rawSha256, originalKey: input.originalKey })) };
     let officialAt = 0;
     const official = async () => { const admission = await readBackendReleaseAdmission({effectScope:'SCHEMA_AND_SYNTHETIC_AUTH', repoRoot: root, expected, prepared, githubToken: input.githubToken }); if (admission.provenance !== 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' || admission.approval.packageSha256 !== prepared.sha256 || !same(admission.expected.fingerprints, expected.fingerprints)) throw failure(); officialAt = Date.now(); };
     await official(); let provider = await readHostedMigrationProvider({ projectRef, boundProjectRef: projectRef, providerToken: input.providerToken }); fresh(provider.observedAtMs);
@@ -86,6 +114,7 @@ export async function provisionHostedSyntheticAuth(value: unknown): Promise<Host
     const release = await database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`, async () => {
       held = true;
       try {
+        if(expected.installedSchema){const installed=await database.readInstalledPopulation();if(installed.sourceSha!==expected.releaseSha||installed.treeSha!==expected.treeSha||installed.manifestSha256!==manifestSha256||input.originalKey!=='cuevo-initial-hosted-synthetic-auth')throw failure();}
         await history(); await observe(); currentReceipt = await database.readAuthSeedAttempt(identity); live();
         const originalConfirmed = currentReceipt?.status === 'CONFIRMED' ? structuredClone(currentReceipt) : null;
         const authFetch: typeof fetch = async (raw, options) => {

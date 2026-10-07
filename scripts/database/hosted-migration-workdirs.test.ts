@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { planHostedMigrations, readCanonicalMigrationSources, canonicalHostedMigrationPlan } from './hosted-migration-plan';
+import { planHostedMigrations, readCanonicalMigrationSources, canonicalHostedMigrationPlan, createCanonicalHostedMigrationPlan } from './hosted-migration-plan';
 
 const hash=(value:Uint8Array|string)=>createHash('sha256').update(value).digest('hex');
 const git=(root:string,...args:string[])=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],windowsHide:true}).trim();
@@ -34,4 +34,22 @@ test('appended committed source extends only the final stage and retains every o
   const final=built.stages.at(-1)!;assert.equal(final.pending.at(-1)!.name,appended.name);assert.equal(final.expectedAfterVersions.length,input.plan.migrations.length);
   for(const row of final.included){const bytes=readFileSync(join(final.workdir,'supabase/migrations',row.name));assert.equal(hash(bytes),row.sha256);assert.deepEqual(bytes,readFileSync(join(input.repoRoot,'supabase/migrations',row.name)));}
  },true);
+});
+
+test('completed prior Git release keeps its populated prefix in all workdirs and appends only one final pending migration',async()=>{
+ const{createHostedMigrationWorkdirs}=await api();await fixture(async input=>{
+  const prior=input.plan,priorSha=input.sourceSha,priorTree=input.treeSha,count=prior.migrations.length;
+  const name='20261007121000_completed_workdir_delta.sql';writeFileSync(join(input.repoRoot,'supabase/migrations',name),'begin;\nselect 1;\ncommit;\n');
+  git(input.repoRoot,'add','.');git(input.repoRoot,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','one append-only delta');
+  const sourceSha=git(input.repoRoot,'rev-parse','HEAD'),treeSha=git(input.repoRoot,'rev-parse','HEAD^{tree}'),now=Date.parse('2026-10-06T00:00:00Z');
+  const priorReceipt={projectRef:prior.projectRef,sourceSha:priorSha,treeSha:priorTree,migrations:prior.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:count};
+  const target={projectRef:prior.projectRef,boundProjectRef:prior.projectRef,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:'2026-10-06T00:00:00Z',authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:prior.migrations.map(row=>row.version),dispatchDisabled:true,population:'GUARDED_SYNTHETIC'};
+  const{plan}=createCanonicalHostedMigrationPlan({repoRoot:input.repoRoot,sourceSha,treeSha,target,priorReceipt,now});
+  const built=await createHostedMigrationWorkdirs({...input,sourceSha,treeSha,plan});
+  assert.deepEqual(built.stages.map(stage=>stage.included.length),[count,count,count,count+1]);
+  assert.deepEqual(built.stages.map(stage=>stage.pending.map(row=>row.name)),[[],[],[],[name]]);
+  for(const stage of built.stages)for(const row of prior.migrations)assert.equal(hash(readFileSync(join(stage.workdir,'supabase/migrations',row.name))),row.sha256);
+  for(const stage of built.stages)assert.deepEqual(stage.expectedBeforeVersions,prior.migrations.map(row=>row.version).sort());
+  await assert.rejects(createHostedMigrationWorkdirs({...input,sourceSha,treeSha,plan:{...plan,priorCompletedRelease:{...plan.priorCompletedRelease!,treeSha:'0'.repeat(40)}}}));
+ });
 });

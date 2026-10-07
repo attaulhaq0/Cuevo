@@ -5,6 +5,20 @@ import { readCodeqlGateContext, runCodeqlAlertGate, type CodeqlGateInput } from 
 const sha = 'a'.repeat(40), headSha = 'b'.repeat(40), sarifId = '01234567-89ab-cdef-0123-456789abcdef';
 const input: CodeqlGateInput = { repository: 'example/cuevo', ref: 'refs/pull/1/merge', sha, checkoutSha: sha, sarifId, token: 'synthetic-test-token' };
 const key = '.github/workflows/ci.yml:codeql';
+
+test('retained processed receipt binds original same-job analysis and excludes private alert context', async () => {
+  const subject = await import('./codeql-alerts');
+  assert.equal(typeof subject.prepareCodeqlReceipt, 'function');
+  const result = await runCodeqlAlertGate(input, fixture().transport);
+  const env = { CI:'true', GITHUB_ACTIONS:'true', GITHUB_JOB:'codeql', GITHUB_REPOSITORY:input.repository, GITHUB_SHA:sha, GITHUB_WORKFLOW_SHA:sha,
+    GITHUB_REF:input.ref, GITHUB_WORKFLOW_REF:'example/cuevo/.github/workflows/ci.yml@refs/pull/1/merge', GITHUB_RUN_ID:'42', GITHUB_RUN_ATTEMPT:'2' };
+  const receipt = subject.prepareCodeqlReceipt(input, result, env, Date.parse('2026-10-06T10:01:00Z'));
+  assert.equal(receipt.runId,'42'); assert.equal(receipt.runAttempt,2); assert.equal(receipt.analysis.id,20); assert.equal(receipt.analysis.sarifId,sarifId);
+  assert.equal(receipt.ref,input.ref); assert.equal(receipt.sourceSha,sha); assert.equal(receipt.policy,'CODEQL_MEDIUM_HIGH_CRITICAL_V1');
+  assert.doesNotMatch(JSON.stringify(receipt),/synthetic-test-token|PRIVATE SOURCE|js\/test-rule/);
+  for(const change of [{GITHUB_RUN_ATTEMPT:'0'},{GITHUB_WORKFLOW_SHA:headSha},{GITHUB_JOB:'other'}]) assert.throws(()=>subject.prepareCodeqlReceipt(input,result,{...env,...change},Date.parse('2026-10-06T10:01:00Z')));
+  assert.throws(()=>subject.prepareCodeqlReceipt(input,{...result,status:'FINDINGS',blockingAlerts:1},env,Date.parse('2026-10-06T10:01:00Z')));
+});
 const analysis = () => ({ id: 20, ref: input.ref, commit_sha: sha, analysis_key: key, category: key, environment: '{}',
   tool: { name: 'CodeQL', version: '2.27.1', guid: null }, sarif_id: sarifId, results_count: 0, rules_count: 87,
   created_at: '2026-10-06T10:00:00Z', error: '', warning: '' });

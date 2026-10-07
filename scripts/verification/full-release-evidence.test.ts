@@ -10,10 +10,11 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { Readable } from 'node:stream';
 import { canonicalReleaseReviewJson } from './release-review';
+import { technicalAcceptanceScope } from './full-verification-evidence';
 
 const sha = 'a'.repeat(40), tree = 'b'.repeat(40), expected = { sha, repository: 'owner/repo', ciRunId: '42' };
 const run = () => ({ id: 42, run_attempt: 2, head_sha: sha, head_branch: 'main', event: 'workflow_dispatch', status: 'completed', conclusion: 'success', path: '.github/workflows/full-regression.yml', repository: { full_name: expected.repository } });
-const summary = () => ({ version: 1, profile: 'CUSTOMER_CANDIDATE', repository: expected.repository, sourceSha: sha, treeSha: tree, runId: '42', runAttempt: 2, evidence: { commitSha: sha, runId: '42', status: 'VERIFIED', sourceFileCount: 10, rows: [...verificationSteps.map(step => ({ name: step.name, exitCode: 0, durationMs: 1 })), { name: 'source-freeze', exitCode: 0, durationMs: 1 }] } });
+const summary = () => ({ version: 1, profile: 'CUSTOMER_CANDIDATE', repository: expected.repository, sourceSha: sha, treeSha: tree, runId: '42', runAttempt: 2, ...technicalAcceptanceScope(), evidence: { commitSha: sha, runId: '42', status: 'VERIFIED', sourceFileCount: 10, rows: [...verificationSteps.map(step => ({ name: step.name, exitCode: 0, durationMs: 1 })), { name: 'source-freeze', exitCode: 0, durationMs: 1 }] } });
 async function api() { const subject = await import('./full-release-evidence'); assert.equal(typeof subject.validateFullReleaseSummary, 'function'); return subject; }
 
 test('production requires explicit current-source manual full candidate and every original full row', async () => {
@@ -21,6 +22,15 @@ test('production requires explicit current-source manual full candidate and ever
   subject.validateProductionCiRun(run(), expected);
   assert.equal(subject.validateFullReleaseSummary(summary(), { ...expected, treeSha: tree, runAttempt: 2 }).profile, 'CUSTOMER_CANDIDATE');
   assert.throws(() => validateCiRun(run(), expected), 'routine source admission remains distinct');
+});
+
+test('production candidate reader refuses removed or relabeled separate acceptance scope', async () => {
+ const subject=await api(),value=summary();
+ assert.doesNotThrow(()=>subject.validateFullReleaseSummary(value,{...expected,treeSha:tree,runAttempt:2}));
+ const changed=structuredClone(value);changed.technicalAcceptanceScope.separateBrowserWindows.pop();
+ assert.throws(()=>subject.validateFullReleaseSummary(changed,{...expected,treeSha:tree,runAttempt:2}));
+ assert.throws(()=>subject.validateFullReleaseSummary({...value,technicalAcceptanceScopeSha256:'0'.repeat(64)},{...expected,treeSha:tree,runAttempt:2}));
+ assert.throws(()=>subject.validateFullReleaseSummary({...value,technicalAcceptanceScope:{...value.technicalAcceptanceScope,customerAcceptance:true}},{...expected,treeSha:tree,runAttempt:2}));
 });
 
 const hash = (value: Uint8Array | string) => createHash('sha256').update(value).digest('hex');

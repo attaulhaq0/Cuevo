@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -24,6 +24,8 @@ import {configureBackendWebSettings} from './backend-web-settings';
 import {exportBackendWebTransfer} from './backend-web-transfer';
 import {hostedMigrationEndpointSchema} from '../database/hosted-migration-provider';
 import {canonicalReleaseExecutionJson} from './release-review';
+import {readActiveRuntimeConfiguration,revalidateActiveRuntime} from './backend-runtime-resume';
+import {createBackendPreviewTransport} from './backend-preview-transport';
 
 const failure = () => Error('Backend release step requires review; private contents withheld.');
 const digest = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
@@ -45,9 +47,9 @@ async function record(root: string, filename: string, value: unknown) {
 }
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
-export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web' | 'export-web-handover'; repoRoot: string; env: Record<string, string | undefined> }) {
+export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'provision' | 'deploy' | 'resume-runtime' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web' | 'export-web-handover'; repoRoot: string; env: Record<string, string | undefined> }) {
   try {
-    if (!['prepare','approval','bootstrap-schema','provision','deploy','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
+    if (!['prepare','approval','bootstrap-schema','provision','deploy','resume-runtime','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
     if (!isAbsolute(repoRoot) || resolve(repoRoot) !== repoRoot || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw failure();
     if (mode === 'prepare') {
       if (privateNames.some(key => !!env[key])) throw failure();
@@ -62,9 +64,11 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     if (digest(bytes) !== required(env, 'CUEVO_BACKEND_BUNDLE_SHA256')) throw failure();
     const bundle = bundleSchema.parse(parseReleaseExecutionJson(new TextDecoder('utf8', { fatal: true }).decode(bytes)));
     // A focused database/account gate is never a provider deployment certificate.
-    const scope = z.object({ stagingVerification: z.unknown().optional(), executionScope: z.enum(['schema-and-accounts', 'complete-backend']).optional() }).parse(bundle.expected);
+    const scope = z.object({ stagingVerification: z.unknown().optional(), installedRuntime:z.unknown().optional(), executionScope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime']).optional() }).parse(bundle.expected);
     if (scope.stagingVerification !== undefined && scope.executionScope !== 'schema-and-accounts') throw failure();
     if ((scope.stagingVerification !== undefined || scope.executionScope === 'schema-and-accounts') && !['approval', 'bootstrap-schema', 'provision'].includes(mode)) throw failure();
+    if(scope.executionScope==='installed-runtime'&&(!scope.installedRuntime||!['approval','resume-runtime','verify','verify-private','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)))throw failure();
+    if(mode==='resume-runtime'&&scope.executionScope!=='installed-runtime')throw failure();
     const identity = z.object({ repository: z.literal(required(env, 'GITHUB_REPOSITORY')), releaseSha: z.literal(required(env, 'GITHUB_SHA')), releaseRunId: z.literal(required(env, 'GITHUB_RUN_ID')), runAttempt: z.literal(Number(required(env, 'GITHUB_RUN_ATTEMPT'))), environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging') }).parse(bundle.expected);
     if (bundle.repoRoot !== repoRoot || identity.runAttempt < 1) throw failure();
     const endpoint=bundle.migrationEndpoint;
@@ -73,26 +77,43 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
     await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken, ...(['approval','bootstrap-schema','provision'].includes(mode)?{effectScope:'SCHEMA_AND_SYNTHETIC_AUTH'}:{}) });
     if (mode === 'approval') return { status: 'ADMITTED' as const, hostedAcceptance: false };
+    if(mode==='resume-runtime'){
+      const operator=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);operator.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;
+      const ca=required(env,'CUEVO_DATABASE_TLS_CA');if(!ca.includes('-----BEGIN CERTIFICATE-----')||Buffer.byteLength(ca)>512*1024)throw failure();
+      const privateInputs={...shared,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),operatorDatabaseUrl:operator.toString(),operatorPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD')};
+      const recovered=await readActiveRuntimeConfiguration({...shared,operatorDatabaseUrl:operator.toString(),operatorPassword:privateInputs.operatorPassword,certificate:ca});
+      const proof=await revalidateActiveRuntime({...privateInputs,runtimeConfig:recovered.runtimeConfig});if(proof.status!=='INSTALLED_RUNTIME_REVALIDATED'||!proof.nativeExecutionVerified||!proof.lockReleased||!proof.original)throw failure();
+      await record(repoRoot,'runtime-private.json',recovered.runtimeConfig);const certificate=await open(join(repoRoot,'.local/hosted-release/database-ca.pem'),'wx',0o600);try{await certificate.writeFile(ca);await certificate.sync();}finally{await certificate.close();}
+      // Keep original activation identity in its own receipt. Fresh verification
+      // belongs to this package; it never becomes a new activation.
+      await record(repoRoot,'runtime-resume-result.json',proof);
+      const configuration=z.object({sourceSha:z.literal(identity.releaseSha),dataApi:z.literal('DISABLED'),observer:z.string().min(1),status:z.literal('OBSERVED_PROVIDER_UI'),visibleText:z.literal('Data API is disabled'),observedAt:z.iso.datetime({offset:true}),projectRef:z.literal(endpoint.projectRef),source:z.literal('https://supabase.com/dashboard/project/'+endpoint.projectRef+'/integrations/data_api/settings')}).strict().parse(parseCanonicalReleaseReviewJson(required(env,'CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON')));if(Date.parse(configuration.observedAt)>Date.now()||Date.now()-Date.parse(configuration.observedAt)>3600000)throw failure();await record(repoRoot,'data-api-configuration.json',configuration);
+      await record(repoRoot,'provider-result.json',{status:'DEPLOYED_ACTIVE_REVALIDATED',purpose:'CUEVO_BACKEND_PROVIDER_DEPLOYMENT',mutation:'NOT_ATTEMPTED',basis:'ORIGINAL_ACTIVE_RUNTIME_REVALIDATION',api:{deploymentId:proof.original.apiDeploymentId,url:proof.original.apiUrl,artifactSha256:z.object({fingerprints:z.object({apiArtifactSha256:z.string()})}).parse(bundle.expected).fingerprints.apiArtifactSha256,metadataVerified:true,healthVerified:false},edge:{id:proof.original.edgeId,version:proof.original.edgeVersion,artifactSha256:z.object({fingerprints:z.object({edgeArtifactSha256:z.string()})}).parse(bundle.expected).fingerprints.edgeArtifactSha256,denoLockSha256:z.object({fingerprints:z.object({denoLockSha256:z.string()})}).parse(bundle.expected).fingerprints.denoLockSha256,customAuthenticationVerified:false,state:'ACTIVE'},hostedAcceptance:false});
+      await createBackendPreviewTransport({repoRoot,expected:bundle.expected as Parameters<typeof createBackendPreviewTransport>[0]['expected'],prepared:bundle.preparedApproval as Parameters<typeof createBackendPreviewTransport>[0]['prepared'],apiDeployment:{id:proof.original.apiDeploymentId,url:proof.original.apiUrl},vercelToken:privateInputs.vercelToken},async()=>{await readBackendReleaseAdmission({repoRoot,expected:bundle.expected,prepared:bundle.preparedApproval,githubToken:shared.githubToken});});
+      return proof;
+    }
     if(mode==='export-web-handover'){
-      const result=await exportBackendWebTransfer({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
+      const result=await exportBackendWebTransfer({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN'),...((z.object({installedSource:z.unknown().optional(),installedSchema:z.unknown().optional()}).parse(bundle.expected).installedSource??z.object({installedSchema:z.unknown().optional()}).parse(bundle.expected).installedSchema)?{installedOperator:{providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),journalStorageKey:required(env,'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'),migrationPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD')}}:{})});
       if(result.transferPath!==join(repoRoot,'.local/hosted-release/web-transfer.json')||!/^[a-f0-9]{64}$/.test(result.transferSha256)||!/^[a-f0-9]{64}$/.test(result.manifestSha256)||result.hostedAcceptance!==false)throw failure();
       await writeFile(required(env,'GITHUB_OUTPUT'),`transfer-sha256=${result.transferSha256}\nmanifest-sha256=${result.manifestSha256}\n`,{flag:'a'});
       return result;
     }
     if(mode==='handover'){
-      const result=await prepareBackendWebHandover({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
+      const state=z.object({installedSource:z.unknown().optional(),installedSchema:z.unknown().optional()}).parse(bundle.expected);const installed=state.installedSource??state.installedSchema;
+      const result=await prepareBackendWebHandover({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN'),...(installed?{installedOperator:{providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),journalStorageKey:required(env,'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'),migrationPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD')}}:{})});
       await record(repoRoot,'web-handover-result.json',result);
       if(result.status!=='PREPARED_STAGING_MANIFEST'||!result.manifestPath||!result.manifestSha256||!result.publicConfigurationPath)throw failure();
       return result;
     }
     if(mode==='configure-web'){
-      const result=await configureBackendWebSettings({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
+      const result=await configureBackendWebSettings({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN'),...((z.object({installedSource:z.unknown().optional(),installedSchema:z.unknown().optional()}).parse(bundle.expected).installedSource??z.object({installedSchema:z.unknown().optional()}).parse(bundle.expected).installedSchema)?{installedOperator:{providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),journalStorageKey:required(env,'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'),migrationPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD')}}:{})});
       if(result.status!=='WEB_PUBLIC_SETTINGS_CONFIRMED'||!result.canonicalReceipt||result.pendingGates.length)throw failure();
       return result;
     }
     if(mode==='bind-api'){
       const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
-      const result=await bindBackendApiOrigin({...shared,runtimeConfig,vercelToken:required(env,'VERCEL_TOKEN'),syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});
+      const operator=new URL('postgresql://'+endpoint.host+':5432/postgres?sslmode=verify-full');operator.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;
+      const result=await bindBackendApiOrigin({...shared,runtimeConfig,vercelToken:required(env,'VERCEL_TOKEN'),syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD'),...(scope.installedRuntime?{activeOperator:{providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),operatorDatabaseUrl:operator.toString(),operatorPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD')}}:{})});
       if(result.status!=='API_ORIGIN_BOUND'||result.healthVerified!==true||result.currentActorVerified!==true||result.corsVerified!==true||result.sessionsClosed!==true||!result.canonicalReceipt)throw failure();
       return result;
     }
@@ -105,7 +126,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     }
     if(mode==='verify-restore'){
       const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
-      const provider=z.object({status:z.literal('DEPLOYED_INACTIVE'),api:z.object({url:z.string().url(),deploymentId:z.string().regex(/^dpl_[A-Za-z0-9]+$/)})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
+      const provider=z.object({status:z.enum(['DEPLOYED_INACTIVE','DEPLOYED_ACTIVE_REVALIDATED']),api:z.object({url:z.string().url(),deploymentId:z.string().regex(/^dpl_[A-Za-z0-9]+$/)})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
       const operator=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);operator.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;
       const result=await verifyNativeHostedDatabaseRestore({...shared,runtimeConfig,operatorDatabaseUrl:operator.toString(),operatorPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD'),providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD'),apiDeployment:{id:provider.api.deploymentId,url:provider.api.url}});
       if(result.status!=='VERIFIED'||result.recoveryVerified!==true||result.cleanupConfirmed!==true||result.sessionsClosed!==true||result.lockReleased!==true||!result.canonicalReceipt)throw failure();
@@ -114,7 +135,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     if(mode==='verify'||mode==='verify-private'||mode==='activate'){
       if(mode==='verify-private')z.object({status:z.literal('PREREQUISITES_OBSERVED'),apiReady:z.literal(true),roleSessions:z.literal(5),crossSchoolDenied:z.literal(true),worker:z.object({missingSignatureDenied:z.literal(true),malformedSignatureDenied:z.literal(true),staleSignatureDenied:z.literal(true)})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/prerequisites-result.json'),48*1024)).toString('utf8')));
       const runtimeConfig=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-private.json'),192*1024)).toString('utf8'));
-      const provider=z.object({status:z.literal('DEPLOYED_INACTIVE'),api:z.object({url:z.string().url(),deploymentId:z.string().startsWith('dpl_')}),edge:z.object({id:z.string(),version:z.number().int().positive()})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
+      const provider=z.object({status:z.enum(['DEPLOYED_INACTIVE','DEPLOYED_ACTIVE_REVALIDATED']),api:z.object({url:z.string().url(),deploymentId:z.string().startsWith('dpl_')}),edge:z.object({id:z.string(),version:z.number().int().positive()})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/provider-result.json'),48*1024)).toString('utf8')));
       if(mode==='activate'){
         const prerequisitesReceipt=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/prerequisites-result.json'),48*1024)).toString('utf8'));
         const privateReceipt=JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/private-access-result.json'),48*1024)).toString('utf8'));
@@ -130,7 +151,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
         return result;
       }
       if(mode==='verify-private'){
-        const result=await verifyHostedPrivateAccess({...shared,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});await record(repoRoot,'private-access-result.json',result);if(result.status!=='PRIVATE_PROBES_CONFIRMED'||result.restrictedDatabaseGrants!==true||result.privateStorage!==true||result.privateRealtime!==true||result.sessionsClosed!==true)throw failure();return result;
+        const result=await verifyHostedPrivateAccess({...shared,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD'),...(scope.installedRuntime?{purpose:'PRE_ACTIVATION'}:{})});await record(repoRoot,'private-access-result.json',result);if(result.status!=='PRIVATE_PROBES_CONFIRMED'||result.restrictedDatabaseGrants!==true||result.privateStorage!==true||result.privateRealtime!==true||result.sessionsClosed!==true)throw failure();return result;
       }
       const result=await verifyHostedBackendPrerequisites({repoRoot,expected:bundle.expected,preparedApproval:bundle.preparedApproval,githubToken:shared.githubToken,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),vercelToken:required(env,'VERCEL_TOKEN'),runtimeConfig,apiDeployment:{url:provider.api.url,id:provider.api.deploymentId},edgeDeployment:{id:provider.edge.id,version:provider.edge.version},syntheticPassword:required(env,'CUEVO_SYNTHETIC_PILOT_PASSWORD')});await record(repoRoot,'prerequisites-result.json',result);if(result.status!=='PREREQUISITES_OBSERVED')throw failure();return result;
     }
@@ -139,8 +160,15 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     if (!ca.includes('-----BEGIN CERTIFICATE-----') || Buffer.byteLength(ca) > 512 * 1024) throw failure();
     const certificatePath = join(repoRoot, '.local/hosted-release/database-ca.pem');
     if(mode==='deploy'){
-      z.object({status:z.literal('CONFIRMED'),apiLogin:z.literal(true),workerLogin:z.literal(true)}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-roles-result.json'),8192)).toString('utf8')));
       z.object({status:z.literal('CONFIRMED'),cleanup:z.literal('RELEASED')}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/reference-result.json'),8192)).toString('utf8')));
+      z.object({status:z.literal('CONFIRMED'),confirmed:z.literal(133)}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/auth-result.json'),16384)).toString('utf8')));
+
+      const db=await createHostedMigrationDatabase({repoRoot,projectRef:endpoint.projectRef,databaseUrl:`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+endpoint.projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,certificate:{path:certificatePath,sha256:digest(ca)},password:migrationPassword});
+      let recovered:{api:string;worker:string}|undefined;
+      const runtimeLease=await db.withLock(`${endpoint.projectRef}:HOSTED_SCHEMA_MIGRATION`,async()=>{await readBackendReleaseAdmission({repoRoot,expected:bundle.expected,prepared:bundle.preparedApproval,githubToken:shared.githubToken});recovered=await db.prepareRuntimeCredentials();});
+      if(runtimeLease.kind!=='RELEASED'||!recovered)throw failure();
+      await record(repoRoot,'runtime-role-passwords.json',{purpose:'INITIAL_RESTRICTED_RUNTIME_CREDENTIALS',sourceSha:identity.releaseSha,projectRef:endpoint.projectRef,...recovered});
+      await record(repoRoot,'runtime-roles-result.json',{status:'CONFIRMED',apiLogin:true,workerLogin:true});
       const passwords=z.object({purpose:z.literal('INITIAL_RESTRICTED_RUNTIME_CREDENTIALS'),sourceSha:z.literal(identity.releaseSha),projectRef:z.string().regex(/^[a-z]{20}$/),api:z.string().regex(/^[a-f0-9]{64}$/),worker:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/runtime-role-passwords.json'),8192)).toString('utf8')));
       const targets=z.object({targets:z.object({web:z.object({origin:z.string()}),supabase:z.object({projectRef:z.literal(passwords.projectRef)})})}).parse(bundle.expected),projectRef=passwords.projectRef,webOrigin=targets.targets.web.origin,authOrigin=`https://${projectRef}.supabase.co`;
       const response=await fetch(`https://api.supabase.com/v1/projects/${projectRef}/api-keys?reveal=true`,{headers:{Authorization:'Bearer '+providerToken},signal:AbortSignal.timeout(15000),redirect:'error'});if(!response.ok)throw failure();
@@ -150,7 +178,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       const common={NODE_ENV:'production',CUEVO_DEPLOYMENT_ENVIRONMENT:'synthetic-staging',CUEVO_SYNTHETIC_PROJECT_REF:projectRef,CUEVO_SYNTHETIC_WEB_ORIGIN:webOrigin,SUPABASE_URL:authOrigin,POSTHOG_CAPTURE_MODE:'DISABLED'};
       const runtimeConfig={version:1,purpose:'CUEVO_HOSTED_RUNTIME_CONFIGURATION',sourceSha:identity.releaseSha,projectRef,webOrigin,api:{...common,DATABASE_URL:url('cuevo_api',passwords.api),CUEVO_DATABASE_TLS_CA:ca,SUPABASE_PUBLISHABLE_KEY:publishable[0].api_key,SUPABASE_SERVICE_ROLE_KEY:storage[0].api_key,API_ALLOWED_ORIGIN:webOrigin,AI_GENERATION_MODE:'FIXTURE',AI_FIXTURE_ENABLED:'true'},edge:{...common,CUEVO_WORKER_DATABASE_URL:url('cuevo_worker',passwords.worker),CUEVO_WORKER_TLS_CA:ca,CUEVO_WORKER_EXECUTION_MODE:'synthetic-staging',CUEVO_WORKER_WAKE_KEY:''}};
       const handle=await open(join(repoRoot,'.local/hosted-release/runtime-private.json'),'wx',0o600);try{await handle.writeFile(JSON.stringify(runtimeConfig));await handle.sync();}finally{await handle.close();}
-      const deployed=await deployBackendProviders({repoRoot,expected:bundle.expected as Parameters<typeof deployBackendProviders>[0]['expected'],preparedApproval:bundle.preparedApproval as Parameters<typeof deployBackendProviders>[0]['preparedApproval'],apiArtifactRoot:bundle.artifacts.apiRoot,edgeArtifactRoot:bundle.artifacts.edgeRoot,vercelToken:required(env,'VERCEL_TOKEN'),providerToken,githubToken:shared.githubToken,runtimeConfig});await record(repoRoot,'provider-result.json',deployed);if(deployed.status!=='DEPLOYED_INACTIVE')throw failure();return deployed;
+      const deployed=await deployBackendProviders({repoRoot,expected:bundle.expected as Parameters<typeof deployBackendProviders>[0]['expected'],preparedApproval:bundle.preparedApproval as Parameters<typeof deployBackendProviders>[0]['preparedApproval'],apiArtifactRoot:bundle.artifacts.apiRoot,edgeArtifactRoot:bundle.artifacts.edgeRoot,vercelToken:required(env,'VERCEL_TOKEN'),providerToken,githubToken:shared.githubToken,runtimeConfig,operator:{databaseUrl:`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,password:migrationPassword,certificate:{path:certificatePath,sha256:digest(ca)}}});await record(repoRoot,'provider-result.json',deployed);if(deployed.status!=='DEPLOYED_INACTIVE')throw failure();return deployed;
     }
     if (mode === 'provision') {
       const syntheticPassword = required(env, 'CUEVO_SYNTHETIC_PILOT_PASSWORD');
@@ -172,15 +200,10 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       if (auth.status !== 'CONFIRMED') throw failure();
       const target = z.object({ targets: z.object({ supabase: z.object({ projectRef: z.string().regex(/^[a-z]{20}$/) }) }) }).parse(bundle.expected);
       const projectRef = target.targets.supabase.projectRef;
-      const runtimePasswords={api:randomBytes(32).toString('hex'),worker:randomBytes(32).toString('hex')};
-      const runtimePasswordHandle=await open(join(repoRoot,'.local/hosted-release/runtime-role-passwords.json'),'wx',0o600);
-      try{await runtimePasswordHandle.writeFile(JSON.stringify({purpose:'INITIAL_RESTRICTED_RUNTIME_CREDENTIALS',sourceSha:identity.releaseSha,projectRef,...runtimePasswords}));await runtimePasswordHandle.sync();}finally{await runtimePasswordHandle.close();}
       const database = await createHostedMigrationDatabase({repoRoot,projectRef,databaseUrl:`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,certificate,password:migrationPassword});
       const referenceState: {status:'CONFIRMED'|'REQUIRES_REVIEW'} = {status:'REQUIRES_REVIEW'};
       const reference = await database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`, async () => {
         await readBackendReleaseAdmission({repoRoot,expected:bundle.expected,prepared:bundle.preparedApproval,githubToken:shared.githubToken,effectScope:'SCHEMA_AND_SYNTHETIC_AUTH'});
-        const roles=await database.provisionInitialRuntimeRoles({apiPassword64hex:runtimePasswords.api,workerPassword64hex:runtimePasswords.worker});
-        await record(repoRoot,'runtime-roles-result.json',roles);if(roles.status!=='CONFIRMED'||!roles.apiLogin||!roles.workerLogin)throw failure();
         await database.executeReferenceScenarioSource(); referenceState.status='CONFIRMED';
       });
       await record(repoRoot, 'reference-result.json', {status:referenceState.status,cleanup:reference.kind,hostedAcceptance:false});
@@ -188,11 +211,14 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       return auth;
     }
     await mkdir(join(repoRoot, '.local/hosted-release'), { recursive: true });
-    const certificateHandle = await open(certificatePath, 'wx', 0o600);
-    try { await certificateHandle.writeFile(ca); await certificateHandle.sync(); } finally { await certificateHandle.close(); }
-    const bootstrap = await createHostedOperatorStorageBootstrap({ ...shared, providerToken, journalStorageKey, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath });
-    const bucket = await bootstrap.bootstrap(); await record(repoRoot, 'bucket-result.json', bucket);
-    if (bucket.status === 'REQUIRES_REVIEW') throw failure();
+    try{const certificateHandle = await open(certificatePath, 'wx', 0o600);try { await certificateHandle.writeFile(ca); await certificateHandle.sync(); } finally { await certificateHandle.close(); }}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST'||!(await ownedFile(repoRoot,certificatePath,512*1024)).equals(Buffer.from(ca)))throw failure();}
+    const installed=z.object({installedSource:z.unknown().optional(),installedSchema:z.unknown().optional()}).parse(bundle.expected);if(!installed.installedSource&&!installed.installedSchema){
+      const bootstrap = await createHostedOperatorStorageBootstrap({ ...shared, providerToken, journalStorageKey, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath });
+      const bucket = await bootstrap.bootstrap(); await record(repoRoot, 'bucket-result.json', bucket);
+      if (bucket.status === 'REQUIRES_REVIEW') throw failure();
+    }
+    // Installed targets are admitted through the complete read-only operator
+    // inventory in the native executor; the empty-target bootstrap cannot run.
     const toolchainKeys = ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'ComSpec', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'LANG', 'LC_ALL', 'TZ'];
     const toolchain = Object.fromEntries(toolchainKeys.filter(key => env[key] !== undefined).map(key => [key, env[key]!]));
     const result = await executeNativeHostedMigrations({ ...shared, providerToken, journalStorageKey, migrationPassword, plan: bundle.plan,endpoint, stages: bundle.stages, certificate: { path: certificatePath, sha256: digest(ca) }, toolchainManifestPath: bundle.toolchainManifestPath, operatorStoragePolicyPath: bundle.operatorStoragePolicyPath, toolchain });
@@ -203,7 +229,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const mode = process.argv[2];
-  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
-  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'verify'|'verify-private'|'activate'|'verify-recovery'|'verify-restore'|'bind-api'|'handover'|'configure-web'|'export-web-handover', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: 'status' in result ? result.status : 'EXPORTED_VERIFIED_BACKEND_HANDOVER', hostedAcceptance: false })); }
+  if (!['prepare', 'approval', 'bootstrap-schema', 'provision','deploy','resume-runtime','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
+  try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'provision'|'deploy'|'resume-runtime'|'verify'|'verify-private'|'activate'|'verify-recovery'|'verify-restore'|'bind-api'|'handover'|'configure-web'|'export-web-handover', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: 'status' in result ? result.status : 'EXPORTED_VERIFIED_BACKEND_HANDOVER', hostedAcceptance: false })); }
   catch { console.error('Cuevo backend step requires review. Inspect retained source-bound receipts; private contents withheld.'); process.exitCode = 1; }
 }

@@ -17,3 +17,19 @@ test('missing checks source drift routine evidence and wrong run context cannot 
   assert.throws(() => fullVerificationSummary({ ...input(), env: { ...env, GITHUB_REF: 'refs/heads/other' } }));
   assert.throws(() => fullVerificationSummary({ ...input(), evidence: { status: 'ROUTINE_VERIFIED', rows: [] } }));
 });
+
+test('full receipt refuses unknown private fields before projecting any source evidence', () => {
+  const raw = input();
+  assert.throws(() => fullVerificationSummary({ ...raw, evidence: { ...raw.evidence, privateDiagnostic: 'private-canary' } }));
+  assert.throws(() => fullVerificationSummary({ ...raw, evidence: { ...raw.evidence, rows: [{ ...raw.evidence.rows[0], privateDiagnostic: 'private-canary' }, ...raw.evidence.rows.slice(1)] } }));
+  assert.throws(() => fullVerificationSummary({ ...raw, privateDiagnostic:'private-canary' } as typeof raw));
+});
+
+test('full candidate receipt declares its fixture scope and separate acceptance windows without claiming customer acceptance', () => {
+  const summary=fullVerificationSummary(input()) as unknown as { technicalAcceptanceScope?:{version:number;hostedAcceptance:boolean;customerAcceptance:boolean;separateBrowserWindows:unknown[];separateIntegrationWindows:unknown[]};technicalAcceptanceScopeSha256?:string };
+  assert.ok(summary.technicalAcceptanceScope);
+  assert.equal(summary.technicalAcceptanceScope.version,1);
+  assert.equal(summary.technicalAcceptanceScope.hostedAcceptance,false);assert.equal(summary.technicalAcceptanceScope.customerAcceptance,false);
+  assert.equal(summary.technicalAcceptanceScope.separateBrowserWindows.length,18);assert.equal(summary.technicalAcceptanceScope.separateIntegrationWindows.length,1);
+  assert.match(summary.technicalAcceptanceScopeSha256??'',/^[a-f0-9]{64}$/);
+});

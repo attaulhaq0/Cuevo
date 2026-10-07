@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdtemp, mkdir, rm } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -23,6 +23,7 @@ test('routine evidence cannot become the original full verification status or co
   const full = verificationProfileSteps('full'); assert.equal(full, verificationSteps);
   const routine = verificationProfileSteps('routine'), names: string[] = routine.map(step => step.name);
   assert.ok(names.includes('clean-bootstrap')); assert.ok(names.includes('database')); assert.ok(names.includes('critical-integration')); assert.ok(names.includes('critical-browser')); assert.equal(names.at(-1), 'demo-seed-restore');
+  assert.ok(names.includes('edge-runtime'));
   for (const excluded of ['lint', 'typecheck', 'unit', 'web-unit', 'repository', 'runtime-outage', 'recovery', 'browser-compatibility', 'browser']) assert.ok(!names.includes(excluded));
   const rows = [...routine.map(step => ({ name: step.name, exitCode: 0, required: true, durationMs: 1 })), { name: 'source-freeze', exitCode: 0, required: true, durationMs: 1 }];
   assert.equal(verificationEvidence('routine', rows).status, 'ROUTINE_VERIFIED');
@@ -44,11 +45,14 @@ test('CI scope stays conservative for unknown sensitive mixed or selector source
   assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.css'], true).profile, 'routine');
   assert.ok(classifyRuntimeChanges(['apps/web/features/learning/components/task.css'], true).browserFiles.includes('learning-content-lifecycle.spec.ts'));
   assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.css'], false).profile, 'full-runtime');
-  assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.tsx'], true).profile, 'full-runtime');
-  for (const files of [['supabase/migrations/example.sql'], ['apps/web/shared/query.ts'], ['apps/web/features/auth/provider.ts'], ['apps/api/src/modules/academic/academic.ts'], ['apps/worker/src/jobs/process.ts'], ['scripts/verification/verification-profiles.ts'], ['.github/workflows/ci.yml'], ['package-lock.json'], ['unknown/path.ts'], ['apps/web/features/learning/view.tsx', 'apps/web/features/community/view.tsx']]) assert.equal(classifyRuntimeChanges(files, true).profile, 'full-runtime');
+  assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.tsx'], true).profile, 'routine');
+  for (const files of [['supabase/migrations/example.sql'], ['apps/web/shared/query.ts'], ['apps/web/features/auth/provider.ts'], ['apps/web/features/learning/server/operation.ts'], ['apps/web/features/learning/model.ts'], ['apps/web/features/learning/api.ts'], ['apps/api/src/modules/academic/academic.ts'], ['apps/worker/src/jobs/process.ts'], ['scripts/verification/verification-profiles.ts'], ['.github/workflows/ci.yml'], ['package-lock.json'], ['unknown/path.ts']]) assert.equal(classifyRuntimeChanges(files, true).profile, 'full-runtime');
+  const mixed = classifyRuntimeChanges(['apps/web/features/learning/components/task.tsx', 'apps/web/features/community/components/post.tsx'], true);
+  assert.equal(mixed.profile, 'routine'); assert.ok(mixed.browserFiles.includes('learning-content-lifecycle.spec.ts')); assert.ok(mixed.browserFiles.includes('community-safety.spec.ts'));
   const runtimeNames: string[] = verificationProfileSteps('full-runtime').map(step => step.name);
   for (const omitted of ['repository', 'repository-fixtures', 'architecture', 'architecture-fixtures', 'docs', 'docs-fixtures', 'cicd', 'cicd-fixtures', 'lint', 'typecheck', 'unit', 'web-unit', 'dependency-security']) assert.ok(!runtimeNames.includes(omitted));
-  assert.ok(runtimeNames.includes('runtime-outage')); assert.ok(runtimeNames.includes('browser')); assert.ok(runtimeNames.includes('recovery'));
+  assert.ok(runtimeNames.includes('runtime-outage')); assert.ok(runtimeNames.includes('critical-browser')); assert.ok(runtimeNames.includes('recovery'));
+  assert.equal(runtimeNames.includes('browser'), false); assert.equal(runtimeNames.includes('browser-compatibility'), false);
   const rows = [...verificationProfileSteps('full-runtime').map(step => ({ name: step.name, exitCode: 0, required: true })), { name: 'source-freeze', exitCode: 0, required: true }];
   assert.equal(verificationEvidence('full-runtime', rows).status, 'FULL_RUNTIME_VERIFIED');
 });
@@ -87,6 +91,14 @@ test('critical API and browser discovery are explicit source-owned files and nev
   assert.deepEqual(integrationArguments(['--profile=critical']).slice(-criticalIntegrationFiles.length), criticalIntegrationFiles);
   assert.throws(() => integrationArguments(['--profile=unknown']));
 });
+
+test('unknown runtime selection includes every mapped owner and public or policy surfaces cannot narrow it', async () => {
+  const { classifyRuntimeChanges, routineBrowserFiles } = await api();
+  for(const file of ['apps/web/features/learning/api.ts','apps/web/features/learning/model.ts','apps/web/features/learning/ui.tsx','apps/web/features/learning/server/save.ts','apps/web/features/learning/components/permissions/access.tsx','apps/web/features/auth/components/sign-in.tsx','apps/web/app/learning/page.tsx','packages/contracts/src/learning.ts']) {
+    const result=classifyRuntimeChanges([file],true);assert.equal(result.profile,'full-runtime',file);assert.deepEqual(result.browserFiles,routineBrowserFiles);
+  }
+  assert.deepEqual(classifyRuntimeChanges([],true).browserFiles,routineBrowserFiles);
+});
 test('critical integration result validation refuses missing files zero tests skipped pending and failed cases', async () => {
   const { criticalIntegrationFiles, validateCriticalIntegrationReport } = await api();
   const report = { success: true, numPendingTests: 0, numFailedTests: 0, testResults: criticalIntegrationFiles.map(file => ({ name: resolve(file), status: 'passed', assertionResults: [{ status: 'passed' }] })) };
@@ -110,4 +122,75 @@ test('critical browser results require every explicit file once with successful 
     (value: typeof report) => { value.suites[0].specs[0].tests[0].results[0].retry = 1; },
     (value: typeof report) => { value.suites[0].specs[0].tests[0].projectName = 'firefox'; },
   ]) { const value = structuredClone(report); mutate(value); assert.throws(() => validateCriticalBrowserReport(value)); }
+});
+
+test('actual PR rename cannot hide a deleted backend owner behind a routine documentation destination', async () => {
+  const { readCiRuntimeSelection } = await api();
+  const root = await mkdtemp(join(tmpdir(), 'cuevo-profile-rename-')), original = process.cwd();
+  try {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore','pipe','pipe'] }).trim();
+    await mkdir(join(root, 'scripts/verification'), { recursive: true });
+    await mkdir(join(root, 'apps/api/src/modules/learning'), { recursive: true });
+    await mkdir(join(root, 'apps/web/features/learning'), { recursive: true });
+    await writeFile(join(root, 'scripts/verification/verification-profiles.ts'), 'immutable selector\n');
+    const backend = join(root, 'apps/api/src/modules/learning/lifecycle.ts'), destination = join(root, 'apps/web/features/learning/lifecycle.md');
+    await writeFile(backend, 'export const protectedBackendCommand = true;\n');
+    git('init','--quiet'); git('add','.'); git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','base');
+    const base = git('rev-parse','HEAD');
+    await writeFile(destination, await readFile(backend)); await rm(backend);
+    git('add','.'); git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','rename');
+    const head = git('rev-parse','HEAD'), event = join(root, 'event.json');
+    assert.match(git('diff','--name-status',base,head), /^R100/);
+    await writeFile(event, JSON.stringify({ pull_request: { base: { sha: base, ref: 'main' }, merge_commit_sha: head } })); process.chdir(root);
+    const selected = await readCiRuntimeSelection({ ...process.env, CI:'true', GITHUB_ACTIONS:'true', GITHUB_SHA:head, GITHUB_REF:'refs/pull/1/merge', GITHUB_BASE_REF:'main', GITHUB_EVENT_NAME:'pull_request', GITHUB_EVENT_PATH:event });
+    assert.equal(selected.profile, 'full-runtime');
+  } finally { process.chdir(original); await rm(root, { recursive:true, force:true }); }
+});
+
+test('actual PR narrows existing mapped UI behavior but new source files require broad runtime admission',async()=>{
+ const {readCiRuntimeSelection}=await api(),root=await mkdtemp(join(tmpdir(),'cuevo-profile-ui-')),original=process.cwd();
+ try{
+  const git=(...args:string[])=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  await mkdir(join(root,'scripts/verification'),{recursive:true});await mkdir(join(root,'apps/web/features/learning/components'),{recursive:true});
+  await writeFile(join(root,'scripts/verification/verification-profiles.ts'),'immutable selector\n');await writeFile(join(root,'apps/web/features/learning/components/task.tsx'),'export const task=1;\n');
+  git('init','--quiet');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','base');const base=git('rev-parse','HEAD');
+  const event=join(root,'event.json');process.chdir(root);
+  const select=async()=>{const head=git('rev-parse','HEAD');await writeFile(event,JSON.stringify({pull_request:{base:{sha:base,ref:'main'},merge_commit_sha:head}}));return readCiRuntimeSelection({...process.env,CI:'true',GITHUB_ACTIONS:'true',GITHUB_SHA:head,GITHUB_REF:'refs/pull/1/merge',GITHUB_BASE_REF:'main',GITHUB_EVENT_NAME:'pull_request',GITHUB_EVENT_PATH:event});};
+  await writeFile(join(root,'apps/web/features/learning/components/task.tsx'),'export const task=2;\n');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','UI');
+  const focused=await select();assert.equal(focused.profile,'routine');assert.ok(focused.browserFiles.includes('learning-content-lifecycle.spec.ts'));
+  await writeFile(join(root,'apps/web/features/learning/components/task.tsx'),"import { actor } from '../../../shared/session/providers';\nexport const task=2;\n");git('add','apps/web/features/learning/components/task.tsx');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','dependency');assert.equal((await select()).profile,'full-runtime');
+  await writeFile(join(root,'apps/web/features/learning/components/new.tsx'),'export const newFeature=1;\n');git('add','apps/web/features/learning/components/new.tsx');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','newsource');assert.equal((await select()).profile,'full-runtime');
+ }finally{process.chdir(original);await rm(root,{recursive:true,force:true});}
+});
+
+test('full integration refuses skipped missing stale or substituted test titles with explicit provider exclusion', async () => {
+  const subject = await api();
+  assert.equal(typeof subject.validateIntegrationRunReport, 'function');
+  const file = resolve('apps/api/test/integration/academic-api.test.ts'), startedAt = Date.now(), finishedAt = startedAt + 1000;
+  const inventory = [{ file, name:'native academic > retains numeric zero' }];
+  const context = { startedAt, finishedAt, expectedFiles:[file] };
+  const report = { success:true, startTime:startedAt, numPendingTests:0, numTodoTests:0, numFailedTests:0, numTotalTests:1, numPassedTests:1, testResults:[{ name:file, status:'passed', startTime:startedAt + 10, endTime:startedAt + 20, message:'', assertionResults:[{ ancestorTitles:['native academic'], title:'retains numeric zero', status:'passed', failureMessages:[] }] }] };
+  assert.doesNotThrow(() => subject.validateIntegrationRunReport(report, inventory, context));
+  for (const mutate of [
+    (value:typeof report) => { value.numPendingTests = 1; },
+    (value:typeof report) => { value.numTodoTests = 1; },
+    (value:typeof report) => { value.testResults[0].assertionResults[0].title = 'substituted test'; },
+    (value:typeof report) => { value.testResults[0].assertionResults = []; },
+    (value:typeof report) => { value.startTime = startedAt - 1; },
+    (value:typeof report) => { value.testResults[0].endTime = finishedAt + 1; },
+  ]) { const changed = structuredClone(report); mutate(changed); assert.throws(() => subject.validateIntegrationRunReport(changed, inventory, context)); }
+  assert.equal(subject.fullIntegrationFiles().includes('apps/api/test/integration/customer-foundry-live-api.test.ts'), false);
+  assert.ok(subject.fullIntegrationFiles().includes('apps/api/test/integration/academic-api.test.ts'));
+});
+
+test('integration validator consumes actual Vitest discovery and fresh pure domain execution without services', async () => {
+  const subject=await api(),directory=await mkdtemp(join(tmpdir(),'cuevo-integration-report-'));
+  try {
+    const file='packages/domain/test/authorization.test.ts',inventoryPath=join(directory,'inventory.json'),reportPath=join(directory,'report.json');
+    const listed=spawnSync(process.execPath,['node_modules/vitest/vitest.mjs','list','--staticParse=false',file,`--json=${inventoryPath}`],{encoding:'utf8'});assert.equal(listed.status,0,listed.stderr);
+    const startedAt=Date.now();
+    const executed=spawnSync(process.execPath,['node_modules/vitest/vitest.mjs','run',file,'--reporter=json',`--outputFile=${reportPath}`],{encoding:'utf8'});assert.equal(executed.status,0,executed.stderr);
+    const count=subject.validateIntegrationRunReport(JSON.parse(await readFile(reportPath,'utf8')),JSON.parse(await readFile(inventoryPath,'utf8')),{expectedFiles:[file],startedAt,finishedAt:Date.now()});
+    assert.ok(count>1);
+  } finally {await rm(directory,{recursive:true,force:true});}
 });

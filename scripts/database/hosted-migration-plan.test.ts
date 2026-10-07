@@ -72,6 +72,18 @@ test('incremental history is the exact reviewed ordered prefix and only missing 
   assert.throws(() => planHostedMigrations({ sources: sources(), source, target: { ...current, migrationVersions: applied.filter(row => row.version !== '20261002021737').map(row => row.version) }, priorReceipt, now }));
 });
 
+test('a completed prior release admits one append-only migration without treating its full prefix as an unknown partial stage', async () => {
+  const { planHostedMigrations } = await api(), original = sources();
+  const installed = planHostedMigrations({ sources: original, source, target: target(), now });
+  const appended = { name: '20261007000000_verified_incremental_fixture.sql', bytes: Buffer.from('begin; select 1; commit;\n') };
+  const priorReceipt = { projectRef, sourceSha: source.sha, treeSha: source.tree, migrations: installed.migrations.map(({ version, sha256 })=>({version,sha256})), completedSourceMigrationCount: installed.migrations.length };
+  const current = { ...target(), authUsers:133,appSchemas:['app','internal','authorization'],population:'GUARDED_SYNTHETIC',migrationVersions:installed.migrations.map(row=>row.version) };
+  const plan = planHostedMigrations({ sources:[...original,appended],source:{sha:'c'.repeat(40),tree:'d'.repeat(40)},target:current,priorReceipt,now });
+  assert.equal(plan.mode,'INCREMENTAL'); assert.deepEqual(plan.pending.map(row=>row.name),[appended.name]);
+  assert.throws(()=>planHostedMigrations({sources:[...original,appended],source,target:current,priorReceipt:{...priorReceipt,completedSourceMigrationCount:installed.migrations.length+1},now}));
+  assert.throws(()=>planHostedMigrations({sources:[...original,appended],source,target:current,priorReceipt:{...priorReceipt,migrations:priorReceipt.migrations.slice(0,-1)},now}));
+});
+
 test('canonical source loader reads actual Git blobs and ignores CRLF checkout serialization', async () => {
   const { readCanonicalMigrationSources } = await api();
   await fixture((root, sha, tree) => {
@@ -185,4 +197,80 @@ test('clean canonical release entry binds actual migration provenance and verifi
     const current = { ...target(), population: 'GUARDED_SYNTHETIC' as const, authUsers: 133, appSchemas: ['app', 'internal', 'authorization'], migrationVersions: result.plan.migrations.map(row => row.version) };
     assert.throws(() => createCanonicalHostedMigrationPlan({ repoRoot: root, sourceSha: sha, treeSha: tree, target: current, priorReceipt, now }));
   }, true);
+});
+
+test('canonical completed Git source admits an append-only delta and preserves exact historical provenance', async () => {
+ const { createCanonicalHostedMigrationPlan,verifyCompletedMigrationPrefix }=await api();
+ await fixture(async(root,priorSha,priorTree)=>{
+  const initial=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:priorSha,treeSha:priorTree,target:target(),now});
+  const count=initial.plan.migrations.length;
+  const appended='20261007120000_verified_canonical_append.sql';
+  writeFileSync(join(root,'supabase/migrations',appended),'begin;\nselect 1;\ncommit;\n');
+  git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','append one immutable migration');
+  const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}');
+  const priorReceipt={projectRef,sourceSha:priorSha,treeSha:priorTree,migrations:initial.plan.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:count};
+  const populated={...target(),authUsers:133,storageObjects:11,appSchemas:['app','authorization','internal'],population:'GUARDED_SYNTHETIC' as const,migrationVersions:initial.plan.migrations.map(row=>row.version)};
+  const current=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:populated,priorReceipt,now});
+  assert.equal(current.plan.migrations.length,count+1);assert.equal(current.plan.applied.length,count);assert.deepEqual(current.plan.pending.map(row=>row.name),[appended]);
+  assert.equal(current.priorReceiptProvenance,'VERIFIED_PRIOR_GIT_SOURCE_HASHES_ONLY');assert.equal(verifyCompletedMigrationPrefix(root,current.plan),true);
+  assert.deepEqual(current.plan.priorCompletedRelease,{sourceSha:priorSha,treeSha:priorTree,migrationCount:count});
+  assert.deepEqual(current.plan.stages.slice(0,-1).map(stage=>stage.names),[[],[],[]]);
+  for(const change of [{...priorReceipt,treeSha:'0'.repeat(40)},{...priorReceipt,completedSourceMigrationCount:count-1},{...priorReceipt,migrations:priorReceipt.migrations.map((row,index)=>index===0?{...row,sha256:'0'.repeat(64)}:row)}])assert.throws(()=>createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:populated,priorReceipt:change,now}));
+ },true);
+});
+
+test('completed canonical populated source with no delta has no pending SQL and cannot forge completion for a partial historical tree', async () => {
+ const { createCanonicalHostedMigrationPlan,verifyCompletedMigrationPrefix }=await api();
+ await fixture(async(root,sha,tree)=>{
+  const initial=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:sha,treeSha:tree,target:target(),now});
+  const receipt={projectRef,sourceSha:sha,treeSha:tree,migrations:initial.plan.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:initial.plan.migrations.length};
+  const populated={...target(),authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],population:'GUARDED_SYNTHETIC' as const,migrationVersions:receipt.migrations.map(row=>row.version)};
+  const current=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:sha,treeSha:tree,target:populated,priorReceipt:receipt,now});
+  assert.equal(current.plan.pending.length,0);assert.ok(current.plan.stages.every(stage=>stage.names.length===0));assert.equal(verifyCompletedMigrationPrefix(root,current.plan),true);
+  const partial=receipt.migrations.slice(0,-1),bad={...receipt,migrations:partial,completedSourceMigrationCount:partial.length};
+  assert.throws(()=>createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:sha,treeSha:tree,target:{...populated,migrationVersions:partial.map(row=>row.version)},priorReceipt:bad,now}));
+ },true);
+});
+
+test('verified committed schema stage can resume before population without claiming a completed source release',async()=>{
+ const subject=await api();const initial=subject.planHostedMigrations({sources:sources(),source,target:target(),now}),applied=initial.migrations.slice(0,initial.stages[0].names.length);
+ const current={...target(),population:'SCHEMA_ONLY',authUsers:0,storageObjects:3,appSchemas:['app','authorization','internal'],migrationVersions:applied.map(row=>row.version)};
+ const priorReceipt={projectRef,sourceSha:source.sha,treeSha:source.tree,migrations:applied.map(({version,sha256})=>({version,sha256}))};
+ const continued=subject.planHostedMigrations({sources:sources(),source,target:current,priorReceipt,now});
+ assert.equal(continued.mode,'INCREMENTAL');assert.equal(continued.priorCompletedRelease,undefined);assert.deepEqual(continued.priorSchemaRelease,{sourceSha:source.sha,treeSha:source.tree,migrationCount:applied.length});assert.equal(continued.stages[0].names.length,0);assert.equal(continued.pending.length,initial.migrations.length-applied.length);
+ assert.throws(()=>subject.planHostedMigrations({sources:sources(),source,target:{...current,authUsers:1},priorReceipt,now}));
+ assert.throws(()=>subject.planHostedMigrations({sources:sources(),source,target:current,priorReceipt:{...priorReceipt,migrations:priorReceipt.migrations.slice(0,-1)},now}));
+});
+
+test('bounded historical Git batches retain each exact original migration byte and reject changed tree identity',async()=>{
+ const subject=await api();const root=resolve(import.meta.dirname,'../..'),sha=git(root,'rev-parse','HEAD'),tree=git(root,'rev-parse','HEAD^{tree}');
+ const historical=subject.readHistoricalMigrationSources(root,sha,tree),current=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree});
+ assert.deepEqual(historical.map(row=>({name:row.name,sha256:digest(row.bytes)})),current.sources.map(row=>({name:row.name,sha256:digest(row.bytes)})));
+ assert.throws(()=>subject.readHistoricalMigrationSources(root,sha,'0'.repeat(40)));
+});
+
+test('active installed runtime can prepare only an explicit same-source read-only zero-pending plan',async()=>{
+ const subject=await api();assert.equal(typeof subject.createCanonicalInstalledRuntimePlan,'function');
+ const method=subject.createCanonicalInstalledRuntimePlan;
+ await fixture(async(root,sha,tree)=>{
+  const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:sha,treeSha:tree,target:target(),now}).plan;
+  const priorReceipt={projectRef,sourceSha:sha,treeSha:tree,migrations:initial.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:initial.migrations.length};
+  const active={...target(),population:'ACTIVE_SYNTHETIC',dispatchDisabled:false,authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version)};
+  const input={repoRoot:root,sourceSha:sha,treeSha:tree,target:active,priorReceipt,now,operation:'INSTALLED_RUNTIME_READ_ONLY' as const};
+  const result=method(input);assert.equal(result.plan.runtimeOnly,true);assert.equal(result.plan.pending.length,0);assert.ok(result.plan.stages.every(stage=>!stage.names.length));
+  assert.throws(()=>subject.createCanonicalHostedMigrationPlan(input));
+  assert.throws(()=>method({...input,operation:'MIGRATE'} as unknown as typeof input));
+  assert.throws(()=>method({...input,target:{...active,migrationVersions:active.migrationVersions.slice(0,-1)}}));
+ },true);
+});
+
+test('canonical schema-only prefix at a former full-source boundary admits only a new committed append',async()=>{
+ const subject=await api();await fixture(async(root,sourceSha,treeSha)=>{
+  const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:target(),now}).plan,prior={projectRef,sourceSha,treeSha,migrations:initial.migrations.map(({version,sha256})=>({version,sha256}))};
+  const append='20261007140000_schema_only_delta.sql';writeFileSync(join(root,'supabase/migrations',append),'begin; select 1; commit;\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','append after completed schema without population');
+  const current={...target(),population:'SCHEMA_ONLY',authUsers:0,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version)};
+  const plan=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:git(root,'rev-parse','HEAD'),treeSha:git(root,'rev-parse','HEAD^{tree}'),target:current,priorReceipt:prior,now}).plan;
+  assert.deepEqual(plan.pending.map(row=>row.name),[append]);assert.equal(plan.priorCompletedRelease,undefined);assert.equal(subject.verifyPriorSchemaPrefix(root,plan),true);
+  const forged={...plan,priorSchemaRelease:{...plan.priorSchemaRelease!,migrationCount:plan.priorSchemaRelease!.migrationCount-1}};assert.throws(()=>subject.verifyPriorSchemaPrefix(root,forged));
+ },true);
 });

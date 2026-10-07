@@ -7,6 +7,7 @@ import { readCanonicalMigrationSources } from '../database/hosted-migration-plan
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
 import { canonicalReleaseExecutionJson } from './release-review';
 import { readBackendWebTransferFile, validateBackendWebTransfer } from './backend-web-transfer';
+import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 
 const fail = () => Error('Completed backend web handover consumption requires review; contents withheld.');
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -110,6 +111,7 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
         get('branches/main/protection'), get('branches/main/protection/required_signatures'), get('git/commits/' + input.releaseSha), get('actions/runs/' + input.backendRunId + '/approvals'),
       ]);
       validateCiRun(ci, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });
+      const canonical=await readCanonicalRuntimeJobs(ci,get);if(canonicalReleaseExecutionJson(canonical)!==canonicalReleaseExecutionJson(initial.body.canonicalRuntimeVerification))throw fail();
       validateReleaseControls({ repository: repo, environment, branches, main: protection, signatures }, { repository, environment: 'staging' });
       z.object({ total_count: z.literal(1) }).parse(branches);
       z.object({ id: z.literal(initial.body.environmentId), name: z.literal('staging') }).parse(environment);
@@ -118,7 +120,7 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
       const admitted = validateCompletedBackendWebApproval(run, approvals, raw, Date.now());
       const finalRun = runSchema.parse(await get('actions/runs/' + input.backendRunId)), finalArtifact = artifactSchema.parse(await get('actions/artifacts/' + input.artifactId));
       if (canonicalReleaseExecutionJson(finalRun) !== canonicalReleaseExecutionJson(run) || canonicalReleaseExecutionJson(finalArtifact) !== canonicalReleaseExecutionJson(artifact)) throw fail();
-      validateCiRun(await get('actions/runs/' + input.ciRunId), { sha: input.releaseSha, repository, ciRunId: input.ciRunId });
+      const finalCi=await get('actions/runs/' + input.ciRunId);validateCiRun(finalCi, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });if(canonicalReleaseExecutionJson(await readCanonicalRuntimeJobs(finalCi,get))!==canonicalReleaseExecutionJson(canonical))throw fail();
       z.object({ object: z.object({ sha: z.literal(input.releaseSha) }) }).parse(await get('git/ref/heads/main'));
       await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected); validateBackendWebTransfer(raw, Date.now());
       if (controller.signal.aborted) throw fail();

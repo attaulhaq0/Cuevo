@@ -7,6 +7,7 @@ import { verificationSteps } from './steps';
 import { canonicalReleaseReviewJson } from './release-review';
 import { readSingleJsonArchive } from './single-json-archive';
 import { fullRegressionJobPolicy, validateFullRegressionWorkflow } from './verification-workflows';
+import { technicalAcceptanceScope } from './full-verification-evidence';
 
 export const fullRegressionWorkflowPath = '.github/workflows/full-regression.yml' as const;
 const sha = z.string().regex(/^[a-f0-9]{40}$/), positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -24,6 +25,7 @@ export function validateProductionCiRun(value: unknown, expected: { sha: string;
   } catch { throw fail(); }
 }
 const summarySchema = z.object({ version: z.literal(1), profile: z.literal('CUSTOMER_CANDIDATE'), repository, sourceSha: sha, treeSha: sha, runId: identifier, runAttempt: positive,
+  technicalAcceptanceScope:z.object({version:z.literal(1),providerMode:z.literal('FIXTURE'),hostedAcceptance:z.literal(false),customerAcceptance:z.literal(false),separateBrowserWindows:z.array(z.object({file:z.string(),reason:z.string()}).strict()).max(100),separateIntegrationWindows:z.array(z.object({file:z.string(),reason:z.string()}).strict()).max(100)}).strict(),technicalAcceptanceScopeSha256:z.string().regex(/^[a-f0-9]{64}$/),
   evidence: z.object({ commitSha: sha, runId: identifier, status: z.literal('VERIFIED'), sourceFileCount: positive,
     rows: z.array(z.object({ name: z.string(), exitCode: z.literal(0), durationMs: z.number().finite().nonnegative() }).strict()).max(1000) }).strict() }).strict();
 export function validateFullReleaseSummary(value: unknown, expected: { sha: string; repository: string; ciRunId: string; treeSha: string; runAttempt: number }) {
@@ -31,7 +33,8 @@ export function validateFullReleaseSummary(value: unknown, expected: { sha: stri
     const context = expectedSchema.extend({ treeSha: sha, runAttempt: positive }).parse(JSON.parse(canonicalReleaseReviewJson(expected))), summary = summarySchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));
     const required = [...verificationSteps.map(step => step.name), 'source-freeze'].sort(), names = summary.evidence.rows.map(row => row.name).sort();
     if (summary.sourceSha !== context.sha || summary.treeSha !== context.treeSha || summary.repository !== context.repository || summary.runId !== context.ciRunId || summary.runAttempt !== context.runAttempt
-      || summary.evidence.commitSha !== summary.sourceSha || summary.evidence.runId !== summary.runId || canonicalReleaseReviewJson(required) !== canonicalReleaseReviewJson(names)) throw fail();
+      || summary.evidence.commitSha !== summary.sourceSha || summary.evidence.runId !== summary.runId || canonicalReleaseReviewJson(required) !== canonicalReleaseReviewJson(names)
+      || canonicalReleaseReviewJson({technicalAcceptanceScope:summary.technicalAcceptanceScope,technicalAcceptanceScopeSha256:summary.technicalAcceptanceScopeSha256})!==canonicalReleaseReviewJson(technicalAcceptanceScope())) throw fail();
     return summary;
   } catch { throw fail(); }
 }

@@ -29,33 +29,92 @@ jobs:
       - run: node node_modules/esbuild/install.js
       - run: node --import tsx scripts/verification/stateless-checks.ts
       - run: npm run lint && npm run typecheck && npm test
-  technical-mvp:
+  runtime-backend:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: '24.16.0', cache: npm }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
-      - run: npx --no-install playwright install --with-deps chromium firefox webkit
-      - run: node --import tsx scripts/verification/technical-exit.ts --profile=ci
+      - name: Verify isolated backend runtime
+        run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=backend
+      - name: Retain exact safe backend lane
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-runtime-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-lanes/backend/lane.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
+  runtime-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Verify isolated focused browser runtime
+        run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=browser
+      - name: Retain exact safe browser lane
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-lanes/browser/lane.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
+  technical-mvp:
+    needs: [runtime-backend, runtime-browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Read exact backend lane from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-runtime-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-lane-inputs/backend
+      - name: Read exact browser lane from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-lane-inputs/browser
+      - name: Combine exact source and required runtime lanes
+        run: node --import tsx scripts/verification/runtime-lane-aggregate.ts
       - name: Export sanitized status evidence
         if: always()
         run: node --import tsx scripts/verification/cicd-evidence.ts
       - name: Retain sanitized evidence only
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: cuevo-safe-${{ github.sha }}
           path: .local/cicd-safe/
           retention-days: 14
           if-no-files-found: error
-      - name: Stop local Supabase
-        if: always()
-        run: npx --no-install supabase stop --project-id cuevo
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -66,6 +125,10 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with: { fail-on-severity: moderate, comment-summary-in-pr: never }
   codeql:
+    concurrency:
+      group: cuevo-codeql-${{ github.ref }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions: { contents: read, security-events: write }
@@ -87,6 +150,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CUEVO_CODEQL_SARIF_ID: ${{ steps.codeql-analyze.outputs.sarif-id }}
         run: node --import tsx scripts/verification/codeql-alerts.ts
+      - name: Retain original processed CodeQL receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-codeql-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/codeql-receipt/receipt.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
   secret-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 20

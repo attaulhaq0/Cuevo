@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto';
 const subject = await import('./release-review').catch(() => ({} as typeof import('./release-review')));
 const sha='a'.repeat(40),base='b'.repeat(40),digest='c'.repeat(64),now=Date.parse('2026-10-06T12:00:00Z');
 const review=(category:'source-spec-code'|'qa-regression-operations',taskId:string)=>({category,taskId,releaseSha:sha,baseSha:base,sourceManifestSha256:digest,diffSha256:digest,reportSha256:category==='source-spec-code'?'d'.repeat(64):'e'.repeat(64),evidenceSha256:digest,reviewedAt:'2026-10-06T11:00:00Z',provenance:'RETAINED_INDEPENDENT_AGENT_REPORT' as const,independenceAttested:true as const});
-const input=()=>({version:1 as const,repository:'owner/repo',releaseSha:sha,baseSha:base,ciRunId:'42',manifestSha256:digest,sourceManifestSha256:digest,diffSha256:digest,web:{teamId:'team_cuevo',projectId:'prj_cuevo',target:'preview' as const},reviews:[review('source-spec-code','/root/source_reviewer'),review('qa-regression-operations','/root/qa_reviewer')]});
-const expected=()=>({repository:'owner/repo',releaseSha:sha,baseSha:base,ciRunId:'42',releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging' as const,now,manifestSha256:digest,sourceManifestSha256:digest,diffSha256:digest,web:input().web,reviews:input().reviews.map(({category,taskId,reportSha256,evidenceSha256})=>({category,taskId,reportSha256,evidenceSha256}))});
+const input=()=>({version:1 as const,repository:'owner/repo',releaseSha:sha,baseSha:base,ciRunId:'42',canonicalRuntimeVerification:{runAttempt:2,jobsSha256:digest},manifestSha256:digest,sourceManifestSha256:digest,diffSha256:digest,web:{teamId:'team_cuevo',projectId:'prj_cuevo',target:'preview' as const},reviews:[review('source-spec-code','/root/source_reviewer'),review('qa-regression-operations','/root/qa_reviewer')]});
+const expected=()=>({repository:'owner/repo',releaseSha:sha,baseSha:base,ciRunId:'42',canonicalRuntimeVerification:{runAttempt:2,jobsSha256:digest},releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging' as const,now,manifestSha256:digest,sourceManifestSha256:digest,diffSha256:digest,web:input().web,reviews:input().reviews.map(({category,taskId,reportSha256,evidenceSha256})=>({category,taskId,reportSha256,evidenceSha256}))});
 const run=()=>({id:51,run_attempt:1,repository:{full_name:'owner/repo'},head_sha:sha,head_branch:'main',path:'.github/workflows/release.yml',event:'workflow_dispatch',status:'in_progress',conclusion:null});
 function approvals(comment:string){return[{environments:[{id:123,name:'staging',created_at:'2020-01-01T00:00:00Z',updated_at:'2026-10-06T12:00:00Z'}],state:'approved',user:{id:95836629,login:'attaulhaq0',type:'User',avatar_url:'https://example.invalid/avatar'},comment}];}
 
@@ -25,6 +25,14 @@ test('production binds full candidate B separately from dependency CI A and reje
  assert.throws(()=>subject.prepareReleaseReviewPackage({...input(),web},context));
  for(const patch of [{runId:'42'},{sourceSha:base},{jobsSha256:'0'.repeat(64)},{summarySha256:'0'.repeat(64)}])assert.throws(()=>subject.prepareReleaseReviewPackage({...body,fullVerification:{...fullVerification,...patch}},context));
  assert.throws(()=>subject.prepareReleaseReviewPackage({...input(),fullVerification},expected()));
+});
+
+test('web approval package binds canonical runtime A attempt and jobs across separate jobs',()=>{
+ const proof={runAttempt:2,jobsSha256:digest},body={...input(),canonicalRuntimeVerification:proof},context={...expected(),canonicalRuntimeVerification:proof};
+ const prepared=subject.prepareReleaseReviewPackage(body,context);assert.match(prepared.canonicalJson,/canonicalRuntimeVerification/);
+ assert.throws(()=>subject.validatePreparedReleaseReviewPackage(prepared,{...context,canonicalRuntimeVerification:{...proof,runAttempt:3}}));
+ assert.throws(()=>subject.validatePreparedReleaseReviewPackage(prepared,{...context,canonicalRuntimeVerification:{...proof,jobsSha256:'0'.repeat(64)}}));
+ const missing=input(),missingExpected=expected();delete(missing as Record<string,unknown>).canonicalRuntimeVerification;delete(missingExpected as Record<string,unknown>).canonicalRuntimeVerification;assert.throws(()=>subject.prepareReleaseReviewPackage(missing,missingExpected));
 });
 test('package refuses missing, unknown, duplicate, stale, future, self or wrong immutable reviewer evidence',()=>{
  for(const patch of[{version:2},{privateContent:'not admitted'},{releaseSha:base},{baseSha:sha},{manifestSha256:'0'.repeat(64)},{reviews:input().reviews.slice(0,1)},{reviews:[input().reviews[0],input().reviews[0]]},{reviews:[{...input().reviews[0],taskId:'/root/author'},input().reviews[1]]},{reviews:[{...input().reviews[0],independenceAttested:false},input().reviews[1]]},{reviews:[{...input().reviews[0],reportSha256:'0'.repeat(64)},input().reviews[1]]},{reviews:[{...input().reviews[0],reviewedAt:'2026-10-06T13:00:00Z'},input().reviews[1]]},{reviews:[{...input().reviews[0],reviewedAt:'2026-10-05T11:59:59Z'},input().reviews[1]]}])assert.throws(()=>subject.prepareReleaseReviewPackage({...input(),...patch},expected()));

@@ -4,6 +4,9 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire, registerHooks } from 'node:module';
 import { canonicalReleaseExecutionJson } from './release-review';
+import {prepareBackendReleaseIntent} from './backend-release-contracts';
+import {ciRuntimeJobs} from './verification-workflows';
+import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 import { backendWebTransferFixture, transferFixtureHash } from './backend-web-transfer-fixtures';
 import { readBackendWebTransferArchive, validateCompletedBackendWebApproval } from './backend-web-transfer-admission';
 import type { Readable } from 'node:stream';
@@ -114,12 +117,17 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
     const manifest = fixture.transfer.manifest as { database: { migrations: { version: string; sha256: string }[] } }; manifest.database.migrations[0].sha256 = transferFixtureHash(Buffer.from('select 1;\n'));
     fixture.transfer.manifestSha256 = transferFixtureHash(canonicalReleaseExecutionJson(manifest));
     if (precision === 'same-second') fixture.transfer.exportedAt = new Date(Math.floor((fixture.now - 30000) / 1000) * 1000 + 750).toISOString();
+    const rawCi={...fixture.expected.ciRun,run_attempt:2};
+    const runtimeJobs=Object.entries(ciRuntimeJobs).map(([name,contract],index)=>({id:100+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:contract.steps.map((step,number)=>({name:'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`,number:number+1,status:'completed',conclusion:'success'}))}));
+    const otherJobs=['fast-checks','codeql','secret-scan','required'].map((name,index)=>({id:200+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:[{name:'Required original work',number:1,status:'completed',conclusion:'success'}]}));
+    const jobsResponse={total_count:runtimeJobs.length+otherJobs.length,jobs:[...runtimeJobs,...otherJobs]},canonical=await readCanonicalRuntimeJobs(rawCi,async path=>path==='actions/runs/31'?rawCi:jobsResponse),body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson);
+    fixture.transfer.preparedApproval=prepareBackendReleaseIntent({...body,canonicalRuntimeVerification:canonical},{...fixture.expected,canonicalRuntimeVerification:canonical});fixture.approvals[0].comment=fixture.transfer.preparedApproval.comment;
     const text = canonicalReleaseExecutionJson(fixture.transfer), zip = await archive([{ name: 'web-transfer.json', bytes: Buffer.from(text) }]);
     const artifact = { id: 71, name: 'cuevo-web-handover-51-1', size_in_bytes: zip.length, expired: false, digest: 'sha256:' + transferFixtureHash(zip), created_at: precision === 'same-second' ? new Date(Math.floor(Date.parse(fixture.transfer.exportedAt) / 1000) * 1000).toISOString() : new Date(fixture.now - 20000).toISOString(), expires_at: new Date(fixture.now + 86400000).toISOString(), workflow_run: { id: 51, head_branch: 'main', head_sha: sourceSha } };
     const environment = { id: 123, name: 'staging', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } };
     const responses = new Map<string, unknown>([
       ['actions/runs/51', fixture.completedRun], ['actions/artifacts/71', artifact], ['', { full_name: 'owner/repo', name: 'repo', owner: { id: 1, login: 'owner', type: 'User' } }],
-      ['git/ref/heads/main', { object: { type: 'commit', sha: sourceSha } }], ['actions/runs/31', fixture.expected.ciRun], ['environments/staging', environment],
+      ['git/ref/heads/main', { object: { type: 'commit', sha: sourceSha } }], ['actions/runs/31', rawCi],['actions/runs/31/attempts/2/jobs?per_page=100&page=1',jobsResponse], ['environments/staging', environment],
       ['environments/staging/deployment-branch-policies', { total_count: 1, branch_policies: [{ name: 'main', type: 'branch' }] }],
       ['branches/main/protection', { allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false }, enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] }, required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false, required_approving_review_count: 0, require_last_push_approval: false } }],
       ['branches/main/protection/required_signatures', { enabled: true }], [`git/commits/${sourceSha}`, { sha: sourceSha, tree: { sha: treeSha }, verification: { verified: true, reason: 'valid', signature: 'controlled-signature', payload: 'controlled-payload' } }], ['actions/runs/51/approvals', fixture.approvals],
@@ -130,7 +138,7 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
       const url = new URL(String(raw)); assert.equal(options?.method ?? 'GET', 'GET'); calls.push(url.hostname + url.pathname);
       if (url.hostname === 'productionresultssafixture.blob.core.windows.net') { assert.equal(new Headers(options?.headers).get('authorization'), null); assert.equal(options?.redirect, 'error'); return new Response(new Uint8Array(zip)); }
       assert.equal(url.origin, 'https://api.github.com'); assert.equal(new Headers(options?.headers).get('authorization'), 'Bearer private-github-canary');
-      const path = url.pathname.replace('/repos/owner/repo', '').replace(/^\//, '');
+      const path = url.pathname.replace('/repos/owner/repo', '').replace(/^\//, '')+url.search;
       if (path === 'actions/artifacts/71/zip') { assert.equal(options?.redirect, 'manual'); return new Response(null, { status: 302, headers: { location: 'https://productionresultssafixture.blob.core.windows.net/artifacts/archive?sig=controlled' } }); }
       assert.equal(options?.redirect, 'error'); if (!responses.has(path)) throw Error('Unexpected fixed path'); return Response.json(responses.get(path));
     };
@@ -149,6 +157,9 @@ test('controlled official completed artifact source and review reader sends no t
     assert.equal(result.originalEvidence.filter((row: { name: string }) => row.name === 'population-result.json').length, 1);
     assert(fixture.calls.includes('productionresultssafixture.blob.core.windows.net/artifacts/archive'));
   });
+});
+test('completed handover consumption rejects changed canonical runtime attempts or missing runtime jobs',async()=>{
+ const api=await nativeReader();for(const mode of ['attempt','missing'])await officialFixture(async f=>{if(mode==='attempt'){const row=f.responses.get('actions/runs/31') as Record<string,unknown>;f.responses.set('actions/runs/31',{...row,run_attempt:3});}else{const path='actions/runs/31/attempts/2/jobs?per_page=100&page=1',row=f.responses.get(path) as {total_count:number;jobs:Record<string,unknown>[]};row.jobs=row.jobs.filter(job=>job.name!=='runtime-browser');row.total_count=row.jobs.length;}await assert.rejects(api.readCompletedBackendWebTransferAdmission(f.input));});
 });
 
 test('official artifact failure digest attempts source signatures review and tracked drift never pass', async () => {

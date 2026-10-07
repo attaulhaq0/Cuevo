@@ -1,8 +1,9 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { z } from 'zod';
+import ts from 'typescript';
 import { technicalResult } from './rules';
 import { fullRuntimeVerificationSteps, mainStagingVerificationSteps, routineVerificationSteps, verificationSteps } from './steps';
 
@@ -70,25 +71,39 @@ export function criticalBrowserArguments(files:readonly string[]):string[]{
  return files.map(file=>`tests/e2e/${file}`);
 }
 export function classifyRuntimeChanges(files: readonly string[], trustedPolicyAvailable: boolean): { profile: 'routine' | 'full-runtime'; browserFiles: string[] } {
-  const full = { profile: 'full-runtime' as const, browserFiles: [...criticalBrowserFiles] };
+  const full = { profile: 'full-runtime' as const, browserFiles: [...routineBrowserFiles] };
   if (!trustedPolicyAvailable || !files.length || files.length > 10000) return full;
   const owners = new Set<string>();
   for (const path of files) {
     if (!path || path.includes('\\') || path.split('/').some(part => !part || ['.', '..'].includes(part))) return full;
-    // Path ownership alone cannot prove a TS/TSX behavior change is low impact.
-    // The first fast lane admits styles and owner documentation; behavior and
-    // source/security changes retain complete affected runtime verification.
-    const match = /^apps\/web\/features\/([^/]+)\/.+\.(?:css|md)$/.exec(path);
+    // This is a focused browser scope, never an authorization exemption. All
+    // profiles still run complete SQL and the critical Auth/domain API owners.
+    // Public models/API surfaces, server/session/policy and unknown owners widen.
+    const match = /^apps\/web\/features\/([^/]+)\/(.+)\.(css|md|ts|tsx)$/.exec(path);
     if (!match || !Object.hasOwn(ownerBrowserFiles, match[1])) return full;
+    const local = match[2];
+    if (/(?:^|\/)(?:server|session|authorization|permissions|policy|policies)(?:\/|$)/.test(local) || /(?:^|\/)(?:model|api|copy|ui|index|middleware|route)$/.test(local)) return full;
     owners.add(match[1]);
   }
-  if (owners.size !== 1) return full;
-  return { profile: 'routine', browserFiles: [...new Set([...criticalBrowserFiles,...ownerBrowserFiles[[...owners][0]]])].sort() };
+  return { profile: 'routine', browserFiles: [...new Set([...criticalBrowserFiles,...[...owners].flatMap(owner=>ownerBrowserFiles[owner])])].sort() };
+}
+/** Changes to imports, exports, dynamic dependency targets or server execution
+ * directives require broad review even when the original file is a UI owner. */
+function uiBoundary(source: string, file: string) {
+ const parsed=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS),boundaries:string[]=[];
+ const inspect=(node:ts.Node)=>{
+  if(ts.isImportDeclaration(node)||ts.isExportDeclaration(node))boundaries.push(node.getText(parsed));
+  if(ts.isExportAssignment(node))boundaries.push('export-assignment');
+  if(ts.isCallExpression(node)&&(node.expression.kind===ts.SyntaxKind.ImportKeyword||ts.isIdentifier(node.expression)&&node.expression.text==='require'))boundaries.push(node.getText(parsed));
+  if(ts.isExpressionStatement(node)&&ts.isStringLiteral(node.expression)&&node.expression.text==='use server')boundaries.push('use server');
+  ts.forEachChild(node,inspect);
+ };
+ inspect(parsed);return boundaries.sort();
 }
 /** Only an immutable baseline policy identical to this selector can authorize narrowing; any selector change runs full affected runtime. */
 export async function readCiRuntimeSelection(env: Record<string,string|undefined> = process.env) {
   const mainPush=env.GITHUB_EVENT_NAME==='push'&&env.GITHUB_REF==='refs/heads/main';
-  const full: { profile: 'main-staging' | 'full-runtime'; browserFiles: string[] } = { profile: mainPush ? 'main-staging' : 'full-runtime', browserFiles: [...criticalBrowserFiles] };
+  const full: { profile: 'main-staging' | 'full-runtime'; browserFiles: string[] } = { profile: mainPush ? 'main-staging' : 'full-runtime', browserFiles: mainPush ? [...criticalBrowserFiles] : [...routineBrowserFiles] };
   try {
     if (env.CI !== 'true' || env.GITHUB_ACTIONS !== 'true' || !env.GITHUB_EVENT_PATH || !/^[a-f0-9]{40}$/.test(env.GITHUB_SHA ?? '') || !['push','pull_request'].includes(env.GITHUB_EVENT_NAME ?? '')) return full;
     const gitEnv = { ...env, GIT_NO_REPLACE_OBJECTS:'1', GIT_CONFIG_NOSYSTEM:'1', GIT_CONFIG_GLOBAL:process.platform==='win32'?'NUL':'/dev/null' };
@@ -102,7 +117,17 @@ export async function readCiRuntimeSelection(env: Record<string,string|undefined
     git(['merge-base','--is-ancestor',base,head]);
     const selector='scripts/verification/verification-profiles.ts',baseline=git(['show',`${base}:${selector}`]);
     if(baseline!==git(['show',`${head}:${selector}`]))return full;
-    const files=git(['diff','--no-ext-diff','--no-textconv','--name-only','-z',base,head,'--']).split('\0').filter(Boolean);
+    // Treat moves as deletion + addition so the original sensitive owner cannot
+    // disappear behind an otherwise admissible CSS/Markdown destination.
+    const changes=git(['diff','--no-ext-diff','--no-textconv','--no-renames','--name-status','-z',base,head,'--']).split('\0').filter(Boolean);
+    if(changes.length%2!==0)return full;
+    const files:string[]=[];
+    for(let index=0;index<changes.length;index+=2){
+      if(!['M','D'].includes(changes[index]))return{...full,browserFiles:[...routineBrowserFiles]}; // New files/interfaces need separately reviewed owner admission.
+      files.push(changes[index+1]);
+      const path=changes[index+1];
+      if(changes[index]==='M'&&/\.tsx?$/.test(path)&&JSON.stringify(uiBoundary(git(['show',`${base}:${path}`]),path))!==JSON.stringify(uiBoundary(git(['show',`${head}:${path}`]),path)))return{...full,browserFiles:[...routineBrowserFiles]};
+    }
     const classified=classifyRuntimeChanges(files,true);
     return mainPush?{profile:'main-staging' as const,browserFiles:classified.browserFiles}:classified;
   } catch { return full; }
@@ -111,7 +136,31 @@ export function integrationArguments(args: readonly string[]): string[] {
   const full = args.length === 0;
   if (!full && !(args.length === 1 && args[0] === '--profile=critical')) throw Error('Integration requires the full default or one explicit critical profile.');
   if (!full && criticalIntegrationFiles.some(file => !existsSync(resolve(file)))) throw Error('A required critical integration owner is missing.');
-  return ['node_modules/vitest/vitest.mjs', 'run', '--fileParallelism=false', '--reporter=default', '--reporter=json', `--outputFile=.local/customer-readiness/${full ? 'integration' : 'critical-integration'}-results.json`, ...(full ? ['apps/api/test/integration'] : criticalIntegrationFiles)];
+  return ['node_modules/vitest/vitest.mjs', 'run', '--allowOnly=false', '--fileParallelism=false', '--reporter=default', '--reporter=json', `--outputFile=.local/customer-readiness/${full ? 'integration' : 'critical-integration'}-results.json`, ...(full ? ['--exclude','apps/api/test/integration/customer-foundry-live-api.test.ts','apps/api/test/integration'] : criticalIntegrationFiles)];
+}
+/** Live-provider execution has its own approved spending/acceptance window. */
+export const integrationExclusions = [{ file:'apps/api/test/integration/customer-foundry-live-api.test.ts', reason:'LIVE_PROVIDER_APPROVAL_AND_BUDGET_REQUIRED' }] as const;
+export function fullIntegrationFiles(): string[] {
+  const discover = (directory:string):string[] => readdirSync(directory,{withFileTypes:true}).flatMap(entry => entry.isDirectory()?discover(`${directory}/${entry.name}`):entry.name.endsWith('.test.ts')?[`${directory}/${entry.name}`]:[]);
+  const files = discover('apps/api/test/integration').filter(file => !integrationExclusions.some(excluded=>excluded.file===file)).sort();
+  if (!files.length || integrationExclusions.some(row=>!existsSync(resolve(row.file)))) throw Error('Complete fixture integration inventory is unavailable.');
+  return files;
+}
+export function validateIntegrationRunReport(value:unknown, inventory:unknown, context:{ expectedFiles:readonly string[]; startedAt:number; finishedAt:number }) {
+  const cases = z.array(z.object({file:z.string().min(1),name:z.string().min(1)})).min(1).parse(inventory);
+  const assertion = z.object({ ancestorTitles:z.array(z.string()),title:z.string(),status:z.literal('passed'),failureMessages:z.array(z.unknown()).length(0) });
+  const report = z.object({success:z.literal(true),startTime:z.number().finite(),numPendingTests:z.literal(0),numTodoTests:z.literal(0),numFailedTests:z.literal(0),numTotalTests:z.number().int().positive(),numPassedTests:z.number().int().positive(),testResults:z.array(z.object({name:z.string(),status:z.literal('passed'),startTime:z.number().finite(),endTime:z.number().finite(),message:z.literal(''),assertionResults:z.array(assertion).min(1)})).min(1)}).parse(value);
+  const invalid=()=>Error('Complete integration execution does not match its original fresh inventory.');
+  if(!Number.isFinite(context.startedAt)||!Number.isFinite(context.finishedAt)||context.finishedAt<context.startedAt||report.startTime<context.startedAt||report.startTime>context.finishedAt)throw invalid();
+  const expectedFiles=context.expectedFiles.map(file=>resolve(file)).sort(), listedFiles=[...new Set(cases.map(row=>resolve(row.file)))].sort();
+  if(JSON.stringify(listedFiles)!==JSON.stringify(expectedFiles)||JSON.stringify(report.testResults.map(row=>resolve(row.name)).sort())!==JSON.stringify(expectedFiles))throw invalid();
+  const expected=cases.map(row=>JSON.stringify([resolve(row.file),row.name])).sort();
+  const actual=report.testResults.flatMap(row=>{
+    if(row.startTime<context.startedAt||row.endTime<row.startTime||row.endTime>context.finishedAt)throw invalid();
+    return row.assertionResults.map(test=>JSON.stringify([resolve(row.name),[...test.ancestorTitles,test.title].join(' > ')]));
+  }).sort();
+  if(new Set(expected).size!==expected.length||new Set(actual).size!==actual.length||JSON.stringify(actual)!==JSON.stringify(expected)||report.numTotalTests!==actual.length||report.numPassedTests!==actual.length)throw invalid();
+  return actual.length;
 }
 export function validateCriticalIntegrationReport(value: unknown) {
   const result = z.object({ success: z.literal(true), numPendingTests: z.literal(0), numFailedTests: z.literal(0), testResults: z.array(z.object({ name: z.string(), status: z.literal('passed'), assertionResults: z.array(z.object({ status: z.literal('passed') })).min(1) })) }).parse(value);

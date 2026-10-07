@@ -41,6 +41,21 @@ test('reference core refuses unknown current source scope before any fixture mut
   }
 });
 
+test('original reference completion receipt returns under its transaction without replaying source mutations', async () => {
+ const queries:string[]=[];let observedFingerprint='';
+ const client={query:async(sql:string)=>{queries.push(sql);if(sql.includes('populationMatches'))return{rows:[admission]};return{rows:[]};}} as unknown as PoolClient;
+ const original={status:'SYNTHETIC_REFERENCE_READY' as const,scenarios:Object.keys(scenarios.scenarioLearners),results:[],thinkingFocus:{status:'SOURCE_LOCKED_EXISTING_REFERENCE'}};
+ const result=await scenarios.seedReferenceScenarioTransaction(client,{read:async(sourceBundleFingerprint)=>{observedFingerprint=sourceBundleFingerprint;return original as unknown as Awaited<ReturnType<typeof scenarios.seedReferenceScenarioTransaction>>;},complete:async()=>{throw Error('Completed original must not write another receipt');}});
+ assert.deepEqual(result,original);assert.match(observedFingerprint,/^[a-f0-9]{64}$/);assert.equal(queries[0],'BEGIN');assert.equal(queries.at(-1),'COMMIT');assert.equal(queries.some(sql=>/insert into|internal.begin_command|internal.configure_curriculum/i.test(sql)),false);
+});
+
+test('unknown original reference receipt rolls back before any new domain source effect', async () => {
+ const queries:string[]=[];
+ const client={query:async(sql:string)=>{queries.push(sql);if(sql.includes('populationMatches'))return{rows:[admission]};return{rows:[]};}} as unknown as PoolClient;
+ await assert.rejects(scenarios.seedReferenceScenarioTransaction(client,{read:async()=>{throw Error('Original completion unavailable');},complete:async()=>{throw Error('No completion permitted');}}));
+ assert.equal(queries.at(-1),'ROLLBACK');assert.equal(queries.includes('COMMIT'),false);assert.equal(queries.some(sql=>/insert into|internal.begin_command|internal.configure_curriculum/i.test(sql)),false);
+});
+
 function firstCoursePort(reservationState: 'NEW' | 'COMPLETED', failure: Error) {
   const queries: { sql: string; args: unknown[] }[] = [];
   const versions = new Map<string, Record<string, unknown>>();
@@ -188,4 +203,16 @@ test('complete canonical reference core commits the same original A–G/native/t
   const second = await scenarioCore(port.client);
   assert.deepEqual(second, first); assert.equal(port.writes.length, beforeWrites); assert.equal(port.commands.size, beforeCommands); assert.equal(port.thinkingCommands.size, 12);
   assert.equal(port.queries.at(-1)?.sql, 'COMMIT');
+});
+
+test('reference completion receipt is written before COMMIT and a lost receipt prevents transaction acceptance',async()=>{
+ for(const failCompletion of [false,true]){
+  const port=completeSourcePort();let fingerprint='';let completed=false;
+  const run=scenarios.seedReferenceScenarioTransaction(port.client,{read:async()=>null,complete:async(sourceBundleFingerprint,result)=>{
+    fingerprint=sourceBundleFingerprint;assert.equal(port.queries.at(-1)?.sql==='COMMIT',false);assert.equal(result.status,'SYNTHETIC_REFERENCE_READY');assert.equal(port.tasks.size,14);completed=true;if(failCompletion)throw Error('Original reference receipt unavailable');
+  }});
+  if(failCompletion){await assert.rejects(run,/Original reference receipt unavailable/);assert.equal(port.queries.at(-1)?.sql,'ROLLBACK');assert.equal(port.queries.some(query=>query.sql==='COMMIT'),false);}
+  else{await run;assert.equal(port.queries.at(-1)?.sql,'COMMIT');}
+  assert.equal(completed,true);assert.match(fingerprint,/^[a-f0-9]{64}$/);
+ }
 });

@@ -13,6 +13,33 @@ import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
 
+test('two isolated runtime jobs and exact same-attempt aggregate refuse skipped private or substituted lanes',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ assert.deepEqual(validateWorkflows(ci,release),[]);
+ for(const change of ['skip','continue','dependency','artifact','cross-run','runtime','env','browser-engine']){
+  const flow=yaml.load(ci),backend=flow.jobs['runtime-backend'],browser=flow.jobs['runtime-browser'],aggregate=flow.jobs['technical-mvp'];
+  if(change==='skip')backend.if='false';if(change==='continue')browser['continue-on-error']=true;if(change==='dependency')aggregate.needs=['runtime-backend'];
+  if(change==='artifact')((backend.steps as Record<string,unknown>[]).find(step=>step.name==='Retain exact safe backend lane')!.with as Record<string,unknown>).path='.local/';
+  if(change==='cross-run')((aggregate.steps as Record<string,unknown>[]).find(step=>step.name==='Read exact backend lane from this run attempt')!.with as Record<string,unknown>)['run-id']='other-run';
+  if(change==='runtime')(backend.steps as Record<string,unknown>[]).find(step=>step.name==='Verify isolated backend runtime')!.run='echo success';
+  if(change==='env')browser.env={NODE_OPTIONS:'--import private.js'};
+  if(change==='browser-engine')(browser.steps as Record<string,unknown>[]).find(step=>String(step.run).includes('playwright install'))!.run='echo skipped';
+  assert.ok(validateWorkflows(yaml.dump(flow),release).length,change);
+ }
+});
+
+test('only the same-job minimized CodeQL receipt can be retained with serialized processed uploads',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,{steps:Record<string,unknown>[];concurrency?:unknown}>};dump(value:unknown):string};
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ assert.deepEqual(validateWorkflows(ci,release),[]);
+ for(const mode of ['path','skip','private-env','other-owner','queue','cancel','missing']){
+  const flow=yaml.load(ci),job=flow.jobs.codeql,step=job.steps.find(row=>row.name==='Retain original processed CodeQL receipt')!;
+  if(mode==='path')(step.with as Record<string,unknown>).path='.local/';else if(mode==='skip')step.if='always()';else if(mode==='private-env')step.env={GH_TOKEN:'${{ github.token }}'};else if(mode==='other-owner'){job.steps=job.steps.filter(row=>row!==step);flow.jobs['fast-checks'].steps.push(step);}else if(mode==='queue')job.concurrency={group:'cuevo-codeql-${{ github.ref }}','cancel-in-progress':false};else if(mode==='cancel')job.concurrency={group:'cuevo-codeql-${{ github.ref }}','cancel-in-progress':true,queue:'max'};else job.steps=job.steps.filter(row=>row!==step);
+  assert.ok(validateWorkflows(yaml.dump(flow),release).length>0,mode);
+ }
+});
+
 test('hosted web source and browser budget cannot silently return to the shorter pre-loop limit',async()=>{
  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
  const root=resolve(import.meta.dirname,'../..'),ci=await readFile(join(root,'.github/workflows/ci.yml'),'utf8'),release=await readFile(join(root,'.github/workflows/release.yml'),'utf8');
@@ -119,7 +146,7 @@ test('actual release context writes only admitted outputs and rejects stale main
         throw Error('Unexpected command action');
       };
       (await import('node:module')).syncBuiltinESMExports();
-      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/full-release-evidence.ts'))return{format:'module',shortCircuit:true,source:'export function validateProductionCiRun(value,expected){if(value.path!==".github/workflows/full-regression.yml"||value.event!=="workflow_dispatch"||value.head_sha!==expected.sha||value.conclusion!=="success"||value.run_attempt!==1)throw Error("Full source evidence refused");}export async function readFullReleaseEvidence(){return{profile:"CUSTOMER_CANDIDATE",sourceSha:${JSON.stringify(sha)},runId:"42",runAttempt:1};}'};return next(url,context);}});
+      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/canonical-runtime-jobs.ts'))return{format:'module',shortCircuit:true,source:'export async function readCanonicalRuntimeJobs(){return{runAttempt:2,jobsSha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"};}'};if(url.endsWith('/full-release-evidence.ts'))return{format:'module',shortCircuit:true,source:'export function validateProductionCiRun(value,expected){if(value.path!==".github/workflows/full-regression.yml"||value.event!=="workflow_dispatch"||value.head_sha!==expected.sha||value.conclusion!=="success"||value.run_attempt!==1)throw Error("Full source evidence refused");}export async function readFullReleaseEvidence(){return{profile:"CUSTOMER_CANDIDATE",sourceSha:${JSON.stringify(sha)},runId:"42",runAttempt:1};}'};return next(url,context);}});
       process.argv[2] = ${JSON.stringify(mode)};
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
@@ -144,6 +171,10 @@ test('actual release context writes only admitted outputs and rejects stale main
     assert.ok(stale.stderr.includes('Main changed'));
     const staleUpload = execute('deploy', 'c'.repeat(40)); assert.equal(staleUpload.status, 1);
     assert.equal(staleUpload.stdout.includes('FETCH https://api.vercel.com'),false);
+    await writeFile(join(directory,'.local/cicd-release/canonical-runtime-proof.json'),JSON.stringify({runAttempt:3,jobsSha256:'e'.repeat(64)}));
+    const changedAttempt=execute('ci');assert.equal(changedAttempt.status,1);assert.match(changedAttempt.stderr,/job attempt changed/);
+    await writeFile(join(directory,'.local/cicd-release/canonical-runtime-proof.json'),JSON.stringify({runAttempt:2,jobsSha256:'0'.repeat(64)}));
+    assert.equal(execute('ci').status,1);
     const wrongCheckout = execute('ci', sha, trustedRun(), 'c'.repeat(40)); assert.equal(wrongCheckout.status, 1);
     assert.equal(wrongCheckout.stdout.includes('FETCH '), false); assert.ok(wrongCheckout.stderr.includes('checkout'));
     await writeFile(eventPath, JSON.stringify({inputs:{environment:'production',commit_sha:'c'.repeat(40),ci_run_id:'42',full_verification_run_id:'84'}}));
@@ -311,12 +342,12 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     const treeBytes='exact synthetic tree',diffBytes='exact synthetic diff';
     const sourceManifestSha256=createHash('sha256').update(treeBytes).digest('hex'),diffSha256=createHash('sha256').update(diffBytes).digest('hex'),manifestSha256=createHash('sha256').update(canonicalReleaseReviewJson(value)).digest('hex');
     const web={teamId:'team_cuevo',projectId:'prj_cuevo',target:'preview' as const};
-    const reviewInput={web,version:1 as const,repository:'owner/repo',releaseSha:sha,baseSha:assignments.baseSha,ciRunId:'42',manifestSha256,sourceManifestSha256,diffSha256,reviews:assignments.reviews.map(row=>({...row,releaseSha:sha,baseSha:assignments.baseSha,sourceManifestSha256,diffSha256,reviewedAt:'2026-10-02T11:00:00Z',provenance:'RETAINED_INDEPENDENT_AGENT_REPORT' as const,independenceAttested:true as const}))};
-    const prepared=prepareReleaseReviewPackage(reviewInput,{repository:'owner/repo',releaseSha:sha,baseSha:assignments.baseSha,ciRunId:'42',releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging',web,now,manifestSha256,sourceManifestSha256,diffSha256,reviews:assignments.reviews});
+    const canonicalRuntimeVerification={runAttempt:2,jobsSha256:'e'.repeat(64)};const reviewInput={web,canonicalRuntimeVerification,version:1 as const,repository:'owner/repo',releaseSha:sha,baseSha:assignments.baseSha,ciRunId:'42',manifestSha256,sourceManifestSha256,diffSha256,reviews:assignments.reviews.map(row=>({...row,releaseSha:sha,baseSha:assignments.baseSha,sourceManifestSha256,diffSha256,reviewedAt:'2026-10-02T11:00:00Z',provenance:'RETAINED_INDEPENDENT_AGENT_REPORT' as const,independenceAttested:true as const}))};
+    const prepared=prepareReleaseReviewPackage(reviewInput,{repository:'owner/repo',releaseSha:sha,baseSha:assignments.baseSha,ciRunId:'42',releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging',web,canonicalRuntimeVerification,now,manifestSha256,sourceManifestSha256,diffSha256,reviews:assignments.reviews});
     const protectedControls={...releaseControls(),environment:{...releaseControls().environment,name:'staging'}};
     const script = (mode: 'manifest' | 'approval' | 'verify') => `
       const cp=(await import('node:module')).createRequire(import.meta.url)('node:child_process');cp.execFileSync=(command,args)=>{if(command!=='git')throw Error('Unexpected executable before verified approval');if(args[0]==='rev-parse')return args[1]==='HEAD'?'${sha}':'${assignments.baseSha}';if(args[0]==='merge-base'||args[0]==='diff'&&args[1]==='--quiet'||args[0]==='ls-files')return '';if(args[0]==='ls-tree')return '${treeBytes}';if(args[0]==='diff')return '${diffBytes}';throw Error('Unexpected source read')};(await import('node:module')).syncBuiltinESMExports();
-            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/protected-preview.ts'))return{format:'module',shortCircuit:true,source:'export async function createProtectedPreview(input,ports){await ports.admit();return{status:"CONFIRMED"};}export async function protectedPreviewHeaders(input){if(new URL(input.url).origin!==input.binding.origin)throw Error("Foreign web origin");return{"x-vercel-protection-bypass":"private-web-contract-canary"};}'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
+            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/canonical-runtime-jobs.ts'))return{format:'module',shortCircuit:true,source:'export async function readCanonicalRuntimeJobs(){return{runAttempt:2,jobsSha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"};}'};if(url.endsWith('/protected-preview.ts'))return{format:'module',shortCircuit:true,source:'export async function createProtectedPreview(input,ports){await ports.admit();return{status:"CONFIRMED"};}export async function protectedPreviewHeaders(input){if(new URL(input.url).origin!==input.binding.origin)throw Error("Foreign web origin");return{"x-vercel-protection-bypass":"private-web-contract-canary"};}'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
       process.argv[2] = '${mode}';
       Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
       globalThis.fetch = async (input,options={}) => {
@@ -413,8 +444,8 @@ test('safe evidence exports only validated counts, statuses and hashes without s
 test('workflow guard consumes YAML structure and rejects changed deployment trust or unsafe artifact boundaries', async () => {
   const ci = await readFile('.github/workflows/ci.yml', 'utf8'); const release = await readFile('.github/workflows/release.yml', 'utf8');
   assert.deepEqual(validateWorkflows(ci, release), []);
-  assert.ok(validateWorkflows(ci.replace('chromium firefox webkit', 'chromium'), release).some(issue => issue.includes('engines')));
-  for (const minutes of [30, 90, 119, 121, 360, 120.5]) assert.ok(validateWorkflows(ci.replace('timeout-minutes: 120', `timeout-minutes: ${minutes}`), release).some(issue => issue.includes('120-minute budget')));
+  assert.ok(validateWorkflows(ci.replace('npx --no-install playwright install --with-deps chromium', 'echo missing browser engine'), release).some(issue => issue.includes('isolated')));
+  for (const minutes of [30, 90, 119, 121, 360, 120.5]) assert.ok(validateWorkflows(ci.replace('timeout-minutes: 120', `timeout-minutes: ${minutes}`), release).some(issue => issue.includes('isolated')));
   assert.ok(validateWorkflows(ci.replace('path: .local/cicd-safe/', 'path: .local/'), release).some(issue => issue.includes('artifact')));
   assert.ok(validateWorkflows(ci, release.replace('cancel-in-progress: false', 'cancel-in-progress: true')).some(issue => issue.includes('release concurrency')));
   assert.ok(validateWorkflows(ci, release.replace("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));

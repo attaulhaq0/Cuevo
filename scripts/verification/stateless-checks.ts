@@ -1,11 +1,9 @@
 import { spawn } from 'node:child_process';
-import { verificationSteps, fullRuntimeVerificationSteps } from './steps';
+import { statelessVerificationSteps } from './steps';
 
 /** Source-owned test discovery executes once in fast CI. Runtime jobs retain
  * their own isolated source and state proofs without repeating these cases. */
-const runtime = new Set(fullRuntimeVerificationSteps.map(step => step.name));
-const excluded = new Set(['unit','web-unit','lint','typecheck']);
-for (const step of verificationSteps.filter(step => !runtime.has(step.name) && !excluded.has(step.name))) {
+for (const step of statelessVerificationSteps) {
   const code = await new Promise<number | null>(done => {
     const child = spawn(process.execPath, [...step.args], { shell: false, windowsHide: true, stdio: 'inherit', env: process.env });
     child.once('error', () => done(null)); child.once('exit', done);

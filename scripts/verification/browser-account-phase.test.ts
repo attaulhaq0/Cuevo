@@ -4,6 +4,7 @@ import { verifyBrowserAccountPhases } from './browser-account-phase';
 import accounts from './playwright.accounts.config';
 import ordinary from './playwright.ordinary.config';
 import * as phases from './browser-account-phase';
+import { ordinaryBrowserExclusionPatterns } from './browser-runtime-scope';
 
 const started = Date.parse('2026-10-03T08:00:00Z');
 const requiredCases = [
@@ -27,7 +28,7 @@ test('unconfirmed restoration prevents ordinary browser state from being accepte
 });
 test('the required account tests are assigned once and never silently omitted from acceptance', () => {
   assert.deepEqual(accounts.testMatch, ['school-account-admission.spec.ts', 'school-account-recovery.spec.ts', 'account-admission-inert.spec.ts']);
-  assert.deepEqual(ordinary.testIgnore, ['**/school-account-admission.spec.ts', '**/school-account-recovery.spec.ts', '**/account-admission-inert.spec.ts']);
+  assert.deepEqual(ordinary.testIgnore, ordinaryBrowserExclusionPatterns);
 });
 
 test('fresh exact account report accepts all three completed cases only', () => {

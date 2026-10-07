@@ -17,14 +17,18 @@ const origin = z.string().refine(value => {
 const vercelTarget = z.object({ teamId: z.string().regex(/^team_[a-zA-Z0-9]+$/), projectId: z.string().regex(/^prj_[a-zA-Z0-9]+$/), origin, target: z.literal('preview') }).strict();
 const targets = z.object({ web: vercelTarget, api: vercelTarget, supabase: z.object({ projectRef: z.string().regex(/^[a-z]{20}$/), authOrigin: origin, edgeOrigin: z.string().max(200) }).strict() }).strict();
 const fingerprints = z.object({ sourceManifestSha256: digest, diffSha256: digest, migrationPlanSha256: digest, migrationHistorySha256: digest, migrationToolchainSha256: digest, migrationEndpointSha256:digest, operatorStoragePolicySha256: digest, apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest }).strict();
+const installedSource=z.object({sourceSha:sha,treeSha:sha,seedSha256:digest,manifestSha256:digest,migrationCount:positive}).strict();
+const installedSchema=z.object({sourceSha:sha,treeSha:sha,migrationCount:positive.max(1000)}).strict();
+const installedRuntime=z.object({version:z.literal(1),purpose:z.literal('CUEVO_INSTALLED_ACTIVE_RUNTIME'),sourceSha:sha,treeSha:sha,originalRunId:identifier,originalRunAttempt:positive,originalPackageSha256:digest,runtimeSha256:digest,apiDeploymentId:z.string().regex(/^dpl_[A-Za-z0-9]+$/),apiUrl:origin,edgeId:z.string().min(1).max(200),edgeVersion:positive,activationId:z.string().min(1).max(200),vaultSecretName:z.string().min(1).max(200),jobId:positive,endpoint:z.string().url(),activationReceiptSha256:digest}).strict();
+const canonicalRuntimeVerification=z.object({runAttempt:positive,jobsSha256:digest}).strict();
 const assignment = z.object({ category, taskId, reportSha256: digest, evidenceSha256: digest }).strict();
 const review = assignment.extend({ releaseSha: sha, treeSha: sha, baseSha: sha, sourceManifestSha256: digest, diffSha256: digest, reviewedAt: timestamp }).strict();
 const identity = z.object({ repository, releaseSha: sha, treeSha: sha, baseSha: sha, ciRunId: identifier, releaseRunId: identifier, runAttempt: positive, environmentId: positive,
-  environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging'), executionScope: z.enum(['schema-and-accounts', 'complete-backend']).optional() }).strict();
+  environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging'), executionScope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime']).optional(), installedSource:installedSource.optional(),installedSchema:installedSchema.optional(),installedRuntime:installedRuntime.optional() }).strict();
 const stagingVerification = z.object({ scope: z.literal('SCHEMA_AND_SYNTHETIC_AUTH'), runAttempt: positive, jobsSha256: digest }).strict();
-const intentSchema = identity.extend({ version: z.literal(1), purpose: z.literal('BACKEND_SYNTHETIC_STAGING'), targets, fingerprints, stagingVerification: stagingVerification.optional(), preparedAt: timestamp, expiresAt: timestamp, reviews: z.array(review).length(2) }).strict();
+const intentSchema = identity.extend({ version: z.literal(1), purpose: z.literal('BACKEND_SYNTHETIC_STAGING'), targets, fingerprints, stagingVerification: stagingVerification.optional(),canonicalRuntimeVerification:canonicalRuntimeVerification.optional(), preparedAt: timestamp, expiresAt: timestamp, reviews: z.array(review).length(2) }).strict();
 const backendRun = z.object({ id: positive, run_attempt: positive, head_sha: sha, head_branch: z.literal('main'), event: z.literal('workflow_dispatch'), status: z.enum(['waiting', 'in_progress']), conclusion: z.null(), path: z.literal('.github/workflows/backend-release.yml'), repository: z.object({ full_name: repository }).strict() }).strict();
-const expectedSchema = identity.extend({ targets, fingerprints, stagingVerification: stagingVerification.optional(), reviews: z.array(assignment).length(2), now: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), currentMainSha: sha, ciRun: backendVerificationRunSchema, backendRun }).strict();
+const expectedSchema = identity.extend({ targets, fingerprints, stagingVerification: stagingVerification.optional(),canonicalRuntimeVerification:canonicalRuntimeVerification.optional(), reviews: z.array(assignment).length(2), now: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), currentMainSha: sha, ciRun: backendVerificationRunSchema, backendRun }).strict();
 const preparedSchema = z.object({ status: z.literal('PREPARED_ONLY'), canonicalJson: z.string().max(48 * 1024), base64: z.string().max(64 * 1024), sha256: digest, comment: z.string().max(300) }).strict();
 export type BackendReleaseIntent = z.infer<typeof intentSchema>;
 export type BackendReleaseExpected = z.infer<typeof expectedSchema>;
@@ -36,13 +40,19 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 }
 function checkIntent(input: BackendReleaseIntent, expected: BackendReleaseExpected) {
   for (const key of ['repository', 'releaseSha', 'treeSha', 'baseSha', 'ciRunId', 'releaseRunId', 'runAttempt', 'environmentId', 'environmentName', 'deploymentEnvironment', 'executionScope'] as const) if (input[key] !== expected[key]) fail();
+  if(canonicalReleaseReviewJson(input.installedSource??null)!==canonicalReleaseReviewJson(expected.installedSource??null))fail();
+  if(input.installedSource&&input.installedSchema||expected.installedSource&&expected.installedSchema||canonicalReleaseReviewJson(input.installedSchema??null)!==canonicalReleaseReviewJson(expected.installedSchema??null))fail();
+  if(canonicalReleaseReviewJson(input.installedRuntime??null)!==canonicalReleaseReviewJson(expected.installedRuntime??null))fail();
+  if(input.executionScope==='installed-runtime'){
+   if(!input.installedRuntime||!input.installedSource||input.installedSchema||input.installedRuntime.sourceSha!==input.releaseSha||input.installedRuntime.treeSha!==input.treeSha||input.installedRuntime.endpoint!==input.targets.supabase.edgeOrigin||input.installedRuntime.apiUrl===input.targets.api.origin)fail();
+  }else if(input.installedRuntime||expected.installedRuntime)fail();
   if (expected.currentMainSha !== input.releaseSha || expected.backendRun.id.toString() !== input.releaseRunId || expected.backendRun.run_attempt !== input.runAttempt
     || expected.backendRun.head_sha !== input.releaseSha || expected.backendRun.repository.full_name !== input.repository) fail();
   try { validateBackendVerificationRun(expected.ciRun, { sha: input.releaseSha, repository: input.repository, ciRunId: input.ciRunId }); } catch { fail(); }
   if (expected.ciRun.path === '.github/workflows/staging-verification.yml') {
-    if (input.executionScope !== 'schema-and-accounts' || !input.stagingVerification || !expected.stagingVerification || input.stagingVerification.runAttempt !== expected.ciRun.run_attempt
+    if (input.canonicalRuntimeVerification||expected.canonicalRuntimeVerification||input.executionScope !== 'schema-and-accounts' || !input.stagingVerification || !expected.stagingVerification || input.stagingVerification.runAttempt !== expected.ciRun.run_attempt
       || canonicalReleaseReviewJson(input.stagingVerification) !== canonicalReleaseReviewJson(expected.stagingVerification)) fail();
-  } else if (input.stagingVerification || expected.stagingVerification) fail();
+  } else if (input.stagingVerification || expected.stagingVerification||!input.canonicalRuntimeVerification||!expected.canonicalRuntimeVerification||canonicalReleaseReviewJson(input.canonicalRuntimeVerification)!==canonicalReleaseReviewJson(expected.canonicalRuntimeVerification)) fail();
   if (canonicalReleaseReviewJson(input.targets) !== canonicalReleaseReviewJson(expected.targets) || canonicalReleaseReviewJson(input.fingerprints) !== canonicalReleaseReviewJson(expected.fingerprints)) fail();
   const binding = input.targets;
   if (binding.web.projectId === binding.api.projectId || binding.web.origin === binding.api.origin || binding.web.teamId !== binding.api.teamId

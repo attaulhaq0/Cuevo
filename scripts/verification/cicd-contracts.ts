@@ -1,5 +1,7 @@
 import { createRequire } from 'node:module';
 import { z } from 'zod';
+import {validateCiRuntimeJobs,runtimeLaneArtifactStep} from './verification-workflows';
+import { canonicalReleaseReviewJson } from './release-review';
 import { verificationSteps } from './steps';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown };
 const sha = z.string().regex(/^[a-f0-9]{40}$/); const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -116,6 +118,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   const issues: string[] = []; let ci: Mapping; let release: Mapping;
   try { ci = mapping(yaml.load(ciText)); release = mapping(yaml.load(releaseText)); } catch { return ['Workflow YAML is invalid.']; }
   const ciTrigger = mapping(ci.on), pushTrigger = mapping(ciTrigger.push);
+  const codeqlReceiptStep = { name:'Retain original processed CodeQL receipt',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-codeql-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/codeql-receipt/receipt.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90} };
   if (Object.keys(ciTrigger).sort().join(',') !== 'pull_request,push,workflow_dispatch'
     || Object.keys(pushTrigger).join(',') !== 'branches' || JSON.stringify(pushTrigger.branches) !== JSON.stringify(['main'])
     || ciTrigger.pull_request !== null || ciTrigger.workflow_dispatch !== null) {
@@ -126,14 +129,16 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     if (Object.hasOwn(trigger, 'pull_request_target') || list(flow.on).some(event => ['pull_request_target', 'workflow_run'].includes(String(event))) || index === 0 && Object.hasOwn(trigger, 'workflow_run')) issues.push('Privileged untrusted triggers are forbidden.');
     if (index === 1 && (Object.keys(trigger).join(',') !== 'workflow_dispatch' || !Object.hasOwn(mapping(mapping(trigger.workflow_dispatch).inputs), 'full_verification_run_id'))) issues.push('Release must be manual and retain separate routine and full-candidate run inputs.');
     if (mapping(flow.permissions).contents !== 'read') issues.push('Default contents permission must be read.');
-    for (const jobValue of Object.values(mapping(flow.jobs))) for (const stepValue of list(mapping(jobValue).steps)) {
+    for (const [jobName,jobValue] of Object.entries(mapping(flow.jobs))) for (const stepValue of list(mapping(jobValue).steps)) {
       const step = mapping(stepValue); const uses = String(step.uses ?? ''); const settings = mapping(step.with);
       if (uses && !/@[a-f0-9]{40}$/.test(uses)) issues.push('Actions require full commit SHA pins.');
       if (uses.startsWith('actions/checkout@') && settings['persist-credentials'] !== false) issues.push('Checkout credentials must not persist.');
       const stagingEvidencePath=['web-deployment-result.json','web-origin-intent.json','web-origin-protection-intent.json','web-origin-result.json','protected-preview-web-intent.json','protected-preview-web-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n';
       const stagingEvidence=index===1&&settings.path===stagingEvidencePath&&settings.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != ''"&&step['continue-on-error']===undefined;
       const learningEvidence=index===1&&settings.path==='.local/cicd-release/hosted-learning-loop/\n.local/cicd-release/hosted-learning-loop-ui/\n'&&settings.name==='cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != ''"&&step['continue-on-error']===undefined;
-      if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
+      const codeqlReceipt=index===0&&jobName==='codeql'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(codeqlReceiptStep);
+      const runtimeLane=index===0&&(['backend','browser'] as const).some(lane=>jobName===`runtime-${lane}`&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(runtimeLaneArtifactStep(lane)));
+      if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !runtimeLane && !codeqlReceipt && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
         && settings.name === 'cuevo-web-deployment-${{ github.run_id }}-${{ github.run_attempt }}' && settings['include-hidden-files'] === true && settings['if-no-files-found'] === 'error'
         && settings['retention-days'] === 2 && step.if === undefined && step['continue-on-error'] === undefined)) issues.push('Unsafe artifact path.');
       if (index === 1 && uses.startsWith('actions/download-artifact@')) issues.push('Release must not consume upstream untrusted artifacts.');
@@ -142,16 +147,18 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     }
   }
   const ciJobs = mapping(ci.jobs); const technical = mapping(ciJobs['technical-mvp']); const steps = list(technical.steps).map(mapping);
-  for (const owner of ['fast-checks', 'technical-mvp']) {
+  for (const owner of ['fast-checks', 'technical-mvp','runtime-backend','runtime-browser']) {
     const checkouts = list(mapping(ciJobs[owner]).steps).map(mapping).filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
     if (checkouts.length !== 1 || mapping(checkouts[0]?.with)['fetch-depth'] !== 0 || checkouts[0]?.if !== undefined || checkouts[0]?.['continue-on-error'] !== undefined) issues.push(`${owner} verification requires one unconditional complete-history checkout for canonical source checks.`);
   }
-  if (technical['timeout-minutes'] !== 120) issues.push('Technical verification requires the measured bounded 120-minute budget.');
-  if (!steps.some(step => step.run === 'npx --no-install playwright install --with-deps chromium firefox webkit')) issues.push('All compatibility engines must be installed.');
-  if (!steps.some(step => step.run === 'node --import tsx scripts/verification/technical-exit.ts --profile=ci')) issues.push('The source-selected routine CI runtime gate is required.');
+  issues.push(...validateCiRuntimeJobs(ciJobs));
   if (!steps.some(step => step.if === 'always()' && step.run === 'node --import tsx scripts/verification/cicd-evidence.ts')) issues.push('Safe evidence must export even on failure.');
   if (JSON.stringify(ci).includes('secrets.')) issues.push('PR verification must not receive external secrets.');
   const codeql = mapping(ciJobs.codeql), codeqlSteps = list(codeql.steps).map(mapping);
+  const receiptSteps=codeqlSteps.filter(step=>step.name==='Retain original processed CodeQL receipt');
+  if(canonicalReleaseReviewJson(codeql.concurrency??null)!==canonicalReleaseReviewJson({group:'cuevo-codeql-${{ github.ref }}','cancel-in-progress':false,queue:'max'}))issues.push('CodeQL processed uploads must serialize per original ref without cancelling queued security proof.');
+  if(receiptSteps.length!==1||canonicalReleaseReviewJson(receiptSteps[0])!==canonicalReleaseReviewJson(codeqlReceiptStep)
+    ||codeqlSteps.indexOf(receiptSteps[0])!==codeqlSteps.findIndex(step=>step.run==='node --import tsx scripts/verification/codeql-alerts.ts')+1)issues.push('CodeQL must retain exactly its minimized same-job processed receipt after the threshold gate.');
   const analyzerIndex = codeqlSteps.findIndex(step => String(step.uses ?? '').startsWith('github/codeql-action/analyze@'));
   const alertIndex = codeqlSteps.findIndex(step => step.run === 'node --import tsx scripts/verification/codeql-alerts.ts');
   if (analyzerIndex < 0 || alertIndex <= analyzerIndex || codeqlSteps[analyzerIndex]?.id !== 'codeql-analyze'
