@@ -34,6 +34,29 @@ async function fixture(run: (input: Parameters<Awaited<ReturnType<typeof api>>['
 test('runtime recipients keep API storage and restricted DSNs private, fixture generation explicit, Edge inactive and provider-injected Auth origin separate', async () => { const { prepareHostedRuntimeRecipients } = await api(), recipients = prepareHostedRuntimeRecipients(runtime(), expected); assert.equal(recipients.api.AI_GENERATION_MODE, 'FIXTURE'); assert.equal(recipients.edge.CUEVO_WORKER_WAKE_KEY, ''); assert.equal(Object.keys(recipients.edge).some(key => key.startsWith('SUPABASE_')), false); assert.equal(recipients.edgeInjectedSupabaseOrigin, expected.targets.supabase.authOrigin); assert.equal(Object.hasOwn(recipients.edge, 'SUPABASE_SERVICE_ROLE_KEY'), false); });
 test('runtime source project role CA liveAI analytics and extra operator credentials refuse without exposing values', async () => { const { prepareHostedRuntimeRecipients } = await api(); for (const mode of ['source', 'project', 'role', 'ca', 'AI', 'analytics', 'operator', 'shared-password']) { const value = runtime(); if (mode === 'source') value.sourceSha = 'c'.repeat(40); if (mode === 'project') value.projectRef = 'a'.repeat(20); if (mode === 'role') value.api.DATABASE_URL = value.api.DATABASE_URL.replace('cuevo_api:', 'postgres:'); if (mode === 'ca') value.edge.CUEVO_WORKER_TLS_CA = 'other'; if (mode === 'AI') value.api.AI_GENERATION_MODE = 'LIVE'; if (mode === 'analytics') value.edge.POSTHOG_CAPTURE_MODE = 'LIVE_SYNTHETIC'; if (mode === 'operator') Object.assign(value.api, { SUPABASE_ACCESS_TOKEN: 'private-provider-token' }); if (mode === 'shared-password') value.edge.CUEVO_WORKER_DATABASE_URL = value.edge.CUEVO_WORKER_DATABASE_URL.replace('worker-private-password', 'api-private-password'); assert.throws(() => prepareHostedRuntimeRecipients(value, expected), error => error instanceof Error && !error.message.includes('private')); } });
 test('provider preparation verifies exact physical API prebuilt and Edge files without outputting runtime values', async () => { const { prepareBackendProviderDeployment } = await api(); await fixture(async input => { const result = await prepareBackendProviderDeployment(input); assert.equal(result.status, 'PREPARED_ONLY'); assert.equal(result.edgeWorker, 'INACTIVE'); assert.equal(result.hostedAcceptance, false); assert.equal(admissions, 2); assert.equal(JSON.stringify(result).includes('private') || JSON.stringify(result).includes(ca), false); }); });
+test('provider preparation admits a complete wide artifact inventory while retaining unlisted-file and byte-drift denial', async () => {
+  const { prepareBackendProviderDeployment } = await api();
+  await fixture(async input => {
+    const manifestPath = join(input.apiArtifactRoot, 'artifact.json'), manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const directory = 'artifact-files', content = 'source-bound artifact fixture\n';
+    await mkdir(join(input.apiArtifactRoot, directory));
+    const paths = Array.from({ length: 8000 }, (_, index) => directory + '/' + String(index).padStart(5, '0') + '-' + 'bounded-artifact-'.repeat(8) + '.txt');
+    await Promise.all(paths.map(path => writeFile(join(input.apiArtifactRoot, path), content)));
+    manifest.files.push(...paths.map(path => ({ path, sha256: hash(content) })));
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+    input.expected.fingerprints.apiArtifactSha256 = hash(JSON.stringify(manifest));
+    assert.ok(Buffer.byteLength(JSON.stringify(['artifact.json', ...manifest.files.map((row: { path: string }) => row.path)].sort())) > 1024 * 1024);
+    assert.ok(manifest.files.length < 20000);
+    assert.ok(paths.length * Buffer.byteLength(content) < 128 * 1024 * 1024);
+    const result = await prepareBackendProviderDeployment(input);
+    assert.equal(result.status, 'PREPARED_ONLY'); assert.equal(result.edgeWorker, 'INACTIVE'); assert.equal(result.hostedAcceptance, false);
+    await writeFile(join(input.apiArtifactRoot, 'unlisted.txt'), 'unexpected artifact');
+    await assert.rejects(prepareBackendProviderDeployment(input));
+    await rm(join(input.apiArtifactRoot, 'unlisted.txt'));
+    await writeFile(join(input.apiArtifactRoot, paths.at(-1)!), 'changed artifact bytes');
+    await assert.rejects(prepareBackendProviderDeployment(input));
+  });
+});
 test('changed artifact bytes unexpected file and wrong fingerprint refuse after source admission without provider action', async () => { const { prepareBackendProviderDeployment } = await api(); for (const mode of ['bytes', 'extra', 'hash']) await fixture(async input => { if (mode === 'bytes') await writeFile(join(input.edgeArtifactRoot, 'index.ts'), 'changed'); if (mode === 'extra') await writeFile(join(input.apiArtifactRoot, 'unexpected.txt'), 'extra'); if (mode === 'hash') input.expected.fingerprints.apiArtifactSha256 = '0'.repeat(64); await assert.rejects(prepareBackendProviderDeployment(input)); }); });
 test('failed official admission and input getters cannot disclose runtime secrets or admit provider package', async () => { const { prepareBackendProviderDeployment } = await api(); await fixture(async input => { denied = true; await assert.rejects(prepareBackendProviderDeployment(input), /requires review/); let reads = 0; await assert.rejects(prepareBackendProviderDeployment({ ...input, get githubToken() { reads++; return 'private-gh-token'; } })); assert.equal(reads, 0); const text = await readFile(join(input.apiArtifactRoot, 'artifact.json'), 'utf8'); assert.equal(text.includes('private-gh-token'), false); }); });
 
