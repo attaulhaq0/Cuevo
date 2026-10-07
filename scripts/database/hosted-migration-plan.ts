@@ -154,10 +154,11 @@ export function verifyCompletedMigrationPrefix(repoRoot:string,plan:HostedMigrat
  const {git}=checkedRoot(repoRoot),prior=plan.priorCompletedRelease;
  if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==plan.applied.length)throw failure();
  git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
- const entries=git(['ls-tree','-r','--name-only',prior.sourceSha,'--','supabase/migrations']).toString().trim().split('\n');
- if(entries.length!==prior.migrationCount||entries.some(path=>!/^supabase\/migrations\/\d{14}_[a-z0-9_]+\.sql$/.test(path)))throw failure();
+ const sources=readHistoricalMigrationSources(repoRoot,prior.sourceSha,prior.treeSha);
+ if(sources.length!==prior.migrationCount)throw failure();
  const history=plan.migrations.slice(0,prior.migrationCount);
- for(const row of history)if(!entries.includes('supabase/migrations/'+row.name)||hash(git(['show',`${prior.sourceSha}:supabase/migrations/${row.name}`]))!==row.sha256)throw failure();
+ const original=new Map(sources.map(source=>[source.name,source.bytes]));
+ for(const row of history){const bytes=original.get(row.name);if(!bytes||hash(bytes)!==row.sha256)throw failure();}
  return true;
 }
 
@@ -186,14 +187,14 @@ export function createCanonicalHostedMigrationPlan(input: { repoRoot: string; so
     if (git(['rev-parse', '--verify', `${prior.sourceSha}^{commit}`]).toString('utf8').trim() !== prior.sourceSha
       || git(['rev-parse', `${prior.sourceSha}^{tree}`]).toString('utf8').trim() !== prior.treeSha) throw failure();
     git(['merge-base', '--is-ancestor', prior.sourceSha, input.sourceSha]);
+    const priorSources=readHistoricalMigrationSources(input.repoRoot,prior.sourceSha,prior.treeSha),priorByName=new Map(priorSources.map(source=>[source.name,source.bytes]));
     if (prior.completedSourceMigrationCount !== undefined) {
-      const entries = git(['ls-tree','-r','--name-only',prior.sourceSha,'--','supabase/migrations']).toString('utf8').trim().split('\n');
-      if (entries.length !== prior.completedSourceMigrationCount || prior.migrations.length !== entries.length
-        || entries.some(path=>!/^supabase\/migrations\/\d{14}_[a-z0-9_]+\.sql$/.test(path))) throw failure();
+      if (priorSources.length !== prior.completedSourceMigrationCount || prior.migrations.length !== priorSources.length) throw failure();
     }
     for (const row of prior.migrations) {
       const current = plan.migrations.find(value => value.version === row.version);
-      if (!current || hash(git(['show', `${prior.sourceSha}:supabase/migrations/${current.name}`])) !== row.sha256) throw failure();
+      const bytes=current?priorByName.get(current.name):undefined;
+      if (!bytes || hash(bytes) !== row.sha256) throw failure();
     }
   }
   if(plan.priorSchemaRelease)verifyPriorSchemaPrefix(input.repoRoot,plan);
