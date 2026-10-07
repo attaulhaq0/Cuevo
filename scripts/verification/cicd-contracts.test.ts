@@ -38,7 +38,7 @@ test('completed-backend staging frontend includes verified origin and browser ch
  const env=steps[browser].env as Record<string,string>;assert.equal(env.CUEVO_SYNTHETIC_PILOT_PASSWORD,'${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}');assert.equal(env.BACKEND_SELECTION_BASE64,'${{ needs.release-admission.outputs.backend-selection-base64 }}');
  assert.ok(steps.some(step=>step.run==='npx --no-install playwright install --with-deps chromium'&&step.if===condition));
  const evidence=steps.find(step=>(step.with as Record<string,unknown>|undefined)?.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}')!;assert.ok(evidence);assert.equal(evidence.if,"always() && needs.release-admission.outputs.backend-selection-base64 != ''");
- assert.equal((evidence.with as Record<string,unknown>).path,['web-deployment-result.json','web-origin-intent.json','web-origin-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n');
+ assert.equal((evidence.with as Record<string,unknown>).path,['web-deployment-result.json','web-origin-intent.json','web-origin-protection-intent.json','web-origin-result.json','protected-preview-web-intent.json','protected-preview-web-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n');
 });
 
 test('learning-loop evidence stays within its exact metadata directories and conditional retention',async()=>{
@@ -313,11 +313,14 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     const protectedControls={...releaseControls(),environment:{...releaseControls().environment,name:'staging'}};
     const script = (mode: 'manifest' | 'approval' | 'verify') => `
       const cp=(await import('node:module')).createRequire(import.meta.url)('node:child_process');cp.execFileSync=(command,args)=>{if(command!=='git')throw Error('Unexpected executable before verified approval');if(args[0]==='rev-parse')return args[1]==='HEAD'?'${sha}':'${assignments.baseSha}';if(args[0]==='merge-base'||args[0]==='diff'&&args[1]==='--quiet'||args[0]==='ls-files')return '';if(args[0]==='ls-tree')return '${treeBytes}';if(args[0]==='diff')return '${diffBytes}';throw Error('Unexpected source read')};(await import('node:module')).syncBuiltinESMExports();
-            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
+            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/protected-preview.ts'))return{format:'module',shortCircuit:true,source:'export async function createProtectedPreview(input,ports){await ports.admit();return{status:"CONFIRMED"};}export async function protectedPreviewHeaders(input){if(new URL(input.url).origin!==input.binding.origin)throw Error("Foreign web origin");return{"x-vercel-protection-bypass":"private-web-contract-canary"};}'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
       process.argv[2] = '${mode}';
       Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
-      globalThis.fetch = async input => {
+      globalThis.fetch = async (input,options={}) => {
         const url = String(input); console.log('FETCH ' + url);
+        const gateway=new Headers(options.headers).get('x-vercel-protection-bypass');
+        if(url==='https://cuevo-build.vercel.app'){if(gateway!=='private-web-contract-canary')return new Response('Protected web preview',{status:401});}
+        else if(gateway)throw Error('Private web transport forwarded outside its immutable origin');
         if(url==='https://api.github.com/repos/owner/repo')return Response.json({full_name:'owner/repo',name:'repo',owner:{id:1,login:'owner',type:'Organization'}});
         if(url==='https://api.github.com/repos/owner/repo/actions/runs/42')return new Response(JSON.stringify(${JSON.stringify(trustedRun())}));
         if(url==='https://api.github.com/repos/owner/repo/git/ref/heads/main')return new Response(JSON.stringify({object:{type:'commit',sha:'${sha}'}}));
@@ -412,7 +415,9 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(ci.replace('path: .local/cicd-safe/', 'path: .local/'), release).some(issue => issue.includes('artifact')));
   assert.ok(validateWorkflows(ci, release.replace('cancel-in-progress: false', 'cancel-in-progress: true')).some(issue => issue.includes('release concurrency')));
   assert.ok(validateWorkflows(ci, release.replace("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));
-  assert.ok(validateWorkflows(ci.replace('on: [push, pull_request, workflow_dispatch]', 'on: [pull_request_target]'), release).some(issue => issue.includes('Privileged')));
+  const triggerYaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
+  const privileged=triggerYaml.load(ci);privileged.on={pull_request_target:null};
+  assert.ok(validateWorkflows(triggerYaml.dump(privileged), release).some(issue => issue.includes('Privileged')));
   assert.ok(validateWorkflows(ci, release.replace('needs: release-admission', 'needs: other-job')).some(issue => issue.includes('admission')));
   assert.ok(validateWorkflows(ci, release.replace('name: ${{ needs.release-admission.outputs.environment }}', 'name: unprotected')).some(issue => issue.includes('environment')));
   assert.ok(validateWorkflows(ci, release.replace('branches: [main]', 'branches: [feature]')).some(issue => issue.includes('canonical main')));
@@ -434,6 +439,34 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   const altered=yaml.load(release);altered.jobs['web-release'].steps.splice(3,0,{name:'Unexpected direct upload',env:{VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'},run:'vercel deploy --prebuilt --yes --prod'});
   assert.ok(validateWorkflows(ci,yaml.dump(altered)).length>0,'A direct credential consumer must not bypass the release owner or approval');
   const inherited=yaml.load(release) as {jobs:{'web-release':{steps:Record<string,unknown>[];env?:Record<string,string>}}};inherited.jobs['web-release'].env={VERCEL_TOKEN:'${{ secrets.VERCEL_TOKEN }}'};inherited.jobs['web-release'].steps.unshift({run:'node unreviewed-action.js'});assert.ok(validateWorkflows(ci,yaml.dump(inherited)).some(issue=>issue.includes('job-level')));
+});
+
+test('CI selects one PR run per branch change while preserving main-push release evidence and manual verification', async () => {
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>};
+  const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8'));
+  assert.deepEqual(workflow.on,{push:{branches:['main']},pull_request:null,workflow_dispatch:null});
+});
+
+test('workflow guard rejects duplicate branch-push CI, missing release/PR events and unsupported filtered events', async () => {
+  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):Record<string,unknown>;dump(value:unknown):string};
+  for(const trigger of [
+    ['push','pull_request','workflow_dispatch'],
+    {push:null,pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main','codex/**']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main'],tags:['*']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main'],paths:['apps/web/**']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['feature']},pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main']},workflow_dispatch:null},
+    {pull_request:null,workflow_dispatch:null},
+    {push:{branches:['main']},pull_request:null},
+    {push:{branches:['main']},pull_request:{paths:['apps/web/**']},workflow_dispatch:null},
+    {push:{branches:['main']},pull_request:{types:['opened']},workflow_dispatch:null},
+    {push:{branches:['main']},pull_request:null,workflow_dispatch:null,schedule:[{cron:'17 0 * * *'}]},
+  ]) {
+    const altered=yaml.load(ci);altered.on=trigger;
+    assert.ok(validateWorkflows(yaml.dump(altered),release).some(issue=>issue.includes('without duplicate feature-branch pushes')),JSON.stringify(trigger));
+  }
 });
 test('web and API automatic Git builds cannot bypass reviewed Actions deployment', async () => {
   for (const owner of ['web', 'api']) {

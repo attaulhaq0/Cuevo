@@ -50,6 +50,8 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   const retained = schema.find(step => String(step.uses).startsWith('actions/upload-artifact@') && map(step.with).name === 'cuevo-backend-schema-result-${{ github.run_id }}-${{ github.run_attempt }}')!;
   assert.equal(retained.if, 'always()'); assert.match(map(retained.with).path as string, /journal-\*\//); assert.doesNotMatch(map(retained.with).path as string, /ca\.pem|process-|backend-bundle|synthetic-access|\.env/);
   for(const suffix of ['intent','asset','room','result'])assert.ok((map(retained.with).path as string).includes(`private-probe-*-${suffix}.json`));
+  for(const suffix of ['intent','result'])assert.ok((map(retained.with).path as string).includes(`protected-preview-api-${suffix}.json`));
+  assert.doesNotMatch(map(retained.with).path as string,/protected-preview-api-private|\.local\/hosted-release\/\*\*|protected-preview-api-\*/);
   for(const path of ['worker-activation-intent.json','worker-activation-journal.jsonl','worker-activation-result.json','worker-activation-cleanup.json'])assert.ok((map(retained.with).path as string).includes(path));
   for(const path of ['database-restore-intent.json','database-restore-asset.json','database-restore-result.json','database-restore-cleanup.json'])assert.ok((map(retained.with).path as string).includes(path));
   assert.doesNotMatch(map(retained.with).path as string,/database-restore-private|\.dump|object\.bin/);

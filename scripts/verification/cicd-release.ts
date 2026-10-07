@@ -13,6 +13,7 @@ import { bindVerifiedStagingWebOrigin } from './web-staging-origin';
 import { verifyHostedBrowserAccess } from './backend-hosted-browser';
 import { readGitBinaryDiffDigest } from './git-source-digest';
 import { verifyHostedLearningLoop, type HostedLearningLoopWebAdmission } from './backend-hosted-learning-loop';
+import { createProtectedPreview, protectedPreviewHeaders, type ProtectedPreviewBinding } from './protected-preview';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -259,8 +260,17 @@ if (mode === 'context') {
     if (publicConfig.api.projectId === projectId) throw Error('API and web must use separate Vercel projects.');
     await inspectDeployment({ projectId: publicConfig.api.projectId, teamId: publicConfig.api.teamId, deploymentId: publicConfig.api.deploymentId, url: publicConfig.api.deploymentUrl });
   }
-  const page = await fetch(deployment.url, { signal: AbortSignal.timeout(15000) });
-  const health = await fetch(`${publicConfig.apiUrl}/health/ready`, { signal: AbortSignal.timeout(15000) });
+  let pageHeaders:Record<string,string>={};
+  if(vercelTarget(required('RELEASE_ENVIRONMENT'))==='preview'){
+    const original=await readmitApproval(),treeSha=execFileSync('git',['rev-parse',required('RELEASE_SHA')+'^{tree}'],{encoding:'utf8',stdio:['ignore','pipe','pipe'],shell:false,env:sourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024}).trim();
+    const packageFacts=z.object({releaseSha:z.literal(required('RELEASE_SHA')),preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson((original.prepared as {canonicalJson:string}).canonicalJson));
+    const binding:ProtectedPreviewBinding={owner:'web',repository:required('GITHUB_REPOSITORY'),releaseSha:required('RELEASE_SHA'),treeSha,runId:required('GITHUB_RUN_ID'),runAttempt:Number(required('GITHUB_RUN_ATTEMPT')),packageSha256:(original.prepared as {sha256:string}).sha256,artifactSha256:await readFile(join(directory,'artifact.sha256'),'utf8'),teamId,projectId,deploymentId:webDeployment.id,origin:new URL(deployment.url).origin};
+    const transport=await createProtectedPreview({repoRoot:process.cwd(),binding,vercelToken:required('VERCEL_TOKEN'),approvalExpiresAt:new Date(Date.parse(packageFacts.preparedAt)+24*60*60*1000).toISOString()},{admit:async()=>{await readmitApproval();}});
+    if(!['CONFIRMED','NONE'].includes(transport.status))throw Error('Protected staging web transport requires current verification.');
+    pageHeaders=await protectedPreviewHeaders({repoRoot:process.cwd(),binding,url:new URL('/',deployment.url).toString(),receipt:transport});
+  }
+  const page = await fetch(deployment.url, { headers:pageHeaders,redirect:'error',credentials:'omit',cache:'no-store',signal: AbortSignal.timeout(15000) });
+  const health = await fetch(`${publicConfig.apiUrl}/health/ready`, { redirect:'error',credentials:'omit',cache:'no-store',signal: AbortSignal.timeout(15000) });
   if (!page.ok || !health.ok) throw Error('Deployed web/API readiness requires review.');
   if (publicConfig.api.kind === 'vercel') console.log('API Vercel team/project/deployment/target/source SHA metadata freshly verified. API artifact hash and custom-origin binding remain reviewed manifest evidence.');
   if (publicConfig.worker.kind === 'container') {

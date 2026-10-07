@@ -115,6 +115,12 @@ const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 export function validateWorkflows(ciText: string, releaseText: string): string[] {
   const issues: string[] = []; let ci: Mapping; let release: Mapping;
   try { ci = mapping(yaml.load(ciText)); release = mapping(yaml.load(releaseText)); } catch { return ['Workflow YAML is invalid.']; }
+  const ciTrigger = mapping(ci.on), pushTrigger = mapping(ciTrigger.push);
+  if (Object.keys(ciTrigger).sort().join(',') !== 'pull_request,push,workflow_dispatch'
+    || Object.keys(pushTrigger).join(',') !== 'branches' || JSON.stringify(pushTrigger.branches) !== JSON.stringify(['main'])
+    || ciTrigger.pull_request !== null || ciTrigger.workflow_dispatch !== null) {
+    issues.push('CI must verify every PR, main push and manual dispatch without duplicate feature-branch pushes.');
+  }
   for (const [index, flow] of [ci, release].entries()) {
     const trigger = mapping(flow.on);
     if (Object.hasOwn(trigger, 'pull_request_target') || list(flow.on).some(event => ['pull_request_target', 'workflow_run'].includes(String(event))) || index === 0 && Object.hasOwn(trigger, 'workflow_run')) issues.push('Privileged untrusted triggers are forbidden.');
@@ -124,7 +130,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
       const step = mapping(stepValue); const uses = String(step.uses ?? ''); const settings = mapping(step.with);
       if (uses && !/@[a-f0-9]{40}$/.test(uses)) issues.push('Actions require full commit SHA pins.');
       if (uses.startsWith('actions/checkout@') && settings['persist-credentials'] !== false) issues.push('Checkout credentials must not persist.');
-      const stagingEvidencePath=['web-deployment-result.json','web-origin-intent.json','web-origin-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n';
+      const stagingEvidencePath=['web-deployment-result.json','web-origin-intent.json','web-origin-protection-intent.json','web-origin-result.json','protected-preview-web-intent.json','protected-preview-web-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n';
       const stagingEvidence=index===1&&settings.path===stagingEvidencePath&&settings.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != ''"&&step['continue-on-error']===undefined;
       const learningEvidence=index===1&&settings.path==='.local/cicd-release/hosted-learning-loop/\n.local/cicd-release/hosted-learning-loop-ui/\n'&&settings.name==='cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != ''"&&step['continue-on-error']===undefined;
       if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
