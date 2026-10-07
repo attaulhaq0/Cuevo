@@ -27,3 +27,6 @@ select
         )
       ))
   ) as allowed`;
+
+/** Original credentials retain the same restricted membership predicate after LOGIN. */
+export const recoveredRuntimeRolesSql=initialRuntimeRolesSql.replace('CUEVO_RUNTIME_INITIAL_ROLES','CUEVO_RUNTIME_RECOVERED_ROLES').replace('not rolcanlogin','rolcanlogin');
