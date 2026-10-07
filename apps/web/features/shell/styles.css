@@ -163,20 +163,22 @@
 @media (max-width: 800px) {
   .workspace .workspace-main { padding-block-start:var(--space-3); }
   .workspace .workspace-intro { gap:var(--space-2); flex-wrap:wrap; }
-  .workspace .workspace-chrome__header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2); }
-  .workspace .workspace-chrome__brand { grid-column: 1; grid-row: 1; }
-  .workspace .workspace-chrome__person { grid-column: 2; grid-row: 1; margin: 0; }
-  .workspace .workspace-chrome__school { grid-column: 1; grid-row: 2; order: 0; flex-wrap: nowrap; gap: var(--space-2); }
-  .workspace .workspace-chrome__school > bdi { flex: 1; }
-  .workspace .workspace-chrome__utilities { grid-column: 2; grid-row: 2; order: 0; justify-content: end; }
-  .workspace .workspace-chrome__search { grid-column: 1 / -1; grid-row: 3; inline-size: 100%; max-inline-size: none; min-inline-size: 0; font-size: var(--type-sm); }
+  .workspace .workspace-chrome__header { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .workspace .workspace-chrome__brand { flex: 0 0 auto; min-inline-size: min-content; order: 0; }
+  .workspace .workspace-chrome__person { flex: 1 0 min(100%,11rem); min-inline-size: 0; margin: 0; order: 1; }
+  .workspace .workspace-chrome__person > button { inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; }
+  .workspace .workspace-chrome__person > button > span:not(.workspace-chrome__avatar) { min-inline-size: 0; }
+  .workspace .workspace-chrome__school { flex: 1 1 100%; order: 2; flex-wrap: nowrap; gap: var(--space-2); }
+  .workspace .workspace-chrome__school > bdi { flex: 1; min-inline-size: 0; max-inline-size: none; }
+  .workspace .workspace-chrome__utilities { flex: 1 1 auto; min-inline-size: 0; flex-wrap: wrap; margin: 0; order: 4; justify-content: end; }
+  .workspace .workspace-chrome__search { flex: 1 1 16rem; order: 3; inline-size: 100%; max-inline-size: none; min-inline-size: 0; font-size: var(--type-sm); }
   .workspace .workspace-chrome__search kbd { display: none; }
   .workspace .workspace-chrome__profile { inset-inline-end: var(--space-3); max-block-size: calc(100dvh - 5rem); }
   .workspace .workspace-chrome__school { font-size: var(--type-xs); }
   .workspace .workspace-chrome__utilities .language-switch { gap: var(--space-1); }
   .workspace .workspace-chrome__utilities .language-switch > svg { display: none; }
   .workspace .workspace-chrome__person > button { gap: var(--space-2); padding-inline: var(--space-1); }
-  .workspace .workspace-chrome__person strong { max-inline-size: 8rem; font-size: var(--type-xs); }
+  .workspace .workspace-chrome__person strong { max-inline-size: 100%; font-size: var(--type-xs); }
   .workspace .workspace-chrome__person .workspace-chrome__avatar { inline-size: 2rem; block-size: 2rem; }
   .workspace .workspace-chrome__rail button { min-block-size: 3.5rem; min-inline-size: 5.25rem; font-size: var(--type-xs); padding-block: var(--space-1); }
   .workspace .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }

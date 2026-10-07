@@ -30,6 +30,34 @@ test('current five-role header and focused navigation reflow at 320px without lo
  expect((await new AxeBuilder({page}).include('.workspace-chrome__header').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);expect(errors).toEqual([]);
 });
 
+for (const locale of ['en', 'ar'] as const) test(`${locale}: enlarged mobile identity keeps school words and brand readable`, async ({ page }, info) => {
+ await mount(page);
+ for (const role of ['admin', 'teacher', 'student', 'coordinator', 'parent']) for (const width of [390, 768]) for (const mode of ['home', 'focused']) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.evaluate(value => {
+   (globalThis as unknown as { chromeReflowScenario: (value: object) => void }).chromeReflowScenario({ ...value, long: false });
+   document.documentElement.lang = value.locale; document.documentElement.dir = value.locale === 'ar' ? 'rtl' : 'ltr'; document.documentElement.style.fontSize = '32px';
+  }, { role, locale, mode });
+  await expect(page.locator('.workspace')).toHaveAttribute('lang', locale);
+  await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))); });
+  const identity = await page.locator('.workspace-chrome__header').evaluate(header => {
+   const school = header.querySelector('.workspace-chrome__school > bdi')!, node = school.firstChild!, text = school.textContent!;
+   let offset = 0;
+   const words = text.trim().split(/\s+/).filter(word => /[\p{L}\p{N}]/u.test(word)).map(word => {
+    const start = text.indexOf(word, offset), range = document.createRange(); offset = start + word.length;
+    range.setStart(node, start); range.setEnd(node, offset);
+    return { word, lines: new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size };
+   });
+   const brand = header.querySelector('.brand')!.getBoundingClientRect(), person = header.querySelector('.workspace-chrome__person > button')!.getBoundingClientRect(), rect = school.getBoundingClientRect();
+   return { words, overlap: Math.min(brand.right, person.right) - Math.max(brand.left, person.left) > 1 && Math.min(brand.bottom, person.bottom) - Math.max(brand.top, person.top) > 1, left: rect.left, right: rect.right, scrollWidth: document.documentElement.scrollWidth, width: innerWidth };
+  });
+  await page.screenshot({ path: info.outputPath(`identity-${locale}-${role}-${width}-${mode}.png`), fullPage: false });
+  expect(identity.words.every(word => word.lines === 1), 'Normal school-name words must not collapse into one character per line').toBe(true);
+  expect(identity.overlap, 'The current person and Cuevo brand must have separate reading space').toBe(false);
+  expect(identity.left).toBeGreaterThanOrEqual(-1); expect(identity.right).toBeLessThanOrEqual(width + 1); expect(identity.scrollWidth).toBeLessThanOrEqual(width + 1);
+ }
+});
+
 for(const locale of['en','ar']as const)test(`${locale}: profile remains actionable when enlarged current context places its opener near the viewport bottom`,async({page})=>{
  await mount(page);await page.evaluate(value=>{(globalThis as unknown as{chromeReflowScenario:(value:object)=>void}).chromeReflowScenario({role:'parent',locale:value,mode:'focused',long:true});document.documentElement.lang=value;document.documentElement.dir=value==='ar'?'rtl':'ltr';document.documentElement.style.fontSize='32px';},locale);
  await page.evaluate(()=>new Promise<void>(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done()))));

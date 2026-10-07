@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Parent Home owns stable heading identity across current-child loading and ready/recovery states; Shell owns natural mobile header wrapping and full school-name reading space. Their colocated view/CSS and browser regressions preserve existing source, selector, navigation and session authority.
+
 Shell owns focused Back reflow in `apps/web/features/shell/styles.css`, preserving the existing label, directional icon and navigation callback. The current Chrome browser fixture covers320/390/834px bilingual enlarged-text bounds, keyboard and pending/draft preservation; native zoom and hosted acceptance remain separate.
 
 Initial hosted runtime role provisioning has one SQL predicate in `scripts/database/hosted-runtime-role-membership.ts`, consumed by the existing database facade and guarded native database fixtures. It preserves the canonical postgres SET grants and managed Supabase creator rows while refusing extra recipients or runtime-role parent memberships; it does not change applied migration history or domain grants.
