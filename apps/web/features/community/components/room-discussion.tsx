@@ -21,6 +21,17 @@ export function RoomDiscussion({ room: selectedRoom, onBack }: { room: Room; onB
   const [action, setAction] = useState<{ postId: string; type: 'reply' | 'report' | 'hide' | 'restore' } | null>(retainedReply ? { postId: retainedReply.split(':').at(-1)!, type: 'reply' } : null); const [restrict, setRestrict] = useState(false); const [mentionIds,setMentionIds]=useState<string[]>(()=>{const retained=commandJournal.get(`/v1/community/rooms/${selectedRoom.id}/posts`)?.body.mentionActorIds;return Array.isArray(retained)?retained.filter((id):id is string=>typeof id==='string'):formDrafts.model<string[]>(`${draftScope}community-mentions:${selectedRoom.id}`)??[];}); const [composerLocked,setComposerLocked]=useState(false);
   const rooms = usePaginatedLearningQuery('/v1/community/rooms?limit=100', parseRoom, refresh);
   const authorizedRoom = rooms.data.find(item => item.id === selectedRoom.id);
+  const roomRecovery = useRef({ key: '', cursors: new Set<string>() });
+  const recoveryKey = `${rooms.context}:${selectedRoom.id}`;
+  useEffect(() => {
+    if (roomRecovery.current.key !== recoveryKey) roomRecovery.current = { key: recoveryKey, cursors: new Set<string>() };
+    if (authorizedRoom || !rooms.loaded || rooms.loading || rooms.loadingMore || rooms.error || rooms.moreError
+      || !rooms.nextCursor || roomRecovery.current.cursors.size >= 30 || roomRecovery.current.cursors.has(rooms.nextCursor)) return;
+    roomRecovery.current.cursors.add(rooms.nextCursor);
+    rooms.loadMore();
+  }, [recoveryKey, authorizedRoom, rooms]);
+  const roomSourcePending = !rooms.error && !communitySourceDenied(rooms)
+    && (rooms.loading || rooms.loadingMore || !rooms.loaded || !authorizedRoom && !!rooms.nextCursor);
   const lifecycleIdentityScope=JSON.stringify([apiUrl,membership?.schoolId,membership?.userId,membership?.role,accessToken,online,status,selectedRoom.id]);
   const lifecycleScope=JSON.stringify([apiUrl,membership?.schoolId,membership?.userId,membership?.role,accessToken,accessGeneration,online,status,selectedRoom.id]);
   const lifecycleRoom=!rooms.loading&&!rooms.loadingMore&&!rooms.error&&!rooms.moreError?authorizedRoom??null:null;
@@ -54,11 +65,11 @@ export function RoomDiscussion({ room: selectedRoom, onBack }: { room: Room; onB
     const target = Array.from(root.current?.querySelectorAll<HTMLElement>('input, textarea, select') ?? []).find(element => element.getAttribute('name') === restore.name && element.closest('section[aria-label]')?.getAttribute('aria-label') === restore.form);
     if (target && !target.matches(':disabled')) target.focus();
   }, [rooms.loading, posts.loading, rooms.error, posts.error, focusContext]);
-  const withLifecycle=(content:ReactNode)=><><div className="learning-actions"><Button type="button" variant="quiet" onClick={onBack}><CuevoIcon name="arrow" size={18} className="directional-icon learning-back-icon" />{t.back}</Button><IconButton icon="refresh" label={t.refresh} type="button" onClick={reload} /></div><WorkspacePageHeading title={rooms.error||posts.error&&['denied','unauthorized'].includes(posts.error.kind)?t.discussionFeed:lifecycleRoom?.name??t.discussionFeed} caption={t.community}/><GroupLifecycle room={lifecycleRoom} roomId={selectedRoom.id} sourceScope={lifecycleScope} identityScope={lifecycleIdentityScope} loading={rooms.loading||rooms.loadingMore||!rooms.loaded&&!rooms.error} onChanged={saved}/>{content}</>;
+  const withLifecycle=(content:ReactNode)=><><div className="learning-actions"><Button type="button" variant="quiet" onClick={onBack}><CuevoIcon name="arrow" size={18} className="directional-icon learning-back-icon" />{t.back}</Button><IconButton icon="refresh" label={t.refresh} type="button" onClick={reload} /></div><WorkspacePageHeading title={rooms.error||posts.error&&['denied','unauthorized'].includes(posts.error.kind)?t.discussionFeed:lifecycleRoom?.name??t.discussionFeed} caption={t.community}/><GroupLifecycle room={lifecycleRoom} roomId={selectedRoom.id} sourceScope={lifecycleScope} identityScope={lifecycleIdentityScope} loading={roomSourcePending} onChanged={saved}/>{content}</>;
   const errorRecovery = (error: NonNullable<typeof rooms.error>) => <section className="community-discussion"><LearningError error={error} /></section>;
   if (rooms.error || communitySourceDenied(rooms)) return withLifecycle(errorRecovery(rooms.error ?? rooms.moreError!));
   if (communitySourceDenied(posts)) return withLifecycle(errorRecovery(posts.error ?? posts.moreError!));
-  if (!rooms.loading && !rooms.data.some(item => item.id === selectedRoom.id) && rooms.nextCursor) return withLifecycle(<section><WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/><LoadMore query={rooms} /></section>);
+  if (!rooms.loading && !rooms.data.some(item => item.id === selectedRoom.id) && rooms.nextCursor) return withLifecycle(<section><WorkspaceState kind={rooms.loadingMore?'loading':'unknown'} icon={rooms.loadingMore?'refresh':'community'} description={rooms.loadingMore?t.loading:t.partialRecords} role="status"/><LoadMore query={rooms} /></section>);
   if (!rooms.loading && !rooms.data.some(item => item.id === selectedRoom.id) && !rooms.nextCursor) return withLifecycle(<section><WorkspaceState kind="denied" icon="shield" description={t.readonly} role="status"/></section>);
   const lifecycle = locale === 'ar' ? maintenanceAr : maintenanceEn;
   const canAct = room.canPost && ['admin', 'teacher', 'student'].includes(membership?.role ?? '');
