@@ -105,7 +105,8 @@ test('a self-consistent shortened final plan cannot admit Auth before exact cano
   await fixture(async input => {
     state.actualFiles = true;
     const original = input.plan as ReturnType<typeof planHostedMigrations>;
-    const shortened = planHostedMigrations({ sources: state.sources.slice(0, -1), source: original.source, now: Date.now(), target: { projectRef: ref, boundProjectRef: ref, projectName: 'Cuevo', projectStatus: 'ACTIVE_HEALTHY', deploymentEnvironment: 'synthetic-staging', observedAt: new Date().toISOString(), authUsers: 0, storageObjects: 0, appSchemas: [], migrationVersions: [], dispatchDisabled: true, population: 'EMPTY' } });
+    const observedAt = Date.now();
+    const shortened = planHostedMigrations({ sources: state.sources.slice(0, -1), source: original.source, now: observedAt, target: { projectRef: ref, boundProjectRef: ref, projectName: 'Cuevo', projectStatus: 'ACTIVE_HEALTHY', deploymentEnvironment: 'synthetic-staging', observedAt: new Date(observedAt).toISOString(), authUsers: 0, storageObjects: 0, appSchemas: [], migrationVersions: [], dispatchDisabled: true, population: 'EMPTY' } });
     input.plan = shortened;
     input.finalStage = { ...(input.finalStage as object), included: shortened.migrations, pending: shortened.pending, expectedAfterVersions: shortened.migrations.map(row => row.version).sort() };
     (input.expected as { fingerprints: Record<string, string> }).fingerprints.migrationPlanSha256 = canonicalHostedMigrationPlan(shortened).sha256;
