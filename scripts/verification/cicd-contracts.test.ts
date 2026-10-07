@@ -411,7 +411,7 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   const ci = await readFile('.github/workflows/ci.yml', 'utf8'); const release = await readFile('.github/workflows/release.yml', 'utf8');
   assert.deepEqual(validateWorkflows(ci, release), []);
   assert.ok(validateWorkflows(ci.replace('chromium firefox webkit', 'chromium'), release).some(issue => issue.includes('engines')));
-  assert.ok(validateWorkflows(ci.replace('timeout-minutes: 90', 'timeout-minutes: 30'), release).some(issue => issue.includes('budget')));
+  for (const minutes of [30, 90, 119, 121, 360, 120.5]) assert.ok(validateWorkflows(ci.replace('timeout-minutes: 120', `timeout-minutes: ${minutes}`), release).some(issue => issue.includes('120-minute budget')));
   assert.ok(validateWorkflows(ci.replace('path: .local/cicd-safe/', 'path: .local/'), release).some(issue => issue.includes('artifact')));
   assert.ok(validateWorkflows(ci, release.replace('cancel-in-progress: false', 'cancel-in-progress: true')).some(issue => issue.includes('release concurrency')));
   assert.ok(validateWorkflows(ci, release.replace("github.ref == 'refs/heads/main'", "github.ref != 'refs/heads/main'")).some(issue => issue.includes('main')));
