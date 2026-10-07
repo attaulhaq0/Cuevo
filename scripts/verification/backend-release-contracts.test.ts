@@ -14,6 +14,21 @@ function input() { return { version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', ..
 function expected() { return { ...identity, targets: structuredClone(targets), fingerprints: { ...fingerprints }, reviews: structuredClone(assignments), now, currentMainSha: sha,
   ciRun: { id: 31, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'attaulhaq0/Cuevo' } },
   backendRun: { id: 51, run_attempt: 1, head_sha: sha, head_branch: 'main', event: 'workflow_dispatch', status: 'waiting', conclusion: null, path: '.github/workflows/backend-release.yml', repository: { full_name: 'attaulhaq0/Cuevo' } } }; }
+
+test('focused staging binds complete job proof to schema and fictional accounts without authorizing production', async () => {
+  const api = await subject(), proof = { scope: 'SCHEMA_AND_SYNTHETIC_AUTH', runAttempt: 1, jobsSha256: 'e'.repeat(64) };
+  const body = { ...input(), executionScope: 'schema-and-accounts', stagingVerification: proof };
+  const current = { ...expected(), executionScope: 'schema-and-accounts', stagingVerification: proof, ciRun: { ...expected().ciRun, path: '.github/workflows/staging-verification.yml', event: 'workflow_dispatch', run_attempt: 1 } };
+  const prepared = api.prepareBackendReleaseIntent(body, current);
+  assert.match(prepared.canonicalJson, /SCHEMA_AND_SYNTHETIC_AUTH/);
+  assert.equal(api.validatePreparedBackendReleaseIntent(prepared, current).status, 'PREPARED_ONLY');
+  assert.throws(() => api.prepareBackendReleaseIntent(input(), current));
+  assert.throws(() => api.validatePreparedBackendReleaseIntent(prepared, { ...current, stagingVerification: { ...proof, jobsSha256: '0'.repeat(64) } }));
+  assert.throws(() => api.prepareBackendReleaseIntent(body, { ...current, ciRun: { ...current.ciRun, run_attempt: 2 } }));
+  assert.throws(() => api.prepareBackendReleaseIntent(body, { ...current, environmentName: 'production' }));
+  assert.throws(() => api.prepareBackendReleaseIntent(body, { ...expected(), stagingVerification: proof }));
+  assert.throws(() => api.prepareBackendReleaseIntent({ ...body, executionScope: 'complete-backend' }, { ...current, executionScope: 'complete-backend' }));
+});
 async function subject() { let module: Record<string, unknown> = {}; try { module = await import(pathToFileURL(resolve(import.meta.dirname, 'backend-release-contracts.ts')).href); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw error; } assert.equal(typeof module.prepareBackendReleaseIntent, 'function', 'backend intent preparation exists'); return module as typeof import('./backend-release-contracts'); }
 
 test('the selected migration endpoint is bound before approval and cannot be removed or replaced',async()=>{const api=await subject(),body=input(),current=expected();const removed=structuredClone(body);delete (removed.fingerprints as Record<string,string>).migrationEndpointSha256;assert.throws(()=>api.prepareBackendReleaseIntent(removed,current));const prepared=api.prepareBackendReleaseIntent(body,current);assert.throws(()=>api.validatePreparedBackendReleaseIntent(prepared,{...current,fingerprints:{...current.fingerprints,migrationEndpointSha256:'0'.repeat(64)}}));});

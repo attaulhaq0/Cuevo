@@ -87,6 +87,31 @@ test('failed official approval cannot reach bucket or schema even with configure
   const api = await subject(); await fixture(async (repoRoot, env) => { state.failApproval = true; await assert.rejects(api.runBackendReleasePhase({ mode: 'bootstrap-schema', repoRoot, env }), error => error instanceof Error && !error.message.includes(secret)); assert.deepEqual(state.events, ['approval']); });
 });
 
+test('focused schema and account approval cannot reach deployment activation or frontend consumers', async () => {
+  const api = await subject();
+  for (const mode of ['deploy', 'verify', 'verify-private', 'activate', 'verify-recovery', 'verify-restore', 'bind-api', 'handover', 'configure-web', 'export-web-handover'] as const) {
+    await fixture(async (repoRoot, env) => {
+      (state.bundle.expected as Record<string, unknown>).stagingVerification = { scope: 'SCHEMA_AND_SYNTHETIC_AUTH', runAttempt: 1, jobsSha256: 'a'.repeat(64) };
+      (state.bundle.expected as Record<string, unknown>).executionScope = 'schema-and-accounts';
+      await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH, canonicalReleaseReviewJson(state.bundle));
+      env.CUEVO_BACKEND_BUNDLE_SHA256 = digest(canonicalReleaseReviewJson(state.bundle));
+      await assert.rejects(api.runBackendReleasePhase({ mode, repoRoot, env }));
+      assert.deepEqual(state.events, []);
+    });
+  }
+});
+
+test('canonical CI schema-only approval also cannot reach provider or frontend consumers', async () => {
+  const api = await subject();
+  await fixture(async (repoRoot, env) => {
+    (state.bundle.expected as Record<string, unknown>).executionScope = 'schema-and-accounts';
+    await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH, canonicalReleaseReviewJson(state.bundle));
+    env.CUEVO_BACKEND_BUNDLE_SHA256 = digest(canonicalReleaseReviewJson(state.bundle));
+    for (const mode of ['deploy', 'activate', 'handover', 'export-web-handover'] as const) await assert.rejects(api.runBackendReleasePhase({ mode, repoRoot, env }));
+    assert.deepEqual(state.events, []);
+  });
+});
+
 test('backend handover export consumes current approval and writes only fixed public handover identity',async()=>{
  const api=await subject();for(const kind of ['confirmed','missing','approval'])await fixture(async(repoRoot,env)=>{
   env.VERCEL_TOKEN=secret;env.GITHUB_OUTPUT=join(repoRoot,'transfer-output');state.transferFailure=kind==='missing';state.failApproval=kind==='approval';

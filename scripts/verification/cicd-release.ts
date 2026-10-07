@@ -14,6 +14,7 @@ import { verifyHostedBrowserAccess } from './backend-hosted-browser';
 import { readGitBinaryDiffDigest } from './git-source-digest';
 import { verifyHostedLearningLoop, type HostedLearningLoopWebAdmission } from './backend-hosted-learning-loop';
 import { createProtectedPreview, protectedPreviewHeaders, type ProtectedPreviewBinding } from './protected-preview';
+import { readFullReleaseEvidence } from './full-release-evidence';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -98,6 +99,19 @@ const currentCi = async () => {
   if (!/^[a-f0-9]{40}$/.test(sha) || !/^[1-9][0-9]*$/.test(ciRunId) || sha !== required('GITHUB_SHA') || process.env.GITHUB_REF !== 'refs/heads/main') throw Error('Release must use the exact verified main commit.');
   assertCheckout();
   validateCiRun(await github(`actions/runs/${ciRunId}`), { sha, repository: required('GITHUB_REPOSITORY'), ciRunId });
+  if (required('RELEASE_ENVIRONMENT') === 'production') {
+    const fullVerificationRunId = required('FULL_VERIFICATION_RUN_ID');
+    if (fullVerificationRunId === ciRunId) throw Error('Full candidate and dependency verification must have separate run identities.');
+    const evidence = await readFullReleaseEvidence({ repoRoot: process.cwd(), githubToken: required('GH_TOKEN'), repository: required('GITHUB_REPOSITORY'), sha, ciRunId: fullVerificationRunId });
+    const receiptPath = join(directory, 'full-release-proof.json');
+    try {
+      const saved = await json<unknown>(receiptPath);
+      if (canonicalReleaseReviewJson(saved) !== canonicalReleaseReviewJson(evidence)) throw Error('Full customer-candidate evidence changed before consumption.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      await mkdir(directory, { recursive: true }); await writeFile(receiptPath, canonicalReleaseReviewJson(evidence), { flag: 'wx', mode: 0o600 });
+    }
+  } else if (process.env.FULL_VERIFICATION_RUN_ID) throw Error('Staging cannot consume a production candidate identity.');
   await assertCurrentMain();
 };
 const assignmentSchema = z.object({ baseSha: z.string().regex(/^[a-f0-9]{40}$/), reviews: z.array(z.object({ category: z.enum(['source-spec-code', 'qa-regression-operations']), taskId: z.string().min(1).max(200).regex(/^[a-zA-Z0-9_./:-]+$/), reportSha256: z.string().regex(/^[a-f0-9]{64}$/), evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict()).length(2) }).strict();
@@ -126,7 +140,9 @@ const reviewExpected = async (manifest: unknown) => {
   const identity = z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), run_attempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), repository: z.object({ full_name: z.literal(required('GITHUB_REPOSITORY')) }), head_sha: z.literal(required('RELEASE_SHA')), head_branch: z.literal('main'), path: z.literal('.github/workflows/release.yml'), event: z.enum(['workflow_dispatch', 'workflow_run']), status: z.enum(['in_progress', 'waiting']), conclusion: z.null() }).parse(run);
   if (String(identity.id) !== required('GITHUB_RUN_ID') || String(identity.run_attempt) !== required('GITHUB_RUN_ATTEMPT')) throw Error('Release run attempt does not match current execution.');
   const fingerprints = await sourceEvidence(assignments.baseSha);
-  const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...fingerprints, reviews: assignments.reviews };
+  const fullProof = environment.name === 'production' ? await json<{ runId: string; runAttempt: number; sourceSha: string; summarySha256: string; jobsSha256: string }>(join(directory,'full-release-proof.json')) : undefined;
+  const fullVerification = fullProof ? { runId: fullProof.runId, runAttempt: fullProof.runAttempt, sourceSha: fullProof.sourceSha, summarySha256: fullProof.summarySha256, jobsSha256: fullProof.jobsSha256 } : undefined;
+  const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(), ...(fullVerification?{fullVerification}:{}), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...fingerprints, reviews: assignments.reviews };
   return { expected, run };
 };
 const backendBridge = async () => {
@@ -184,7 +200,7 @@ if (mode === 'context') {
   const event = await json<unknown>(required('GITHUB_EVENT_PATH'));
   const context = releaseContext(event, { sha: required('GITHUB_SHA'), ref: required('GITHUB_REF'), repository: required('GITHUB_REPOSITORY'), eventName: required('GITHUB_EVENT_NAME') });
   const selection = backendSelectionForWebEvent(event, required('GITHUB_EVENT_NAME'), context.environment);
-  await writeFile(required('GITHUB_OUTPUT'), `sha=${context.sha}\nci-run-id=${context.ciRunId}\nenvironment=${context.environment}\n`, { flag: 'a' });
+  await writeFile(required('GITHUB_OUTPUT'), `sha=${context.sha}\nci-run-id=${context.ciRunId}\nfull-run-id=${context.fullVerificationRunId??''}\nenvironment=${context.environment}\n`, { flag: 'a' });
   if (selection) await writeFile(required('GITHUB_OUTPUT'), `backend-selection-base64=${encodeWebBackendSelection(selection)}\n`, { flag: 'a' });
   console.log('Release context bound to the current main checkout and canonical CI run.');
 } else if (mode === 'controls') {

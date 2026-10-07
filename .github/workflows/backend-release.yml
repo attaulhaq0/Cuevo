@@ -10,6 +10,12 @@ on:
         description: Successful canonical main push verification run
         required: true
         type: string
+      scope:
+        description: First schema/accounts milestone or complete backend release
+        required: true
+        type: choice
+        default: schema-and-accounts
+        options: [schema-and-accounts, complete-backend]
 permissions:
   contents: read
   actions: read
@@ -100,8 +106,10 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts provision
       - name: Install pinned API deployment CLI
+        if: inputs.scope == 'complete-backend'
         run: npm install --global vercel@62.1.0 --ignore-scripts --no-audit --no-fund
       - name: Deploy current API and inactive Edge worker
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -113,6 +121,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts deploy
       - name: Verify hosted current-role and endpoint prerequisites
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -122,6 +131,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify
       - name: Verify restricted database private files and channel access
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -131,6 +141,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify-private
       - name: Verify signed worker execution and scheduled recovery
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -142,6 +153,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts activate
       - name: Verify original worker lease retry and backoff recovery
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -152,8 +164,10 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify-recovery
       - name: Acquire the exact isolated restoration image
+        if: inputs.scope == 'complete-backend'
         run: docker pull public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53
       - name: Verify isolated database and owned private-file restoration
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -164,6 +178,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify-restore
       - name: Bind the verified API to its reserved staging origin
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -172,6 +187,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts bind-api
       - name: Prepare the frontend manifest from verified backend receipts
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -179,6 +195,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts handover
       - name: Configure only verified public frontend settings
+        if: inputs.scope == 'complete-backend'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -186,6 +203,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts configure-web
       - name: Export the verified public handover for the separate web release
+        if: inputs.scope == 'complete-backend'
         id: web-transfer
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
@@ -194,6 +212,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts export-web-handover
       - name: Retain only the completed backend public handover
+        if: inputs.scope == 'complete-backend'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}

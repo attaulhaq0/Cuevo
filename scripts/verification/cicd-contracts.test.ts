@@ -84,20 +84,24 @@ test('release controls require existing protected environment and reviewed signe
   const bypass = { ...releaseControls(), main: { ...releaseControls().main, required_pull_request_reviews: { ...releaseControls().main.required_pull_request_reviews, bypass_pull_request_allowances: { users: [{ id: 1 }], teams: [], apps: [] } } } };
   assert.throws(() => validateReleaseControls(bypass, { environment: 'production', repository: 'owner/repo' }));
 });
-test('automatic release context admits only successful canonical current-main push CI', () => {
+test('automatic metadata cannot replace explicit manual production candidate admission', () => {
   const expected = { sha, ref: 'refs/heads/main', repository: 'owner/repo', eventName: 'workflow_run' };
-  assert.deepEqual(releaseContext({ workflow_run: trustedRun() }, expected), { sha, ciRunId: '42', environment: 'production' });
+  const full = { ...trustedRun(), event: 'workflow_dispatch', path: '.github/workflows/full-regression.yml', run_attempt: 1 };
+  assert.throws(() => releaseContext({ workflow_run: full }, expected));
+  assert.throws(() => releaseContext({ workflow_run: trustedRun() }, expected), 'routine main CI cannot initiate production');
   for (const fields of [{ event: 'pull_request' }, { conclusion: 'failure' }, { conclusion: 'cancelled' }, { status: 'in_progress' }, { head_branch: 'feature' }, { head_sha: 'c'.repeat(40) }, { path: '.github/workflows/other.yml' }, { repository: { full_name: 'fork/repo' } }, { id: null }]) {
-    assert.throws(() => releaseContext({ workflow_run: { ...trustedRun(), ...fields } }, expected));
+    assert.throws(() => releaseContext({ workflow_run: { ...full, ...fields } }, expected));
   }
   for (const fields of [{ ref: 'refs/heads/feature' }, { eventName: 'pull_request' }, { repository: 'other/repo' }]) {
-    assert.throws(() => releaseContext({ workflow_run: trustedRun() }, { ...expected, ...fields }));
+    assert.throws(() => releaseContext({ workflow_run: full }, { ...expected, ...fields }));
   }
   assert.throws(() => releaseContext({}, expected));
 });
 test('manual release context retains exact-main staging and production admission', () => {
   const expected = { sha, ref: 'refs/heads/main', repository: 'owner/repo', eventName: 'workflow_dispatch' };
-  for (const environment of ['staging', 'production']) assert.deepEqual(releaseContext({ inputs: { environment, commit_sha: sha, ci_run_id: '42' } }, expected), { sha, ciRunId: '42', environment });
+  assert.deepEqual(releaseContext({ inputs: { environment:'staging', commit_sha: sha, ci_run_id:'42' } },expected),{sha,ciRunId:'42',environment:'staging'});
+  assert.deepEqual(releaseContext({ inputs: { environment:'production', commit_sha: sha, ci_run_id:'42',full_verification_run_id:'84' } },expected),{sha,ciRunId:'42',environment:'production',fullVerificationRunId:'84'});
+  for(const [environment,full_verification_run_id]of [['production',''],['production','42'],['staging','84'],['production','bad']]as const)assert.throws(()=>releaseContext({inputs:{environment,commit_sha:sha,ci_run_id:'42',full_verification_run_id}},expected));
   for (const fields of [{ environment: 'preview' }, { commit_sha: 'c'.repeat(40) }, { commit_sha: '$(command)' }, { ci_run_id: '42\nurl=untrusted' }]) {
     assert.throws(() => releaseContext({ inputs: { environment: 'staging', commit_sha: sha, ci_run_id: '42', ...fields } }, expected));
   }
@@ -106,8 +110,8 @@ test('actual release context writes only admitted outputs and rejects stale main
   const directory = await mkdtemp(join(tmpdir(), 'cuevo-release-admission-'));
   const eventPath = join(directory, 'event.json'); const outputPath = join(directory, 'outputs');
   try {
-    await writeFile(eventPath, JSON.stringify({ workflow_run: trustedRun() }));
-    const expected = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, GITHUB_SHA: sha, GITHUB_REF: 'refs/heads/main', GITHUB_REPOSITORY: 'owner/repo', GITHUB_EVENT_NAME: 'workflow_run', GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath, RELEASE_SHA: sha, CI_RUN_ID: '42', GH_TOKEN: 'synthetic-token' };
+    await writeFile(eventPath, JSON.stringify({ inputs:{environment:'production',commit_sha:sha,ci_run_id:'42',full_verification_run_id:'84'} }));
+    const expected = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, GITHUB_SHA: sha, GITHUB_REF: 'refs/heads/main', GITHUB_REPOSITORY: 'owner/repo', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath, RELEASE_SHA: sha, CI_RUN_ID: '42', FULL_VERIFICATION_RUN_ID:'84', GH_TOKEN: 'synthetic-token' };
     const execute = (mode: 'context' | 'ci' | 'deploy' | 'controls', currentSha = sha, run = trustedRun(), checkoutSha = sha, protectedEnvironment = true) => spawnSync(process.execPath, ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href, '--input-type=module', '--eval', `
       const childProcess = (await import('node:module')).createRequire(import.meta.url)('node:child_process');
       childProcess.execFileSync = (command,args) => {
@@ -115,6 +119,7 @@ test('actual release context writes only admitted outputs and rejects stale main
         throw Error('Unexpected command action');
       };
       (await import('node:module')).syncBuiltinESMExports();
+      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/full-release-evidence.ts'))return{format:'module',shortCircuit:true,source:'export function validateProductionCiRun(value,expected){if(value.path!==".github/workflows/full-regression.yml"||value.event!=="workflow_dispatch"||value.head_sha!==expected.sha||value.conclusion!=="success"||value.run_attempt!==1)throw Error("Full source evidence refused");}export async function readFullReleaseEvidence(){return{profile:"CUSTOMER_CANDIDATE",sourceSha:${JSON.stringify(sha)},runId:"42",runAttempt:1};}'};return next(url,context);}});
       process.argv[2] = ${JSON.stringify(mode)};
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
@@ -131,7 +136,7 @@ test('actual release context writes only admitted outputs and rejects stale main
     `], { cwd: directory, env: { ...expected, RELEASE_ENVIRONMENT: 'production' }, encoding: 'utf8', timeout: 20000 });
     const contextResult = execute('context'); assert.equal(contextResult.status, 0, contextResult.stderr);
     assert.equal(contextResult.stdout.includes('FETCH '), false);
-    assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nenvironment=production\n`);
+    assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nfull-run-id=84\nenvironment=production\n`);
     assert.equal(execute('ci').status, 0);
     const controls = execute('controls'); assert.equal(controls.status, 0, controls.stderr); assert.ok(controls.stdout.includes('/protection/required_signatures'));
     const missing = execute('controls', sha, trustedRun(), sha, false); assert.equal(missing.status, 1); assert.ok(missing.stderr.includes('control or approval evidence'));
@@ -141,11 +146,9 @@ test('actual release context writes only admitted outputs and rejects stale main
     assert.equal(staleUpload.stdout.includes('FETCH https://api.vercel.com'),false);
     const wrongCheckout = execute('ci', sha, trustedRun(), 'c'.repeat(40)); assert.equal(wrongCheckout.status, 1);
     assert.equal(wrongCheckout.stdout.includes('FETCH '), false); assert.ok(wrongCheckout.stderr.includes('checkout'));
-    const failed = execute('ci', sha, { ...trustedRun(), conclusion: 'failure' }); assert.equal(failed.status, 1);
-    assert.equal(failed.stdout.includes('/git/ref/heads/main'), false);
-    await writeFile(eventPath, JSON.stringify({ workflow_run: { ...trustedRun(), head_sha: 'c'.repeat(40) } }));
+    await writeFile(eventPath, JSON.stringify({inputs:{environment:'production',commit_sha:'c'.repeat(40),ci_run_id:'42',full_verification_run_id:'84'}}));
     const refused = execute('context'); assert.equal(refused.status, 1);
-    assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nenvironment=production\n`);
+    assert.equal(await readFile(outputPath, 'utf8'), `sha=${sha}\nci-run-id=42\nfull-run-id=84\nenvironment=production\n`);
   } finally {
     assert.equal(dirname(directory), resolve(tmpdir())); assert.ok(basename(directory).startsWith('cuevo-release-admission-'));
     await rm(directory, { recursive: true, force: true });
@@ -420,9 +423,8 @@ test('workflow guard consumes YAML structure and rejects changed deployment trus
   assert.ok(validateWorkflows(triggerYaml.dump(privileged), release).some(issue => issue.includes('Privileged')));
   assert.ok(validateWorkflows(ci, release.replace('needs: release-admission', 'needs: other-job')).some(issue => issue.includes('admission')));
   assert.ok(validateWorkflows(ci, release.replace('name: ${{ needs.release-admission.outputs.environment }}', 'name: unprotected')).some(issue => issue.includes('environment')));
-  assert.ok(validateWorkflows(ci, release.replace('branches: [main]', 'branches: [feature]')).some(issue => issue.includes('canonical main')));
-  assert.ok(validateWorkflows(ci, release.replace('workflows: [Cuevo verification]', 'workflows: [Other workflow]')).some(issue => issue.includes('canonical main')));
-  assert.ok(validateWorkflows(ci, release.replace("github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.conclusion != 'success'")).some(issue => issue.includes('main')));
+  assert.ok(validateWorkflows(ci, release.replace('full_verification_run_id:', 'removed_full_run_id:')).some(issue => issue.includes('separate')));
+  assert.ok(validateWorkflows(ci, release.replace("github.event_name == 'workflow_dispatch'", "github.event_name == 'workflow_run'")).some(issue => issue.includes('main')));
   assert.ok(validateWorkflows(ci, release.replace('id: context', 'id: unvalidated')).some(issue => issue.includes('context')));
   assert.ok(validateWorkflows(ci, release.replace('RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}', 'RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}')).some(issue => issue.includes('validated')));
   assert.ok(validateWorkflows(ci, release.replace('ref: ${{ needs.release-admission.outputs.sha }}', 'ref: main')).some(issue => issue.includes('checkout')));

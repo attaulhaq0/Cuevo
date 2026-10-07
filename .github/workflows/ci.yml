@@ -27,9 +27,7 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
-      - run: npm run test:cicd
-      - run: node --import tsx scripts/verification/cicd-check.ts
-      - run: npm run check:repository && npm run test:repository && npm run check:architecture && npm run test:architecture && npm run check:docs && npm run test:docs
+      - run: node --import tsx scripts/verification/stateless-checks.ts
       - run: npm run lint && npm run typecheck && npm test
   technical-mvp:
     runs-on: ubuntu-latest
@@ -43,13 +41,7 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - run: npx --no-install playwright install --with-deps chromium firefox webkit
-      - run: npm run verify:technical
-      - name: Build local Docker images
-        run: docker compose --env-file .env.local build
-      - name: Build compiled runtime images
-        run: |
-          docker build -f docker/Dockerfile.runtime --build-arg SERVICE=api -t cuevo-api:${{ github.sha }} .
-          docker build -f docker/Dockerfile.runtime --build-arg SERVICE=worker -t cuevo-worker:${{ github.sha }} .
+      - run: node --import tsx scripts/verification/technical-exit.ts --profile=ci
       - name: Export sanitized status evidence
         if: always()
         run: node --import tsx scripts/verification/cicd-evidence.ts

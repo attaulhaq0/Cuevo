@@ -5,7 +5,9 @@ import { isAbsolute, join, parse, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { readBackendReleaseSourceEvidence } from './backend-release-admission';
 import { prepareBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
-import { validateCiRun, validateReleaseControls } from './cicd-contracts';
+import { validateReleaseControls } from './cicd-contracts';
+import { validateBackendVerificationRun } from './staging-verification';
+import { readStagingVerificationJobs } from './staging-verification-jobs';
 import { canonicalReleaseReviewJson, canonicalReleaseExecutionJson, parseReleaseExecutionJson } from './release-review';
 import { createCanonicalHostedMigrationPlan, canonicalHostedMigrationPlan, type HostedMigrationPlanV1 } from '../database/hosted-migration-plan';
 import { createHostedMigrationWorkdirs, type HostedMigrationWorkdirs } from '../database/hosted-migration-workdirs';
@@ -24,8 +26,7 @@ const repositoryName = z.string().regex(/^[a-zA-Z0-9_.-]{1,100}\/[a-zA-Z0-9_.-]{
 const secret = z.string().min(1).max(4096).regex(/^[\x21-\x7e]+$/);
 const review = z.object({ category: z.enum(['source-spec-code', 'qa-regression-operations']), taskId: z.string().min(1).max(200).regex(/^[a-zA-Z0-9_./:-]+$/), reportSha256: hash, evidenceSha256: hash, releaseSha: sha, treeSha: sha, baseSha: sha, sourceManifestSha256: hash, diffSha256: hash, reviewedAt: z.iso.datetime({ offset: true }) }).strict();
 const inputSchema = z.object({ repoRoot: z.string(), eventPath: z.string(), repository: repositoryName, sha, ref: z.literal('refs/heads/main'), eventName: z.literal('workflow_dispatch'), runId: identifier, runAttempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), githubToken: secret, providerToken: secret, input: z.object({ targets: z.unknown(), baseSha: sha, ciRunId: identifier, reviews: z.array(review).length(2) }).strict() }).strict();
-const eventSchema = z.object({ ref: z.literal('refs/heads/main'), inputs: z.object({ commit_sha: sha, ci_run_id: identifier }), repository: z.object({ full_name: repositoryName }) });
-const ciSchema = z.object({ id: z.number().int().positive(), head_sha: sha, head_branch: z.literal('main'), event: z.literal('push'), status: z.literal('completed'), conclusion: z.literal('success'), path: z.literal('.github/workflows/ci.yml'), repository: z.object({ full_name: repositoryName }) });
+const eventSchema = z.object({ ref: z.literal('refs/heads/main'), inputs: z.object({ commit_sha: sha, ci_run_id: identifier, scope: z.enum(['schema-and-accounts', 'complete-backend']) }), repository: z.object({ full_name: repositoryName }) });
 const runSchema = z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive(), head_sha: sha, head_branch: z.literal('main'), event: z.literal('workflow_dispatch'), status: z.enum(['waiting', 'in_progress']), conclusion: z.null(), path: z.literal('.github/workflows/backend-release.yml'), repository: z.object({ full_name: repositoryName }) });
 const zero = z.union([z.literal(0), z.literal('0')]).transform(() => 0 as const);
 const emptySchema = z.array(z.object({ authUsers: zero, storageObjects: zero, appSchemas: z.array(z.string()).length(0), runtimeRoles: z.array(z.string()).length(0), historyPresent: z.literal(false), recoveryCronPresent: z.boolean() }).strict()).length(1);
@@ -79,13 +80,14 @@ async function request(url: string, token: string, query?: string) {
 async function authority(input: NativePreparationInput, treeSha: string) {
   const github = (path: string) => request(`https://api.github.com/repos/${input.repository}${path ? '/' + path : ''}`, input.githubToken);
   const [repository, mainRaw, ciRaw, runRaw, environment, branches, main, signatures, commit] = await Promise.all([github(''), github('git/ref/heads/main'), github('actions/runs/' + input.input.ciRunId), github('actions/runs/' + input.runId), github('environments/staging'), github('environments/staging/deployment-branch-policies'), github('branches/main/protection'), github('branches/main/protection/required_signatures'), github('git/commits/' + input.sha)]);
-  const ci = ciSchema.parse(ciRaw), backend = runSchema.parse(runRaw), mainSha = z.object({ object: z.object({ type: z.literal('commit'), sha }) }).parse(mainRaw).object.sha;
-  validateCiRun(ci, { sha: input.sha, repository: input.repository, ciRunId: input.input.ciRunId }); validateReleaseControls({ repository, environment, branches, main, signatures }, { repository: input.repository, environment: 'staging' });
+  const ci = validateBackendVerificationRun(ciRaw, { sha: input.sha, repository: input.repository, ciRunId: input.input.ciRunId }), backend = runSchema.parse(runRaw), mainSha = z.object({ object: z.object({ type: z.literal('commit'), sha }) }).parse(mainRaw).object.sha;
+  const focusedJobs = await readStagingVerificationJobs(ci, github);
+  validateReleaseControls({ repository, environment, branches, main, signatures }, { repository: input.repository, environment: 'staging' });
   const environmentId = z.object({ id: z.number().int().positive(), name: z.literal('staging') }).parse(environment).id;
   z.object({ total_count: z.literal(1) }).parse(branches);
   z.object({ sha: z.literal(input.sha), tree: z.object({ sha: z.literal(treeSha) }), verification: z.object({ verified: z.literal(true), reason: z.literal('valid'), signature: z.string().min(1), payload: z.string().min(1) }) }).parse(commit);
   if (mainSha !== input.sha || String(backend.id) !== input.runId || backend.run_attempt !== input.runAttempt || backend.head_sha !== input.sha || backend.repository.full_name !== input.repository) throw failure();
-  return { currentMainSha: mainSha, environmentId, ciRun: { ...ci, repository: { full_name: ci.repository.full_name } }, backendRun: { ...backend, repository: { full_name: backend.repository.full_name } } };
+  return { currentMainSha: mainSha, environmentId, ciRun: ci, ...(focusedJobs ? { stagingVerification: { scope: 'SCHEMA_AND_SYNTHETIC_AUTH' as const, ...focusedJobs } } : {}), backendRun: { ...backend, repository: { full_name: backend.repository.full_name } } };
 }
 async function emptyTarget(input: NativePreparationInput, projectRef: string) {
   const provider = await readHostedMigrationProvider({ projectRef, boundProjectRef: projectRef, providerToken: input.providerToken });
@@ -151,9 +153,9 @@ export async function prepareNativeBackendRelease(value: unknown): Promise<Prepa
     const source = { releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, fingerprints: { sourceManifestSha256, diffSha256 } };
     await readBackendReleaseSourceEvidence(root, source as Parameters<typeof readBackendReleaseSourceEvidence>[1]);
     const current = await authority(input, treeSha), placeholder = '0'.repeat(64), now = Date.now();
-    const common = { repository: input.repository, releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, ciRunId: input.input.ciRunId, releaseRunId: input.runId, runAttempt: input.runAttempt, environmentName: 'staging' as const, deploymentEnvironment: 'synthetic-staging' as const, targets: input.input.targets as BackendReleaseExpected['targets'], reviews: input.input.reviews.map(({ category, taskId, reportSha256, evidenceSha256 }) => ({ category, taskId, reportSha256, evidenceSha256 })) };
+    const common = { repository: input.repository, releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, ciRunId: input.input.ciRunId, releaseRunId: input.runId, runAttempt: input.runAttempt, environmentName: 'staging' as const, deploymentEnvironment: 'synthetic-staging' as const, executionScope: event.inputs.scope, targets: input.input.targets as BackendReleaseExpected['targets'], reviews: input.input.reviews.map(({ category, taskId, reportSha256, evidenceSha256 }) => ({ category, taskId, reportSha256, evidenceSha256 })) };
     const trial: BackendReleaseExpected = { ...common, ...current, now, fingerprints: { sourceManifestSha256, diffSha256, migrationPlanSha256: placeholder, migrationHistorySha256: placeholder, migrationToolchainSha256: placeholder,migrationEndpointSha256:placeholder, operatorStoragePolicySha256: placeholder, apiArtifactSha256: placeholder, edgeArtifactSha256: placeholder, denoLockSha256: placeholder } };
-    const intent = (expected: BackendReleaseExpected) => ({ ...common, environmentId: expected.environmentId, version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', fingerprints: expected.fingerprints, preparedAt: new Date(expected.now).toISOString(), expiresAt: new Date(expected.now + 3600000).toISOString(), reviews: input.input.reviews });
+    const intent = (expected: BackendReleaseExpected) => ({ ...common, environmentId: expected.environmentId, version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', fingerprints: expected.fingerprints, ...(expected.stagingVerification ? { stagingVerification: expected.stagingVerification } : {}), preparedAt: new Date(expected.now).toISOString(), expiresAt: new Date(expected.now + 3600000).toISOString(), reviews: input.input.reviews });
     prepareBackendReleaseIntent(intent(trial), trial);
     stage='empty-target-and-migration-plan';
     const projectRef = trial.targets.supabase.projectRef, target = await emptyTarget(input, projectRef), planned = createCanonicalHostedMigrationPlan({ repoRoot: root, sourceSha: input.sha, treeSha, target, now: Date.now() });

@@ -8,10 +8,23 @@ const map = (value: unknown): Map => value && typeof value === 'object' && !Arra
 async function source() { return map(yaml.load(await readFile('.github/workflows/backend-release.yml', 'utf8'))); }
 test('backend schema workflow uses exact main manual dispatch and one serialized deployment window', async () => {
   const workflow = await source(); assert.deepEqual(Object.keys(map(workflow.on)), ['workflow_dispatch']);
-  assert.deepEqual(Object.keys(map(map(map(workflow.on).workflow_dispatch).inputs)).sort(), ['ci_run_id', 'commit_sha']);
+  assert.deepEqual(Object.keys(map(map(map(workflow.on).workflow_dispatch).inputs)).sort(), ['ci_run_id', 'commit_sha', 'scope']);
+  const scope = map(map(map(map(workflow.on).workflow_dispatch).inputs).scope);
+  assert.deepEqual(scope.options, ['schema-and-accounts', 'complete-backend']);
+  assert.equal(scope.default, 'schema-and-accounts');
   assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' }); assert.deepEqual(workflow.concurrency, { group: 'cuevo-backend-release', 'cancel-in-progress': false });
   const jobs = map(workflow.jobs); assert.deepEqual(Object.keys(jobs), ['prepare', 'schema']);
   assert.equal(map(jobs.prepare).if, "github.ref == 'refs/heads/main'"); assert.equal(map(jobs.schema).if, "github.ref == 'refs/heads/main'"); assert.equal(map(jobs.schema).environment, 'staging'); assert.equal(map(jobs.schema).needs, 'prepare');
+});
+
+test('schema and account milestone skips every later backend deployment and handover consumer', async () => {
+  const workflow = await source(), steps = (map(map(workflow.jobs).schema).steps as unknown[]).map(map);
+  const provision = steps.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts provision');
+  const required = steps.filter((step, index) => index > provision && (typeof step.run === 'string' || step.id === 'web-transfer'
+    || map(step.with).name === 'cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}'));
+  assert.ok(required.length > 10);
+  for (const step of required) assert.equal(step.if, "inputs.scope == 'complete-backend'");
+  for (const phase of ['approval', 'bootstrap-schema', 'provision']) assert.equal(steps.find(step => step.run === `node --import tsx scripts/verification/backend-release.ts ${phase}`)!.if, undefined);
 });
 
 test('completed backend exports exactly one public handover after web settings and never uploads runtime secrets with it',async()=>{
@@ -21,7 +34,7 @@ test('completed backend exports exactly one public handover after web settings a
  assert.ok(exported>configure&&configure>=0);
  const step=schema[exported];assert.equal(step.id,'web-transfer');assert.deepEqual(Object.keys(map(step.env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','GH_TOKEN','VERCEL_TOKEN']);
  const uploaded=schema.findIndex(row=>map(row.with).name==='cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}');assert.ok(uploaded>exported);
- const upload=schema[uploaded];assert.equal(map(upload.with).path,'.local/hosted-release/web-transfer.json');assert.equal(map(upload.with)['if-no-files-found'],'error');assert.equal(upload.if,undefined);
+ const upload=schema[uploaded];assert.equal(map(upload.with).path,'.local/hosted-release/web-transfer.json');assert.equal(map(upload.with)['if-no-files-found'],'error');assert.equal(upload.if,"inputs.scope == 'complete-backend'");
 });
 test('only metadata token reaches preparation; schema credentials arrive after package approval and never enter shell input', async () => {
   const workflow = await source(), jobs = map(workflow.jobs), prepare = (map(jobs.prepare).steps as unknown[]).map(map), schema = (map(jobs.schema).steps as unknown[]).map(map);

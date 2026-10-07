@@ -16,6 +16,16 @@ test('package requires the two actual assigned report/source bindings and hashes
  assert.equal(prepared.comment,`Cuevo release admission approved: sha=${sha}; run=51; attempt=1; package=sha256:${prepared.sha256}`);
  assert.match(prepared.canonicalJson,/RETAINED_INDEPENDENT_AGENT_REPORT/);assert.doesNotMatch(prepared.canonicalJson,/approvedAt|approvalId|agentReadProven/);
 });
+
+test('production binds full candidate B separately from dependency CI A and rejects missing or altered proof',()=>{
+ const fullVerification={runId:'84',runAttempt:2,sourceSha:sha,summarySha256:digest,jobsSha256:digest},web={...input().web,target:'production' as const};
+ const body={...input(),web,fullVerification},context={...expected(),web,environmentName:'production' as const,fullVerification};
+ const prepared=subject.prepareReleaseReviewPackage(body,context);assert.match(prepared.canonicalJson,/"ciRunId":"42"/);assert.match(prepared.canonicalJson,/"runId":"84"/);
+ assert.equal(subject.validatePreparedReleaseReviewPackage(prepared,context).sha256,prepared.sha256);
+ assert.throws(()=>subject.prepareReleaseReviewPackage({...input(),web},context));
+ for(const patch of [{runId:'42'},{sourceSha:base},{jobsSha256:'0'.repeat(64)},{summarySha256:'0'.repeat(64)}])assert.throws(()=>subject.prepareReleaseReviewPackage({...body,fullVerification:{...fullVerification,...patch}},context));
+ assert.throws(()=>subject.prepareReleaseReviewPackage({...input(),fullVerification},expected()));
+});
 test('package refuses missing, unknown, duplicate, stale, future, self or wrong immutable reviewer evidence',()=>{
  for(const patch of[{version:2},{privateContent:'not admitted'},{releaseSha:base},{baseSha:sha},{manifestSha256:'0'.repeat(64)},{reviews:input().reviews.slice(0,1)},{reviews:[input().reviews[0],input().reviews[0]]},{reviews:[{...input().reviews[0],taskId:'/root/author'},input().reviews[1]]},{reviews:[{...input().reviews[0],independenceAttested:false},input().reviews[1]]},{reviews:[{...input().reviews[0],reportSha256:'0'.repeat(64)},input().reviews[1]]},{reviews:[{...input().reviews[0],reviewedAt:'2026-10-06T13:00:00Z'},input().reviews[1]]},{reviews:[{...input().reviews[0],reviewedAt:'2026-10-05T11:59:59Z'},input().reviews[1]]}])assert.throws(()=>subject.prepareReleaseReviewPackage({...input(),...patch},expected()));
 });

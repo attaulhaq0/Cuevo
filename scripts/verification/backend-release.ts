@@ -61,13 +61,17 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const bytes = await ownedFile(repoRoot, bundlePath, 1024 * 1024);
     if (digest(bytes) !== required(env, 'CUEVO_BACKEND_BUNDLE_SHA256')) throw failure();
     const bundle = bundleSchema.parse(parseReleaseExecutionJson(new TextDecoder('utf8', { fatal: true }).decode(bytes)));
+    // A focused database/account gate is never a provider deployment certificate.
+    const scope = z.object({ stagingVerification: z.unknown().optional(), executionScope: z.enum(['schema-and-accounts', 'complete-backend']).optional() }).parse(bundle.expected);
+    if (scope.stagingVerification !== undefined && scope.executionScope !== 'schema-and-accounts') throw failure();
+    if ((scope.stagingVerification !== undefined || scope.executionScope === 'schema-and-accounts') && !['approval', 'bootstrap-schema', 'provision'].includes(mode)) throw failure();
     const identity = z.object({ repository: z.literal(required(env, 'GITHUB_REPOSITORY')), releaseSha: z.literal(required(env, 'GITHUB_SHA')), releaseRunId: z.literal(required(env, 'GITHUB_RUN_ID')), runAttempt: z.literal(Number(required(env, 'GITHUB_RUN_ATTEMPT'))), environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging') }).parse(bundle.expected);
     if (bundle.repoRoot !== repoRoot || identity.runAttempt < 1) throw failure();
     const endpoint=bundle.migrationEndpoint;
     const endpointFingerprint=z.object({fingerprints:z.object({migrationEndpointSha256:z.literal(digest(canonicalReleaseExecutionJson(endpoint)))})}).parse(bundle.expected);if(!endpointFingerprint)throw failure();
     validatePreparedBackendReleaseIntent(bundle.preparedApproval, { ...bundle.expected as object, now: Date.now() });
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
-    await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken });
+    await readBackendReleaseAdmission({ repoRoot, expected: bundle.expected, prepared: bundle.preparedApproval, githubToken: shared.githubToken, ...(['approval','bootstrap-schema','provision'].includes(mode)?{effectScope:'SCHEMA_AND_SYNTHETIC_AUTH'}:{}) });
     if (mode === 'approval') return { status: 'ADMITTED' as const, hostedAcceptance: false };
     if(mode==='export-web-handover'){
       const result=await exportBackendWebTransfer({repoRoot,bundleSha256:required(env,'CUEVO_BACKEND_BUNDLE_SHA256'),githubToken:shared.githubToken,vercelToken:required(env,'VERCEL_TOKEN')});
@@ -174,7 +178,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       const database = await createHostedMigrationDatabase({repoRoot,projectRef,databaseUrl:`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,certificate,password:migrationPassword});
       const referenceState: {status:'CONFIRMED'|'REQUIRES_REVIEW'} = {status:'REQUIRES_REVIEW'};
       const reference = await database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`, async () => {
-        await readBackendReleaseAdmission({repoRoot,expected:bundle.expected,prepared:bundle.preparedApproval,githubToken:shared.githubToken});
+        await readBackendReleaseAdmission({repoRoot,expected:bundle.expected,prepared:bundle.preparedApproval,githubToken:shared.githubToken,effectScope:'SCHEMA_AND_SYNTHETIC_AUTH'});
         const roles=await database.provisionInitialRuntimeRoles({apiPassword64hex:runtimePasswords.api,workerPassword64hex:runtimePasswords.worker});
         await record(repoRoot,'runtime-roles-result.json',roles);if(roles.status!=='CONFIRMED'||!roles.apiLogin||!roles.workerLogin)throw failure();
         await database.executeReferenceScenarioSource(); referenceState.status='CONFIRMED';

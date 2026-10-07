@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { prepareBackendReleaseIntent } from './backend-release-contracts';
+import { stagingVerificationJobPolicy } from './staging-verification';
+import { readStagingVerificationJobs } from './staging-verification-jobs';
 const token='private-github-admission-canary',repo='owner/repo';
 const git=(root:string,...args:string[])=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],windowsHide:true}).trim();
 async function api(){let subject:Record<string,unknown>={};try{subject=await import(pathToFileURL(resolve(import.meta.dirname,'backend-release-admission.ts')).href);}catch(error){if((error as NodeJS.ErrnoException).code!=='ERR_MODULE_NOT_FOUND')throw error;}assert.equal(typeof subject.readBackendReleaseAdmission,'function','native GitHub backend admission reader exists');return subject as typeof import('./backend-release-admission');}
@@ -33,3 +35,35 @@ test('signature contradictions redirects malformed and oversized bodies never be
 test('a stalled official body is cancelled by the bounded native request signal without exposing content',async()=>{const{readBackendReleaseAdmission}=await api();await fixture(async f=>{const timeout=AbortSignal.timeout;try{AbortSignal.timeout=()=>{const controller=new AbortController();setTimeout(()=>controller.abort(),20);return controller.signal;};globalThis.fetch=async()=>new Response(new ReadableStream({start(){/* Simulated official transport never finishes. */}}));await assert.rejects(readBackendReleaseAdmission(f.input),error=>error instanceof Error&&!error.message.includes(token));}finally{AbortSignal.timeout=timeout;}});});
 
 test('CI rerun status or metadata changed after approval is read again and refuses stale successful admission',async()=>{const{readBackendReleaseAdmission}=await api();for(const fields of[{status:'in_progress',conclusion:null},{id:32},{head_sha:'0'.repeat(40)},{repository:{full_name:'fork/repo'}}])await fixture(async f=>{const fetcher=globalThis.fetch;let afterApproval=false;globalThis.fetch=async(url,options)=>{if(String(url).endsWith('/approvals'))afterApproval=true;if(afterApproval&&String(url).endsWith('/actions/runs/31'))return Response.json({...f.responses.get('actions/runs/31') as object,...fields});return fetcher(url,options);};await assert.rejects(readBackendReleaseAdmission(f.input),/admission.*requires review/i);});});
+
+test('native focused admission re-reads every successful job and rejects proof drift before effects', async () => {
+  const { readBackendReleaseAdmission } = await api();
+  await fixture(async f => {
+    const ci = { ...f.responses.get('actions/runs/31') as object, path: '.github/workflows/staging-verification.yml', event: 'workflow_dispatch', run_attempt: 1 };
+    const jobs = Object.entries(stagingVerificationJobPolicy).map(([name, policy], index) => ({ id: index + 1, name, run_id: 31, run_attempt: 1,
+      head_sha: f.sha, head_branch: 'main', status: 'completed', conclusion: 'success', steps: policy.steps.map((step, position) => ({ name: step, number: position + 1, status: 'completed', conclusion: 'success' })) }));
+    f.responses.set('actions/runs/31', ci);
+    f.responses.set('actions/runs/31/attempts/1/jobs?per_page=100&page=1', { total_count: jobs.length, jobs });
+    const securityRun = { ...ci, id: 41, path: '.github/workflows/ci.yml', event: 'push' };
+    f.responses.set(`actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${f.sha}&per_page=100&page=1`, { total_count: 1, workflow_runs: [securityRun] });
+    f.responses.set('actions/runs/41', securityRun);
+    const securitySteps = ['Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1','Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020','Run npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund','Run npm ci --ignore-scripts --no-audit --no-fund','Run node node_modules/esbuild/install.js','Run github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2','Run github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2','Require current processed CodeQL security findings to be clear'];
+    f.responses.set('actions/runs/41/attempts/1/jobs?per_page=100&page=1', { total_count: 1, jobs: [{ id: 70, name: 'codeql', run_id: 41, run_attempt: 1, head_sha: f.sha, head_branch: 'main', status: 'completed', conclusion: 'success', steps: securitySteps.map((name,index)=>({ name, number: index+1, status:'completed', conclusion:'success' })) }] });
+    const jobProof = await readStagingVerificationJobs(ci, async path => f.responses.get(path));
+    assert.ok(jobProof);
+    const stagingVerification = { scope: 'SCHEMA_AND_SYNTHETIC_AUTH', ...jobProof };
+    const expected = { ...f.expected, ciRun: ci, stagingVerification, executionScope: 'schema-and-accounts' };
+    const body = JSON.parse((f.input.prepared as { canonicalJson: string }).canonicalJson);
+    const prepared = prepareBackendReleaseIntent({ ...body, stagingVerification, executionScope: 'schema-and-accounts' }, expected);
+    f.responses.set('actions/runs/51/approvals', [{ environments: [{ id: 123, name: 'staging' }], state: 'approved', user: { id: 95836629, login: 'attaulhaq0', type: 'User' }, comment: prepared.comment }]);
+    const input = { ...f.input, expected, prepared, effectScope: 'SCHEMA_AND_SYNTHETIC_AUTH' };
+    await assert.rejects(readBackendReleaseAdmission({ ...input, effectScope: 'COMPLETE_BACKEND' }));
+    await assert.rejects(readBackendReleaseAdmission({ ...f.input, expected, prepared }));
+    assert.equal(f.calls.length, 0);
+    const admitted = await readBackendReleaseAdmission(input);
+    assert.deepEqual(admitted.expected.stagingVerification, stagingVerification);
+    assert.equal(f.calls.filter(path => path.startsWith('actions/runs/31/attempts/1/jobs')).length, 2);
+    jobs[0].steps[0].conclusion = 'skipped';
+    await assert.rejects(readBackendReleaseAdmission(input));
+  });
+});
