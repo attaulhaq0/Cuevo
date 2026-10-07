@@ -72,21 +72,29 @@ test('failed snapshot waits for its held read sibling before returning unavailab
  });
 });
 
-test('object verification starts info and bytes for exactly two objects while a third waits for the bounded batch',async()=>{
+test('initial snapshot overlaps remote metadata construction but waits for both before inspecting any chain',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async()=>{
+  const transport=globalThis.fetch;let release:(()=>void)|undefined,remoteMetadataStarted=false,chainStarted=false;
+  globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),query=options?.body?JSON.parse(String(options.body)).query as string|undefined:undefined;if(query?.includes('CUEVO_STORAGE_INVENTORY_COUNTS')&&!release)await new Promise<void>(done=>{release=done;});if(url.pathname==='/storage/v1/bucket/'+bucket)remoteMetadataStarted=true;if(url.pathname==='/storage/v1/object/list/'+bucket)chainStarted=true;return transport(raw,options);};
+  const pending=readHostedOperatorStorageInventory(input);for(let index=0;index<20&&!release;index++)await new Promise(done=>setTimeout(done,0));await new Promise(done=>setTimeout(done,0));const beforeRelease={remoteMetadataStarted,chainStarted};release!();await pending;assert.equal(beforeRelease.remoteMetadataStarted,true);assert.equal(beforeRelease.chainStarted,false);
+ });
+});
+
+test('object verification starts info and bytes for exactly four objects while a fifth waits for the bounded batch',async()=>{
  const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{
-  populate(f,'COMMITTED');const transport=globalThis.fetch,started:string[]=[],releases:(()=>void)[]=[],infoReads=new Map<string,number>();let active=0,maxActive=0,blocked=true,verificationStarted=false;
+  populate(f,'COMMITTED',2);const transport=globalThis.fetch,started:string[]=[],releases:(()=>void)[]=[],infoReads=new Map<string,number>();let active=0,maxActive=0,blocked=true,verificationStarted=false;
   globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),match=/^\/storage\/v1\/object\/(info\/)?cuevo-release-operator\/(.+)$/.exec(url.pathname);if(match?.[1]){const count=(infoReads.get(match[2])??0)+1;infoReads.set(match[2],count);if(count===2)verificationStarted=true;}if(match&&verificationStarted&&f.rows.some(row=>row.name===match[2])&&blocked){started.push((match[1]?'info:':'bytes:')+match[2]);active++;maxActive=Math.max(maxActive,active);await new Promise<void>(done=>releases.push(done));active--;}return transport(raw,options);};
-  const pending=readHostedOperatorStorageInventory(input);for(let index=0;index<80&&started.length<4;index++)await new Promise(done=>setTimeout(done,0));
+  const pending=readHostedOperatorStorageInventory(input);for(let index=0;index<80&&started.length<8;index++)await new Promise(done=>setTimeout(done,0));
   const observed=[...started];blocked=false;for(const release of releases)release();await pending;
-  assert.equal(observed.length,4);assert.equal(maxActive,4);assert.equal(new Set(observed.map(value=>value.slice(value.indexOf(':')+1))).size,2);assert.equal(observed.some(value=>value.endsWith(f.rows[2].name)),false);
+  assert.equal(observed.length,8);assert.equal(maxActive,8);assert.equal(new Set(observed.map(value=>value.slice(value.indexOf(':')+1))).size,4);assert.equal(observed.some(value=>value.endsWith(f.rows[4].name)),false);
  });
 });
 
 test('failed object INFO drains held bodies before refusal and never starts the next object batch',async()=>{
  const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{
-  populate(f,'COMMITTED');const transport=globalThis.fetch,release: (()=>void)[]=[],paths:string[]=[],infoReads=new Map<string,number>();let started=false,settled=false;
+  populate(f,'COMMITTED',2);const transport=globalThis.fetch,release: (()=>void)[]=[],paths:string[]=[],infoReads=new Map<string,number>();let started=false,settled=false;
   globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),match=/^\/storage\/v1\/object\/(info\/)?cuevo-release-operator\/(.+)$/.exec(url.pathname);if(match?.[1]){const count=(infoReads.get(match[2])??0)+1;infoReads.set(match[2],count);if(count===2)started=true;}if(match&&started){paths.push(match[2]);if(match[1]&&match[2]===f.rows[0].name)return Response.json({error:'failed'},{status:403});if(!match[1])await new Promise<void>(done=>release.push(done));}return transport(raw,options);};
-  const pending=readHostedOperatorStorageInventory(input).then(()=>{settled=true;return false;},()=>{settled=true;return true;});for(let index=0;index<80&&release.length<2;index++)await new Promise(done=>setTimeout(done,0));await new Promise(done=>setTimeout(done,0));const premature=settled;for(const done of release)done();assert.equal(await pending,true);assert.equal(premature,false);assert.equal(paths.includes(f.rows[2].name),false);
+  const pending=readHostedOperatorStorageInventory(input).then(()=>{settled=true;return false;},()=>{settled=true;return true;});for(let index=0;index<80&&release.length<4;index++)await new Promise(done=>setTimeout(done,0));await new Promise(done=>setTimeout(done,0));const premature=settled;for(const done of release)done();assert.equal(await pending,true);assert.equal(premature,false);assert.equal(paths.includes(f.rows[4].name),false);
  });
 });
 

@@ -67,7 +67,10 @@ export async function readHostedOperatorStorageInventory(value:unknown):Promise<
    if(counts.bucketCount!==expectedBuckets.length||counts.totalObjects!==counts.operatorObjects||counts.otherObjects!==0||counts.invalidOperatorPaths!==0||!same(buckets,expectedBuckets))throw failure();
    const rows:z.infer<typeof objectSchema>[]=[];let prior='';const ids=new Set<string>();for(let offset=0;offset<=1000;offset+=100){const page=offset===0?firstPage:await readPage(offset);for(const row of page){if(!pathPattern.test(row.name)||row.name<=prior||ids.has(row.id)||!validTimestamp(row.createdAt)||!validTimestamp(row.updatedAt))throw failure();prior=row.name;ids.add(row.id);rows.push(row);}if(rows.length>1000)throw failure();if(page.length<100){if(rows.length!==counts.totalObjects)throw failure();return{counts,buckets,rows};}}throw failure();
   };
-  const before=await snapshot(),bytesVerificationStartedAtMs=Date.now(),remote=await createHostedMigrationRemoteJournal({projectRef:input.projectRef,boundProjectRef:input.boundProjectRef,identity:input.identity,providerToken:input.providerToken,storageKey:input.storageKey}),project=await remote.inspectProject();
+  // Both independently validated metadata owners finish before any project
+  // chain inspection. The original byte clock covers this whole read wave.
+  const bytesVerificationStartedAtMs=Date.now(),[before,remote]=await readWave([snapshot(),createHostedMigrationRemoteJournal({projectRef:input.projectRef,boundProjectRef:input.boundProjectRef,identity:input.identity,providerToken:input.providerToken,storageKey:input.storageKey})]);
+  const project=await remote.inspectProject();
   const verified=project.operations.flatMap(o=>o.objects).sort((a,b)=>a.path.localeCompare(b.path));if(verified.length!==before.rows.length||new Set(verified.map(o=>o.path)).size!==verified.length)throw failure();
   const verifyObject=async(row:z.infer<typeof objectSchema>,index:number)=>{
    const actual=verified[index];if(!actual||actual.path!==row.name||actual.size!==Number(row.size))throw failure();
@@ -76,10 +79,10 @@ export async function readHostedOperatorStorageInventory(value:unknown):Promise<
    if(info.id!==row.id||info.name!==row.name||info.size!==Number(row.size)||info.version!==undefined&&info.version!==row.version)throw failure();
    if(bytes.length!==actual.size||hash(bytes)!==actual.sha256)throw failure();
   };
-  // Two admitted objects per wave, each with independent INFO/body reads:
-  // at most four requests, with every result verified before the next wave.
-  for(let offset=0;offset<before.rows.length;offset+=2){
-   await readWave(before.rows.slice(offset,offset+2).map((row,index)=>verifyObject(row,offset+index)));
+  // Four admitted objects per wave, each with independent INFO/body reads:
+  // at most eight requests, with every result verified before the next wave.
+  for(let offset=0;offset<before.rows.length;offset+=4){
+   await readWave(before.rows.slice(offset,offset+4).map((row,index)=>verifyObject(row,offset+index)));
   }
   const[after,confirmed,finalCounts]=await readWave([snapshot(),remote.inspectProject(),readCounts()]);if(!same(before,after)||!same(project.operations,confirmed.operations)||project.sha256!==confirmed.sha256||!same(after.counts,finalCounts))throw failure();const bytesVerifiedAtMs=confirmed.observedAtMs;if(!Number.isSafeInteger(bytesVerifiedAtMs)||bytesVerifiedAtMs<bytesVerificationStartedAtMs||bytesVerificationStartedAtMs<startedAtMs||bytesVerifiedAtMs>Date.now())throw failure();sourcePolicy(input);const sourceConfirmedCounts=await readCounts();if(!same(finalCounts,sourceConfirmedCounts))throw failure();const countsVerifiedAtMs=Date.now(),completedAtMs=countsVerifiedAtMs;if(!Number.isSafeInteger(completedAtMs)||completedAtMs<bytesVerifiedAtMs)throw failure();
   return{evidence:'VERIFIED_INITIAL_OPERATOR_STORAGE_INVENTORY',projectRef:input.projectRef,sourceSha:input.sourceSha,treeSha:input.treeSha,approvalDigest:input.identity.approvalDigest,ciRunId:input.identity.ciRunId,planSha256:input.identity.planSha256,stageId:input.identity.stageId,stageSha256:input.identity.stageSha256,expectedVersionsSha256:hash(JSON.stringify([...input.expectedVersions].sort())),observedAtMs:Math.min(bytesVerificationStartedAtMs,countsVerifiedAtMs),startedAtMs,bytesVerificationStartedAtMs,bytesVerifiedAtMs,countsVerifiedAtMs,completedAtMs,totalStorageObjects:before.counts.totalObjects,verifiedOperatorObjects:verified.length,applicationStorageObjects:0,bucketMetadataSha256:hash(JSON.stringify(before.buckets)),objectSetSha256:hash(JSON.stringify(before.rows)),remoteProjectSha256:project.sha256,operations:project.operations.map(o=>({operation:o.operation,state:o.state,identity:o.identity,identitySha256:hash(JSON.stringify(o.identity)),chainSha256:o.chainSha256,objectCount:o.objects.length}))};
