@@ -41,6 +41,63 @@ async function fixture(run:(f:Fixture)=>Promise<void>, activeStorageKey=storageK
 }
 test('complete empty Storage inventory is actual bound metadata rather than a supplied zero',async()=>{const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{const r=await readHostedOperatorStorageInventory(input);assert.equal(r.evidence,'VERIFIED_INITIAL_OPERATOR_STORAGE_INVENTORY');assert.equal(r.totalStorageObjects,0);assert.equal(r.applicationStorageObjects,0);assert.equal(r.verifiedOperatorObjects,0);assert.ok(f.queries.some(q=>q.includes('CUEVO_STORAGE_INVENTORY_COUNTS')));assert.equal(JSON.stringify(r).includes(storageKey),false);});});
 
+test('snapshot starts independent count bucket and first-page reads before awaiting any of their responses',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async()=>{
+  const transport=globalThis.fetch,started=new Set<string>(),releases:(()=>void)[]=[];
+  globalThis.fetch=async(raw,options)=>{
+   const query=options?.body?JSON.parse(String(options.body)).query as string|undefined:undefined;
+   const category=query?.includes('CUEVO_STORAGE_INVENTORY_COUNTS')?'counts':query?.includes('CUEVO_STORAGE_INVENTORY_BUCKETS')?'buckets':query?.includes('CUEVO_STORAGE_INVENTORY_OBJECTS')&&query.endsWith('offset 0')?'objects':null;
+   if(category&&!started.has(category)){started.add(category);await new Promise<void>(done=>releases.push(done));}
+   return transport(raw,options);
+  };
+  const pending=readHostedOperatorStorageInventory(input);await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  const actual=[...started].sort();for(const release of releases)release();globalThis.fetch=transport;
+  await pending;assert.deepEqual(actual,['buckets','counts','objects']);
+ });
+});
+
+test('concurrent metadata rejection remains unavailable after every sibling settles',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async()=>{
+  const transport=globalThis.fetch,started=new Set<string>();
+  globalThis.fetch=async(raw,options)=>{const q=options?.body?JSON.parse(String(options.body)).query as string|undefined:undefined;const category=q?.includes('CUEVO_STORAGE_INVENTORY_COUNTS')?'counts':q?.includes('CUEVO_STORAGE_INVENTORY_BUCKETS')?'buckets':q?.includes('CUEVO_STORAGE_INVENTORY_OBJECTS')?'objects':null;if(category)started.add(category);if(category==='buckets')return Response.json({error:'unavailable'},{status:403});return transport(raw,options);};
+  await assert.rejects(readHostedOperatorStorageInventory(input),error=>error instanceof Error&&!error.message.includes(storageKey)&&!error.message.includes(providerToken));await Promise.resolve();assert.deepEqual([...started].sort(),['buckets','counts','objects']);
+ });
+});
+
+test('failed snapshot waits for its held read sibling before returning unavailable',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async()=>{
+  const transport=globalThis.fetch;let release:(()=>void)|undefined,settled=false;
+  globalThis.fetch=async(raw,options)=>{const query=options?.body?JSON.parse(String(options.body)).query as string|undefined:undefined;if(query?.includes('CUEVO_STORAGE_INVENTORY_COUNTS'))await new Promise<void>(done=>{release=done;});if(query?.includes('CUEVO_STORAGE_INVENTORY_BUCKETS'))return Response.json({error:'failed'},{status:403});return transport(raw,options);};
+  const pending=readHostedOperatorStorageInventory(input).then(()=>{settled=true;return false;},()=>{settled=true;return true;});for(let index=0;index<20&&!release;index++)await new Promise(done=>setTimeout(done,0));await new Promise(done=>setTimeout(done,0));const premature=settled;release!();assert.equal(await pending,true);assert.equal(premature,false);
+ });
+});
+
+test('initial snapshot overlaps remote metadata construction but waits for both before inspecting any chain',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async()=>{
+  const transport=globalThis.fetch;let release:(()=>void)|undefined,remoteMetadataStarted=false,chainStarted=false;
+  globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),query=options?.body?JSON.parse(String(options.body)).query as string|undefined:undefined;if(query?.includes('CUEVO_STORAGE_INVENTORY_COUNTS')&&!release)await new Promise<void>(done=>{release=done;});if(url.pathname==='/storage/v1/bucket/'+bucket)remoteMetadataStarted=true;if(url.pathname==='/storage/v1/object/list/'+bucket)chainStarted=true;return transport(raw,options);};
+  const pending=readHostedOperatorStorageInventory(input);for(let index=0;index<20&&!release;index++)await new Promise(done=>setTimeout(done,0));await new Promise(done=>setTimeout(done,0));const beforeRelease={remoteMetadataStarted,chainStarted};release!();await pending;assert.equal(beforeRelease.remoteMetadataStarted,true);assert.equal(beforeRelease.chainStarted,false);
+ });
+});
+
+test('object verification starts info and bytes for exactly four objects while a fifth waits for the bounded batch',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{
+  populate(f,'COMMITTED',2);const transport=globalThis.fetch,started:string[]=[],releases:(()=>void)[]=[],infoReads=new Map<string,number>();let active=0,maxActive=0,blocked=true,verificationStarted=false;
+  globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),match=/^\/storage\/v1\/object\/(info\/)?cuevo-release-operator\/(.+)$/.exec(url.pathname);if(match?.[1]){const count=(infoReads.get(match[2])??0)+1;infoReads.set(match[2],count);if(count===2)verificationStarted=true;}if(match&&verificationStarted&&f.rows.some(row=>row.name===match[2])&&blocked){started.push((match[1]?'info:':'bytes:')+match[2]);active++;maxActive=Math.max(maxActive,active);await new Promise<void>(done=>releases.push(done));active--;}return transport(raw,options);};
+  const pending=readHostedOperatorStorageInventory(input);for(let index=0;index<80&&started.length<8;index++)await new Promise(done=>setTimeout(done,0));
+  const observed=[...started];blocked=false;for(const release of releases)release();await pending;
+  assert.equal(observed.length,8);assert.equal(maxActive,8);assert.equal(new Set(observed.map(value=>value.slice(value.indexOf(':')+1))).size,4);assert.equal(observed.some(value=>value.endsWith(f.rows[4].name)),false);
+ });
+});
+
+test('failed object INFO drains held bodies before refusal and never starts the next object batch',async()=>{
+ const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{
+  populate(f,'COMMITTED',2);const transport=globalThis.fetch,release: (()=>void)[]=[],paths:string[]=[],infoReads=new Map<string,number>();let started=false,settled=false;
+  globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),match=/^\/storage\/v1\/object\/(info\/)?cuevo-release-operator\/(.+)$/.exec(url.pathname);if(match?.[1]){const count=(infoReads.get(match[2])??0)+1;infoReads.set(match[2],count);if(count===2)started=true;}if(match&&started){paths.push(match[2]);if(match[1]&&match[2]===f.rows[0].name)return Response.json({error:'failed'},{status:403});if(!match[1])await new Promise<void>(done=>release.push(done));}return transport(raw,options);};
+  const pending=readHostedOperatorStorageInventory(input).then(()=>{settled=true;return false;},()=>{settled=true;return true;});for(let index=0;index<80&&release.length<4;index++)await new Promise(done=>setTimeout(done,0));await new Promise(done=>setTimeout(done,0));const premature=settled;for(const done of release)done();assert.equal(await pending,true);assert.equal(premature,false);assert.equal(paths.includes(f.rows[4].name),false);
+ });
+});
+
 test('remote inventory retains exact verified original identity for applied-stage coverage without replacing it with current approval',async()=>{const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{populate(f,'COMMITTED');const current={...input,identity:{...identity,ciRunId:'32',approvalDigest:'a'.repeat(64)}};const result=await readHostedOperatorStorageInventory(current);assert.equal(result.operations.length,1);assert.deepEqual(result.operations[0].identity,identity);assert.equal(result.operations[0].identitySha256,hash(JSON.stringify(identity)));assert.equal(result.operations[0].state,'COMMITTED');assert.notEqual(result.operations[0].identity.approvalDigest,current.identity.approvalDigest);});});
 test('current original INTENT bytes count as exact operator objects without becoming committed',async()=>{const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{populate(f);const r=await readHostedOperatorStorageInventory(input);assert.equal(r.totalStorageObjects,2);assert.equal(r.verifiedOperatorObjects,2);assert.equal(r.operations[0].state,'INTENT');});});
 test('source-stage learner bucket metadata and terminal second page are exact',async()=>{const{readHostedOperatorStorageInventory}=await api();await fixture(async f=>{populate(f,'COMMITTED',34);const r=await readHostedOperatorStorageInventory(input);assert.equal(r.totalStorageObjects,102);assert.ok(f.queries.some(q=>q.includes('offset 100')));});await fixture(async f=>{f.learner=true;const r=await readHostedOperatorStorageInventory({...input,identity:{...identity,stageId:'remaining'},expectedVersions:versions});assert.equal(r.applicationStorageObjects,0);f.badSize=true;await assert.rejects(readHostedOperatorStorageInventory({...input,identity:{...identity,stageId:'remaining'},expectedVersions:versions}));});});

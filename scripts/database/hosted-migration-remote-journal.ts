@@ -39,7 +39,7 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
   let input: z.infer<typeof inputSchema>; try { input = inputSchema.parse(own(value)); input.identity = identity(input.identity); if (input.projectRef !== input.boundProjectRef || input.projectRef !== input.identity.projectRef) throw failure(); } catch { throw failure(); }
   const origin = `https://${input.projectRef}.supabase.co/storage/v1`, projectPrefix = `migration/v1/${input.projectRef}`, operation = hash(JSON.stringify(input.identity)), ownPrefix = `${projectPrefix}/${operation}`;
   let uncertain = false, writing = false, publishedIntentSha256: string | null = null;
-  const request = async (path: string, method: 'GET' | 'POST', body?: string, upload = false, missing = false, management = false): Promise<{ status: number; bytes: Uint8Array }> => {
+  const transport = async (path: string, method: 'GET' | 'POST', body?: string, upload = false, missing = false, management = false): Promise<{ status: number; bytes: Uint8Array }> => {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000); let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       const url = management ? `https://api.supabase.com/v1/projects/${input.projectRef}/database/query` : `${origin}/${path}`, response = await fetch(url, { method, headers: { ...(management ? { Authorization: 'Bearer ' + input.providerToken } : hostedOperatorStorageHeaders(input.storageKey)), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(upload ? { 'x-upsert': 'false', 'Cache-Control': 'no-store' } : {}) }, ...(body === undefined ? {} : { body }), cache: 'no-store', redirect: 'error', signal: controller.signal });
@@ -51,7 +51,16 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
       return { status: response.status, bytes: Buffer.concat(chunks) };
     } catch { throw failure(); } finally { clearTimeout(timer); controller.abort(); if (reader) { void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* Cancelled transport retains its pending read cleanup. */ } } }
   };
-  const bucketRead = async () => { const rows = z.array(bucketSchema).length(1).parse(JSON.parse(decode((await request('', 'POST', JSON.stringify({ query: bucketMetadataQuery }), false, false, true)).bytes))), metadata = rows[0]; const storage = storageBucketSchema.parse(JSON.parse(decode((await request(`bucket/${bucket}`, 'GET')).bytes))); const comparable = (value: typeof storage) => ({ id: value.id, name: value.name, public: value.public, file_size_limit: value.file_size_limit, allowed_mime_types: value.allowed_mime_types }); if (JSON.stringify(comparable(storage)) !== JSON.stringify(comparable(metadata))) throw failure(); };
+  // Only private reads share this fixed cap. Uploads retain their original
+  // serialized write owner and each active request retains its own deadline.
+  let activeReads=0;const queuedReads:(()=>void)[]=[];
+  const request = async (...args:Parameters<typeof transport>):ReturnType<typeof transport> => {
+    if(args[3]===true)return transport(...args);
+    if(activeReads>=8)await new Promise<void>(done=>queuedReads.push(done));else activeReads++;
+    try{return await transport(...args);}finally{const next=queuedReads.shift();if(next)next();else activeReads--;}
+  };
+  const readWave=async<T extends readonly unknown[]>(reads:{[K in keyof T]:Promise<T[K]>}):Promise<T>=>{const settled=await Promise.allSettled(reads);if(settled.some(row=>row.status==='rejected'))throw failure();return settled.map(row=>{if(row.status!=='fulfilled')throw failure();return row.value;}) as unknown as T;};
+  const bucketRead = async () => { const [managed,stored]=await readWave([request('', 'POST', JSON.stringify({ query: bucketMetadataQuery }), false, false, true),request(`bucket/${bucket}`, 'GET')]);const rows=z.array(bucketSchema).length(1).parse(JSON.parse(decode(managed.bytes))),metadata=rows[0],storage=storageBucketSchema.parse(JSON.parse(decode(stored.bytes))); const comparable = (value: typeof storage) => ({ id: value.id, name: value.name, public: value.public, file_size_limit: value.file_size_limit, allowed_mime_types: value.allowed_mime_types }); if (JSON.stringify(comparable(storage)) !== JSON.stringify(comparable(metadata))) throw failure(); };
   const list = async (prefix: string) => {
     const entries: z.infer<typeof entrySchema>[] = []; const seen = new Set<string>(); let prior = '';
     for (let offset = 0; offset <= 1000; offset += 100) {
@@ -62,19 +71,22 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
     throw failure();
   };
   const download = async (path: string, listed?: z.infer<typeof entrySchema>): Promise<string | null> => {
-    const read = await request(`object/${bucket}/${path}`, 'GET', undefined, false, !listed); if (read.status === 404) return null; if (read.bytes.length > 49152) throw failure();
-    const metadata = infoSchema.parse(JSON.parse(decode((await request(`object/info/${bucket}/${path}`, 'GET')).bytes))); if (metadata.name !== path || metadata.size !== read.bytes.length || listed && (listed.id !== metadata.id || listed.metadata?.size !== metadata.size)) throw failure(); return decode(read.bytes);
+    const readBody=()=>request(`object/${bucket}/${path}`, 'GET', undefined, false, !listed),readInfo=()=>request(`object/info/${bucket}/${path}`, 'GET');
+    const [read,info]=listed?await readWave([readBody(),readInfo()]):await (async()=>{const read=await readBody();return read.status===404?[read,null] as const:[read,await readInfo()] as const;})();
+    if(read.status===404)return null;if(read.bytes.length>49152||!info)throw failure();
+    const metadata=infoSchema.parse(JSON.parse(decode(info.bytes)));if(metadata.name!==path||metadata.size!==read.bytes.length||listed&&(listed.id!==metadata.id||listed.metadata?.size!==metadata.size))throw failure();return decode(read.bytes);
   };
   const chain = async (name: string): Promise<Chain> => {
     if (!/^[a-f0-9]{64}$/.test(name)) throw failure(); const prefix = `${projectPrefix}/${name}`, entries = await list(prefix), names = entries.map(row => row.name); const expected = ['owner.json', ...names.filter(name => /^00000[1-3]\.record\.json$/.test(name))].sort();
     if (JSON.stringify(names) !== JSON.stringify(expected) || entries.some(row => row.id === null || row.metadata === null) || names.length > 4) throw failure();
     const ownerBytes = await download(`${prefix}/owner.json`, entries.find(row => row.name === 'owner.json')); if (ownerBytes === null) throw failure(); const owner = ownerSchema.parse(own(JSON.parse(ownerBytes))), checked = identity(owner.identity); if (checked.projectRef !== input.projectRef || hash(JSON.stringify(checked)) !== name || ownerBytes !== json({ version: 1, purpose, identity: checked })) throw failure();
     const records: Chain['records'] = []; let previous: string | null = null;
-    for (const [index, row] of entries.filter(row => row.name !== 'owner.json').entries()) { if (row.name !== String(index + 1).padStart(6, '0') + '.record.json') throw failure(); const bytes = await download(`${prefix}/${row.name}`, row); if (bytes === null) throw failure(); const raw = JSON.parse(bytes), record = recordSchema.parse(own(raw)), checkedIdentity = identity(record.payload.identity); if (record.sequence !== index + 1 || record.previousSha256 !== previous || JSON.stringify(checkedIdentity) !== JSON.stringify(checked) || record.payloadSha256 !== hash(JSON.stringify(raw.payload)) || !transition(records.at(-1)?.payload.state, record.payload.state) || bytes !== json(raw)) throw failure(); records.push({ bytes, payload: raw.payload as HostedExecutionJournal }); previous = hash(bytes); }
+    const recordEntries=entries.filter(row=>row.name!=='owner.json');for(const[index,row]of recordEntries.entries())if(row.name!==String(index+1).padStart(6,'0')+'.record.json')throw failure();const downloaded=await readWave(recordEntries.map(row=>download(`${prefix}/${row.name}`,row)));
+    for (const [index, row] of recordEntries.entries()) { if (row.name !== String(index + 1).padStart(6, '0') + '.record.json') throw failure(); const bytes = downloaded[index]; if (bytes === null) throw failure(); const raw = JSON.parse(bytes), record = recordSchema.parse(own(raw)), checkedIdentity = identity(record.payload.identity); if (record.sequence !== index + 1 || record.previousSha256 !== previous || JSON.stringify(checkedIdentity) !== JSON.stringify(checked) || record.payloadSha256 !== hash(JSON.stringify(raw.payload)) || !transition(records.at(-1)?.payload.state, record.payload.state) || bytes !== json(raw)) throw failure(); records.push({ bytes, payload: raw.payload as HostedExecutionJournal }); previous = hash(bytes); }
     if (!sameEntries(entries, await list(prefix))) throw failure(); return { operation: name, identity: checked, ownerBytes, records };
   };
   function sameEntries(left: z.infer<typeof entrySchema>[], right: z.infer<typeof entrySchema>[]) { return JSON.stringify(left.map(row => ({ name: row.name, id: row.id, metadata: row.metadata }))) === JSON.stringify(right.map(row => ({ name: row.name, id: row.id, metadata: row.metadata }))); }
-  const inspect = async () => { if (uncertain) throw failure(); await bucketRead(); const entries = await list(projectPrefix); if (entries.some(row => row.id !== null || row.metadata !== null || !/^[a-f0-9]{64}$/.test(row.name))) throw failure(); const chains: Chain[] = []; for (const row of entries) chains.push(await chain(row.name)); if (!sameEntries(entries, await list(projectPrefix))) throw failure(); await bucketRead(); return chains; };
+  const inspect = async () => { if (uncertain) throw failure(); const[entries]=await readWave([list(projectPrefix),bucketRead()]); if (entries.some(row => row.id !== null || row.metadata !== null || !/^[a-f0-9]{64}$/.test(row.name))) throw failure(); const chains: Chain[] = [];for(let start=0;start<entries.length;start+=4)chains.push(...await readWave(entries.slice(start,start+4).map(row=>chain(row.name))));const[after]=await readWave([list(projectPrefix),bucketRead()]);if (!sameEntries(entries,after)) throw failure(); return chains; };
   const publish = async (path: string, bytes: string) => { if (Buffer.byteLength(bytes) > 49152 || bytes.includes(input.storageKey) || bytes.includes(input.providerToken)) throw failure(); await request(`object/${bucket}/${path}`, 'POST', bytes, true); if (await download(path) !== bytes) throw failure(); };
   try { await bucketRead(); } catch { throw failure(); }
   return {
