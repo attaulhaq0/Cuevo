@@ -118,7 +118,8 @@ async function artifact(root: string, directory: string, built: unknown, service
   const paths = new Set<string>();
   for (const row of parsed.files) { if (!row || typeof row.path !== 'string' || row.path.includes('\\') || row.path.startsWith('/') || row.path.split('/').some(piece => !piece || piece === '.' || piece === '..') || row.path === 'artifact.json' || paths.has(row.path) || !hash.safeParse(row.sha256).success) throw failure(); paths.add(row.path); if (digest(await file(root, join(directory, row.path), 32 * 1024 * 1024)) !== row.sha256) throw failure(); }
   const collect = async (path: string): Promise<string[]> => { await physical(root, path, 'directory'); const rows: string[] = []; for (const entry of await readdir(path, { withFileTypes: true })) { const next = join(path, entry.name); if (entry.isDirectory()) rows.push(...await collect(next)); else { await physical(root, next, 'file'); rows.push(relative(directory, next).replaceAll('\\', '/')); } } return rows; };
-  if (!same((await collect(directory)).sort(), ['artifact.json', ...paths].sort())) throw failure();
+  const actualPaths=(await collect(directory)).sort(),expectedPaths=['artifact.json',...paths].sort();
+  if(actualPaths.length!==expectedPaths.length||actualPaths.some((path,index)=>path!==expectedPaths[index]))throw failure();
   if (service === 'cuevo-worker' && (!hash.safeParse(parsed.denoLockSha256).success || !paths.has('deno.lock') || digest(await file(root, join(directory, 'deno.lock'), 2 * 1024 * 1024)) !== parsed.denoLockSha256)) throw failure();
   return { sha256: digest(JSON.stringify(parsed)), ...(parsed.denoLockSha256 === undefined ? {} : { denoLockSha256: parsed.denoLockSha256 }) };
 }
@@ -140,6 +141,7 @@ async function workdirs(root: string, work: HostedMigrationWorkdirs, plan: Hoste
 
 /** Fixed native source/provider reads and local builders only. This package never grants approval or hosted readiness. */
 export async function prepareNativeBackendRelease(value: unknown): Promise<PreparedNativeBackendRelease> {
+  let stage='source-and-authority';
   try {
     const input = inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value))), root = input.repoRoot;
     if (root !== builderRepoRoot) throw failure(); await physical(root, root, 'directory');
@@ -153,11 +155,13 @@ export async function prepareNativeBackendRelease(value: unknown): Promise<Prepa
     const trial: BackendReleaseExpected = { ...common, ...current, now, fingerprints: { sourceManifestSha256, diffSha256, migrationPlanSha256: placeholder, migrationHistorySha256: placeholder, migrationToolchainSha256: placeholder,migrationEndpointSha256:placeholder, operatorStoragePolicySha256: placeholder, apiArtifactSha256: placeholder, edgeArtifactSha256: placeholder, denoLockSha256: placeholder } };
     const intent = (expected: BackendReleaseExpected) => ({ ...common, environmentId: expected.environmentId, version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', fingerprints: expected.fingerprints, preparedAt: new Date(expected.now).toISOString(), expiresAt: new Date(expected.now + 3600000).toISOString(), reviews: input.input.reviews });
     prepareBackendReleaseIntent(intent(trial), trial);
+    stage='empty-target-and-migration-plan';
     const projectRef = trial.targets.supabase.projectRef, target = await emptyTarget(input, projectRef), planned = createCanonicalHostedMigrationPlan({ repoRoot: root, sourceSha: input.sha, treeSha, target, now: Date.now() });
     // This route is selected before approval after the observed GitHub IPv6
     // refusal. A later execution never switches endpoints after an intent.
     const migrationEndpoint=(await readHostedMigrationProvider({projectRef,boundProjectRef:projectRef,providerToken:input.providerToken})).sessionEndpoint;
     const plan = planned.plan; if (planned.sourceProvenance.kind !== 'VERIFIED_GIT_BLOBS' || plan.mode !== 'EMPTY_INITIAL' || plan.applied.length || plan.dispatch !== 'DISABLED' || plan.seed !== 'DISABLED' || plan.vault !== 'DISABLED') throw failure();
+    stage='toolchain-and-migration-delivery';
     await outputDirectory(root);
     const toolchainManifestPath = join(root, '.local/hosted-release/migration-toolchain.json'), operatorStoragePolicyPath = join(root, '.local/hosted-release/operator-storage-policy.json'), bundlePath = join(root, '.local/hosted-release/backend-bundle.json');
     const manifest = await toolchain(root, input.sha, treeSha), manifestBytes = canonicalReleaseReviewJson(manifest), policy = prepareHostedOperatorStoragePolicy({ sourceSha: input.sha, treeSha, projectRef });
@@ -165,15 +169,22 @@ export async function prepareNativeBackendRelease(value: unknown): Promise<Prepa
     const work = await createHostedMigrationWorkdirs({ repoRoot: root, sourceSha: input.sha, treeSha, plan, outputRoot: join(root, '.local/hosted-release') }); await workdirs(root, work, plan);
     const apiRoot = join(root, '.local/runtime-artifacts/api-vercel'), edgeRoot = join(root, '.local/edge-artifacts/cuevo-worker');
     for (const directory of [join(root, '.local/runtime-artifacts'), join(root, '.local/edge-artifacts')]) { try { await mkdir(directory); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw failure(); } await physical(root, directory, 'directory'); }
-    const builtApi = await buildRuntimeArtifact('api-vercel'), api = await artifact(root, apiRoot, builtApi, 'api'), builtEdge = await buildEdgeArtifact(), edge = await artifact(root, edgeRoot, builtEdge, 'cuevo-worker');
+    stage='api-artifact-build';
+    const builtApi = await buildRuntimeArtifact('api-vercel');
+    stage='api-artifact-verification';
+    const api = await artifact(root, apiRoot, builtApi, 'api');
+    stage='edge-artifact-build-and-verification';
+    const builtEdge = await buildEdgeArtifact(), edge = await artifact(root, edgeRoot, builtEdge, 'cuevo-worker');
+    stage='final-source-authority-and-artifacts';
     await readBackendReleaseSourceEvidence(root, source as Parameters<typeof readBackendReleaseSourceEvidence>[1]);
     const finalAuthority = await authority(input, treeSha); if (!same(finalAuthority, current)) throw failure(); await emptyTarget(input, projectRef);
     await workdirs(root, work, plan); if (!same(await toolchain(root, input.sha, treeSha), manifest) || !(await file(root, toolchainManifestPath, 48 * 1024)).equals(Buffer.from(manifestBytes)) || !(await file(root, operatorStoragePolicyPath, 8192)).equals(Buffer.from(policy.canonicalJson)) || !same(await artifact(root, apiRoot, builtApi, 'api'), api) || !same(await artifact(root, edgeRoot, builtEdge, 'cuevo-worker'), edge)) throw failure();
     if(!same((await readHostedMigrationProvider({projectRef,boundProjectRef:projectRef,providerToken:input.providerToken})).sessionEndpoint,migrationEndpoint))throw failure();
+    stage='package-encoding-and-persistence';
     const expected: BackendReleaseExpected = { ...trial, ...finalAuthority, now: Date.now(), fingerprints: { sourceManifestSha256, diffSha256, migrationPlanSha256: canonicalHostedMigrationPlan(plan).sha256, migrationHistorySha256: plan.observedHistorySha256, migrationToolchainSha256: digest(manifestBytes),migrationEndpointSha256:digest(canonicalReleaseExecutionJson(migrationEndpoint)), operatorStoragePolicySha256: policy.sha256, apiArtifactSha256: api.sha256, edgeArtifactSha256: edge.sha256, denoLockSha256: edge.denoLockSha256! } }, preparedApproval = prepareBackendReleaseIntent(intent(expected), expected);
     const bundle = { version: 1 as const, purpose: 'CUEVO_BACKEND_RELEASE_EXECUTION' as const, repoRoot: root, expected, preparedApproval, plan,migrationEndpoint, stages: work.stages, toolchainManifestPath, operatorStoragePolicyPath, artifacts: { apiRoot, edgeRoot } }, bytes = canonicalReleaseExecutionJson(bundle); parseReleaseExecutionJson(bytes);
     if (bytes.includes(input.githubToken) || bytes.includes(input.providerToken)) throw failure();
     await readBackendReleaseSourceEvidence(root, source as Parameters<typeof readBackendReleaseSourceEvidence>[1]);
     await persist(root, bundlePath, bytes); return { ...bundle, bundlePath, bundleSha256: digest(bytes) };
-  } catch { throw failure(); }
+  } catch { console.error('Backend preparation failed at '+stage+'; private contents withheld.'); throw failure(); }
 }
