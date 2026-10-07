@@ -49,3 +49,67 @@ test('separate provider credential controls and supplied query hooks refuse befo
 test('Storage provided nonstandard type contradicts authoritative STANDARD and cannot be omitted by the adapter', async () => { const { createHostedMigrationRemoteJournal } = await api(); await fixture(async () => { const fetcher = globalThis.fetch; globalThis.fetch = async (url, options) => String(url).endsWith(`/bucket/${bucket}`) ? Response.json({ id: bucket, name: bucket, public: false, type: 'ANALYTICS', file_size_limit: 49152, allowed_mime_types: ['application/json'] }) : fetcher(url, options); await assert.rejects(createHostedMigrationRemoteJournal(input)); }); });
 
 test('modern secret-key journal uploads and readback omit Bearer while Management keeps its own token', async () => { const { createHostedMigrationRemoteJournal } = await api(); const modern = 'sb_secret_private-journal-canary'; await fixture(async state => { const journal = await createHostedMigrationRemoteJournal({ ...input, storageKey: modern }); assert.equal(await journal.readJournal(), null); assert.equal((await journal.writeJournal(payload('INTENT'))).kind, 'SYNCED'); assert.equal((await journal.writeJournal(payload('COMMITTED'))).kind, 'SYNCED'); assert.deepEqual(await journal.readJournal(), payload('COMMITTED')); assert.ok(state.requests.some(row => row.path.startsWith('object/'))); }, modern); });
+
+function storedChain(state:Fixture,currentIdentity:HostedExecutionJournal['identity'],states:HostedExecutionJournal['state'][]=['INTENT','COMMITTED']){
+ const prefix='migration/v1/'+projectRef+'/'+hash(JSON.stringify(currentIdentity));state.objects.set(prefix+'/owner.json',JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity:currentIdentity})+'\n');let previous:string|null=null;
+ for(const[index,stateName]of states.entries()){const next={...payload(stateName),identity:currentIdentity},bytes=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:index+1,previousSha256:previous,payload:next,payloadSha256:hash(JSON.stringify(next))})+'\n';state.objects.set(prefix+'/'+String(index+1).padStart(6,'0')+'.record.json',bytes);previous=hash(bytes);}return prefix;
+}
+
+test('independent authoritative bucket reads overlap before any private chain download',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{
+  storedChain(state,identity);const fetcher=globalThis.fetch;let release!:()=>void;const held=new Promise<void>(done=>release=done),started:string[]=[];
+  globalThis.fetch=async(url,options)=>{const value=new URL(String(url));started.push(value.pathname);await held;return fetcher(url,options)};
+  const pending=createHostedMigrationRemoteJournal(input);
+  try{await new Promise<void>(done=>setImmediate(done));assert.equal(started.length,2,'Management and Storage metadata must start in the same bounded read wave');assert.equal(started.some(path=>path.includes('/object/')),false);}
+  finally{release();await pending;}
+ });
+});
+
+test('four-slot journal reads overlap independent chains and validate out-of-order record completion in source order',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{
+  const prefixes=Array.from({length:5},(_,index)=>storedChain(state,{...identity,stageSha256:hash('stage-'+index)}));const fetcher=globalThis.fetch;let active=0,maximum=0,started=0,release!:()=>void,held=true;const gate=new Promise<void>(done=>release=()=>{held=false;done()}),completed:string[]=[];
+  globalThis.fetch=async(url,options)=>{active++;maximum=Math.max(maximum,active);started++;try{if(held)await gate;const path=new URL(String(url)).pathname;if(path.endsWith('000001.record.json'))await new Promise<void>(done=>setImmediate(done));const response=await fetcher(url,options);completed.push(path);return response;}finally{active--;}};
+  const pending=createHostedMigrationRemoteJournal(input).then(journal=>journal.inspectProject());
+  try{await new Promise<void>(done=>setImmediate(done));assert.equal(started,2);release();const result=await pending;assert.equal(result.operations.length,5);assert.ok(result.operations.every(row=>row.state==='COMMITTED'&&row.objects.length===3));assert.equal(maximum,4,'the private reader must allow four independent transports and no more');for(const prefix of prefixes){const first=completed.indexOf('/storage/v1/object/'+bucket+'/'+prefix+'/000001.record.json'),second=completed.indexOf('/storage/v1/object/'+bucket+'/'+prefix+'/000002.record.json');assert.ok(second<first,'a later record may finish first without changing sequence validation');}assert.equal(state.requests.some(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')),false);}
+  finally{release();await pending.catch(()=>undefined);}
+ });
+});
+
+test('parallel journal waves retain bucket denial and final project or chain change refusals without uploads',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();for(const mode of['bucket','project','chain','record']as const)await fixture(async state=>{
+  const prefix=storedChain(state,identity),journal=await createHostedMigrationRemoteJournal(input),fetcher=globalThis.fetch;let projectLists=0,chainLists=0;
+  if(mode==='bucket')state.public=true;
+  globalThis.fetch=async(url,options)=>{const path=new URL(String(url)).pathname;if(path==='/storage/v1/object/list/'+bucket){const body=JSON.parse(String(options?.body));if(body.prefix==='migration/v1/'+projectRef&&++projectLists===2&&mode==='project')state.objects.set('migration/v1/'+projectRef+'/'+hash('other')+'/owner.json','{}\n');if(body.prefix===prefix&&++chainLists===2&&mode==='chain')state.objects.delete(prefix+'/000002.record.json');}if(mode==='record'&&path.endsWith('000002.record.json')){const raw=JSON.parse(state.objects.get(prefix+'/000002.record.json')!);raw.previousSha256='0'.repeat(64);state.objects.set(prefix+'/000002.record.json',JSON.stringify(raw)+'\n');}return fetcher(url,options)};
+  await assert.rejects(journal.inspectProject());assert.deepEqual(await journal.writeJournal(payload('INTENT')),{kind:'UNCONFIRMED'});assert.equal(state.requests.some(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')),false);if(mode==='bucket')assert.equal(state.requests.some(row=>row.path.startsWith('object/'+bucket+'/')),false);
+ });
+});
+
+test('failed parallel metadata read waits for its active sibling before refusing factory admission',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async()=>{
+  const fetcher=globalThis.fetch;let release!:()=>void;const held=new Promise<void>(done=>release=done),started:string[]=[];let settled=false;
+  globalThis.fetch=async(url,options)=>{const path=new URL(String(url)).pathname;started.push(path);if(path.endsWith('/database/query'))throw Error(providerToken);await held;return fetcher(url,options)};
+  const pending=createHostedMigrationRemoteJournal(input).then(()=>{settled=true;return false},()=>{settled=true;return true});
+  try{await new Promise<void>(done=>setImmediate(done));assert.equal(started.length,2);assert.equal(settled,false,'refusal must wait for an active sibling read to finish');release();assert.equal(await pending,true);}
+  finally{release();await pending;}
+ });
+});
+
+test('a failed queued record wave settles all siblings before latching uncertainty and blocks further writes',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{
+  const prefixes=Array.from({length:4},(_,index)=>storedChain(state,{...identity,stageSha256:hash('queued-stage-'+index)},['INTENT','COMMITTED','REQUIRES_REVIEW']));const journal=await createHostedMigrationRemoteJournal(input),fetcher=globalThis.fetch;let active=0,maximum=0,blocked=0,settled=false,release!:()=>void;const held=new Promise<void>(done=>release=done);
+  globalThis.fetch=async(url,options)=>{const path=new URL(String(url)).pathname;active++;maximum=Math.max(maximum,active);try{if(path.endsWith('.record.json')&&!path.includes('/object/info/')){if(path.endsWith('000001.record.json'))throw Error(key);blocked++;await held;}return await fetcher(url,options);}finally{active--;}};
+  const pending=journal.inspectProject().then(()=>{settled=true;return false},()=>{settled=true;return true});
+  try{for(let part=0;part<50&&blocked===0;part++)await new Promise<void>(done=>setImmediate(done));assert.ok(blocked>0);assert.equal(settled,false);release();assert.equal(await pending,true);assert.equal(active,0);assert.ok(maximum<=4);const readCount=state.requests.length;assert.deepEqual(await journal.writeJournal(payload('INTENT')),{kind:'UNCONFIRMED'});assert.equal(state.requests.length,readCount);assert.equal(state.requests.some(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')),false);assert.equal(prefixes.length,4);}
+  finally{release();await pending;}
+ });
+});
+
+test('parallel read inspection keeps immutable uploads serialized and rejects a second write while the first is active',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async()=>{
+  const journal=await createHostedMigrationRemoteJournal(input),fetcher=globalThis.fetch;let release!:()=>void;const held=new Promise<void>(done=>release=done);let uploads=0;
+  globalThis.fetch=async(url,options)=>{if(options?.method==='POST'&&new URL(String(url)).pathname.startsWith('/storage/v1/object/'+bucket+'/')){uploads++;if(uploads===1)await held;}return fetcher(url,options)};
+  const pending=journal.writeJournal(payload('INTENT'));
+  try{for(let part=0;part<50&&uploads===0;part++)await new Promise<void>(done=>setImmediate(done));assert.equal(uploads,1);assert.deepEqual(await journal.writeJournal(payload('INTENT')),{kind:'UNCONFIRMED'});assert.equal(uploads,1);release();assert.equal((await pending).kind,'SYNCED');assert.equal(uploads,2);assert.equal((await journal.writeJournal(payload('COMMITTED'))).kind,'SYNCED');assert.equal(uploads,3);}
+  finally{release();await pending;}
+ });
+});
