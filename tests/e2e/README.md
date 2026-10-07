@@ -1,5 +1,7 @@
 # Browser journeys
 
+`student-stage-label-reflow.spec.ts` checks enlarged English/Arabic Student stage titles and unknown-status labels. It requires whole ordinary words within the available mobile reading width, preserving unknown state rather than hiding it.
+
 `access-capability-reflow.spec.ts` checks the real Access view with enlarged English/Arabic text at 390px. Each permitted capability card remains inside its reading column; this is presentation proof only and grants no capability.
 
 `parent-home-heading-identity.spec.ts` exercises the actual Parent Home view across unresolved, ready, denied and offline context. It verifies the same heading DOM node retains focus, a deliberately focused selector remains focused during later reads, and unsent input survives. `workspace-chrome-reflow.spec.ts` adds enlarged 390/768px school-word and brand/person checks across all five roles. These controlled component tests complement actual compiled-production source observations; they do not establish hosted Auth/database or native browser zoom acceptance.
