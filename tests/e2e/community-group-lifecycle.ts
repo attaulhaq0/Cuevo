@@ -107,7 +107,7 @@ export class CommunityGroupLifecycle {
         if (await form.count()) throw failure();
         const opener = this.page.getByRole('button', { name: 'Review group lifecycle', exact: true });
         await expect(opener).toBeEnabled({ timeout: 5000 });
-        if (!this.admitted()) throw failure();
+        await expect.poll(() => this.admitted(), { timeout: 5000 }).toBe(true);
         // A source refresh can cancel native activation between pointer-down
         // and pointer-up even when Playwright's click resolves successfully.
         // Only repeat this read-only opener before any working form exists.
@@ -117,7 +117,7 @@ export class CommunityGroupLifecycle {
           return this.admitted() && (!await opener.count() || await opener.isEnabled());
         }, { timeout: 5000 }).toBe(true);
         await this.page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
-        if (!this.admitted()) throw failure();
+        await expect.poll(() => this.admitted(), { timeout: 5000 }).toBe(true);
         if (await form.count()) { opened = true; break; }
       }
       if (!opened) throw failure();
@@ -127,7 +127,8 @@ export class CommunityGroupLifecycle {
       await expect(form.getByLabel('Group state', { exact: true })).toHaveValue(room.value.status);
       await expect(form.getByLabel('Reason', { exact: true })).toHaveValue('');
       await expect(form.getByLabel('I approve this group lifecycle change', { exact: true })).not.toBeChecked();
-      if (!this.admitted()) throw failure();
+      await expect.poll(() => this.admitted(), { timeout: 5000 }).toBe(true);
+      await expect(form.getByLabel('Group name', { exact: true })).toBeEnabled({ timeout: 5000 });
       return form;
     } finally {
       this.active = false;

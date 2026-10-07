@@ -81,8 +81,16 @@ function CurrentProgressWorkspace() {
   };
   function backToLearners() { setLearnerId(null); setDetailSelection(null); setClassLearnerLabel(null); returnToBrowse.current = true; }
   useEffect(() => {
+    const cancelReturn = (event: FocusEvent) => {
+      if (returnToBrowse.current && event.target !== document.body && event.target !== document.documentElement) returnToBrowse.current = false;
+    };
+    document.addEventListener('focusin', cancelReturn);
+    return () => document.removeEventListener('focusin', cancelReturn);
+  }, []);
+  useEffect(() => {
     if (!returnToBrowse.current || activeLearnerId) return;
     const frame = requestAnimationFrame(() => {
+      if (!returnToBrowse.current) return;
       returnToBrowse.current = false;
       const previous = browseOpener.current;
       const picker = document.getElementById('learner-selection') as HTMLSelectElement | null;

@@ -114,3 +114,53 @@ for (const newer of ['denied', 'changed-name'] as const) test(`an older room res
   }
   expect(controlled.writes).toEqual([]);
 });
+for (const current of ['same-basis', 'denied', 'changed'] as const) test(`a ${current} current read beginning during opener render settlement is awaited and revalidated`, async ({ page }) => {
+  const controlled = await mount(page, 'stable');
+  let release: (() => void) | undefined, lateRead = false;
+  await page.route(origin + '/v1/community/rooms?late-settlement=1', async route => {
+    lateRead = true;
+    await new Promise<void>(done => { release = done; });
+    if (current === 'denied') await route.fulfill({ status: 403, json: { code: 'FORBIDDEN' } });
+    else await route.fulfill({ json: { items: [{ ...room, ...(current === 'changed' ? { revision: 2, name: 'New current source' } : {}) }], nextCursor: null } });
+  });
+  await page.evaluate(() => {
+    (globalThis as unknown as { lateSettlementClicks: number }).lateSettlementClicks = 0;
+    document.addEventListener('click', event => {
+      if (!(event.target as Element).closest('.community-group-lifecycle button')) return;
+      (globalThis as unknown as { lateSettlementClicks: number }).lateSettlementClicks++;
+    }, { once: true });
+  });
+  // Keep the actual two-frame evaluation but make its request-event boundary
+  // deterministic: this same-basis HTTP read is observed before it returns.
+  const evaluate = page.evaluate.bind(page);
+  let settlementIntercepted = false;
+  page.evaluate = (async (callback: Parameters<Page['evaluate']>[0], argument?: unknown) => {
+    if (!settlementIntercepted && String(callback).includes('requestAnimationFrame') && String(callback).includes('requestAnimationFrame(() =>')) {
+      settlementIntercepted = true;
+      await evaluate(() => { void fetch('http://localhost:4000/v1/community/rooms?late-settlement=1', { headers: { Authorization: 'Bearer controlled-current-token', 'X-School-Id': 'ef000000-0000-4000-8000-000000000001' } }); });
+      await expect.poll(() => lateRead).toBe(true);
+    }
+    return evaluate(callback, argument);
+  }) as Page['evaluate'];
+  let settled = false;
+  const opening = controlled.observer.open().finally(() => { settled = true; });
+  // Attach immediately so an early refusal is asserted, not an unhandled
+  // promise. The successful contract must wait for the held actual HTTP read.
+  const outcome = opening.then(form => ({ form, error: null }), error => ({ form: null, error }));
+  await expect.poll(() => lateRead).toBe(true);
+  await page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  expect(settled, 'A current pending read cannot be treated as a refused unchanged source').toBe(false);
+  release!();
+  const result = await outcome;
+  if (current === 'same-basis') {
+    expect(result.error).toBeNull();
+    await expect(result.form!.getByLabel('Group name', { exact: true })).toHaveValue(room.name);
+    await expect(result.form!.getByLabel('Reason', { exact: true })).toHaveValue('');
+    await expect(result.form!.getByLabel('I approve this group lifecycle change', { exact: true })).not.toBeChecked();
+  } else {
+    expect(result.error).not.toBeNull();
+    expect(result.form).toBeNull();
+  }
+  expect(await page.evaluate(() => (globalThis as unknown as { lateSettlementClicks: number }).lateSettlementClicks)).toBe(1);
+  expect(controlled.writes).toEqual([]);
+});
