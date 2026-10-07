@@ -1,6 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { z } from 'zod';
+import { canonicalReleaseReviewJson } from './release-review';
 
 export type CodeqlGateInput = { repository: string; ref: string; sha: string; checkoutSha: string; sarifId: string; token: string };
 type Transport = (url: string, init: RequestInit) => Promise<Response>;
@@ -8,6 +11,35 @@ type ObjectValue = Record<string, unknown>;
 const unavailable = () => new Error('CodeQL alert evidence is unavailable or requires review; contents withheld.');
 const analysisKey = '.github/workflows/ci.yml:codeql';
 const maximumPages = 50, maximumBody = 2 * 1024 * 1024;
+const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER), nonnegative = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const digestSha = z.string().regex(/^[a-f0-9]{40}$/), identifier = z.string().regex(/^[1-9][0-9]*$/).refine(value => Number.isSafeInteger(Number(value)));
+const analysisSchema = z.object({ id: positive, sarifId: z.string().regex(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/), key: z.literal(analysisKey), toolVersion: z.string().min(1).max(100), createdAt: z.iso.datetime({ offset: true }) }).strict();
+const resultSchema = z.object({ check: z.literal('codeql-open-security-alerts'), status: z.literal('VERIFIED'), analysisResults: nonnegative, analysisRules: positive,
+  openAlerts: nonnegative, blockingAlerts: z.literal(0), severities: z.object({ low: nonnegative, medium: z.literal(0), high: z.literal(0), critical: z.literal(0), nonsecurity: nonnegative }).strict(), snapshotPasses: z.literal(2), analysis: analysisSchema }).strict();
+const receiptSchema = z.object({ version: z.literal(1), purpose: z.literal('ORIGINAL_PROCESSED_CODEQL_RECEIPT'), policy: z.literal('CODEQL_MEDIUM_HIGH_CRITICAL_V1'),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/), sourceSha: digestSha, ref: z.string(), runId: identifier, runAttempt: positive,
+  observedAt: z.iso.datetime({ offset: true }), analysis: analysisSchema, result: resultSchema.omit({ analysis: true }) }).strict();
+
+/** A successful same-job processed observation; no alert rows, messages, paths or credentials enter the receipt. */
+export function prepareCodeqlReceipt(input: CodeqlGateInput, result: unknown, env: Record<string,string|undefined>, now: number) {
+  validInput(input);
+  if(env.CI!=='true'||env.GITHUB_ACTIONS!=='true'||env.GITHUB_JOB!=='codeql'||env.GITHUB_SHA!==input.sha||env.GITHUB_WORKFLOW_SHA!==input.sha||env.GITHUB_REPOSITORY!==input.repository||env.GITHUB_REF!==input.ref
+    ||env.GITHUB_WORKFLOW_REF!==`${input.repository}/.github/workflows/ci.yml@${input.ref}`||!Number.isSafeInteger(now)||now<0)throw unavailable();
+  const proof=resultSchema.parse(JSON.parse(canonicalReleaseReviewJson(result)));
+  if(proof.analysis.sarifId!==input.sarifId||Date.parse(proof.analysis.createdAt)>now||proof.openAlerts!==proof.severities.low+proof.severities.nonsecurity||proof.openAlerts>proof.analysisResults)throw unavailable();
+  const {analysis,...summary}=proof;
+  return receiptSchema.parse({version:1,purpose:'ORIGINAL_PROCESSED_CODEQL_RECEIPT',policy:'CODEQL_MEDIUM_HIGH_CRITICAL_V1',repository:input.repository,sourceSha:input.sha,ref:input.ref,
+    runId:env.GITHUB_RUN_ID,runAttempt:Number(env.GITHUB_RUN_ATTEMPT),observedAt:new Date(now).toISOString(),analysis,result:summary});
+}
+
+export function validateCodeqlReceipt(value: unknown, expected: { repository:string; sourceSha:string; ref:string; runId:string; runAttempt:number; startedAt:string; completedAt:string; now:number }) {
+  const receipt=receiptSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));
+  const started=Date.parse(expected.startedAt),completed=Date.parse(expected.completedAt),observed=Date.parse(receipt.observedAt),created=Date.parse(receipt.analysis.createdAt);
+  if(receipt.repository!==expected.repository||receipt.sourceSha!==expected.sourceSha||receipt.ref!==expected.ref||receipt.runId!==expected.runId||receipt.runAttempt!==expected.runAttempt
+    ||!Number.isFinite(started)||!Number.isFinite(completed)||completed<started||completed>expected.now||created<started||created>observed||observed>completed
+    ||receipt.result.openAlerts!==receipt.result.severities.low+receipt.result.severities.nonsecurity||receipt.result.openAlerts>receipt.result.analysisResults)throw unavailable();
+  return receipt;
+}
 
 function object(value: unknown): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw unavailable();
@@ -89,7 +121,7 @@ function parseAnalysis(value: unknown, input: CodeqlGateInput) {
     || row.category !== analysisKey || row.environment !== '{}' || row.error !== '' || row.warning !== ''
     || tool.name !== 'CodeQL' || typeof tool.version !== 'string' || !tool.version.length
     || typeof row.created_at !== 'string' || !Number.isFinite(Date.parse(row.created_at))) throw unavailable();
-  return { id: count(row.id, true), results: count(row.results_count), rules: count(row.rules_count, true), version: tool.version };
+  return { id: count(row.id, true), results: count(row.results_count), rules: count(row.rules_count, true), version: tool.version, createdAt: row.created_at };
 }
 function parseAlert(value: unknown, input: CodeqlGateInput) {
   const row = object(value), rule = object(row.rule), tool = object(row.tool), instance = object(row.most_recent_instance);
@@ -165,7 +197,8 @@ export async function runCodeqlAlertGate(input: CodeqlGateInput, transport: Tran
     for (const row of first) severities[row.severity ?? 'nonsecurity']++;
     const blockingAlerts = severities.medium + severities.high + severities.critical;
     return { check: 'codeql-open-security-alerts', status: blockingAlerts ? 'FINDINGS' as const : 'VERIFIED' as const,
-      analysisResults: initial.results, analysisRules: initial.rules, openAlerts: first.length, blockingAlerts, severities, snapshotPasses: 2 as const };
+      analysisResults: initial.results, analysisRules: initial.rules, openAlerts: first.length, blockingAlerts, severities, snapshotPasses: 2 as const,
+      analysis: { id: initial.id, sarifId: input.sarifId, key: analysisKey, toolVersion: initial.version, createdAt: initial.createdAt } };
   } catch { throw unavailable(); } finally { clearTimeout(timer); controller.abort(); }
 }
 
@@ -175,7 +208,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       .map(key => [key, process.env[key]]).concat([['GIT_NO_REPLACE_OBJECTS', '1'], ['GIT_CONFIG_NOSYSTEM', '1'], ['GIT_CONFIG_GLOBAL', process.platform === 'win32' ? 'NUL' : '/dev/null']]));
     const checkout = execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], { env: gitEnv, shell: false, windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }).toString().trim();
-    const result = await runCodeqlAlertGate(readCodeqlGateContext(process.env, checkout));
+    const context=readCodeqlGateContext(process.env, checkout),result = await runCodeqlAlertGate(context);
+    if(result.status==='VERIFIED'){
+      const receipt=prepareCodeqlReceipt(context,result,process.env,Date.now());
+      await mkdir(resolve('.local/codeql-receipt'),{recursive:true});
+      await writeFile(resolve('.local/codeql-receipt/receipt.json'),canonicalReleaseReviewJson(receipt),{flag:'wx',mode:0o600});
+    }
     console.log(JSON.stringify(result)); if (result.status !== 'VERIFIED') process.exitCode = 1;
   } catch {
     console.log(JSON.stringify({ check: 'codeql-open-security-alerts', status: 'UNAVAILABLE' })); process.exitCode = 1;

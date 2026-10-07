@@ -9,11 +9,45 @@ const now = Date.parse('2026-10-06T12:00:00Z');
 const fingerprints = { sourceManifestSha256: '1'.repeat(64), diffSha256: '2'.repeat(64), migrationPlanSha256: '3'.repeat(64), migrationHistorySha256: '4'.repeat(64), migrationToolchainSha256: 'd'.repeat(64), migrationEndpointSha256:'e'.repeat(64),operatorStoragePolicySha256: 'f'.repeat(64), apiArtifactSha256: '5'.repeat(64), edgeArtifactSha256: '6'.repeat(64), denoLockSha256: '7'.repeat(64) };
 const targets = { web: { teamId: 'team_Cuevo', projectId: 'prj_Web', origin: 'https://cuevo-web.vercel.app', target: 'preview' }, api: { teamId: 'team_Cuevo', projectId: 'prj_Api', origin: 'https://cuevo-api.vercel.app', target: 'preview' }, supabase: { projectRef: ref, authOrigin: `https://${ref}.supabase.co`, edgeOrigin: `https://${ref}.supabase.co/functions/v1/cuevo-worker` } };
 const assignments = [{ category: 'source-spec-code', taskId: 'source-review', reportSha256: '8'.repeat(64), evidenceSha256: '9'.repeat(64) }, { category: 'qa-regression-operations', taskId: 'qa-review', reportSha256: 'a'.repeat(64), evidenceSha256: 'b'.repeat(64) }];
-const identity = { repository: 'attaulhaq0/Cuevo', releaseSha: sha, treeSha: tree, baseSha: base, ciRunId: '31', releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: 'staging', deploymentEnvironment: 'synthetic-staging' };
+const identity = { repository: 'attaulhaq0/Cuevo', releaseSha: sha, treeSha: tree, baseSha: base, ciRunId: '31', releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: 'staging', deploymentEnvironment: 'synthetic-staging', canonicalRuntimeVerification:{runAttempt:2,jobsSha256:'e'.repeat(64)} };
 function input() { return { version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', ...identity, targets: structuredClone(targets), fingerprints: { ...fingerprints }, preparedAt: '2026-10-06T11:00:00Z', expiresAt: '2026-10-07T11:00:00Z', reviews: assignments.map(row => ({ ...row, releaseSha: sha, treeSha: tree, baseSha: base, sourceManifestSha256: fingerprints.sourceManifestSha256, diffSha256: fingerprints.diffSha256, reviewedAt: '2026-10-06T10:00:00Z' })) }; }
 function expected() { return { ...identity, targets: structuredClone(targets), fingerprints: { ...fingerprints }, reviews: structuredClone(assignments), now, currentMainSha: sha,
   ciRun: { id: 31, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'attaulhaq0/Cuevo' } },
   backendRun: { id: 51, run_attempt: 1, head_sha: sha, head_branch: 'main', event: 'workflow_dispatch', status: 'waiting', conclusion: null, path: '.github/workflows/backend-release.yml', repository: { full_name: 'attaulhaq0/Cuevo' } } }; }
+
+test('focused staging binds complete job proof to schema and fictional accounts without authorizing production', async () => {
+  const api = await subject(), proof = { scope: 'SCHEMA_AND_SYNTHETIC_AUTH', runAttempt: 1, jobsSha256: 'e'.repeat(64) };
+  const body = { ...input(), executionScope: 'schema-and-accounts', stagingVerification: proof }; delete (body as Record<string,unknown>).canonicalRuntimeVerification;
+  const current = { ...expected(), executionScope: 'schema-and-accounts', stagingVerification: proof, ciRun: { ...expected().ciRun, path: '.github/workflows/staging-verification.yml', event: 'workflow_dispatch', run_attempt: 1 } };
+  delete (current as Record<string,unknown>).canonicalRuntimeVerification;
+  const prepared = api.prepareBackendReleaseIntent(body, current);
+  assert.match(prepared.canonicalJson, /SCHEMA_AND_SYNTHETIC_AUTH/);
+  assert.equal(api.validatePreparedBackendReleaseIntent(prepared, current).status, 'PREPARED_ONLY');
+  assert.throws(() => api.prepareBackendReleaseIntent(input(), current));
+  assert.throws(() => api.validatePreparedBackendReleaseIntent(prepared, { ...current, stagingVerification: { ...proof, jobsSha256: '0'.repeat(64) } }));
+  assert.throws(() => api.prepareBackendReleaseIntent(body, { ...current, ciRun: { ...current.ciRun, run_attempt: 2 } }));
+  assert.throws(() => api.prepareBackendReleaseIntent(body, { ...current, environmentName: 'production' }));
+  assert.throws(() => api.prepareBackendReleaseIntent(body, { ...expected(), stagingVerification: proof }));
+  assert.throws(() => api.prepareBackendReleaseIntent({ ...body, executionScope: 'complete-backend' }, { ...current, executionScope: 'complete-backend' }));
+});
+
+test('canonical backend intent requires immutable exact runtime job attempt proof and separates installed schema from population',async()=>{
+ const api=await subject(),proof={runAttempt:2,jobsSha256:'e'.repeat(64)},body={...input(),canonicalRuntimeVerification:proof},current={...expected(),canonicalRuntimeVerification:proof};
+ const prepared=api.prepareBackendReleaseIntent(body,current);assert.match(prepared.canonicalJson,/canonicalRuntimeVerification/);
+ const missingBody=input(),missingExpected=expected();delete (missingBody as Record<string,unknown>).canonicalRuntimeVerification;delete (missingExpected as Record<string,unknown>).canonicalRuntimeVerification;assert.throws(()=>api.prepareBackendReleaseIntent(missingBody,missingExpected));
+ for(const replacement of [{runAttempt:3,jobsSha256:proof.jobsSha256},{runAttempt:2,jobsSha256:'0'.repeat(64)}])assert.throws(()=>api.validatePreparedBackendReleaseIntent(prepared,{...current,canonicalRuntimeVerification:replacement}));
+ const installedSchema={sourceSha:base,treeSha:tree,migrationCount:123};assert.doesNotThrow(()=>api.prepareBackendReleaseIntent({...body,installedSchema},{...current,installedSchema}));
+ const installedSource={sourceSha:base,treeSha:tree,migrationCount:230,seedSha256:'f'.repeat(64),manifestSha256:'d'.repeat(64)};
+ assert.throws(()=>api.prepareBackendReleaseIntent({...body,installedSchema,installedSource},{...current,installedSchema,installedSource}));
+});
+
+test('installed runtime binds original activation receipt and permits only the exact current source with installed population',async()=>{
+ const api=await subject(),installedSource={sourceSha:base,treeSha:tree,migrationCount:230,seedSha256:'f'.repeat(64),manifestSha256:'d'.repeat(64)},installedRuntime={version:1,purpose:'CUEVO_INSTALLED_ACTIVE_RUNTIME',sourceSha:sha,treeSha:tree,originalRunId:'50',originalRunAttempt:1,originalPackageSha256:'e'.repeat(64),runtimeSha256:'f'.repeat(64),apiDeploymentId:'dpl_Api',apiUrl:'https://cuevo-api-source.vercel.app',edgeId:'edge-original',edgeVersion:1,activationId:'original-activation',vaultSecretName:'cuevo_worker_original',jobId:42,endpoint:targets.supabase.edgeOrigin,activationReceiptSha256:'d'.repeat(64)};
+ const body={...input(),executionScope:'installed-runtime',installedSource,installedRuntime},current={...expected(),executionScope:'installed-runtime',installedSource,installedRuntime};
+ const prepared=api.prepareBackendReleaseIntent(body,current);assert.match(prepared.canonicalJson,/CUEVO_INSTALLED_ACTIVE_RUNTIME/);
+ for(const fields of [{installedSource:undefined},{installedSchema:{sourceSha:base,treeSha:tree,migrationCount:123}},{executionScope:'complete-backend'},{installedRuntime:{...installedRuntime,sourceSha:base}},{installedRuntime:{...installedRuntime,endpoint:targets.supabase.edgeOrigin+'/other'}}])assert.throws(()=>api.prepareBackendReleaseIntent({...body,...fields},{...current,...fields}));
+ assert.throws(()=>api.validatePreparedBackendReleaseIntent(prepared,{...current,installedRuntime:{...installedRuntime,activationReceiptSha256:'0'.repeat(64)}}));
+});
 async function subject() { let module: Record<string, unknown> = {}; try { module = await import(pathToFileURL(resolve(import.meta.dirname, 'backend-release-contracts.ts')).href); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw error; } assert.equal(typeof module.prepareBackendReleaseIntent, 'function', 'backend intent preparation exists'); return module as typeof import('./backend-release-contracts'); }
 
 test('the selected migration endpoint is bound before approval and cannot be removed or replaced',async()=>{const api=await subject(),body=input(),current=expected();const removed=structuredClone(body);delete (removed.fingerprints as Record<string,string>).migrationEndpointSha256;assert.throws(()=>api.prepareBackendReleaseIntent(removed,current));const prepared=api.prepareBackendReleaseIntent(body,current);assert.throws(()=>api.validatePreparedBackendReleaseIntent(prepared,{...current,fingerprints:{...current.fingerprints,migrationEndpointSha256:'0'.repeat(64)}}));});
@@ -26,6 +60,7 @@ test('backend approval binds the migration toolchain artifact and cannot admit o
   assert.throws(() => api.prepareBackendReleaseIntent(withoutToolchain, expectedWithout));
   (body.fingerprints as Record<string, string>).migrationToolchainSha256 = 'd'.repeat(64);
   (current.fingerprints as Record<string, string>).migrationToolchainSha256 = 'd'.repeat(64);
+
   const prepared = api.prepareBackendReleaseIntent(body, current);
   assert.match(prepared.canonicalJson, /migrationToolchainSha256/);
   (current.fingerprints as Record<string, string>).migrationToolchainSha256 = 'e'.repeat(64);
@@ -40,6 +75,7 @@ test('backend approval binds operator journal policy separately from toolchain a
   assert.throws(() => api.prepareBackendReleaseIntent(absent, absentExpected));
   (body.fingerprints as Record<string, string>).operatorStoragePolicySha256 = 'f'.repeat(64);
   (current.fingerprints as Record<string, string>).operatorStoragePolicySha256 = 'f'.repeat(64);
+
   const prepared = api.prepareBackendReleaseIntent(body, current);
   assert.match(prepared.canonicalJson, /operatorStoragePolicySha256/);
   (current.fingerprints as Record<string, string>).operatorStoragePolicySha256 = 'e'.repeat(64);

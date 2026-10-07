@@ -38,6 +38,26 @@ test('stage proof refuses unknown source versions, malformed booleans and unsafe
 test('unsafe actual stage facts remain false and all query paths are fixed read-only metadata',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{state.history=history(Object.values(versions));state.checks={...baseChecks(),privateRelations:false,nativeSourceBridge:false};state.dispatch={count:1,disabled:false};state.analytics={count:2,disabled:false};state.cron={present:true,inactive:false};state.transport=false;const observed=await db.observeStage({stageId:'remaining',expectedAfterVersions:Object.values(versions)});assert.equal(observed.checks.privateRelations,false);assert.equal(observed.checks.nativeSourceBridge,false);assert.equal(observed.checks.dispatchInactive,false);assert.equal(observed.checks.analyticsInactive,false);assert.equal(observed.checks.recoveryCronInactive,false);assert.equal(observed.checks.transportPrivate,false);});assert.equal(state.queries.some(q=>/\b(?:insert\s+into|update\s+[a-z_]|delete\s+from|drop\s+|truncate\s+)|(?:select|perform)\s+internal\.(?:configure_worker_dispatch|send_worker_wake)|select\s+.*decrypted_secret/i.test(q.sql)),false);});});
 test('target reads revalidate physical CA and refuse completion after lock loss while native context remains unchanged',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{state.holdTarget=true;const target=db.observeTarget();target.catch(()=>undefined);for(let n=0;n<100&&!state.targetRelease;n++)await new Promise(done=>setTimeout(done,5));assert.ok(state.targetRelease);state.clients[0].emit('error',new Error(input.password));state.targetRelease!();await assert.rejects(target,/requires review; contents withheld/);}).catch(error=>assert.match(error.message,/requires review; contents withheld/));});await fixture(async input=>{const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{await writeFile(input.certificate.path,'changed private certificate');await assert.rejects(db.observeTarget());});});});
 
+test('verified transport facts stay internal while native observations match their declared consumer contract',async()=>{
+ const{createHostedMigrationDatabase}=await api();
+ await fixture(async input=>{
+  const db=await createHostedMigrationDatabase(input);
+  let observedKeys:string[]=[];let targetKeys:string[]=[];
+  await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{
+   const observed=await db.observe();
+   observedKeys=Object.keys(observed).sort();
+   const current=await db.observeTarget();
+   targetKeys=Object.keys(current).sort();
+   assert.equal(current.tls.kind,'PEER_VERIFIED');
+   assert.equal(current.tls.protocol,'TLSv1.3');
+  });
+  const observationKeys=['operator','database','serverVersion','tls','historyPresent','history'];
+  assert.deepEqual(observedKeys,observationKeys.sort());
+  assert.deepEqual(targetKeys,[...observationKeys,'observedAtMs','authUsers','storageObjects','appSchemas','runtimeRoles','schools'].sort());
+  assert.ok(state.queries.some(query=>query.sql.includes('select ssl from pg_stat_ssl')));
+ });
+});
+
 test('final transport requires its exact immutable Git body and private metadata while historical stage never calls it',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{state.history=history([versions.foundation,versions.wake]);state.transport=false;const early=await db.observeStage({stageId:'pre-observability',expectedAfterVersions:[versions.foundation,versions.wake]});assert.equal(early.checks.transportPrivate,null);assert.equal(state.queries.some(q=>q.sql.includes('CUEVO_TRANSPORT_PRIVATE')),false);state.history=history(Object.values(versions));state.transport=true;state.transportBody='select true';await assert.rejects(db.observeStage({stageId:'remaining',expectedAfterVersions:Object.values(versions)}));state.transportBody=finalTransportBody;state.transportMetadata=false;await assert.rejects(db.observeStage({stageId:'remaining',expectedAfterVersions:Object.values(versions)}));state.transportMetadata=true;assert.equal((await db.observeStage({stageId:'remaining',expectedAfterVersions:Object.values(versions)})).checks.transportPrivate,true);});});});
 
 test('a preinstalled active recovery schedule is observed even before dispatch migration or first schema stage',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{state.cron={present:true,inactive:false};const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const observed=await db.observeStage({stageId:'prefix',expectedAfterVersions:[]});assert.equal(observed.checks.recoveryCronInactive,false);assert.equal(observed.checks.dispatchInactive,null);});});});

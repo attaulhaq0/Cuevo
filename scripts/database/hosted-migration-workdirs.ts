@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstat, mkdir, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
-import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, type HostedMigrationPlanV1 } from './hosted-migration-plan';
+import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, verifyCompletedMigrationPrefix, verifyPriorSchemaPrefix, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { replayPlan, nativeSourceMigration, posthogIntelligenceMigration } from './replay-plan';
 
 const failure=()=>new Error('Hosted migration workdir source, plan or owned output requires review; contents withheld.');
@@ -28,7 +28,7 @@ export async function createHostedMigrationWorkdirs(input:{repoRoot:string;sourc
  if(observability<0)throw failure();
  const groups=[replay.before,[nativeSourceMigration],replay.remaining.slice(0,observability),replay.remaining.slice(observability)];
  const boundaries=groups.map((_,index)=>groups.slice(0,index+1).flat().length);
- if(plan.applied.length&&!boundaries.includes(plan.applied.length)||plan.mode===(plan.applied.length?'EMPTY_INITIAL':'INCREMENTAL'))throw failure();
+ if(plan.applied.length&&!boundaries.includes(plan.applied.length)&&!(plan.priorSchemaRelease?verifyPriorSchemaPrefix(input.repoRoot,plan):verifyCompletedMigrationPrefix(input.repoRoot,plan))||plan.mode===(plan.applied.length?'EMPTY_INITIAL':'INCREMENTAL'))throw failure();
  const pendingSet=new Set(plan.pending.map(row=>row.name));
  if(plan.stages.some((stage,index)=>JSON.stringify(stage.names)!==JSON.stringify(groups[index].filter(name=>pendingSet.has(name)))))throw failure();
  const repoRoot=await realpath(input.repoRoot),expected=join(repoRoot,'.local','hosted-release');

@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { readCanonicalMigrationSources, planHostedMigrations } from './hosted-migration-plan';
+import { readCanonicalMigrationSources, planHostedMigrations, createCanonicalHostedMigrationPlan } from './hosted-migration-plan';
 import { createHostedMigrationWorkdirs } from './hosted-migration-workdirs';
 
 const ref='mqxdjvsyckzocokuikmx';
@@ -18,3 +18,18 @@ test('tampered bytes, extra inputs, reordered versions and alias workdirs fail w
 test('unrelated authored drift and symlinked inputs cannot attest a clean release source',async()=>{const{admitHostedMigrationStageFiles}=await api();await fixture(async(input)=>{await writeFile(join(input.repoRoot,'unreviewed.txt'),'unreviewed source');await assert.rejects(admitHostedMigrationStageFiles(input));await rm(join(input.repoRoot,'unreviewed.txt'));const config=join(input.stage.workdir,'supabase');await rm(config,{recursive:true,force:true});await symlink(join(input.repoRoot,'supabase'),config,process.platform==='win32'?'junction':'dir');await assert.rejects(admitHostedMigrationStageFiles(input));assert.ok((await readdir(input.stage.workdir)).includes('supabase'));});});
 
 test('valid native execution metadata above the approval-package limit still admits exact Git and physical files',async()=>{const{admitHostedMigrationStageFiles}=await api();await fixture(async(input,built)=>{assert.ok(Buffer.byteLength(JSON.stringify(input.plan.migrations))>48*1024);const stage=built.stages.at(-1)!;assert.ok(Buffer.byteLength(JSON.stringify(stage.included))>48*1024);const receipt=await admitHostedMigrationStageFiles({...input,stage});assert.equal(receipt.sources.length,input.plan.migrations.length);assert.equal(receipt.stageSha256,createHash('sha256').update(JSON.stringify({included:stage.included,configSha256:stage.configSha256})).digest('hex'));},120);});
+
+test('physical stage admission independently verifies completed prior Git prefix before a populated append-only delta',async()=>{
+ const{admitHostedMigrationStageFiles}=await api();await fixture(async input=>{
+  const prior=input.plan,priorSha=input.sourceSha,priorTree=input.treeSha,count=prior.migrations.length,name='20261007122000_completed_physical_delta.sql';
+  await writeFile(join(input.repoRoot,'supabase/migrations',name),'begin;\nselect 1;\ncommit;\n');git(input.repoRoot,'add','.');git(input.repoRoot,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','append immutable native source');
+  const sourceSha=git(input.repoRoot,'rev-parse','HEAD'),treeSha=git(input.repoRoot,'rev-parse','HEAD^{tree}'),now=Date.now();
+  const priorReceipt={projectRef:ref,sourceSha:priorSha,treeSha:priorTree,migrations:prior.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:count};
+  const target={projectRef:ref,boundProjectRef:ref,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(now).toISOString(),authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:prior.migrations.map(row=>row.version),dispatchDisabled:true,population:'GUARDED_SYNTHETIC'};
+  const{plan}=createCanonicalHostedMigrationPlan({repoRoot:input.repoRoot,sourceSha,treeSha,target,priorReceipt,now});
+  const built=await createHostedMigrationWorkdirs({repoRoot:input.repoRoot,sourceSha,treeSha,plan,outputRoot:join(input.repoRoot,'.local/hosted-release')});
+  for(const stage of built.stages){const receipt=await admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage});assert.equal(receipt.sources.length,count+1);}
+  await assert.rejects(admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan:{...plan,priorCompletedRelease:{...plan.priorCompletedRelease!,sourceSha:'0'.repeat(40)}},stage:built.stages[0]}));
+  const final=built.stages.at(-1)!,file=join(final.workdir,'supabase/migrations',name);await writeFile(file,'select 999;\n');await assert.rejects(admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage:final}));
+ });
+});

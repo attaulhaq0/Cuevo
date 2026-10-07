@@ -14,6 +14,8 @@ import { verifyHostedBrowserAccess } from './backend-hosted-browser';
 import { readGitBinaryDiffDigest } from './git-source-digest';
 import { verifyHostedLearningLoop, type HostedLearningLoopWebAdmission } from './backend-hosted-learning-loop';
 import { createProtectedPreview, protectedPreviewHeaders, type ProtectedPreviewBinding } from './protected-preview';
+import { readFullReleaseEvidence } from './full-release-evidence';
+import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -97,7 +99,24 @@ const currentCi = async () => {
   const sha = required('RELEASE_SHA'), ciRunId = required('CI_RUN_ID');
   if (!/^[a-f0-9]{40}$/.test(sha) || !/^[1-9][0-9]*$/.test(ciRunId) || sha !== required('GITHUB_SHA') || process.env.GITHUB_REF !== 'refs/heads/main') throw Error('Release must use the exact verified main commit.');
   assertCheckout();
-  validateCiRun(await github(`actions/runs/${ciRunId}`), { sha, repository: required('GITHUB_REPOSITORY'), ciRunId });
+  const rawCi=await github(`actions/runs/${ciRunId}`);
+  validateCiRun(rawCi, { sha, repository: required('GITHUB_REPOSITORY'), ciRunId });
+  const canonicalRuntimeVerification=await readCanonicalRuntimeJobs(rawCi,github),canonicalPath=join(directory,'canonical-runtime-proof.json');
+  try{const saved=await json<unknown>(canonicalPath);if(canonicalReleaseReviewJson(saved)!==canonicalReleaseReviewJson(canonicalRuntimeVerification))throw Error('Canonical runtime job attempt changed before release consumption.');}
+  catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;await mkdir(directory,{recursive:true});await writeFile(canonicalPath,canonicalReleaseReviewJson(canonicalRuntimeVerification),{flag:'wx',mode:0o600});}
+  if (required('RELEASE_ENVIRONMENT') === 'production') {
+    const fullVerificationRunId = required('FULL_VERIFICATION_RUN_ID');
+    if (fullVerificationRunId === ciRunId) throw Error('Full candidate and dependency verification must have separate run identities.');
+    const evidence = await readFullReleaseEvidence({ repoRoot: process.cwd(), githubToken: required('GH_TOKEN'), repository: required('GITHUB_REPOSITORY'), sha, ciRunId: fullVerificationRunId });
+    const receiptPath = join(directory, 'full-release-proof.json');
+    try {
+      const saved = await json<unknown>(receiptPath);
+      if (canonicalReleaseReviewJson(saved) !== canonicalReleaseReviewJson(evidence)) throw Error('Full customer-candidate evidence changed before consumption.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      await mkdir(directory, { recursive: true }); await writeFile(receiptPath, canonicalReleaseReviewJson(evidence), { flag: 'wx', mode: 0o600 });
+    }
+  } else if (process.env.FULL_VERIFICATION_RUN_ID) throw Error('Staging cannot consume a production candidate identity.');
   await assertCurrentMain();
 };
 const assignmentSchema = z.object({ baseSha: z.string().regex(/^[a-f0-9]{40}$/), reviews: z.array(z.object({ category: z.enum(['source-spec-code', 'qa-regression-operations']), taskId: z.string().min(1).max(200).regex(/^[a-zA-Z0-9_./:-]+$/), reportSha256: z.string().regex(/^[a-f0-9]{64}$/), evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict()).length(2) }).strict();
@@ -126,7 +145,10 @@ const reviewExpected = async (manifest: unknown) => {
   const identity = z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), run_attempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), repository: z.object({ full_name: z.literal(required('GITHUB_REPOSITORY')) }), head_sha: z.literal(required('RELEASE_SHA')), head_branch: z.literal('main'), path: z.literal('.github/workflows/release.yml'), event: z.enum(['workflow_dispatch', 'workflow_run']), status: z.enum(['in_progress', 'waiting']), conclusion: z.null() }).parse(run);
   if (String(identity.id) !== required('GITHUB_RUN_ID') || String(identity.run_attempt) !== required('GITHUB_RUN_ATTEMPT')) throw Error('Release run attempt does not match current execution.');
   const fingerprints = await sourceEvidence(assignments.baseSha);
-  const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...fingerprints, reviews: assignments.reviews };
+  const fullProof = environment.name === 'production' ? await json<{ runId: string; runAttempt: number; sourceSha: string; summarySha256: string; jobsSha256: string }>(join(directory,'full-release-proof.json')) : undefined;
+  const fullVerification = fullProof ? { runId: fullProof.runId, runAttempt: fullProof.runAttempt, sourceSha: fullProof.sourceSha, summarySha256: fullProof.summarySha256, jobsSha256: fullProof.jobsSha256 } : undefined;
+  const canonicalRuntimeVerification=z.object({runAttempt:z.number().int().positive(),jobsSha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(await json<unknown>(join(directory,'canonical-runtime-proof.json')));
+  const expected: ReleaseReviewExpected = { repository: required('GITHUB_REPOSITORY'), releaseSha: required('RELEASE_SHA'), baseSha: assignments.baseSha, ciRunId: required('CI_RUN_ID'), releaseRunId: String(identity.id), runAttempt: identity.run_attempt, environmentId: environment.id, environmentName: environment.name as 'staging' | 'production', web: webIdentity(),canonicalRuntimeVerification, ...(fullVerification?{fullVerification}:{}), now: Date.now(), manifestSha256: createHash('sha256').update(canonicalReleaseReviewJson(manifest), 'utf8').digest('hex'), ...fingerprints, reviews: assignments.reviews };
   return { expected, run };
 };
 const backendBridge = async () => {
@@ -184,7 +206,7 @@ if (mode === 'context') {
   const event = await json<unknown>(required('GITHUB_EVENT_PATH'));
   const context = releaseContext(event, { sha: required('GITHUB_SHA'), ref: required('GITHUB_REF'), repository: required('GITHUB_REPOSITORY'), eventName: required('GITHUB_EVENT_NAME') });
   const selection = backendSelectionForWebEvent(event, required('GITHUB_EVENT_NAME'), context.environment);
-  await writeFile(required('GITHUB_OUTPUT'), `sha=${context.sha}\nci-run-id=${context.ciRunId}\nenvironment=${context.environment}\n`, { flag: 'a' });
+  await writeFile(required('GITHUB_OUTPUT'), `sha=${context.sha}\nci-run-id=${context.ciRunId}\nfull-run-id=${context.fullVerificationRunId??''}\nenvironment=${context.environment}\n`, { flag: 'a' });
   if (selection) await writeFile(required('GITHUB_OUTPUT'), `backend-selection-base64=${encodeWebBackendSelection(selection)}\n`, { flag: 'a' });
   console.log('Release context bound to the current main checkout and canonical CI run.');
 } else if (mode === 'controls') {
@@ -199,7 +221,9 @@ if (mode === 'context') {
   const admitted = await admitManifest(input.manifest, required('CI_RUN_ID'));
   if(admitted.api.kind==='vercel'&&admitted.api.projectId===webIdentity().projectId)throw Error('API and web must use separate Vercel projects before release preparation.');
   const { expected } = await reviewExpected(input.manifest);
-  const prepared = prepareReleaseReviewPackage(input.review, expected);
+  const suppliedReview=z.object({canonicalRuntimeVerification:z.unknown().optional()}).passthrough().parse(input.review);
+  if(suppliedReview.canonicalRuntimeVerification!==undefined&&canonicalReleaseReviewJson(suppliedReview.canonicalRuntimeVerification)!==canonicalReleaseReviewJson(expected.canonicalRuntimeVerification))throw Error('Supplied review cannot replace official canonical runtime proof.');
+  const prepared = prepareReleaseReviewPackage({...suppliedReview,canonicalRuntimeVerification:expected.canonicalRuntimeVerification}, expected);
   await writeFile(required('GITHUB_OUTPUT'), `review-base64=${prepared.base64}\nreview-digest=${prepared.sha256}\nenvironment-id=${expected.environmentId}\n`, { flag: 'a' });
   if (bridge) await writeFile(required('GITHUB_OUTPUT'), `backend-manifest-base64=${Buffer.from(canonicalReleaseReviewJson(bridge.manifest)).toString('base64')}\nbackend-bridge-base64=${Buffer.from(canonicalReleaseReviewJson(bridge)).toString('base64')}\n`, { flag: 'a' });
   await writeFile(required('GITHUB_STEP_SUMMARY'), `## Cuevo pre-build release admission\n\nThis package contains operator-attested independent review digests. It does not approve a future web artifact or domain promotion.\n\n\`\`\`json\n${JSON.stringify(parseCanonicalReleaseReviewJson(prepared.canonicalJson), null, 2)}\n\`\`\`\n\nThe following dependency manifest is bound by the package's manifest SHA-256:\n\n\`\`\`json\n${JSON.stringify(input.manifest, null, 2)}\n\`\`\`\n\nCopy this exact approval comment:\n\n\`${prepared.comment}\`\n`, { flag: 'a' });

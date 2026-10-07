@@ -19,6 +19,27 @@ test('fast and complete technical CI discover the same backend release contract 
  assert.match(browserSource, /actual Chromium normal forms/);
  assert.match(browserSource, /runHostedRoleBrowser/);
 });
+
+test('required source inventory executes docs reference audit asset contracts and local runtime fixtures once', () => {
+ const argumentsList:string[] = verificationSteps.flatMap(step => [...step.args]);
+ for (const file of ['scripts/docs/reference-inventory.test.ts','scripts/verification/dependency-security.test.ts','scripts/verification/web-test-assets.test.ts']) assert.ok(argumentsList.includes(file), file);
+ const packageScripts = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../package.json'), 'utf8')).scripts as Record<string,string>;
+ assert.equal(packageScripts.test.includes('scripts/local-runtime.test.ts'), false);
+});
+
+test('every bootstrapped verification failure restores only after confirmed owned runtime stop', async () => {
+ const rules = await import('./rules');
+ assert.equal(typeof rules.restoreTechnicalState, 'function');
+ for(const profile of ['full','full-runtime','routine','main-staging']) {
+  const calls:string[]=[];
+  assert.equal(await rules.restoreTechnicalState(true,false,{stopped:async()=>{calls.push('stopped');},restore:async()=>{calls.push('restore');return 0;}}),0,profile);
+  assert.deepEqual(calls,['stopped','restore']);
+ }
+ let restored=false;
+ assert.equal(await rules.restoreTechnicalState(true,false,{stopped:async()=>{throw Error('unknown');},restore:async()=>{restored=true;return 0;}}),1);assert.equal(restored,false);
+ assert.equal(await rules.restoreTechnicalState(false,false,{stopped:async()=>{},restore:async()=>{throw Error('must not mutate');}}),0);
+ assert.equal(await rules.restoreTechnicalState(true,true,{stopped:async()=>{},restore:async()=>{throw Error('already restored');}}),0);
+});
 test('recovery only accepts dedicated local Cuevo database and scratch name',()=>{assert.doesNotThrow(()=>validateRecoveryTarget('postgresql://postgres:private@127.0.0.1:56322/postgres','cuevo_recovery_123'));for(const[url,name]of[['postgresql://postgres:private@remote.example:5432/postgres','cuevo_recovery_123'],['postgresql://postgres:private@127.0.0.1:54322/postgres','cuevo_recovery_123'],['postgresql://postgres:private@127.0.0.1:56322/postgres','postgres']])assert.throws(()=>validateRecoveryTarget(url!,name!));});
 test('missing skipped or failed evidence cannot yield technical completion',()=>{assert.equal(technicalResult([{name:'unit',exitCode:0,required:true},{name:'db',exitCode:null,required:true}]).status,'NOT_VERIFIED');assert.equal(technicalResult([{name:'unit',exitCode:0,required:true},{name:'db',exitCode:1,required:true}]).status,'FAILED');assert.equal(technicalResult([{name:'unit',exitCode:0,required:true},{name:'db',exitCode:0,required:true}]).status,'VERIFIED');});
 test('configured build and mutation runners load the current bootstrap environment',()=>{for(const name of['build','integration','browser','browser-compatibility','runtime-outage','recovery']){const step=verificationSteps.find(s=>s.name===name)!;assert.equal(commandArgs(step)[0],'--env-file=.env.local');}for(const name of['clean-bootstrap','clean-browser-seed','demo-seed-restore']){const bootstrap=verificationSteps.find(s=>s.name===name)!;assert.notEqual(commandArgs(bootstrap)[0],'--env-file=.env.local');}});

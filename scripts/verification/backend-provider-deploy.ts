@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { lstat, mkdir, open, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { parseServerConfig } from '@cuevo/config';
@@ -10,6 +10,11 @@ import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './rel
 import { readBackendReleaseAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
 import { createBackendPreviewTransport, backendPreviewHeaders } from './backend-preview-transport';
+import { createHostedMigrationDatabase } from '../database/hosted-migration-database';
+import { readHostedMigrationProvider, requireCurrentHostedMigrationEndpoint } from '../database/hosted-migration-provider';
+import { providerDeploymentStateSchema, providerStateSha256, validateProviderDeploymentTransition, type ProviderDeploymentState, type ProviderDeploymentOperation, type ProviderDeploymentPhase } from '../database/hosted-provider-state';
+import {readCanonicalMigrationSources} from '../database/hosted-migration-plan';
+import {verifyHostedMigrationHistory} from '../database/hosted-migration-history';
 
 const failure = () => Error('Backend provider artifact or runtime recipient requires review; contents withheld.');
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -81,23 +86,24 @@ export async function prepareBackendProviderDeployment(value: { repoRoot: string
   } catch { throw failure(); }
 }
 
-type DeploymentInput = { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; vercelToken: string; providerToken: string; githubToken: string; runtimeConfig: unknown };
+type DeploymentInput = { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; vercelToken: string; providerToken: string; githubToken: string; runtimeConfig: unknown; operator: { databaseUrl: string; certificate: { path: string; sha256: string }; password: string } };
 export type BackendProviderDeploymentResult = { status: 'DEPLOYED_INACTIVE' | 'REQUIRES_REVIEW'; purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT'; api: { deploymentId: string; url: string; artifactSha256: string; metadataVerified: true; healthVerified: boolean } | null; edge: { id: string; version: number; artifactSha256: string; denoLockSha256: string; customAuthenticationVerified: boolean; state: 'INACTIVE' } | null; mutation: 'NOT_ATTEMPTED' | 'ATTEMPTED'; hostedAcceptance: false };
 async function responseBytes(response: Response, signal: AbortSignal) {
   if (response.redirected || !response.body) throw failure(); const declared = response.headers.get('content-length'); if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > 1024 * 1024)) throw failure();
   const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
   try { while (true) { const part = await new Promise<ReadableStreamReadResult<Uint8Array>>((done, reject) => { const abort = () => { signal.removeEventListener('abort', abort); reject(failure()); }; if (signal.aborted) return abort(); signal.addEventListener('abort', abort, { once: true }); void reader.read().then(value => { signal.removeEventListener('abort', abort); done(value); }, () => { signal.removeEventListener('abort', abort); reject(failure()); }); }); if (signal.aborted) throw failure(); if (part.done) break; size += part.value.byteLength; if (size > 1024 * 1024) throw failure(); chunks.push(part.value); } return Buffer.concat(chunks); } finally { void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* Pending cancelled read owns cleanup. */ } }
 }
-async function providerRequest(url: string, token: string | null, method: 'GET' | 'POST', body?: string | FormData, allowFailure = false, transportHeaders: Record<string,string> = {}) {
+async function providerRequest(url: string, token: string | null, method: 'GET' | 'POST', body?: string | FormData, allowFailure = false, transportHeaders: Record<string,string> = {}, parentSignal?: AbortSignal) {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-  try { const response = await fetch(url, { method, headers: { ...transportHeaders, ...(token === null ? {} : { Authorization: 'Bearer ' + token }), ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) }, ...(body === undefined ? {} : { body }), redirect: 'error', credentials: 'omit', cache: 'no-store', signal: controller.signal }); if (response.redirected || response.url && response.url !== url || !allowFailure && !response.ok) throw failure();
+  const signal = parentSignal ? AbortSignal.any([controller.signal, parentSignal]) : controller.signal;
+  try { const response = await fetch(url, { method, headers: { ...transportHeaders, ...(token === null ? {} : { Authorization: 'Bearer ' + token }), ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) }, ...(body === undefined ? {} : { body }), redirect: 'error', credentials: 'omit', cache: 'no-store', signal }); if (signal.aborted || response.redirected || response.url && response.url !== url || !allowFailure && !response.ok) throw failure();
     // The official secrets-create endpoint confirms with bodyless 201. Its
     // immediate fixed GET verifies the values; other endpoints require JSON.
     const expectedEmpty = method === 'POST' && response.status === 201 && /^https:\/\/api\.supabase\.com\/v1\/projects\/[a-z]{20}\/secrets$/.test(url);
     if (expectedEmpty && !response.body) { const length = response.headers.get('content-length'); if (length !== null && length !== '0' || controller.signal.aborted) throw failure(); return { status: response.status, value: null }; }
-    const bytes = await responseBytes(response, controller.signal); if (!bytes.length && !expectedEmpty) throw failure(); return { status: response.status, value: bytes.length ? JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(bytes)) as unknown : null }; } finally { clearTimeout(timer); controller.abort(); }
+    const bytes = await responseBytes(response, signal); if (!bytes.length && !expectedEmpty) throw failure(); return { status: response.status, value: bytes.length ? JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(bytes)) as unknown : null }; } finally { clearTimeout(timer); controller.abort(); }
 }
-async function apiCli(root: string, artifact: VerifiedArtifact, expected: BackendReleaseExpected, token: string) {
+async function apiCli(root: string, artifact: VerifiedArtifact, expected: BackendReleaseExpected, token: string, operationSha256: string, signal: AbortSignal) {
   if (process.platform !== 'linux') throw failure();
   const scopedEnvironment = Object.fromEntries(['PATH', 'LANG', 'LC_ALL', 'TZ', 'TMP', 'TEMP'].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]])), global = await execute('npm', ['root', '--global'], { env: scopedEnvironment, windowsHide: true, timeout: 15000, maxBuffer: 65536, shell: false });
   const globalRoot = resolve(global.stdout.trim()), cliRoot = join(globalRoot, 'vercel'), manifest = JSON.parse((await readFile(join(cliRoot, 'package.json'))).toString('utf8')) as { name?: string; version?: string; bin?: string | Record<string, string> }; if (manifest.name !== 'vercel' || manifest.version !== '62.1.0') throw failure();
@@ -105,48 +111,136 @@ async function apiCli(root: string, artifact: VerifiedArtifact, expected: Backen
   const delivery = join(root, '.local/hosted-release', 'api-delivery-' + randomUUID()); await mkdir(delivery, { mode: 0o700 }); await physical(root, delivery, 'directory');
   for (const row of artifact.files.filter(row => row.path.startsWith('.vercel/output/'))) { const path = join(delivery, row.path); await mkdir(resolve(path, '..'), { recursive: true }); await writeFile(path, row.bytes, { mode: 0o600 }); }
   await mkdir(join(delivery, '.vercel'), { recursive: true }); await writeFile(join(delivery, '.vercel/project.json'), JSON.stringify({ orgId: expected.targets.api.teamId, projectId: expected.targets.api.projectId }), { mode: 0o600 });
-  const result = await execute(process.execPath, [cli, 'deploy', '--prebuilt', '--yes', '--target=preview', '--meta', 'cuevoCommitSha=' + expected.releaseSha, '--scope', expected.targets.api.teamId], { cwd: delivery, env: { ...scopedEnvironment, VERCEL_TOKEN: token, VERCEL_ORG_ID: expected.targets.api.teamId, VERCEL_PROJECT_ID: expected.targets.api.projectId, VERCEL_TELEMETRY_DISABLED: '1' }, shell: false, windowsHide: true, timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024 });
+  const result = await execute(process.execPath, [cli, 'deploy', '--prebuilt', '--yes', '--target=preview', '--meta', 'cuevoCommitSha=' + expected.releaseSha, '--meta', 'cuevoArtifactSha256=' + artifact.sha256, '--meta', 'cuevoProviderOperation=' + operationSha256, '--scope', expected.targets.api.teamId], { cwd: delivery, env: { ...scopedEnvironment, VERCEL_TOKEN: token, VERCEL_ORG_ID: expected.targets.api.teamId, VERCEL_PROJECT_ID: expected.targets.api.projectId, VERCEL_TELEMETRY_DISABLED: '1' }, shell: false, windowsHide: true, timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024, signal });
   const url = result.stdout.trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/.test(url) || url.includes(token)) throw failure(); return url.replace(/\/$/, '');
 }
-/** Initial-only provider consumer. Every write repeats exact current admission.
- * Unknown writes remain review-required and are never blindly retried. */
+/** Provider phases retain original durable intent and confirmed receipts. A
+ * current approval admits pending effects; it never recreates an unknown upload. */
 export async function deployBackendProviders(value: DeploymentInput): Promise<BackendProviderDeploymentResult> {
   const result: BackendProviderDeploymentResult = { status: 'REQUIRES_REVIEW', purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT', api: null, edge: null, mutation: 'NOT_ATTEMPTED', hostedAcceptance: false };
   try {
-    const input = z.object({ repoRoot: z.string(), preparedApproval: z.unknown(), expected: z.unknown(), apiArtifactRoot: z.string(), edgeArtifactRoot: z.string(), vercelToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), providerToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), githubToken: z.string().min(1), runtimeConfig: z.unknown() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value))), expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() });
-    const recipients = prepareHostedRuntimeRecipients(input.runtimeConfig, expected), root = input.repoRoot;
+    const input = z.object({ repoRoot: z.string(), preparedApproval: z.unknown(), expected: z.unknown(), apiArtifactRoot: z.string(), edgeArtifactRoot: z.string(), vercelToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), providerToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), githubToken: z.string().min(1), runtimeConfig: z.unknown(), operator: z.object({ databaseUrl: z.string().max(400), password: privateValue, certificate: z.object({ path: z.string(), sha256: digest }).strict() }).strict() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
+    const expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }), recipients = prepareHostedRuntimeRecipients(input.runtimeConfig, expected), root = input.repoRoot;
     const admission = async () => { await readBackendReleaseAdmission({ repoRoot: root, expected, prepared, githubToken: input.githubToken }); };
     const artifacts = async () => { const api = await artifact(root, input.apiArtifactRoot, expected.fingerprints.apiArtifactSha256, 'api'), edge = await artifact(root, input.edgeArtifactRoot, expected.fingerprints.edgeArtifactSha256, 'cuevo-worker'); if (edge.manifest.denoLockSha256 !== expected.fingerprints.denoLockSha256) throw failure(); return { api, edge }; };
     await admission(); let built = await artifacts();
-    const team = expected.targets.api.teamId, project = expected.targets.api.projectId, query = '?teamId=' + team, vercel = (path: string, method: 'GET' | 'POST' = 'GET', body?: string) => providerRequest('https://api.vercel.com' + path, input.vercelToken, method, body), supabase = (path: string, method: 'GET' | 'POST' = 'GET', body?: string | FormData) => providerRequest(`https://api.supabase.com/v1/projects/${expected.targets.supabase.projectRef}/` + path, input.providerToken, method, body);
-    const projectValue = z.object({ id: z.literal(project), accountId: z.literal(team) }).parse((await vercel('/v9/projects/' + project + query)).value); if (projectValue.id !== project) throw failure();
-    const envPath = '/v10/projects/' + project + '/env' + query, listed = z.object({ envs: z.array(z.object({ key: z.string(), target: z.array(z.string()), id: z.string() }).passthrough()).max(100) }).parse((await vercel(envPath + '&decrypt=false')).value);
-    if (listed.envs.length) throw failure();
-    const projectRef = expected.targets.supabase.projectRef;
-    const functions = z.array(z.object({ slug: z.string() }).passthrough()).max(100).parse((await supabase('functions')).value); if (functions.length) throw failure();
-    const secrets = z.array(z.object({ name: z.string(), value: z.string() }).passthrough()).max(100).parse((await supabase('secrets')).value); if (secrets.some(row => Object.hasOwn(recipients.edge, row.name))) throw failure();
-    await admission(); built = await artifacts();
-    const receiptPath = join(root, '.local/hosted-release/provider-deployment-intent.json'), intent = { version: 1, purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT', sourceSha: expected.releaseSha, runId: expected.releaseRunId, runAttempt: expected.runAttempt, packageSha256: prepared.sha256, apiArtifactSha256: built.api.sha256, edgeArtifactSha256: built.edge.sha256, runtimeSha256: recipients.runtimeSha256 };
-    const handle = await open(receiptPath, 'wx', 0o600); try { await handle.writeFile(canonicalReleaseReviewJson(intent)); await handle.sync(); } finally { await handle.close(); }
-    result.mutation = 'ATTEMPTED';
-    const envBody = Object.entries(recipients.api).map(([key, value]) => ({ key, value, type: 'encrypted', target: ['preview'], comment: 'Cuevo source-bound synthetic runtime ' + expected.releaseSha }));
-    const envCreated = (await vercel(envPath, 'POST', JSON.stringify(envBody))).value;
-    if (z.object({ failed: z.array(z.unknown()).length(0) }).safeParse(envCreated).success !== true) throw failure();
-    const afterEnvs = z.object({ envs: z.array(z.object({ key: z.string(), target: z.array(z.literal('preview')).length(1), type: z.literal('encrypted') }).passthrough()) }).parse((await vercel(envPath + '&decrypt=false')).value); if (canonicalReleaseExecutionJson(afterEnvs.envs.map(row => row.key).sort()) !== canonicalReleaseExecutionJson(Object.keys(recipients.api).sort())) throw failure();
-    await admission(); built = await artifacts(); const apiUrl = await apiCli(root, built.api, expected, input.vercelToken);
-    const deployment = z.object({ id: z.string().startsWith('dpl_'), projectId: z.literal(project), ownerId: z.literal(team), url: z.literal(new URL(apiUrl).hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), meta: z.object({ cuevoCommitSha: z.literal(expected.releaseSha) }) }).parse((await vercel('/v13/deployments/' + new URL(apiUrl).hostname + query)).value);
-    const preview={repoRoot:root,expected,prepared,apiDeployment:{id:deployment.id,url:apiUrl}};
-    await createBackendPreviewTransport({...preview,vercelToken:input.vercelToken},admission);
-    const health = await providerRequest(apiUrl + '/health/live', null, 'GET', undefined, false, await backendPreviewHeaders({...preview,url:apiUrl+'/health/live'})); const live = z.object({ status: z.literal('ok'), service: z.literal('cuevo-api') }).safeParse(health.value).success;
-    result.api = { deploymentId: deployment.id, url: apiUrl, artifactSha256: built.api.sha256, metadataVerified: true, healthVerified: live }; if (!live) throw failure();
-    await admission(); built = await artifacts();
-    await supabase('secrets', 'POST', JSON.stringify(Object.entries(recipients.edge).map(([name, value]) => ({ name, value }))));
-    const afterSecrets = z.array(z.object({ name: z.string(), value: z.string() }).passthrough()).max(100).parse((await supabase('secrets')).value); for (const [name, value] of Object.entries(recipients.edge)) { const rows = afterSecrets.filter(row => row.name === name); if (rows.length !== 1 || rows[0].value !== hash(value)) throw failure(); }
-    await admission(); built = await artifacts(); const body = new FormData(); for (const row of built.edge.files) body.append('file', new Blob([Uint8Array.from(row.bytes).buffer]), row.path); body.append('metadata', JSON.stringify({ entrypoint_path: 'index.ts', import_map_path: 'deno.json', verify_jwt: false, name: 'cuevo-worker' }));
-    const deployed = z.object({ id: z.string(), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.number().int().positive(), verify_jwt: z.literal(false) }).parse((await supabase('functions/deploy?slug=cuevo-worker', 'POST', body)).value);
-    const observed = z.object({ id: z.literal(deployed.id), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.literal(deployed.version), verify_jwt: z.literal(false) }).parse((await supabase('functions/cuevo-worker')).value); if (observed.version !== deployed.version) throw failure();
-    const denial = await providerRequest(`https://${projectRef}.supabase.co/functions/v1/cuevo-worker`, null, 'POST', JSON.stringify({ version: 1, wakeId: '00000000-0000-4000-8000-000000000000' }), true), authenticated = denial.status === 401 && z.object({ code: z.literal('WORKER_AUTH_REQUIRED') }).strict().safeParse(denial.value).success;
-    result.edge = { id: deployed.id, version: deployed.version, artifactSha256: built.edge.sha256, denoLockSha256: expected.fingerprints.denoLockSha256, customAuthenticationVerified: authenticated, state: 'INACTIVE' }; if (!authenticated) throw failure();
-    await admission(); result.status = 'DEPLOYED_INACTIVE'; return result;
+    const team = expected.targets.api.teamId, project = expected.targets.api.projectId, projectRef = expected.targets.supabase.projectRef, query = '?teamId=' + team;
+    const operatorUrl = new URL(input.operator.databaseUrl), endpoint = { projectRef, kind: operatorUrl.hostname === `db.${projectRef}.supabase.co` ? 'direct' as const : 'session-pooler' as const, host: operatorUrl.hostname, port: 5432 as const, database: 'postgres' as const };
+    requireCurrentHostedMigrationEndpoint(endpoint, await readHostedMigrationProvider({ projectRef, boundProjectRef: projectRef, providerToken: input.providerToken }), expected.fingerprints.migrationEndpointSha256);
+    const database = await createHostedMigrationDatabase({ repoRoot: root, projectRef, ...input.operator });
+    const migrationSources=readCanonicalMigrationSources({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha}).sources;
+    const included=migrationSources.map(source=>({name:source.name,version:source.name.slice(0,14),sha256:hash(source.bytes)})),versions=included.map(row=>row.version).sort();
+    const released = await database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`, async () => {
+      const live = () => { if (database.signal.aborted) throw failure(); };
+      const inactive=async()=>{
+       live();const observed=await database.observe(),post=await database.observeStage({stageId:'remaining',expectedAfterVersions:versions});
+       if(observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||post.observedAtMs>Date.now()||Date.now()-post.observedAtMs>30000||Object.values(post.checks).some(value=>value!==true))throw failure();
+       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});live();
+      };
+      await inactive();
+      const vercel = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string) => { live(); const response = await providerRequest('https://api.vercel.com' + path, input.vercelToken, method, body, false, {}, database.signal); live(); return response; };
+      const supabase = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string | FormData) => { live(); const response = await providerRequest(`https://api.supabase.com/v1/projects/${projectRef}/` + path, input.providerToken, method, body, false, {}, database.signal); live(); return response; };
+      z.object({ id: z.literal(project), accountId: z.literal(team) }).parse((await vercel('/v9/projects/' + project + query)).value);
+      const identity: ProviderDeploymentOperation['identity'] = { sourceSha: expected.releaseSha, treeSha: expected.treeSha, apiArtifactSha256: built.api.sha256, edgeArtifactSha256: built.edge.sha256, denoLockSha256: expected.fingerprints.denoLockSha256, runtimeSha256: recipients.runtimeSha256, teamId: team, projectId: project, originalRunId: expected.releaseRunId, originalRunAttempt: expected.runAttempt, originalPackageSha256: prepared.sha256 };
+      const same = (left: unknown, right: unknown) => canonicalReleaseReviewJson(left) === canonicalReleaseReviewJson(right);
+      const currentFacts = (id: ProviderDeploymentOperation['identity']) => ({ sourceSha: id.sourceSha, treeSha: id.treeSha, apiArtifactSha256: id.apiArtifactSha256, edgeArtifactSha256: id.edgeArtifactSha256, denoLockSha256: id.denoLockSha256, runtimeSha256: id.runtimeSha256, teamId: id.teamId, projectId: id.projectId });
+      const raw = await database.readProviderDeploymentState();
+      let saved: ProviderDeploymentState | null = raw === null ? null : providerDeploymentStateSchema.parse(raw);
+      if (saved && saved.projectRef !== projectRef) throw failure();
+      let state = saved === null ? null : structuredClone(saved), operation = state?.operations.at(-1);
+      const previous = operation && !same(currentFacts(operation.identity), currentFacts(identity)) ? operation : state && state.operations.length > 1 ? state.operations.at(-2) : undefined;
+      if (operation && !same(currentFacts(operation.identity), currentFacts(identity))) {
+        if (operation.identity.sourceSha === identity.sourceSha || operation.identity.projectId !== project || operation.identity.teamId !== team || operation.phases.length !== 4 || operation.phases.some(row => row.state !== 'CONFIRMED')) throw failure();
+        operation = undefined;
+      }
+      const persist = async () => {
+        if (!state) throw failure(); live(); validateProviderDeploymentTransition(saved, state, projectRef);
+        await database.persistProviderDeploymentState({ expectedSha256: saved === null ? null : providerStateSha256(saved), value: state });
+        const retained = providerDeploymentStateSchema.parse(await database.readProviderDeploymentState()); if (!same(retained, state)) throw failure(); saved = structuredClone(retained); live();
+      };
+      const envPath = '/v10/projects/' + project + '/env' + query;
+      const envs = async () => z.object({ envs: z.array(z.object({ key: z.string(), id: z.string(), value: z.string(), target: z.array(z.string()), type: z.string(), comment: z.string().optional(), gitBranch: z.string().nullable().optional() }).passthrough()).max(100) }).parse((await vercel(envPath + '&decrypt=true')).value).envs;
+      const edgeSecrets = async () => z.array(z.object({ name: z.string(), value: z.string() }).passthrough()).max(100).parse((await supabase('secrets')).value);
+      const envReceipt = async (): Promise<ProviderDeploymentPhase['receipt']> => {
+        const rows = await envs(), keys = Object.keys(recipients.api).sort();
+        if (!same(rows.map(row => row.key).sort(), keys) || new Set(rows.map(row => row.id)).size !== rows.length) return null;
+        if (rows.some(row => row.type !== 'encrypted' || !same(row.target, ['preview']) || row.gitBranch || row.comment !== 'Cuevo source-bound synthetic runtime ' + expected.releaseSha || row.value !== recipients.api[row.key as keyof typeof recipients.api])) return null;
+        return { kind: 'API_ENVIRONMENT', keysSha256: hash(canonicalReleaseReviewJson(keys)), valuesSha256: hash(canonicalReleaseReviewJson(recipients.api)), variables: rows.map(row => ({ key: row.key, id: row.id, valueSha256: hash(row.value) })).sort((a, b) => a.key.localeCompare(b.key)) };
+      };
+      const secretReceipt = async (): Promise<ProviderDeploymentPhase['receipt']> => {
+        const rows = await edgeSecrets(), variables = Object.entries(recipients.edge).map(([name, value]) => ({ name, valueSha256: hash(value) })).sort((a, b) => a.name.localeCompare(b.name));
+        if (variables.some(variable => { const matching = rows.filter(row => row.name === variable.name); return matching.length !== 1 || matching[0].value !== variable.valueSha256; })) return null;
+        return { kind: 'EDGE_SECRETS', valuesSha256: hash(canonicalReleaseReviewJson(recipients.edge)), variables };
+      };
+      const priorReceipt = (name: ProviderDeploymentPhase['name']) => previous?.phases.find(row => row.name === name)?.receipt;
+      const guardEnvironment = async () => {
+        const rows = await envs(), prior = priorReceipt('API_ENVIRONMENT');
+        if (!previous) { if (rows.length) throw failure(); return; }
+        if (prior?.kind !== 'API_ENVIRONMENT' || rows.length !== prior.variables.length || prior.variables.some(variable => !rows.some(row => row.key === variable.key && row.id === variable.id && hash(row.value) === variable.valueSha256 && row.type === 'encrypted' && same(row.target, ['preview']) && !row.gitBranch && row.comment === 'Cuevo source-bound synthetic runtime ' + previous.identity.sourceSha))) throw failure();
+      };
+      const guardSecrets = async () => {
+        const rows = await edgeSecrets(), prior = priorReceipt('EDGE_SECRETS');
+        if (!previous) { if (rows.some(row => Object.hasOwn(recipients.edge, row.name))) throw failure(); return; }
+        if (prior?.kind !== 'EDGE_SECRETS' || prior.variables.some(variable => { const matching = rows.filter(row => row.name === variable.name); return matching.length !== 1 || matching[0].value !== variable.valueSha256; })) throw failure();
+      };
+      const guardFunction = async () => {
+        const rows = z.array(z.object({ slug: z.string(), id: z.string().optional(), version: z.number().optional() }).passthrough()).max(100).parse((await supabase('functions')).value), prior = priorReceipt('EDGE_DEPLOYMENT');
+        if (!previous) { if (rows.length) throw failure(); return; }
+        if (prior?.kind !== 'EDGE_DEPLOYMENT' || rows.length !== 1 || rows[0].slug !== 'cuevo-worker' || rows[0].id !== prior.id || rows[0].version !== prior.version) throw failure();
+      };
+      // Admit the whole original target before changing the first setting.
+      // Later phase guards repeat these checks immediately before their effects.
+      if (!operation) { await guardEnvironment(); await guardSecrets(); await guardFunction(); }
+      const phase = async (name: ProviderDeploymentPhase['name'], observe: () => Promise<ProviderDeploymentPhase['receipt']>, effect: () => Promise<void>, guard: () => Promise<void>, reconcileIntent: boolean) => {
+        await inactive();live(); const original = operation?.phases.find(row => row.name === name);
+        if (original) {
+          if (original.state === 'INTENT' && !reconcileIntent) throw failure();
+          const receipt = await observe(); if (!receipt || original.state === 'CONFIRMED' && !same(original.receipt, receipt)) throw failure();
+          if (original.state === 'INTENT') { original.state = 'CONFIRMED'; original.receipt = receipt; await persist(); }
+          return receipt;
+        }
+        await admission(); built = await artifacts(); await guard(); live();
+        if (!state) state = { version: 1, purpose: 'CUEVO_PRIVATE_PROVIDER_DEPLOYMENT_STATE', projectRef, operations: [] };
+        if (!operation) { operation = { identity, phases: [] }; state.operations.push(operation); }
+        const next: ProviderDeploymentPhase = { name, state: 'INTENT', receipt: null }; operation.phases.push(next); await persist();
+        result.mutation = 'ATTEMPTED'; await admission(); built = await artifacts();await inactive(); live(); await effect(); live();
+        const receipt = await observe(); if (!receipt) throw failure(); next.state = 'CONFIRMED'; next.receipt = receipt; await persist(); return receipt;
+      };
+      await phase('API_ENVIRONMENT', envReceipt, async () => {
+        const body = Object.entries(recipients.api).map(([key, value]) => ({ key, value, type: 'encrypted', target: ['preview'], comment: 'Cuevo source-bound synthetic runtime ' + expected.releaseSha }));
+        const created = (await vercel(envPath + (previous ? '&upsert=true' : ''), 'POST', JSON.stringify(body))).value;
+        z.object({ failed: z.array(z.unknown()).length(0) }).parse(created);
+      }, guardEnvironment, true);
+      let apiUrl: string | null = null;
+      const operationSha256 = providerStateSha256(operation!.identity);
+      const apiReceipt = await phase('API_DEPLOYMENT', async () => {
+        const prior = operation?.phases.find(row => row.name === 'API_DEPLOYMENT')?.receipt;
+        const selectedUrl = apiUrl ?? (prior?.kind === 'API_DEPLOYMENT' ? prior.url : null); if (!selectedUrl) return null;
+        const deployment = z.object({ id: z.string().regex(/^dpl_[A-Za-z0-9]+$/), projectId: z.literal(project), ownerId: z.literal(team), url: z.literal(new URL(selectedUrl).hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), meta: z.object({ cuevoCommitSha: z.literal(expected.releaseSha), cuevoArtifactSha256: z.literal(built.api.sha256), cuevoProviderOperation: z.literal(operationSha256) }) }).parse((await vercel('/v13/deployments/' + (prior?.kind === 'API_DEPLOYMENT' ? prior.deploymentId : new URL(selectedUrl).hostname) + query)).value);
+        return { kind: 'API_DEPLOYMENT', deploymentId: deployment.id, url: selectedUrl };
+      }, async () => { apiUrl = await apiCli(root, built.api, expected, input.vercelToken, operationSha256, database.signal); }, async () => undefined, false);
+      if (apiReceipt?.kind !== 'API_DEPLOYMENT') throw failure();
+      const preview = { repoRoot: root, expected, prepared, apiDeployment: { id: apiReceipt.deploymentId, url: apiReceipt.url } };
+      await createBackendPreviewTransport({ ...preview, vercelToken: input.vercelToken }, admission);
+      const health = await providerRequest(apiReceipt.url + '/health/live', null, 'GET', undefined, false, await backendPreviewHeaders({ ...preview, url: apiReceipt.url + '/health/live' }), database.signal);
+      const healthy = z.object({ status: z.literal('ok'), service: z.literal('cuevo-api') }).safeParse(health.value).success;
+      result.api = { deploymentId: apiReceipt.deploymentId, url: apiReceipt.url, artifactSha256: built.api.sha256, metadataVerified: true, healthVerified: healthy }; if (!healthy) throw failure();
+      await phase('EDGE_SECRETS', secretReceipt, async () => { await supabase('secrets', 'POST', JSON.stringify(Object.entries(recipients.edge).map(([name, value]) => ({ name, value })))); }, guardSecrets, true);
+      let deployedEdge: { id: string; version: number } | null = null;
+      const edgeReceipt = await phase('EDGE_DEPLOYMENT', async () => {
+        const prior = operation?.phases.find(row => row.name === 'EDGE_DEPLOYMENT')?.receipt, selected = deployedEdge ?? (prior?.kind === 'EDGE_DEPLOYMENT' ? prior : null); if (!selected) return null;
+        z.object({ id: z.literal(selected.id), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.literal(selected.version), verify_jwt: z.literal(false) }).parse((await supabase('functions/cuevo-worker')).value);
+        return { kind: 'EDGE_DEPLOYMENT', id: selected.id, version: selected.version };
+      }, async () => {
+        const body = new FormData(); for (const row of built.edge.files) body.append('file', new Blob([Uint8Array.from(row.bytes).buffer]), row.path); body.append('metadata', JSON.stringify({ entrypoint_path: 'index.ts', import_map_path: 'deno.json', verify_jwt: false, name: 'cuevo-worker' }));
+        deployedEdge = z.object({ id: z.string().min(1), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.number().int().positive(), verify_jwt: z.literal(false) }).parse((await supabase('functions/deploy?slug=cuevo-worker', 'POST', body)).value);
+      }, guardFunction, false);
+      if (edgeReceipt?.kind !== 'EDGE_DEPLOYMENT') throw failure();
+      const denial = await providerRequest(`https://${projectRef}.supabase.co/functions/v1/cuevo-worker`, null, 'POST', JSON.stringify({ version: 1, wakeId: '00000000-0000-4000-8000-000000000000' }), true, {}, database.signal);
+      const authenticated = denial.status === 401 && z.object({ code: z.literal('WORKER_AUTH_REQUIRED') }).strict().safeParse(denial.value).success;
+      await inactive();result.edge = { id: edgeReceipt.id, version: edgeReceipt.version, artifactSha256: built.edge.sha256, denoLockSha256: expected.fingerprints.denoLockSha256, customAuthenticationVerified: authenticated, state: 'INACTIVE' }; if (!authenticated) throw failure();
+      await admission(); live();
+    });
+    if (released.kind !== 'RELEASED') throw failure(); result.status = 'DEPLOYED_INACTIVE'; return result;
   } catch { return result; }
 }

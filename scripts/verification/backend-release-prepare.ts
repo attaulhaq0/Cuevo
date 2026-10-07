@@ -5,15 +5,23 @@ import { isAbsolute, join, parse, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { readBackendReleaseSourceEvidence } from './backend-release-admission';
 import { prepareBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
-import { validateCiRun, validateReleaseControls } from './cicd-contracts';
+import { validateReleaseControls } from './cicd-contracts';
+import { validateBackendVerificationRun } from './staging-verification';
+import { readStagingVerificationJobs } from './staging-verification-jobs';
+import { createGithubCodeqlArtifactReader } from './staging-security';
+import { readCanonicalRuntimeJobs } from './canonical-runtime-jobs';
 import { canonicalReleaseReviewJson, canonicalReleaseExecutionJson, parseReleaseExecutionJson } from './release-review';
-import { createCanonicalHostedMigrationPlan, canonicalHostedMigrationPlan, type HostedMigrationPlanV1 } from '../database/hosted-migration-plan';
+import { readHistoricalMigrationSources, createCanonicalInstalledRuntimePlan, createCanonicalHostedMigrationPlan, canonicalHostedMigrationPlan, type HostedMigrationPlanV1 } from '../database/hosted-migration-plan';
 import { createHostedMigrationWorkdirs, type HostedMigrationWorkdirs } from '../database/hosted-migration-workdirs';
 import { readHostedMigrationProvider, type HostedMigrationEndpoint } from '../database/hosted-migration-provider';
 import { prepareHostedOperatorStoragePolicy } from '../database/hosted-operator-storage-policy';
 import { buildRuntimeArtifact } from '../runtime/build-artifacts';
 import { buildEdgeArtifact } from '../runtime/build-edge-artifact';
 import { readGitBinaryDiffDigest } from './git-source-digest';
+import { installedSchemaStorageQuery, readInstalledSchemaReceipt, readInstalledMigrationReceipt, installedPopulationQuery,readInstalledPopulationReceipt,hostedSyntheticSeedSha256 } from '../database/hosted-installed-state';
+import { verifyHostedMigrationHistory } from '../database/hosted-migration-history';
+import { replayPlan } from '../database/replay-plan';
+import { activeRuntimePublicQuery,readInstalledRuntimeMetadata } from './backend-runtime-resume';
 
 const builderRepoRoot = resolve(import.meta.dirname, '../..');
 const failure = () => Error('Native backend preparation requires review; contents withheld.');
@@ -24,8 +32,7 @@ const repositoryName = z.string().regex(/^[a-zA-Z0-9_.-]{1,100}\/[a-zA-Z0-9_.-]{
 const secret = z.string().min(1).max(4096).regex(/^[\x21-\x7e]+$/);
 const review = z.object({ category: z.enum(['source-spec-code', 'qa-regression-operations']), taskId: z.string().min(1).max(200).regex(/^[a-zA-Z0-9_./:-]+$/), reportSha256: hash, evidenceSha256: hash, releaseSha: sha, treeSha: sha, baseSha: sha, sourceManifestSha256: hash, diffSha256: hash, reviewedAt: z.iso.datetime({ offset: true }) }).strict();
 const inputSchema = z.object({ repoRoot: z.string(), eventPath: z.string(), repository: repositoryName, sha, ref: z.literal('refs/heads/main'), eventName: z.literal('workflow_dispatch'), runId: identifier, runAttempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), githubToken: secret, providerToken: secret, input: z.object({ targets: z.unknown(), baseSha: sha, ciRunId: identifier, reviews: z.array(review).length(2) }).strict() }).strict();
-const eventSchema = z.object({ ref: z.literal('refs/heads/main'), inputs: z.object({ commit_sha: sha, ci_run_id: identifier }), repository: z.object({ full_name: repositoryName }) });
-const ciSchema = z.object({ id: z.number().int().positive(), head_sha: sha, head_branch: z.literal('main'), event: z.literal('push'), status: z.literal('completed'), conclusion: z.literal('success'), path: z.literal('.github/workflows/ci.yml'), repository: z.object({ full_name: repositoryName }) });
+const eventSchema = z.object({ ref: z.literal('refs/heads/main'), inputs: z.object({ commit_sha: sha, ci_run_id: identifier, scope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime']) }), repository: z.object({ full_name: repositoryName }) });
 const runSchema = z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive(), head_sha: sha, head_branch: z.literal('main'), event: z.literal('workflow_dispatch'), status: z.enum(['waiting', 'in_progress']), conclusion: z.null(), path: z.literal('.github/workflows/backend-release.yml'), repository: z.object({ full_name: repositoryName }) });
 const zero = z.union([z.literal(0), z.literal('0')]).transform(() => 0 as const);
 const emptySchema = z.array(z.object({ authUsers: zero, storageObjects: zero, appSchemas: z.array(z.string()).length(0), runtimeRoles: z.array(z.string()).length(0), historyPresent: z.literal(false), recoveryCronPresent: z.boolean() }).strict()).length(1);
@@ -53,9 +60,9 @@ async function file(root: string, path: string, maximum: number) {
   if (before.ino !== after.ino || before.dev !== after.dev || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || bytes.length > maximum) throw failure();
   return bytes;
 }
-async function boundedJson(response: Response, signal: AbortSignal) {
+async function boundedJson(response: Response, signal: AbortSignal,maximum=512*1024) {
   if (!response.ok || response.redirected || !response.body) throw failure();
-  const declared = response.headers.get('content-length'); if (declared && (!/^\d+$/.test(declared) || Number(declared) > 512 * 1024)) throw failure();
+  const declared = response.headers.get('content-length'); if (declared && (!/^\d+$/.test(declared) || Number(declared) > maximum)) throw failure();
   const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
   try {
     while (true) {
@@ -64,28 +71,30 @@ async function boundedJson(response: Response, signal: AbortSignal) {
         signal.addEventListener('abort', abort, { once: true });
         void reader.read().then(value => { signal.removeEventListener('abort', abort); done(value); }, () => { signal.removeEventListener('abort', abort); reject(failure()); });
       });
-      if (signal.aborted) throw failure(); if (chunk.done) break; size += chunk.value.byteLength; if (size > 512 * 1024) throw failure(); chunks.push(chunk.value);
+      if (signal.aborted) throw failure(); if (chunk.done) break; size += chunk.value.byteLength; if (size > maximum) throw failure(); chunks.push(chunk.value);
     }
     return JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks))) as unknown;
   } finally { void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* Cancelled pending reads retain cleanup. */ } }
 }
-async function request(url: string, token: string, query?: string) {
+async function request(url: string, token: string, query?: string,maximum=512*1024) {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
   try {
     const response = await fetch(url, { method: query === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', ...(query === undefined ? { 'X-GitHub-Api-Version': '2022-11-28' } : { 'Content-Type': 'application/json' }) }, ...(query === undefined ? {} : { body: JSON.stringify({ query }) }), redirect: 'error', signal: controller.signal });
-    if (response.url && response.url !== url) throw failure(); return await boundedJson(response, controller.signal);
+    if (response.url && response.url !== url) throw failure(); return await boundedJson(response, controller.signal,maximum);
   } finally { clearTimeout(timer); controller.abort(); }
 }
 async function authority(input: NativePreparationInput, treeSha: string) {
   const github = (path: string) => request(`https://api.github.com/repos/${input.repository}${path ? '/' + path : ''}`, input.githubToken);
   const [repository, mainRaw, ciRaw, runRaw, environment, branches, main, signatures, commit] = await Promise.all([github(''), github('git/ref/heads/main'), github('actions/runs/' + input.input.ciRunId), github('actions/runs/' + input.runId), github('environments/staging'), github('environments/staging/deployment-branch-policies'), github('branches/main/protection'), github('branches/main/protection/required_signatures'), github('git/commits/' + input.sha)]);
-  const ci = ciSchema.parse(ciRaw), backend = runSchema.parse(runRaw), mainSha = z.object({ object: z.object({ type: z.literal('commit'), sha }) }).parse(mainRaw).object.sha;
-  validateCiRun(ci, { sha: input.sha, repository: input.repository, ciRunId: input.input.ciRunId }); validateReleaseControls({ repository, environment, branches, main, signatures }, { repository: input.repository, environment: 'staging' });
+  const ci = validateBackendVerificationRun(ciRaw, { sha: input.sha, repository: input.repository, ciRunId: input.input.ciRunId }), backend = runSchema.parse(runRaw), mainSha = z.object({ object: z.object({ type: z.literal('commit'), sha }) }).parse(mainRaw).object.sha;
+  const focusedJobs = await readStagingVerificationJobs(ci, github, createGithubCodeqlArtifactReader(input.repository,input.githubToken));
+  const canonicalRuntimeVerification=ci.path==='.github/workflows/ci.yml'?await readCanonicalRuntimeJobs(ciRaw,github):undefined;
+  validateReleaseControls({ repository, environment, branches, main, signatures }, { repository: input.repository, environment: 'staging' });
   const environmentId = z.object({ id: z.number().int().positive(), name: z.literal('staging') }).parse(environment).id;
   z.object({ total_count: z.literal(1) }).parse(branches);
   z.object({ sha: z.literal(input.sha), tree: z.object({ sha: z.literal(treeSha) }), verification: z.object({ verified: z.literal(true), reason: z.literal('valid'), signature: z.string().min(1), payload: z.string().min(1) }) }).parse(commit);
   if (mainSha !== input.sha || String(backend.id) !== input.runId || backend.run_attempt !== input.runAttempt || backend.head_sha !== input.sha || backend.repository.full_name !== input.repository) throw failure();
-  return { currentMainSha: mainSha, environmentId, ciRun: { ...ci, repository: { full_name: ci.repository.full_name } }, backendRun: { ...backend, repository: { full_name: backend.repository.full_name } } };
+  return { currentMainSha: mainSha, environmentId, ciRun: ci, ...(canonicalRuntimeVerification?{canonicalRuntimeVerification}:{}), ...(focusedJobs ? { stagingVerification: { scope: 'SCHEMA_AND_SYNTHETIC_AUTH' as const, ...focusedJobs } } : {}), backendRun: { ...backend, repository: { full_name: backend.repository.full_name } } };
 }
 async function emptyTarget(input: NativePreparationInput, projectRef: string) {
   const provider = await readHostedMigrationProvider({ projectRef, boundProjectRef: projectRef, providerToken: input.providerToken });
@@ -93,6 +102,33 @@ async function emptyTarget(input: NativePreparationInput, projectRef: string) {
   if (rows[0].recoveryCronPresent) z.array(z.object({ inactive: z.literal(true) }).strict()).length(1).parse(await request(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, input.providerToken, cronQuery));
   if (provider.observedAtMs > Date.now() || Date.now() - provider.observedAtMs > 30000) throw failure();
   return { projectRef, boundProjectRef: projectRef, projectName: provider.projectName, projectStatus: provider.projectStatus, deploymentEnvironment: 'synthetic-staging' as const, observedAt: new Date().toISOString(), authUsers: rows[0].authUsers, storageObjects: rows[0].storageObjects, appSchemas: [], migrationVersions: [], dispatchDisabled: true as const, population: 'EMPTY' as const };
+}
+async function installedTarget(input:NativePreparationInput,projectRef:string,activeRuntime=false){
+ const started=Date.now(),provider=await readHostedMigrationProvider({projectRef,boundProjectRef:projectRef,providerToken:input.providerToken});
+ const query=(sql:string)=>request('https://api.supabase.com/v1/projects/'+projectRef+'/database/query',input.providerToken,sql,sql.includes('CUEVO_INSTALLED_HISTORY')?16*1024*1024:512*1024);
+ const rows=z.array(z.object({authUsers:z.coerce.number().int().min(0).max(133),storageObjects:z.coerce.number().int().nonnegative(),appSchemas:z.array(z.enum(['app','internal','authorization'])).length(3),runtimeRoles:z.array(z.enum(['cuevo_api','cuevo_worker'])).length(2),historyPresent:z.literal(true),recoveryCronPresent:z.boolean()})).length(1).parse(await query(targetQuery));
+ if(new Set(rows[0].appSchemas).size!==3||new Set(rows[0].runtimeRoles).size!==2)throw failure();
+ if(rows[0].recoveryCronPresent&&!activeRuntime)z.array(z.object({inactive:z.literal(true)})).length(1).parse(await query(cronQuery));
+ const runtime=activeRuntime?readInstalledRuntimeMetadata(await query(activeRuntimePublicQuery(projectRef)),projectRef):undefined;
+ if(runtime&&(runtime.sourceSha!==input.sha||git(input.repoRoot,['rev-parse',input.sha+'^{tree}']).toString().trim()!==runtime.treeSha))throw failure();
+ const populationRows=z.array(z.unknown()).max(1).parse(await query(installedPopulationQuery)),receipt=populationRows.length?readInstalledPopulationReceipt(populationRows,projectRef):undefined;
+ const completed=readInstalledMigrationReceipt(await query("/* CUEVO_INSTALLED_MIGRATION_SOURCE */ select decrypted_secret from vault.decrypted_secrets where name='cuevo_schema_"+projectRef+"'"),projectRef);
+ const partial=receipt?null:readInstalledSchemaReceipt(await query("/* CUEVO_INSTALLED_SCHEMA_STAGE */ select decrypted_secret from vault.decrypted_secrets where name='cuevo_schema_stage_"+projectRef+"'"),projectRef);
+ const migrationSource=receipt?(completed??receipt):(partial??completed);if(!migrationSource)throw failure();
+ const dispatchPresent=z.array(z.object({present:z.boolean()}).strict()).length(1).parse(await query("/* CUEVO_INSTALLED_DISPATCH_PRESENCE */ select to_regclass('internal.worker_dispatch_control') is not null as present"))[0].present;
+ const dispatch=dispatchPresent?(runtime?z.array(z.object({enabled:z.literal(true),endpoint:z.literal(runtime.endpoint),vault_secret_name:z.literal(runtime.vaultSecretName),allow_local:z.literal(false)}).strict()).length(1).parse(await query('/* CUEVO_INSTALLED_DISPATCH_INACTIVE */ select enabled,endpoint,vault_secret_name,allow_local from internal.worker_dispatch_control where singleton')):z.array(z.object({enabled:z.literal(false),endpoint:z.null(),vault_secret_name:z.null(),allow_local:z.literal(false)}).strict()).length(1).parse(await query('/* CUEVO_INSTALLED_DISPATCH_INACTIVE */ select enabled,endpoint,vault_secret_name,allow_local from internal.worker_dispatch_control where singleton'))):[];
+ if(runtime){if(!receipt||!completed||rows[0].authUsers!==133||!dispatchPresent)throw failure();z.array(z.object({jobid:z.literal(runtime.jobId),jobname:z.literal('cuevo-worker-recovery'),schedule:z.literal('* * * * *'),command:z.literal('select internal.request_worker_wake();'),database:z.literal('postgres'),username:z.literal('postgres'),active:z.literal(true)}).strict()).length(1).parse(await query("/* CUEVO_INSTALLED_RUNTIME_CRON */ select jobid,jobname,schedule,command,database,username,active from cron.job where jobname='cuevo-worker-recovery' or(active and(command ilike '%request_worker_wake%' or jobname ilike 'cuevo%'))"));}
+ if(receipt){if(!dispatchPresent||receipt.seedSha256!==hostedSyntheticSeedSha256||receipt.manifestSha256!==digest(canonicalReleaseExecutionJson(JSON.parse(await readFile(join(input.repoRoot,'supabase/seed/identities.json'),'utf8')))))throw failure();git(input.repoRoot,['merge-base','--is-ancestor',receipt.sourceSha,input.sha]);if(git(input.repoRoot,['rev-parse',receipt.sourceSha+'^{tree}']).toString().trim()!==receipt.treeSha)throw failure();}
+ else{if(rows[0].authUsers!==0)throw failure();z.array(z.object({schools:z.literal(0),people:z.literal(0)}).strict()).length(1).parse(await query('/* CUEVO_INSTALLED_SCHEMA_EMPTY */ select (select count(*)::integer from app.schools) as schools,(select count(*)::integer from app.people) as people'));}
+ git(input.repoRoot,['merge-base','--is-ancestor',migrationSource.sourceSha,input.sha]);if(git(input.repoRoot,['rev-parse',migrationSource.sourceSha+'^{tree}']).toString().trim()!==migrationSource.treeSha)throw failure();
+ const originalSources=readHistoricalMigrationSources(input.repoRoot,migrationSource.sourceSha,migrationSource.treeSha),originalReplay=replayPlan(originalSources),originalOrder=[...originalReplay.before,originalReplay.prerequisite,...originalReplay.remaining];
+ const count=receipt?(completed?.migrationCount??originalOrder.length):('migrationCount'in migrationSource?migrationSource.migrationCount:0);if(!count)throw failure();
+ const priorRows=originalOrder.slice(0,count).map(name=>({version:name.slice(0,14),sha256:digest(originalSources.find(row=>row.name===name)!.bytes)}));
+ if('migrations'in migrationSource&&!same(migrationSource.migrations,priorRows))throw failure();
+ const history=z.array(z.object({version:z.string(),name:z.string(),statements:z.array(z.string())})).max(1000).parse(await query('/* CUEVO_INSTALLED_HISTORY */ select version,name,statements from supabase_migrations.schema_migrations order by version'));if(history.length!==count)throw failure();
+ if(!same(await query(targetQuery),rows)||dispatchPresent&&!same(await query('/* CUEVO_INSTALLED_DISPATCH_INACTIVE */ select enabled,endpoint,vault_secret_name,allow_local from internal.worker_dispatch_control where singleton'),dispatch)||!same(await query(installedPopulationQuery),populationRows)||Date.now()-started>30000||Date.now()-provider.observedAtMs>30000)throw failure();
+ const prior={projectRef,sourceSha:migrationSource.sourceSha,treeSha:migrationSource.treeSha,migrations:priorRows,...(receipt?{completedSourceMigrationCount:count}:{})};
+ return{target:{projectRef,boundProjectRef:projectRef,projectName:provider.projectName,projectStatus:provider.projectStatus,deploymentEnvironment:'synthetic-staging' as const,observedAt:new Date().toISOString(),authUsers:rows[0].authUsers,storageObjects:rows[0].storageObjects,appSchemas:rows[0].appSchemas,migrationVersions:history.map(row=>row.version),dispatchDisabled:!runtime,population:runtime?'ACTIVE_SYNTHETIC' as const:receipt?'GUARDED_SYNTHETIC' as const:'SCHEMA_ONLY' as const},prior,history,receipt,runtime,schema:receipt?undefined:{sourceSha:migrationSource.sourceSha,treeSha:migrationSource.treeSha,migrationCount:count}};
 }
 async function outputDirectory(root: string) {
   for (const path of [join(root, '.local'), join(root, '.local/hosted-release')]) { try { await mkdir(path, { mode: 0o700 }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw failure(); } await physical(root, path, 'directory'); }
@@ -126,7 +162,7 @@ async function artifact(root: string, directory: string, built: unknown, service
 async function workdirs(root: string, work: HostedMigrationWorkdirs, plan: HostedMigrationPlanV1) {
   if (work.projectRef !== plan.projectRef || work.sourceSha !== plan.source.sha || work.treeSha !== plan.source.tree || work.planSha256 !== canonicalHostedMigrationPlan(plan).sha256 || work.execution !== 'NOT_EXECUTED' || work.stages.length !== 4) throw failure();
   const contained = relative(join(root, '.local/hosted-release'), work.root); if (!contained || isAbsolute(contained) || contained.split(/[\\/]/).some(piece => piece === '..')) throw failure();
-  await physical(root, work.root, 'directory'); let boundary = 0;
+  await physical(root, work.root, 'directory'); let boundary = plan.applied.length;
   for (const [index, stage] of work.stages.entries()) {
     const before = boundary; boundary += plan.stages[index].names.length;
     const included = plan.migrations.slice(0, boundary), pending = included.filter(row => plan.stages[index].names.includes(row.name));
@@ -151,16 +187,22 @@ export async function prepareNativeBackendRelease(value: unknown): Promise<Prepa
     const source = { releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, fingerprints: { sourceManifestSha256, diffSha256 } };
     await readBackendReleaseSourceEvidence(root, source as Parameters<typeof readBackendReleaseSourceEvidence>[1]);
     const current = await authority(input, treeSha), placeholder = '0'.repeat(64), now = Date.now();
-    const common = { repository: input.repository, releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, ciRunId: input.input.ciRunId, releaseRunId: input.runId, runAttempt: input.runAttempt, environmentName: 'staging' as const, deploymentEnvironment: 'synthetic-staging' as const, targets: input.input.targets as BackendReleaseExpected['targets'], reviews: input.input.reviews.map(({ category, taskId, reportSha256, evidenceSha256 }) => ({ category, taskId, reportSha256, evidenceSha256 })) };
+    const common = { repository: input.repository, releaseSha: input.sha, treeSha, baseSha: input.input.baseSha, ciRunId: input.input.ciRunId, releaseRunId: input.runId, runAttempt: input.runAttempt, environmentName: 'staging' as const, deploymentEnvironment: 'synthetic-staging' as const, executionScope: event.inputs.scope, targets: input.input.targets as BackendReleaseExpected['targets'], reviews: input.input.reviews.map(({ category, taskId, reportSha256, evidenceSha256 }) => ({ category, taskId, reportSha256, evidenceSha256 })) };
     const trial: BackendReleaseExpected = { ...common, ...current, now, fingerprints: { sourceManifestSha256, diffSha256, migrationPlanSha256: placeholder, migrationHistorySha256: placeholder, migrationToolchainSha256: placeholder,migrationEndpointSha256:placeholder, operatorStoragePolicySha256: placeholder, apiArtifactSha256: placeholder, edgeArtifactSha256: placeholder, denoLockSha256: placeholder } };
-    const intent = (expected: BackendReleaseExpected) => ({ ...common, environmentId: expected.environmentId, version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', fingerprints: expected.fingerprints, preparedAt: new Date(expected.now).toISOString(), expiresAt: new Date(expected.now + 3600000).toISOString(), reviews: input.input.reviews });
-    prepareBackendReleaseIntent(intent(trial), trial);
+    const intent = (expected: BackendReleaseExpected) => ({ ...common, environmentId: expected.environmentId, version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', fingerprints: expected.fingerprints, ...(expected.installedSource?{installedSource:expected.installedSource}:{}), ...(expected.installedSchema?{installedSchema:expected.installedSchema}:{}), ...(expected.installedRuntime?{installedRuntime:expected.installedRuntime}:{}), ...(expected.canonicalRuntimeVerification?{canonicalRuntimeVerification:expected.canonicalRuntimeVerification}:{}), ...(expected.stagingVerification ? { stagingVerification: expected.stagingVerification } : {}), preparedAt: new Date(expected.now).toISOString(), expiresAt: new Date(expected.now + 3600000).toISOString(), reviews: input.input.reviews });
+    if(event.inputs.scope!=='installed-runtime')prepareBackendReleaseIntent(intent(trial), trial);
     stage='empty-target-and-migration-plan';
-    const projectRef = trial.targets.supabase.projectRef, target = await emptyTarget(input, projectRef), planned = createCanonicalHostedMigrationPlan({ repoRoot: root, sourceSha: input.sha, treeSha, target, now: Date.now() });
+    const projectRef = trial.targets.supabase.projectRef;
+    z.array(z.object({available:z.literal(true)}).strict()).length(1).parse(await request('https://api.supabase.com/v1/projects/'+projectRef+'/database/query',input.providerToken,installedSchemaStorageQuery));
+    const targetStatus=z.array(z.object({authUsers:z.coerce.number().int().nonnegative(),historyPresent:z.boolean()})).length(1).parse(await request(`https://api.supabase.com/v1/projects/${projectRef}/database/query`,input.providerToken,targetQuery))[0];
+    const installed=targetStatus.historyPresent?await installedTarget(input,projectRef,event.inputs.scope==='installed-runtime'):undefined;if(event.inputs.scope==='installed-runtime'&&!installed?.runtime)throw failure();
+    const target=installed?.target??await emptyTarget(input,projectRef),planned=installed?.runtime?createCanonicalInstalledRuntimePlan({repoRoot:root,sourceSha:input.sha,treeSha,target,priorReceipt:installed.prior,operation:'INSTALLED_RUNTIME_READ_ONLY',now:Date.now()}):createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:input.sha,treeSha,target,...(installed?{priorReceipt:installed.prior}:{}),now:Date.now()});
+    if(installed){if(installed.receipt)trial.installedSource={sourceSha:installed.receipt.sourceSha,treeSha:installed.receipt.treeSha,seedSha256:installed.receipt.seedSha256,manifestSha256:installed.receipt.manifestSha256,migrationCount:installed.prior.migrations.length};else trial.installedSchema=installed.schema!;if(installed.runtime)trial.installedRuntime=installed.runtime;
+      verifyHostedMigrationHistory({sources:readHistoricalMigrationSources(root,input.sha,treeSha),included:planned.plan.migrations.slice(0,planned.plan.applied.length),expectedVersions:planned.plan.applied.map(row=>row.version),history:installed.history});}
     // This route is selected before approval after the observed GitHub IPv6
     // refusal. A later execution never switches endpoints after an intent.
     const migrationEndpoint=(await readHostedMigrationProvider({projectRef,boundProjectRef:projectRef,providerToken:input.providerToken})).sessionEndpoint;
-    const plan = planned.plan; if (planned.sourceProvenance.kind !== 'VERIFIED_GIT_BLOBS' || plan.mode !== 'EMPTY_INITIAL' || plan.applied.length || plan.dispatch !== 'DISABLED' || plan.seed !== 'DISABLED' || plan.vault !== 'DISABLED') throw failure();
+    const plan = planned.plan; if (planned.sourceProvenance.kind !== 'VERIFIED_GIT_BLOBS' || (!installed&&(plan.mode!=='EMPTY_INITIAL'||plan.applied.length)) || plan.dispatch !== 'DISABLED' || plan.seed !== 'DISABLED' || plan.vault !== 'DISABLED') throw failure();
     stage='toolchain-and-migration-delivery';
     await outputDirectory(root);
     const toolchainManifestPath = join(root, '.local/hosted-release/migration-toolchain.json'), operatorStoragePolicyPath = join(root, '.local/hosted-release/operator-storage-policy.json'), bundlePath = join(root, '.local/hosted-release/backend-bundle.json');
@@ -177,7 +219,8 @@ export async function prepareNativeBackendRelease(value: unknown): Promise<Prepa
     const builtEdge = await buildEdgeArtifact(), edge = await artifact(root, edgeRoot, builtEdge, 'cuevo-worker');
     stage='final-source-authority-and-artifacts';
     await readBackendReleaseSourceEvidence(root, source as Parameters<typeof readBackendReleaseSourceEvidence>[1]);
-    const finalAuthority = await authority(input, treeSha); if (!same(finalAuthority, current)) throw failure(); await emptyTarget(input, projectRef);
+    const finalAuthority = await authority(input, treeSha); if (!same(finalAuthority, current)) throw failure();
+    if(installed){const final=await installedTarget(input,projectRef,event.inputs.scope==='installed-runtime');if(!same(final.runtime??null,installed.runtime??null)||!same(final.receipt??null,installed.receipt??null)||!same(final.schema??null,installed.schema??null)||digest(JSON.stringify(final.history))!==digest(JSON.stringify(installed.history)))throw failure();}else await emptyTarget(input, projectRef);
     await workdirs(root, work, plan); if (!same(await toolchain(root, input.sha, treeSha), manifest) || !(await file(root, toolchainManifestPath, 48 * 1024)).equals(Buffer.from(manifestBytes)) || !(await file(root, operatorStoragePolicyPath, 8192)).equals(Buffer.from(policy.canonicalJson)) || !same(await artifact(root, apiRoot, builtApi, 'api'), api) || !same(await artifact(root, edgeRoot, builtEdge, 'cuevo-worker'), edge)) throw failure();
     if(!same((await readHostedMigrationProvider({projectRef,boundProjectRef:projectRef,providerToken:input.providerToken})).sessionEndpoint,migrationEndpoint))throw failure();
     stage='package-encoding-and-persistence';

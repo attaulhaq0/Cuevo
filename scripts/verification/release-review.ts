@@ -13,6 +13,8 @@ const repository = z.string().regex(/^[a-zA-Z0-9_.-]{1,100}\/[a-zA-Z0-9_.-]{1,10
 const category = z.enum(['source-spec-code', 'qa-regression-operations']);
 const taskId = z.string().min(1).max(200).regex(/^[a-zA-Z0-9_./:-]+$/);
 const webTarget=z.object({teamId:z.string().regex(/^team_[a-zA-Z0-9]+$/),projectId:z.string().regex(/^prj_[a-zA-Z0-9]+$/),target:z.enum(['preview','production'])}).strict();
+const fullVerificationSchema=z.object({runId:identifier,runAttempt:positive,sourceSha:sha,summarySha256:digest,jobsSha256:digest}).strict();
+const canonicalRuntimeVerificationSchema=z.object({runAttempt:positive,jobsSha256:digest}).strict();
 const reviewSchema = z.object({
   category, taskId, releaseSha: sha, baseSha: sha, sourceManifestSha256: digest, diffSha256: digest,
   reportSha256: digest, evidenceSha256: digest, reviewedAt: z.iso.datetime({ offset: true }),
@@ -22,7 +24,7 @@ const reviewAssignmentSchema = z.object({ category, taskId, reportSha256: digest
 const inputSchema = z.object({
   version: z.literal(1), repository, releaseSha: sha, baseSha: sha, ciRunId: identifier,
   manifestSha256: digest, sourceManifestSha256: digest, diffSha256: digest,
-  web:webTarget,
+  web:webTarget, canonicalRuntimeVerification:canonicalRuntimeVerificationSchema,fullVerification:fullVerificationSchema.optional(),
   reviews: z.array(reviewSchema).length(2),
 }).strict();
 const expectedSchema = z.object({
@@ -30,7 +32,7 @@ const expectedSchema = z.object({
   runAttempt: positive, environmentId: positive, environmentName: z.enum(['staging', 'production']),
   now: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), manifestSha256: digest,
   sourceManifestSha256: digest, diffSha256: digest, reviews: z.array(reviewAssignmentSchema).length(2),
-  web:webTarget,
+  web:webTarget, canonicalRuntimeVerification:canonicalRuntimeVerificationSchema,fullVerification:fullVerificationSchema.optional(),
 }).strict();
 const packageSchema = inputSchema.extend({
   purpose: z.literal('PREBUILD_RELEASE_ADMISSION'), releaseRunId: identifier, runAttempt: positive,
@@ -132,6 +134,10 @@ function fresh(timestamp: string, now: number): void {
   if (!Number.isFinite(recorded) || recorded > now || now - recorded > maximumAgeMs) fail();
 }
 function checkInput(input: ReleaseReviewInput, expected: ReleaseReviewExpected): void {
+  if(canonicalReleaseReviewJson(input.canonicalRuntimeVerification)!==canonicalReleaseReviewJson(expected.canonicalRuntimeVerification))fail();
+  if(expected.environmentName==='production'){
+    if(!input.fullVerification||!expected.fullVerification||input.fullVerification.sourceSha!==expected.releaseSha||input.fullVerification.runId===expected.ciRunId||canonicalReleaseReviewJson(input.fullVerification)!==canonicalReleaseReviewJson(expected.fullVerification))fail();
+  }else if(input.fullVerification||expected.fullVerification)fail();
   if(canonicalReleaseReviewJson(input.web)!==canonicalReleaseReviewJson(expected.web)||input.web.target!==(expected.environmentName==='staging'?'preview':'production'))fail();
   for (const key of ['repository', 'releaseSha', 'baseSha', 'ciRunId', 'manifestSha256', 'sourceManifestSha256', 'diffSha256'] as const) {
     if (input[key] !== expected[key]) fail();
@@ -190,8 +196,8 @@ export function validatePreparedReleaseReviewPackage(preparedValue: unknown, exp
   if (body.releaseRunId !== expected.releaseRunId || body.runAttempt !== expected.runAttempt
     || body.environmentId !== expected.environmentId || body.environmentName !== expected.environmentName) fail();
   checkInput({ version: body.version, repository: body.repository, releaseSha: body.releaseSha,
-    baseSha: body.baseSha, ciRunId: body.ciRunId, manifestSha256: body.manifestSha256,
-    sourceManifestSha256: body.sourceManifestSha256, diffSha256: body.diffSha256, reviews: body.reviews,web:body.web }, expected);
+    baseSha: body.baseSha, ciRunId: body.ciRunId, canonicalRuntimeVerification:body.canonicalRuntimeVerification,manifestSha256: body.manifestSha256,
+    sourceManifestSha256: body.sourceManifestSha256, diffSha256: body.diffSha256, reviews: body.reviews,web:body.web,...(body.fullVerification?{fullVerification:body.fullVerification}:{}) }, expected);
   fresh(body.preparedAt, expected.now);
   if (prepared.comment !== approvalComment(expected.releaseSha, expected.releaseRunId, expected.runAttempt, prepared.sha256)) fail();
   return prepared;

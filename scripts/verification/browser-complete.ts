@@ -1,6 +1,8 @@
 import { readFile, mkdir, open, rename, unlink } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { resolve, isAbsolute, relative } from 'node:path';
+import { randomUUID, createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { browserVerificationMetadata, parseBrowserInventory, validateBrowserRunReport, validateBrowserPhaseReceipt, accountBrowserFiles, ordinaryBrowserFiles, reviewedBrowserExclusions, type BrowserPhaseReceipt } from './browser-runtime-scope';
 import { createConnection } from 'node:net';
 import { parseEnv } from 'node:util';
 import { verifyBrowserAccountPhases, validateAccountBrowserReport, restoreAccountBrowserState, requireStoppedBrowserPorts, type BrowserPortState } from './browser-account-phase';
@@ -36,19 +38,48 @@ async function save(path: string, value: unknown) {
 }
 const accountConfig = 'scripts/verification/playwright.accounts.config.ts';
 process.loadEnvFile(resolve('.env.local'));
+const phaseStartedAt = Date.now();
+const snapshot = async () => {
+  const paths = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+  const manifest: { path: string; sha256: string }[] = [];
+  for (const path of new Set(paths)) { try { manifest.push({ path, sha256: createHash('sha256').update(await readFile(path)).digest('hex') }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; } }
+  return createHash('sha256').update(JSON.stringify(manifest.sort((a, b) => a.path.localeCompare(b.path)))).digest('hex');
+};
+const initialSource = await snapshot(), sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const suppliedIdentity = browserVerificationMetadata().cuevoBrowserVerification;
+const identity = suppliedIdentity ?? { runId: randomUUID(), sourceSha, sourceDigest: initialSource, scope: 'browser' };
+if (identity.scope !== 'browser' || identity.sourceSha !== sourceSha || identity.sourceDigest !== initialSource) throw Error('Browser source and original verification identity are not confirmed.');
+const receiptPath = process.env.CUEVO_VERIFICATION_BROWSER_RECEIPT_FILE;
+if (receiptPath && (!isAbsolute(receiptPath) || relative(resolve('.local/verification'), receiptPath).startsWith('..') || isAbsolute(relative(resolve('.local/verification'), receiptPath)))) throw Error('Browser receipt must belong to the current local verification directory.');
 const runId = randomUUID(); const directory = resolve('.local/customer-readiness/account-phase', runId); await mkdir(directory, { recursive: true });
 const journal = { runId, startedAt: new Date().toISOString(), baseline: null as AccountPhaseRequest[] | null, owned: null as AccountPhaseRequest[] | null, ownership: 'PENDING', cleanup: 'PENDING' };
 const journalPath = resolve(directory, 'recovery-journal.json'); await save(journalPath, journal);
+const phaseEvidence: Partial<Pick<BrowserPhaseReceipt, 'account' | 'ordinary'>> = {};
+async function verifyPhase(name: 'account' | 'ordinary', config: string, files: readonly string[], env: NodeJS.ProcessEnv) {
+  const childIdentity = { ...identity, scope: name + '-browser' };
+  const bound = { ...env, CUEVO_VERIFICATION_RUN_ID: identity.runId, CUEVO_VERIFICATION_SOURCE_SHA: identity.sourceSha, CUEVO_VERIFICATION_SOURCE_DIGEST: identity.sourceDigest, CUEVO_VERIFICATION_SCOPE: childIdentity.scope };
+  const inventoryPath = resolve(directory, name + '-browser-inventory.json'), reportPath = resolve(directory, name + '-browser-results.json');
+  const base = ['node_modules/@playwright/test/cli.js', 'test', '--config', config, '--forbid-only'];
+  const listedAt = Date.now();
+  if (await run([...base, '--list', '--reporter=json'], { ...bound, PLAYWRIGHT_JSON_OUTPUT_FILE: inventoryPath }) !== 0) return 1;
+  const inventoryBytes = await readFile(inventoryPath, 'utf8');
+  const inventory = parseBrowserInventory(JSON.parse(inventoryBytes), files, { ...childIdentity, startedAt: listedAt, finishedAt: Date.now() });
+  const startedAt = Date.now();
+  const code = await run([...base, '--reporter=list,json'], { ...bound, PLAYWRIGHT_JSON_OUTPUT_FILE: reportPath });
+  await stopped();
+  if (code !== 0) return code;
+  const finishedAt = Date.now(), reportBytes = await readFile(reportPath, 'utf8'), report = JSON.parse(reportBytes);
+  const completedTests = validateBrowserRunReport(report, inventory, { ...childIdentity, startedAt, finishedAt });
+  if (name === 'account') validateAccountBrowserReport(report, startedAt, finishedAt);
+  phaseEvidence[name] = { completedTests, inventorySha256: createHash('sha256').update(inventoryBytes).digest('hex'), reportSha256: createHash('sha256').update(reportBytes).digest('hex') };
+  return 0;
+}
 const result = await verifyBrowserAccountPhases({
   account: async () => {
     await stopped(); journal.baseline = await snapshotAccountPhaseRequests(); journal.ownership = 'BASELINE_RECORDED'; await save(journalPath, journal);
     await configureLocalSchoolAccounts({ enabled: true, operatorId: '20000000-0000-4000-8000-000000000001', reason: 'Required guarded synthetic account browser acceptance' });
     const overlay = parseEnv(await readFile('.local/school-account.env', 'utf8'));
-    const reportPath = resolve(directory, 'account-browser-results.json'); const startedAt = Date.now();
-    const code = await run(['node_modules/@playwright/test/cli.js', 'test', '--config', accountConfig, '--reporter=list,json'], { ...process.env, ...overlay, PLAYWRIGHT_JSON_OUTPUT_FILE: reportPath });
-    await stopped();
-    if (code !== 0) return code;
-    validateAccountBrowserReport(JSON.parse(await readFile(reportPath, 'utf8')), startedAt, Date.now()); return 0;
+    return verifyPhase('account', accountConfig, accountBrowserFiles, { ...process.env, ...overlay });
   },
   restore: async () => restoreAccountBrowserState({
     stopped,
@@ -75,9 +106,17 @@ const result = await verifyBrowserAccountPhases({
   ordinary: async () => {
     if (interrupted) throw Error('Browser verification was interrupted.'); await stopped();
     const clean = { ...process.env }; for (const key of Object.keys(clean)) if (key.startsWith('CUEVO_AUTH_PROVISIONING_')) delete clean[key];
-    const code = await run(['node_modules/@playwright/test/cli.js', 'test', '--config', 'scripts/verification/playwright.ordinary.config.ts'], clean); await stopped(); return code;
+    return verifyPhase('ordinary', 'scripts/verification/playwright.ordinary.config.ts', ordinaryBrowserFiles(), clean);
   },
   record: async value => { await save(resolve(directory, 'browser-phases.json'), { runId, ...value }); await save(resolve('.local/customer-readiness/browser-phases.json'), { runId, ...value }); },
 });
+if (result === 0) {
+  if (await snapshot() !== initialSource || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== sourceSha || !phaseEvidence.account || !phaseEvidence.ordinary) throw Error('Browser source freeze or complete phase evidence is not confirmed.');
+  const finishedAt = Date.now();
+  const receipt: BrowserPhaseReceipt = { version: 1, identity, phaseRunId: runId, status: 'VERIFIED', startedAt: phaseStartedAt, finishedAt, account: phaseEvidence.account, ordinary: phaseEvidence.ordinary, excludedBrowserFiles: reviewedBrowserExclusions.map(({ file, reason }) => ({ file, reason })) };
+  validateBrowserPhaseReceipt(receipt, identity, phaseStartedAt, finishedAt);
+  await save(resolve(directory, 'receipt.json'), receipt);
+  if (receiptPath) await save(receiptPath, receipt);
+}
 process.exitCode = result;
 process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);

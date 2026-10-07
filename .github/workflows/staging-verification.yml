@@ -1,0 +1,133 @@
+name: Cuevo focused staging verification
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cuevo-staging-verification-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  SCARF_ANALYTICS: 'false'
+jobs:
+  staging-checks:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Verify repository architecture and documentation
+        run: npm run check:repository && npm run test:repository && npm run check:architecture && npm run test:architecture && npm run check:docs && npm run test:docs
+      - name: Verify release admission and workflow contracts
+        run: npm run test:cicd && npm run check:cicd
+      - name: Verify lint types and unit contracts
+        run: npm run lint && npm run typecheck && npm test
+      - name: Verify complete migration and synthetic Auth contracts
+        run: npm run test:hosted-plan
+      - name: Verify build and runtime dependency security
+        run: node --import tsx scripts/verification/dependency-security.ts
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  staging-database:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Replay guarded clean local synthetic bootstrap
+        run: npm run local:bootstrap
+      - name: Verify complete SQL RLS grants and provider fixtures
+        run: npm run db:test
+      - name: Verify local database security advisors
+        run: node --import tsx scripts/verification/database-advisors.ts
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
+  codeql:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: { contents: read, actions: read }
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Require exact canonical source CodeQL security job
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/verification/staging-security.ts
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  secret-scan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Verify pinned scanner and full source policy
+        run: node --import tsx --test scripts/verification/secret-scan-policy.test.ts scripts/verification/secret-scan.test.ts
+      - name: Scan full history plus authored worktree
+        run: node --import tsx scripts/verification/secret-scan.ts
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  staging-required:
+    if: always() && github.ref == 'refs/heads/main'
+    needs: [staging-checks, staging-database, codeql, secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every focused staging boundary
+        env:
+          CHECKS: ${{ needs.staging-checks.result }}
+          DATABASE: ${{ needs.staging-database.result }}
+          CODEQL: ${{ needs.codeql.result }}
+          SECRET_SCAN: ${{ needs.secret-scan.result }}
+        run: |
+          test "$CHECKS" = success && test "$DATABASE" = success && test "$CODEQL" = success && test "$SECRET_SCAN" = success

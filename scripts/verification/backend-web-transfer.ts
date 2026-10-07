@@ -18,15 +18,15 @@ export const backendWebTransferProducerPaths = [
   'scripts/verification/backend-web-handover.ts', 'scripts/verification/backend-web-settings.ts',
   'scripts/verification/backend-api-origin.ts', 'scripts/verification/backend-hosted-fault-recovery-native.ts',
   'scripts/verification/backend-hosted-database-restore.ts', 'scripts/verification/backend-web-transfer.ts',
+  'scripts/verification/backend-runtime-resume.ts',
 ] as const;
-export function backendWebTransferEvidenceNames(deploymentId: string) {
+export function backendWebTransferEvidenceNames(deploymentId: string,installedRuntime=false) {
   if (!/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) throw fail();
   return [
-    'schema-result.json', 'population-result.json', 'auth-result.json', 'reference-result.json',
-    'runtime-roles-result.json', 'provider-result.json', 'prerequisites-result.json',
+    ...(installedRuntime?['runtime-resume-result.json']:['schema-result.json', 'population-result.json', 'auth-result.json', 'reference-result.json']),
+    ...(!installedRuntime?['runtime-roles-result.json']:[]), 'provider-result.json', 'prerequisites-result.json',
     ...['intent', 'asset', 'room', 'result'].map(suffix => `private-probe-pre-activation-${deploymentId}-${suffix}.json`),
-    'data-api-configuration.json', 'worker-activation-intent.json', 'worker-activation-result.json',
-    'worker-activation-cleanup.json', 'worker-fault-recovery-provisional.json', 'worker-fault-recovery-result.json',
+    'data-api-configuration.json', ...(!installedRuntime?['worker-activation-intent.json', 'worker-activation-result.json','worker-activation-cleanup.json']:[]), 'worker-fault-recovery-provisional.json', 'worker-fault-recovery-result.json',
     'worker-fault-recovery-cleanup.json', 'database-restore-result.json', 'database-restore-cleanup.json',
     'api-origin-result.json', 'web-handover-result.json', 'web-settings-result.json',
   ].sort();
@@ -75,7 +75,7 @@ export function validateBackendWebTransfer(raw: unknown, now: number) {
     const clocks = [Date.parse(manifest.verifiedAt), Date.parse(manifest.database.dataApi.verifiedAt), Date.parse(transfer.settings.observedAt)];
     if (clocks.some(at => at < earliest || at > exported || exported - at > 3600000)) throw fail();
     if (!same(transfer.producers.map(row => row.path).sort(), [...backendWebTransferProducerPaths].sort())
-      || !same(transfer.evidence.map(row => row.name).sort(), backendWebTransferEvidenceNames(manifest.api.deploymentId))) throw fail();
+      || !same(transfer.evidence.map(row => row.name).sort(), backendWebTransferEvidenceNames(manifest.api.deploymentId,body.installedRuntime!==undefined))) throw fail();
     return { transfer, body, expected: context as BackendReleaseExpected, prepared, manifest: transfer.manifest, publicConfig, assignments, reviewFacts: body.reviews };
   } catch { throw fail(); }
 }
@@ -94,7 +94,7 @@ export async function readBackendWebTransferFile(root: string, path: string, max
 
 export async function exportBackendWebTransfer(value: unknown) {
   try {
-    const input = z.object({ repoRoot: z.string(), bundleSha256: digest, githubToken: z.string().min(1), vercelToken: z.string().min(20) }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
+    const input = z.object({ repoRoot: z.string(), bundleSha256: digest, githubToken: z.string().min(1), vercelToken: z.string().min(20), installedOperator:z.object({providerToken:z.string().min(20),journalStorageKey:z.string().min(20),migrationPassword:z.string().min(1)}).strict().optional() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
     const root = input.repoRoot, folder = join(root, '.local/hosted-release');
     const bundleBytes = await readBackendWebTransferFile(root, join(folder, 'backend-bundle.json'));
     if (hash(bundleBytes) !== input.bundleSha256) throw fail();
@@ -115,11 +115,15 @@ export async function exportBackendWebTransfer(value: unknown) {
     if (!same(publicConfig, typed.publicConfig)) throw fail();
     const settings = z.object({ purpose: z.literal('CUEVO_STAGING_PUBLIC_WEB_SETTINGS'), status: z.literal('WEB_PUBLIC_SETTINGS_CONFIRMED'), operation: z.enum(['CONFIRMED', 'NOOP']), sourceSha: z.literal(supplied.releaseSha), runId: z.literal(supplied.releaseRunId), runAttempt: z.literal(supplied.runAttempt), packageSha256: z.literal(prepared.sha256), manifestSha256: z.literal(handover.manifestSha256), webProjectId: z.literal(supplied.targets.web.projectId), teamId: z.literal(supplied.targets.web.teamId), observedAt: time, settingsSha256: digest, pendingGates: z.array(z.unknown()).length(0), hostedAcceptance: z.literal(false), canonicalReceipt: z.null() }).parse(JSON.parse((await readBackendWebTransferFile(root, join(folder, 'web-settings-result.json'))).toString('utf8')));
     const evidence = [], proofClocks = [Date.parse(typed.verifiedAt), Date.parse(settings.observedAt)];
-    for (const name of backendWebTransferEvidenceNames(typed.api.deploymentId)) {
+    for (const name of backendWebTransferEvidenceNames(typed.api.deploymentId,supplied.installedRuntime!==undefined)) {
       const bytes = await readBackendWebTransferFile(root, join(folder, name));
       // Native owners retain JSON.stringify/canonical JSON followed by LF. Hash
       // those exact bytes; normalize only the bounded in-memory timestamp read.
       const raw = JSON.parse(canonicalReleaseExecutionJson(JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(bytes)))) as Record<string, unknown>;
+      if(name==='runtime-resume-result.json'){
+        const original=supplied.installedRuntime;if(!original)throw fail();const receipt=z.object({status:z.literal('INSTALLED_RUNTIME_REVALIDATED'),sourceSha:z.literal(supplied.releaseSha),runId:z.literal(supplied.releaseRunId),runAttempt:z.literal(supplied.runAttempt),packageSha256:z.literal(prepared.sha256),nativeExecutionVerified:z.literal(true),lockReleased:z.literal(true),original:z.unknown(),activation:z.unknown(),cleanup:z.unknown(),observedAt:time}).parse(raw);
+        if(!same(receipt.original,original)||hash(canonicalReleaseExecutionJson(receipt.activation))!==original.activationReceiptSha256)throw fail();
+      }
       evidence.push({ name, sha256: hash(bytes) });
       for (const key of ['observedAt', 'verifiedAt', 'createdAt']) if (typeof raw[key] === 'string') { const at = Date.parse(raw[key]); if (!Number.isFinite(at)) throw fail(); proofClocks.push(at); }
     }

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { backendWebTransferFixture, transferFixtureHash } from './backend-web-transfer-fixtures';
 import { validateBackendWebTransfer, readBackendWebTransferFile, exportBackendWebTransfer, backendWebTransferProducerPaths, backendWebTransferEvidenceNames } from './backend-web-transfer';
 import { canonicalReleaseExecutionJson } from './release-review';
+import {prepareBackendReleaseIntent} from './backend-release-contracts';
 import { registerHooks } from 'node:module';
 import { transformSync } from 'esbuild';
 import { readFileSync } from 'node:fs';
@@ -26,6 +27,13 @@ test('original successful export retains its proof clocks after mutation expiry 
   assert.equal(later.transfer.backendMutationAllowed, false);
   assert.equal(later.transfer.customerReady, false);
   assert.throws(() => validateBackendWebTransfer(fixture.transfer, fixture.now + 86400000));
+});
+test('active completed transfer keeps original activation identity but consumes only fresh continuation evidence clocks',()=>{
+ const f=backendWebTransferFixture(),body=JSON.parse(f.transfer.preparedApproval.canonicalJson),installedRuntime={version:1,purpose:'CUEVO_INSTALLED_ACTIVE_RUNTIME',sourceSha:body.releaseSha,treeSha:body.treeSha,originalRunId:'11',originalRunAttempt:1,originalPackageSha256:'a'.repeat(64),runtimeSha256:'b'.repeat(64),apiDeploymentId:'dpl_Api',apiUrl:'https://cuevo-api-deployment.vercel.app',edgeId:'edge-fixture',edgeVersion:1,activationId:'10000000-0000-4000-8000-000000000002',vaultSecretName:'cuevo_worker_10000000000040008000000000000002',jobId:42,endpoint:body.targets.supabase.edgeOrigin,activationReceiptSha256:'c'.repeat(64)},installedSource={sourceSha:body.releaseSha,treeSha:body.treeSha,seedSha256:'7be612e9a30e916ec4b460a2ae14a2796cb3f4f542cbdec8f7db2f49c95d9903',manifestSha256:'d'.repeat(64),migrationCount:230};
+ f.transfer.preparedApproval=prepareBackendReleaseIntent({...body,installedRuntime,installedSource,executionScope:'installed-runtime'},{...f.expected,installedRuntime,installedSource,executionScope:'installed-runtime'});
+ f.transfer.evidence=backendWebTransferEvidenceNames('dpl_Api',true).map(name=>({name,sha256:transferFixtureHash(name)}));
+ const proof=validateBackendWebTransfer(f.transfer,f.now);assert.equal(proof.body.installedRuntime?.originalRunId,'11');assert.equal(proof.transfer.earliestProofAt,f.transfer.earliestProofAt);assert.equal(proof.transfer.evidence.some(row=>row.name==='worker-activation-intent.json'),false);assert.equal(proof.transfer.evidence.some(row=>row.name==='runtime-resume-result.json'),true);
+ f.transfer.evidence.push({name:'worker-activation-result.json',sha256:'0'.repeat(64)});assert.throws(()=>validateBackendWebTransfer(f.transfer,f.now));
 });
 
 test('missing producer and evidence or altered manifest clocks and public settings are refused', () => {

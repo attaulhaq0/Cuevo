@@ -1,3 +1,8 @@
 export function validateRecoveryTarget(value:string,scratch:string):void{const url=new URL(value);if(!['postgres:','postgresql:'].includes(url.protocol)||!['127.0.0.1','localhost'].includes(url.hostname)||url.port!=='56322'||url.pathname!=='/postgres'||url.username!=='postgres'||url.search||url.hash||!/^cuevo_recovery_[a-z0-9_]{1,50}$/.test(scratch))throw Error('Recovery refuses any target outside local Cuevo and its scratch database.');}
 export function technicalResult(rows:{name:string;exitCode:number|null;required:boolean}[]):{status:'VERIFIED'|'FAILED'|'NOT_VERIFIED'}{if(!rows.length||rows.some(r=>r.required&&r.exitCode===null))return{status:'NOT_VERIFIED'};if(rows.some(r=>r.required&&r.exitCode!==0))return{status:'FAILED'};return{status:'VERIFIED'};}
 export function sameSourceManifest(before:{path:string;sha256:string}[],after:{path:string;sha256:string}[]){const sort=(rows:{path:string;sha256:string}[])=>[...rows].sort((a,b)=>a.path.localeCompare(b.path));return JSON.stringify(sort(before))===JSON.stringify(sort(after));}
+/** A failed gate never authorizes reset until every owned application port is stopped. */
+export async function restoreTechnicalState(bootstrapped:boolean,restored:boolean,ports:{stopped():Promise<void>;restore():Promise<number>}):Promise<number>{
+ if(!bootstrapped||restored)return 0;
+ try{await ports.stopped();return await ports.restore();}catch{return 1;}
+}

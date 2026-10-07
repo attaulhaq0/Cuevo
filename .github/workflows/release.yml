@@ -1,9 +1,5 @@
 name: Cuevo reviewed web release
 on:
-  workflow_run:
-    workflows: [Cuevo verification]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -18,6 +14,10 @@ on:
       ci_run_id:
         description: Successful main push Cuevo verification run ID
         required: true
+        type: string
+      full_verification_run_id:
+        description: Separate successful full customer-candidate run required only for production
+        required: false
         type: string
       backend_run_id:
         description: Completed successful staging backend run; all four backend fields required together
@@ -38,17 +38,18 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cuevo-release-${{ github.event_name == 'workflow_run' && 'production' || inputs.environment }}
+  group: cuevo-release-${{ inputs.environment }}
   cancel-in-progress: false
 jobs:
   release-admission:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: { contents: read, actions: read }
     outputs:
       sha: ${{ steps.context.outputs.sha }}
       ci-run-id: ${{ steps.context.outputs.ci-run-id }}
+      full-run-id: ${{ steps.context.outputs.full-run-id }}
       environment: ${{ steps.context.outputs.environment }}
       review-base64: ${{ steps.review.outputs.review-base64 }}
       review-digest: ${{ steps.review.outputs.review-digest }}
@@ -67,9 +68,11 @@ jobs:
         run: node --import tsx scripts/verification/cicd-release.ts context
       - name: Validate exact trusted CI commit
         env:
+          RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_SHA: ${{ steps.context.outputs.sha }}
           CI_RUN_ID: ${{ steps.context.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ steps.context.outputs.full-run-id }}
         run: node --import tsx scripts/verification/cicd-release.ts ci
       - name: Require existing protected release environment and main
         env:
@@ -83,6 +86,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ steps.context.outputs.environment }}
           RELEASE_SHA: ${{ steps.context.outputs.sha }}
           CI_RUN_ID: ${{ steps.context.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ steps.context.outputs.full-run-id }}
           CUEVO_RELEASE_REVIEW_INPUT_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}
           CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON: ${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
@@ -91,7 +95,7 @@ jobs:
         run: node --import tsx scripts/verification/cicd-release.ts prepare
   web-release:
     needs: release-admission
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment:
@@ -109,9 +113,11 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
       - name: Revalidate canonical CI and current main after environment approval
         env:
+          RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
         run: node --import tsx scripts/verification/cicd-release.ts ci
       - name: Admit exact official founder approval before receiving deployment credentials
         env:
@@ -122,6 +128,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
           REVIEW_BASE64: ${{ needs.release-admission.outputs.review-base64 }}
           REVIEW_DIGEST: ${{ needs.release-admission.outputs.review-digest }}
@@ -140,6 +147,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
@@ -159,6 +167,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
@@ -177,6 +186,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
@@ -196,6 +206,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
@@ -219,6 +230,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}
@@ -239,6 +251,7 @@ jobs:
           RELEASE_ENVIRONMENT: ${{ needs.release-admission.outputs.environment }}
           RELEASE_SHA: ${{ needs.release-admission.outputs.sha }}
           CI_RUN_ID: ${{ needs.release-admission.outputs.ci-run-id }}
+          FULL_VERIFICATION_RUN_ID: ${{ needs.release-admission.outputs.full-run-id }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           RELEASE_MANIFEST: ${{ vars.CUEVO_RELEASE_MANIFEST_JSON }}
           RELEASE_ENVIRONMENT_ID: ${{ needs.release-admission.outputs.environment-id }}

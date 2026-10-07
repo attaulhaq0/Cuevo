@@ -1,0 +1,113 @@
+name: Cuevo full regression
+on:
+  schedule:
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+    inputs:
+      purpose:
+        description: Diagnostic regression or frozen customer release candidate
+        required: true
+        type: choice
+        default: regression
+        options: [regression, customer-candidate]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cuevo-full-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CI: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  SCARF_ANALYTICS: 'false'
+jobs:
+  technical-mvp:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Install complete browser engines
+        run: npx --no-install playwright install --with-deps chromium firefox webkit
+      - name: Run complete frozen acceptance
+        run: npm run verify:technical
+      - name: Export exact full profile evidence
+        env:
+          CUEVO_FULL_VERIFICATION_PURPOSE: ${{ github.event_name == 'workflow_dispatch' && inputs.purpose || 'regression' }}
+        run: node --import tsx scripts/verification/full-verification-evidence.ts
+      - name: Retain exact full profile summary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-full-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/full-verification/summary.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
+  codeql-evidence:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Verify canonical same-source security
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/verification/staging-security.ts
+  secret-scan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - name: Install pinned npm
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install local esbuild binary
+        run: node node_modules/esbuild/install.js
+      - name: Verify pinned scanner and full source policy
+        run: node --import tsx --test scripts/verification/secret-scan-policy.test.ts scripts/verification/secret-scan.test.ts
+      - name: Scan full history plus authored worktree
+        run: node --import tsx scripts/verification/secret-scan.ts
+  required:
+    if: always() && github.ref == 'refs/heads/main'
+    needs: [technical-mvp, codeql-evidence, secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every full regression boundary
+        env:
+          TECHNICAL: ${{ needs.technical-mvp.result }}
+          CODEQL: ${{ needs.codeql-evidence.result }}
+          SECRET_SCAN: ${{ needs.secret-scan.result }}
+        run: test "$TECHNICAL" = success && test "$CODEQL" = success && test "$SECRET_SCAN" = success

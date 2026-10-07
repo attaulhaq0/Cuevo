@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import type { Readable } from 'node:stream';
 import { z } from 'zod';
+import { readSingleJsonArchive } from './single-json-archive';
 import { readBackendReleaseSourceEvidence } from './backend-release-admission';
 import { readCanonicalMigrationSources } from '../database/hosted-migration-plan';
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
-import { canonicalReleaseExecutionJson, parseReleaseExecutionJson } from './release-review';
+import { canonicalReleaseExecutionJson } from './release-review';
 import { readBackendWebTransferFile, validateBackendWebTransfer } from './backend-web-transfer';
+import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 
 const fail = () => Error('Completed backend web handover consumption requires review; contents withheld.');
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -48,45 +48,11 @@ export function validateCompletedBackendWebApproval(rawRun: unknown, rawApproval
   } catch { throw fail(); }
 }
 
-type ZipEntry = { fileName: string; uncompressedSize: number; compressedSize: number; generalPurposeBitFlag: number; compressionMethod: number; externalFileAttributes: number };
-type Zip = { entryCount: number; on(name: 'error' | 'entry' | 'end', listener: (...args: never[]) => void): void; readEntry(): void; close(): void; openReadStream(entry: ZipEntry, callback: (error: Error | null, stream?: Readable) => void): void };
-const { yauzl } = createRequire(import.meta.url)('playwright-core/lib/utilsBundle') as { yauzl: { fromBuffer(bytes: Buffer, options: object, callback: (error: Error | null, zip?: Zip) => void): void } };
-
-/** Existing locked ZIP reader, exactly one plain JSON entry, no disk extraction. */
+/** Existing fixed backend JSON contract delegates to the shared bounded archive owner. */
 export async function readBackendWebTransferArchive(bytes: Uint8Array, archiveSha256: string, transferSha256: string): Promise<unknown> {
-  try {
-    if (!digest.safeParse(archiveSha256).success || !digest.safeParse(transferSha256).success || bytes.byteLength > 2 * 1024 * 1024 || hash(bytes) !== archiveSha256) throw fail();
-    const file = await new Promise<Buffer>((done, reject) => {
-      let opened: Zip | undefined, reader: Readable | undefined, settled = false, count = 0, body: Buffer | undefined;
-      const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); reader?.destroy(); opened?.close(); if (error || !body) reject(fail()); else done(body); };
-      const timer = setTimeout(() => finish(fail()), 10000);
-      yauzl.fromBuffer(Buffer.from(bytes), { lazyEntries: true, autoClose: true, decodeStrings: true, validateEntrySizes: true, strictFileNames: true }, (error, zip) => {
-        if (settled) { zip?.close(); return; } if (error || !zip) return finish(fail()); opened = zip;
-        if (zip.entryCount !== 1) return finish(fail());
-        zip.on('error', (() => finish(fail())) as (...args: never[]) => void);
-        zip.on('end', (() => count === 1 ? finish() : finish(fail())) as (...args: never[]) => void);
-        zip.on('entry', ((entry: ZipEntry) => {
-          const kind = (entry.externalFileAttributes >>> 16) & 0xf000;
-          if (++count !== 1 || entry.fileName !== 'web-transfer.json' || entry.generalPurposeBitFlag & 1 || ![0, 8].includes(entry.compressionMethod)
-            || ![0, 0x8000].includes(kind) || entry.externalFileAttributes & 0x10 || !Number.isSafeInteger(entry.uncompressedSize) || entry.uncompressedSize < 1 || entry.uncompressedSize > 192 * 1024 || entry.compressedSize > 2 * 1024 * 1024) return finish(fail());
-          zip.openReadStream(entry, (readError, stream) => {
-            if (readError || !stream || settled) { stream?.destroy(); return finish(fail()); } reader = stream;
-            const parts: Buffer[] = []; let size = 0;
-            stream.on('error', () => finish(fail()));
-            stream.on('data', (chunk: Buffer) => { size += chunk.length; if (size > 192 * 1024 || size > entry.uncompressedSize) return finish(fail()); parts.push(chunk); });
-            stream.on('end', () => { if (settled || size !== entry.uncompressedSize) return finish(fail()); body = Buffer.concat(parts); zip.readEntry(); });
-          });
-        }) as (...args: never[]) => void);
-        zip.readEntry();
-      });
-    });
-    if (hash(file) !== transferSha256) throw fail();
-    const text = new TextDecoder('utf8', { fatal: true }).decode(file), value = parseReleaseExecutionJson(text);
-    if (canonicalReleaseExecutionJson(value) !== text) throw fail();
-    return value;
-  } catch { throw fail(); }
+  try { return (await readSingleJsonArchive(bytes, { archiveSha256, jsonSha256: transferSha256, fileName: 'web-transfer.json', maximumJsonBytes: 192 * 1024 })).value; }
+  catch { throw fail(); }
 }
-
 async function boundedBytes(response: Response, signal: AbortSignal, maximum: number) {
   if (!response.ok || response.redirected || !response.body) throw fail();
   const declared = response.headers.get('content-length'); if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > maximum)) throw fail();
@@ -145,6 +111,7 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
         get('branches/main/protection'), get('branches/main/protection/required_signatures'), get('git/commits/' + input.releaseSha), get('actions/runs/' + input.backendRunId + '/approvals'),
       ]);
       validateCiRun(ci, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });
+      const canonical=await readCanonicalRuntimeJobs(ci,get);if(canonicalReleaseExecutionJson(canonical)!==canonicalReleaseExecutionJson(initial.body.canonicalRuntimeVerification))throw fail();
       validateReleaseControls({ repository: repo, environment, branches, main: protection, signatures }, { repository, environment: 'staging' });
       z.object({ total_count: z.literal(1) }).parse(branches);
       z.object({ id: z.literal(initial.body.environmentId), name: z.literal('staging') }).parse(environment);
@@ -153,7 +120,7 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
       const admitted = validateCompletedBackendWebApproval(run, approvals, raw, Date.now());
       const finalRun = runSchema.parse(await get('actions/runs/' + input.backendRunId)), finalArtifact = artifactSchema.parse(await get('actions/artifacts/' + input.artifactId));
       if (canonicalReleaseExecutionJson(finalRun) !== canonicalReleaseExecutionJson(run) || canonicalReleaseExecutionJson(finalArtifact) !== canonicalReleaseExecutionJson(artifact)) throw fail();
-      validateCiRun(await get('actions/runs/' + input.ciRunId), { sha: input.releaseSha, repository, ciRunId: input.ciRunId });
+      const finalCi=await get('actions/runs/' + input.ciRunId);validateCiRun(finalCi, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });if(canonicalReleaseExecutionJson(await readCanonicalRuntimeJobs(finalCi,get))!==canonicalReleaseExecutionJson(canonical))throw fail();
       z.object({ object: z.object({ sha: z.literal(input.releaseSha) }) }).parse(await get('git/ref/heads/main'));
       await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected); validateBackendWebTransfer(raw, Date.now());
       if (controller.signal.aborted) throw fail();

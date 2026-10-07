@@ -6,12 +6,34 @@ const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): 
 type Map = Record<string, unknown>;
 const map = (value: unknown): Map => value && typeof value === 'object' && !Array.isArray(value) ? value as Map : {};
 async function source() { return map(yaml.load(await readFile('.github/workflows/backend-release.yml', 'utf8'))); }
+
+test('installed runtime has a guarded original-state observer and cannot invoke installation or activation',async()=>{
+ const workflow=await source(),steps=(map(map(workflow.jobs).schema).steps as unknown[]).map(map),phase=(name:string)=>steps.find(step=>step.run==='node --import tsx scripts/verification/backend-release.ts '+name)!;
+ assert.equal(phase('resume-runtime').if,"inputs.scope == 'installed-runtime'");
+ assert.equal(map(phase('resume-runtime').env).CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON,'${{ vars.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON }}');
+ for(const name of ['bootstrap-schema','provision'])assert.equal(phase(name).if,"inputs.scope != 'installed-runtime'");
+ for(const name of ['deploy','activate'])assert.equal(phase(name).if,"inputs.scope == 'complete-backend'");
+ for(const name of ['verify','verify-private','verify-recovery','verify-restore','handover','configure-web','export-web-handover'])assert.equal(phase(name).if,"inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'");
+});
 test('backend schema workflow uses exact main manual dispatch and one serialized deployment window', async () => {
   const workflow = await source(); assert.deepEqual(Object.keys(map(workflow.on)), ['workflow_dispatch']);
-  assert.deepEqual(Object.keys(map(map(map(workflow.on).workflow_dispatch).inputs)).sort(), ['ci_run_id', 'commit_sha']);
+  assert.deepEqual(Object.keys(map(map(map(workflow.on).workflow_dispatch).inputs)).sort(), ['ci_run_id', 'commit_sha', 'scope']);
+  const scope = map(map(map(map(workflow.on).workflow_dispatch).inputs).scope);
+  assert.deepEqual(scope.options, ['schema-and-accounts', 'complete-backend','installed-runtime']);
+  assert.equal(scope.default, 'schema-and-accounts');
   assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' }); assert.deepEqual(workflow.concurrency, { group: 'cuevo-backend-release', 'cancel-in-progress': false });
   const jobs = map(workflow.jobs); assert.deepEqual(Object.keys(jobs), ['prepare', 'schema']);
   assert.equal(map(jobs.prepare).if, "github.ref == 'refs/heads/main'"); assert.equal(map(jobs.schema).if, "github.ref == 'refs/heads/main'"); assert.equal(map(jobs.schema).environment, 'staging'); assert.equal(map(jobs.schema).needs, 'prepare');
+});
+
+test('schema and account milestone skips every later backend deployment and handover consumer', async () => {
+  const workflow = await source(), steps = (map(map(workflow.jobs).schema).steps as unknown[]).map(map);
+  const provision = steps.findIndex(step => step.run === 'node --import tsx scripts/verification/backend-release.ts provision');
+  const required = steps.filter((step, index) => index > provision && (typeof step.run === 'string' || step.id === 'web-transfer'
+    || map(step.with).name === 'cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}'));
+  assert.ok(required.length > 10);
+  for(const step of required){const isCompleteOnly=['node --import tsx scripts/verification/backend-release.ts deploy','node --import tsx scripts/verification/backend-release.ts activate','npm install --global vercel@62.1.0 --ignore-scripts --no-audit --no-fund'].includes(String(step.run));assert.equal(step.if,isCompleteOnly?"inputs.scope == 'complete-backend'":step.run==='node --import tsx scripts/verification/backend-release.ts resume-runtime'?"inputs.scope == 'installed-runtime'":"inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'");}
+  assert.equal(steps.find(step=>step.run==='node --import tsx scripts/verification/backend-release.ts approval')!.if,undefined);for(const phase of ['bootstrap-schema','provision'])assert.equal(steps.find(step=>step.run===`node --import tsx scripts/verification/backend-release.ts ${phase}`)!.if,"inputs.scope != 'installed-runtime'");
 });
 
 test('completed backend exports exactly one public handover after web settings and never uploads runtime secrets with it',async()=>{
@@ -19,9 +41,9 @@ test('completed backend exports exactly one public handover after web settings a
  const configure=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts configure-web');
  const exported=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts export-web-handover');
  assert.ok(exported>configure&&configure>=0);
- const step=schema[exported];assert.equal(step.id,'web-transfer');assert.deepEqual(Object.keys(map(step.env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','GH_TOKEN','VERCEL_TOKEN']);
+ const step=schema[exported];assert.equal(step.id,'web-transfer');assert.deepEqual(Object.keys(map(step.env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_RELEASE_JOURNAL_STORAGE_KEY','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
  const uploaded=schema.findIndex(row=>map(row.with).name==='cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}');assert.ok(uploaded>exported);
- const upload=schema[uploaded];assert.equal(map(upload.with).path,'.local/hosted-release/web-transfer.json');assert.equal(map(upload.with)['if-no-files-found'],'error');assert.equal(upload.if,undefined);
+ const upload=schema[uploaded];assert.equal(map(upload.with).path,'.local/hosted-release/web-transfer.json');assert.equal(map(upload.with)['if-no-files-found'],'error');assert.equal(upload.if,"inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'");
 });
 test('only metadata token reaches preparation; schema credentials arrive after package approval and never enter shell input', async () => {
   const workflow = await source(), jobs = map(workflow.jobs), prepare = (map(jobs.prepare).steps as unknown[]).map(map), schema = (map(jobs.schema).steps as unknown[]).map(map);
@@ -38,10 +60,10 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   const recoveryIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts verify-recovery');assert.ok(recoveryIndex>activationIndex);assert.deepEqual(Object.keys(map(schema[recoveryIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_SYNTHETIC_PILOT_PASSWORD','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
   const restoreIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts verify-restore');assert.ok(restoreIndex>recoveryIndex);assert.deepEqual(Object.keys(map(schema[restoreIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_SYNTHETIC_PILOT_PASSWORD','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
   const imageIndex=schema.findIndex(step=>step.run==='docker pull public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53');assert.ok(imageIndex>approvalIndex&&imageIndex<restoreIndex);assert.deepEqual(Object.keys(map(schema[imageIndex].env)),[]);
-  const bindIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts bind-api'),handoverIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts handover');assert.ok(bindIndex>restoreIndex&&handoverIndex>bindIndex);assert.deepEqual(Object.keys(map(schema[bindIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_SYNTHETIC_PILOT_PASSWORD','GH_TOKEN','VERCEL_TOKEN']);assert.deepEqual(Object.keys(map(schema[handoverIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','GH_TOKEN','VERCEL_TOKEN']);
-  const publicIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts configure-web');assert.ok(publicIndex>handoverIndex);assert.deepEqual(Object.keys(map(schema[publicIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','GH_TOKEN','VERCEL_TOKEN']);
+  const bindIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts bind-api'),handoverIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts handover');assert.ok(bindIndex>restoreIndex&&handoverIndex>bindIndex);assert.deepEqual(Object.keys(map(schema[bindIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_SYNTHETIC_PILOT_PASSWORD','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);assert.deepEqual(Object.keys(map(schema[handoverIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_RELEASE_JOURNAL_STORAGE_KEY','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
+  const publicIndex=schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts configure-web');assert.ok(publicIndex>handoverIndex);assert.deepEqual(Object.keys(map(schema[publicIndex].env)).sort(),['CUEVO_BACKEND_BUNDLE_PATH','CUEVO_BACKEND_BUNDLE_SHA256','CUEVO_MIGRATION_DATABASE_PASSWORD','CUEVO_RELEASE_JOURNAL_STORAGE_KEY','GH_TOKEN','SUPABASE_ACCESS_TOKEN','VERCEL_TOKEN']);
   for (const [index, step] of schema.entries()) {
-    if (index !== mutationIndex && index !== provisionIndex && index!==deployIndex && index!==activationIndex && index!==recoveryIndex && index!==restoreIndex) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
+    if (![mutationIndex,provisionIndex,deployIndex,activationIndex,recoveryIndex,restoreIndex,bindIndex,handoverIndex,publicIndex,schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts resume-runtime'),schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts export-web-handover')].includes(index)) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
     if (step.run) assert.ok(!(step.run as string).includes('${{'));
     if (step.uses) assert.match(step.uses as string, /@[a-f0-9]{40}$/);
   }
