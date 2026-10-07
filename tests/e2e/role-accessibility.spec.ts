@@ -85,7 +85,8 @@ async function keyboardWorkspaceAction(page: Page, label: string): Promise<Locat
 async function signIn(page: Page, role: Role) {
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
   const account = accounts.find(item => item.role === role); if (!account) throw new Error('Synthetic role account missing.');
-  await page.goto('/'); await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+  await page.goto('/'); await expect(page.locator('.auth-form')).toBeVisible();
+  await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
   await page.getByLabel('School email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(account.password);
   const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/me' && response.request().method() === 'GET');
@@ -283,7 +284,8 @@ test('protected content clears offline and only returns after current membership
 });
 
 test('sign-in keyboard controls, validation errors and bilingual labels remain associated at narrow reflow', async ({ page }) => {
-  await page.goto('/'); await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+  await page.goto('/'); await expect(page.locator('.auth-form')).toBeVisible();
+  await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
   const email = page.getByLabel('School email', { exact: true }); const password = page.getByLabel('Password', { exact: true });
   await keyboardActivate(page, page.getByRole('button', { name: 'Sign in', exact: true }));
   await expect(email).toBeFocused(); expect(await email.evaluate(element => (element as HTMLInputElement).validity.valueMissing)).toBe(true);
