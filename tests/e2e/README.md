@@ -1,5 +1,7 @@
 # Browser journeys
 
+`access-capability-reflow.spec.ts` checks the real Access view with enlarged English/Arabic text at 390px. Each permitted capability card remains inside its reading column; this is presentation proof only and grants no capability.
+
 `parent-home-heading-identity.spec.ts` exercises the actual Parent Home view across unresolved, ready, denied and offline context. It verifies the same heading DOM node retains focus, a deliberately focused selector remains focused during later reads, and unsent input survives. `workspace-chrome-reflow.spec.ts` adds enlarged 390/768px school-word and brand/person checks across all five roles. These controlled component tests complement actual compiled-production source observations; they do not establish hosted Auth/database or native browser zoom acceptance.
 
 The full visible learning-loop journey reuses the existing bounded transport diagnostic only when its original console/page/hydration assertion fails. It records classified endpoint/status/cancellation metadata, without response content, record names, query strings or credentials. The unexplained console 401 remains a failure; this diagnostic does not filter or retry it. Native source chains and hosted acceptance remain separate from diagnostic fixture tests.
