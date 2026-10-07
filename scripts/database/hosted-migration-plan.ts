@@ -98,10 +98,14 @@ function gitReader(root: string) {
 export function readHistoricalMigrationSources(repoRoot:string,sourceSha:string,treeSha:string):MigrationSource[]{
  if(!sha.safeParse(sourceSha).success||!sha.safeParse(treeSha).success)throw failure();const{git}=checkedRoot(repoRoot);
  if(git(['rev-parse',`${sourceSha}^{tree}`]).toString().trim()!==treeSha)throw failure();
- const entries=git(['ls-tree','-r','-z',sourceSha,'--','supabase/migrations']).toString('utf8').split('\0').filter(Boolean).map(entry=>{const match=/^100644 blob ([a-f0-9]{40})\tsupabase\/migrations\/(\d{14}_[a-z0-9_]+\.sql)$/.exec(entry);if(!match)throw failure();return{blob:match[1],name:match[2]};});
- if(!entries.length||entries.length>1000)throw failure();const output:MigrationSource[]=[];
+ return readMigrationBlobBatches(git,git(['ls-tree','-r','-z',sourceSha,'--','supabase/migrations']));
+}
+/** Exact IDs, per-blob/total limits and framing are checked for every batch. */
+function readMigrationBlobBatches(git:ReturnType<typeof gitReader>,tree:Uint8Array):MigrationSource[]{
+ const entries=new TextDecoder('utf8',{fatal:true}).decode(tree).split('\0').filter(Boolean).map(entry=>{const match=/^100644 blob ([a-f0-9]{40})\tsupabase\/migrations\/(\d{14}_[a-z0-9_]+\.sql)$/.exec(entry);if(!match)throw failure();return{blob:match[1],name:match[2]};});
+ if(!entries.length||entries.length>1000||new Set(entries.map(row=>row.name.slice(0,14))).size!==entries.length)throw failure();const output:MigrationSource[]=[];let total=0;
  for(let start=0;start<entries.length;start+=16){const group=entries.slice(start,start+16),batch=git(['cat-file','--batch'],group.map(row=>row.blob).join('\n')+'\n');let offset=0;
-  for(const row of group){const end=batch.indexOf(10,offset);if(end<0)throw failure();const match=/^([a-f0-9]{40}) blob ([0-9]+)$/.exec(batch.subarray(offset,end).toString('ascii'));if(!match||match[1]!==row.blob)throw failure();const size=Number(match[2]);if(!Number.isSafeInteger(size)||size>2*1024*1024)throw failure();offset=end+1;const bytes=batch.subarray(offset,offset+size);if(bytes.length!==size||batch[offset+size]!==10)throw failure();offset+=size+1;output.push({name:row.name,bytes:new Uint8Array(bytes)});}if(offset!==batch.length)throw failure();
+  for(const row of group){const end=batch.indexOf(10,offset);if(end<0)throw failure();const match=/^([a-f0-9]{40}) blob ([0-9]+)$/.exec(batch.subarray(offset,end).toString('ascii'));if(!match||match[1]!==row.blob)throw failure();const size=Number(match[2]);if(!Number.isSafeInteger(size)||size>2*1024*1024)throw failure();total+=size;if(total>16*1024*1024)throw failure();offset=end+1;const bytes=batch.subarray(offset,offset+size);if(bytes.length!==size||batch[offset+size]!==10)throw failure();offset+=size+1;output.push({name:row.name,bytes:new Uint8Array(bytes)});}if(offset!==batch.length)throw failure();
  }
  return output;
 }
@@ -128,20 +132,14 @@ export function readCanonicalMigrationSources(input: { repoRoot: string; sourceS
   if (git(['ls-files', '--others', '--exclude-standard', '-z', '--', 'supabase/migrations']).length) throw failure();
   for (const path of ['supabase', 'supabase/migrations']) if (lstatSync(join(root, path)).isSymbolicLink()) throw failure();
   const tree = git(['ls-tree', '-r', '-z', input.sourceSha, '--', 'supabase/migrations']);
-  const entries = tree.toString('utf8').split('\0').filter(Boolean);
-  if (!entries.length || entries.length > 1000) throw failure();
-  const sources = entries.map(entry => {
-    const match = entry.match(/^100644 blob ([a-f0-9]{40})\tsupabase\/migrations\/(\d{14}_[a-z0-9_]+\.sql)$/);
-    if (!match) throw failure();
-    const [, blob, name] = match;
-    if (!lstatSync(join(root, 'supabase/migrations', name)).isFile()) throw failure();
-    const bytes = git(['cat-file', 'blob', blob]);
+  const sources = readMigrationBlobBatches(git,tree);
+  for(const{name,bytes}of sources){
+    const stat=lstatSync(join(root,'supabase/migrations',name));if(!stat.isFile()||stat.isSymbolicLink())throw failure();
     const working = readFileSync(join(root, 'supabase/migrations', name));
     // Only CRLF/LF serialization is tolerated; Git filters cannot conceal altered SQL bytes.
     const normalize = (value: Uint8Array) => Buffer.from(value.filter((byte, index) => byte !== 13 || value[index + 1] !== 10));
     if (bytes.length > 2 * 1024 * 1024 || working.length > 2 * 1024 * 1024 || !normalize(bytes).equals(normalize(working))) throw failure();
-    return { name, bytes: new Uint8Array(bytes) };
-  });
+  }
   if (new Set(sources.map(row => row.name.slice(0, 14))).size !== sources.length) throw failure();
   const physical = readdirSync(join(root, 'supabase/migrations'));
   if (physical.length !== sources.length || physical.some(name => !sources.some(row => row.name === name))) throw failure();

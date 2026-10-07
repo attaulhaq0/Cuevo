@@ -331,6 +331,23 @@ test('older actual target observation expires during later inventory instead of 
  }));
 });
 
+test('failed admission reports only its allowlisted phase and original observation ages before any intent',async()=>{
+ const subject=await api();await fixture(async input=>withMigrationClock(async()=>{
+  state.failures=['older-target'];const result=await subject.executeNativeHostedMigrationStage(input);
+  assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(state.commands,0);assert.equal(state.events.includes('journal:INTENT'),false);
+  assert.ok(result.admissionFailure);assert.equal(result.admissionFailure.phase,'FINAL_FRESHNESS');assert.ok(result.admissionFailure.agesMs.target!==null&&result.admissionFailure.agesMs.target>30000);
+  assert.equal(JSON.stringify(result.admissionFailure).includes(secret),false);assert.deepEqual(Object.keys(result.admissionFailure).sort(),['agesMs','durationMs','phase']);
+ }));
+});
+
+test('admission diagnostics classify capability inventory and scope refusals while successful evidence has no failure fields',async()=>{
+ const subject=await api();
+ for(const [mode,phase]of [['schema-storage','STORAGE_CAPABILITY'],['count-mismatch','OPERATOR_INVENTORY'],['population','HISTORY_AND_SCOPE']]as const)await fixture(async input=>{
+  state.failures=[mode];const result=await subject.executeNativeHostedMigrationStage(input);assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.admissionFailure?.phase,phase);assert.equal(state.commands,0);assert.equal(state.events.includes('journal:INTENT'),false);assert.deepEqual(Object.keys(result.admissionFailure??{}).sort(),['agesMs','durationMs','phase']);assert.equal(JSON.stringify(result.admissionFailure).includes(secret),false);
+ });
+ await fixture(async input=>{const result=await subject.executeNativeHostedMigrationStage(input);assert.equal(result.status,'COMMITTED');assert.equal(result.admissionFailure,undefined);});
+});
+
 test('native session loss during fresh inventory stops the original CLI', async () => {
  const module = await api(); await fixture(async input => { state.failures = ['lost-during-inventory'];
   const result = await module.executeNativeHostedMigrationStage(input); assert.equal(result.status, 'REQUIRES_REVIEW'); assert.equal(state.commands, 0);

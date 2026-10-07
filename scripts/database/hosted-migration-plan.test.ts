@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import {createRequire,syncBuiltinESMExports} from 'node:module';
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -247,6 +248,25 @@ test('bounded historical Git batches retain each exact original migration byte a
  const historical=subject.readHistoricalMigrationSources(root,sha,tree),current=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree});
  assert.deepEqual(historical.map(row=>({name:row.name,sha256:digest(row.bytes)})),current.sources.map(row=>({name:row.name,sha256:digest(row.bytes)})));
  assert.throws(()=>subject.readHistoricalMigrationSources(root,sha,'0'.repeat(40)));
+});
+
+test('canonical source acquisition batches real Git blobs and refuses incomplete or wrong transport bytes without dropping physical checks',async()=>{
+ const subject=await api();await fixture(async(root)=>{
+  for(let index=2;index<=33;index++)writeFileSync(join(root,'supabase/migrations',`20260101${String(index).padStart(6,'0')}_source_fixture.sql`),`select ${index};\n`);
+  git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Many immutable sources');const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}');
+  const childProcess=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),original=childProcess.execFileSync,calls:string[][]=[];let corruption:'none'|'truncated'|'wrong-id'='none';
+  childProcess.execFileSync=((file:string,args:string[],options:unknown)=>{
+   if(file==='git')calls.push([...args]);const output=original(file,args,options as Parameters<typeof execFileSync>[2]);
+   if(file==='git'&&args.includes('--batch')&&Buffer.isBuffer(output)){if(corruption==='truncated')return output.subarray(0,output.length-1);if(corruption==='wrong-id')return Buffer.concat([Buffer.from('0'.repeat(40)),output.subarray(40)]);}
+   return output;
+  }) as typeof execFileSync;syncBuiltinESMExports();
+  try{
+   const loaded=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha});assert.equal(loaded.sources.length,33);assert.equal(calls.some(args=>args.includes('cat-file')&&args.includes('blob')),false,'one process per migration cannot consume the freshness window');assert.ok(calls.filter(args=>args.includes('--batch')).length<=3);
+   for(const row of loaded.sources)assert.deepEqual(Buffer.from(row.bytes),readFileSync(join(root,'supabase/migrations',row.name)));
+   for(const value of ['truncated','wrong-id'] as const){corruption=value;assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}));}
+   corruption='none';git(root,'update-index','--assume-unchanged','supabase/migrations/20260101000000_example.sql');writeFileSync(join(root,'supabase/migrations/20260101000000_example.sql'),'select 999;\n');assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}));
+  }finally{childProcess.execFileSync=original;syncBuiltinESMExports();}
+ });
 });
 
 test('active installed runtime can prepare only an explicit same-source read-only zero-pending plan',async()=>{
