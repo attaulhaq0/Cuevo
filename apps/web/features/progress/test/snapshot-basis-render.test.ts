@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { registerHooks } from 'node:module';
+import { registerHooks, createRequire } from 'node:module';
 import { parseLearnerState } from '../model.ts';
 import { progressAr, progressEn } from '../messages.ts';
 import { commonAr, commonEn } from '../../../shared/i18n/common.ts';
@@ -18,13 +18,119 @@ registerHooks({ load(url, context, nextLoad) {
   if (path.endsWith('/shared/hooks/use-api.ts')) return { format: 'module', shortCircuit: true, source: 'export function useApi(){return {t:globalThis.progressBasisCommon[globalThis.progressBasisFixture.app.locale],request(){throw Error("No request in a render test")}}} export function useApiQuery(path,parse){const f=globalThis.progressBasisFixture;if(!path?.endsWith("/state"))return {data:null,loading:true,error:null};return {data:f.error?null:parse(f.state),loading:false,error:f.error}}' };
   if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: 'export function usePaginatedLearningQuery(){return {data:[],loading:false,loaded:true,loadingMore:false,error:null,moreError:null,nextCursor:null,loadMore(){}}}' };
   if (path.endsWith('/shared/hooks/use-child-context.ts')) return { format: 'module', shortCircuit: true, source: 'export function useChildContext(){const parent=globalThis.progressBasisFixture.app.membership.role==="parent";return {parent,children:[],child:parent?{id:"learner",displayName:"Alex Hassan"}:null,query:{data:[],loading:false,error:null,nextCursor:null},selectChild(){}}}' };
+  if (path.endsWith('/features/progress/components/progress-workspace.tsx')) {
+    const loaded = nextLoad(url, context);
+    return { ...loaded, source: `${loaded.source?.toString()}\nexport { LearnerDetail as ProgressSnapshotTestReader };` };
+  }
   return nextLoad(url, context);
 } });
-const { ProgressWorkspace } = await import('../components/progress-workspace.tsx');
+type Element = { textContent: string; querySelector(selector: string): Element | null; querySelectorAll(selector: string): Element[] };
+const { parse } = createRequire(import.meta.url)('next/dist/compiled/node-html-parser') as { parse(html: string): Element };
+const source = await import('../components/progress-workspace.tsx');
+const { ProgressWorkspace } = source;
+// Expose the existing private selected reader only in this test loader. Staff
+// source selection and its real request guards remain tested by their owners.
+const SnapshotReader = (source as typeof source & { ProgressSnapshotTestReader: React.ComponentType<{ learnerId: string; learnerLabel: string; focusRequest: number; refresh: number; parent: boolean; utilities: React.ReactNode }> }).ProgressSnapshotTestReader;
 function render(locale: 'en' | 'ar', role: 'student' | 'parent') {
   fixture.app = { locale, status: 'ready', online: true, apiUrl: '', accessToken: 'synthetic', accessGeneration: 1, membership: { userId: role === 'student' ? 'learner' : 'parent', schoolId: 'school', role, displayName: 'Alex Hassan', school: { name: 'School' }, entitlements: ['learning', 'assessment', 'curriculum', 'learner.state'] }, reportDiagnostic() {} };
   return renderToStaticMarkup(createElement(ProgressWorkspace));
 }
+function renderSelected(locale: 'en' | 'ar', role: 'student' | 'teacher' | 'coordinator' | 'admin' | 'parent') {
+  fixture.app = { locale, status: 'ready', online: true, apiUrl: '', accessToken: 'synthetic', accessGeneration: 1, membership: { userId: role === 'student' ? 'learner' : role, schoolId: 'school', role, displayName: 'Alex Hassan', school: { name: 'School' }, entitlements: ['learning', 'assessment', 'curriculum', 'learner.state'] }, reportDiagnostic() {} };
+  return parse(renderToStaticMarkup(createElement(SnapshotReader, { learnerId: 'learner', learnerLabel: 'Alex Hassan', focusRequest: 0, refresh: 0, parent: role === 'parent', utilities: null })));
+}
+function readyEmpty() {
+  return parseLearnerState({ ...unknown, status: 'READY', freshness: 'CURRENT', generatedAt: '2026-10-05T00:00:00Z', version: 1 });
+}
+
+test('unknown selected snapshots explain unavailable academic and permitted support chapters rather than declaring them empty', () => {
+  fixture.error = null;
+  for (const locale of ['en', 'ar'] as const) for (const role of ['student', 'teacher', 'coordinator', 'admin', 'parent'] as const) {
+    fixture.state = role === 'parent' ? { ...unknown, freshness: 'APPROVED_PROJECTION' } : unknown;
+    const view = renderSelected(locale, role), academic = view.querySelector('#progress-academic')!;
+    assert.equal(academic.querySelectorAll('[data-state="empty"]').length, 0, `${role}/${locale} unknown academic is not empty`);
+    assert.equal(academic.querySelectorAll('[data-state="unknown"]').length, 1);
+    assert.match(academic.textContent, locale === 'en' ? /Result pages/ : /صفحات النتائج/);
+    const support = view.querySelector('#progress-support');
+    if (role === 'parent') assert.equal(support, null);
+    else {
+      assert.equal(support!.querySelectorAll('[data-state="empty"]').length, 0, `${role}/${locale} unknown support is not empty`);
+      assert.equal(support!.querySelectorAll('[data-state="unknown"]').length, 1);
+      assert.match(support!.textContent, locale === 'en' ? /Refresh/ : /حدّث/);
+    }
+    assert.ok(view.querySelector('#progress-reports'), 'Independent result pages remain mounted');
+  }
+});
+
+test('READY complete zero chapters retain true empty while stale or incomplete returned projections do not', () => {
+  fixture.error = null;
+  const ready = readyEmpty(), cursor = '10000000-0000-4000-8000-000000000001';
+  for (const locale of ['en', 'ar'] as const) for (const role of ['student', 'teacher', 'coordinator', 'admin', 'parent'] as const) {
+    fixture.state = role === 'parent' ? { ...ready, freshness: 'APPROVED_PROJECTION' } : ready;
+    let view = renderSelected(locale, role);
+    assert.equal(view.querySelector('#progress-academic')!.querySelectorAll('[data-state="empty"]').length, 1);
+    if (role !== 'parent') assert.equal(view.querySelector('#progress-support')!.querySelectorAll('[data-state="empty"]').length, 1);
+    for (const state of [
+      { ...ready, freshness: 'STALE' },
+      { ...ready, projection: { ...ready.projection!, academic: { returnedCount: 0, totalCount: 1, truncated: true, nextCursor: cursor }, support: { returnedCount: 0, totalCount: 1, truncated: true } } },
+      { ...ready, projection: { ...ready.projection!, academic: { ...emptyCount, totalCount: null, nextCursor: null }, support: { ...emptyCount, totalCount: null } } },
+      { ...ready, projection: { ...ready.projection!, academic: { ...emptyCount, nextCursor: cursor } } },
+    ]) {
+      fixture.state = parseLearnerState(state); view = renderSelected(locale, role);
+      assert.equal(view.querySelector('#progress-academic')!.querySelectorAll('[data-state="empty"]').length, 0);
+      assert.equal(view.querySelector('#progress-academic')!.querySelectorAll('[data-state="unknown"]').length, 1);
+      if (role !== 'parent' && (state.projection?.support?.totalCount !== 0 || state.freshness === 'STALE')) {
+        assert.equal(view.querySelector('#progress-support')!.querySelectorAll('[data-state="empty"]').length, 0);
+      }
+      if (role === 'parent') assert.equal(view.querySelector('#progress-support'), null);
+    }
+  }
+});
+
+test('legacy READY empty stays snapshot-qualified while missing declared support coverage remains unconfirmed', () => {
+  fixture.error = null;
+  const ready = readyEmpty();
+  for (const locale of ['en', 'ar'] as const) for (const role of ['student', 'teacher', 'coordinator', 'admin'] as const) {
+    const t = locale === 'ar' ? progressAr : progressEn;
+    const legacy = { ...ready }; delete legacy.projection; fixture.state = parseLearnerState(legacy);
+    let view = renderSelected(locale, role);
+    assert.equal(view.querySelector('#progress-academic')!.querySelectorAll('[data-state="empty"]').length, 1);
+    assert.ok(view.querySelector('#progress-academic')!.textContent.includes(t.noAcademic));
+    assert.ok(view.querySelector('#progress-support')!.textContent.includes(t.noSupport));
+    const incomplete = { ...ready.projection! }; delete incomplete.support;
+    fixture.state = parseLearnerState({ ...ready, projection: incomplete }); view = renderSelected(locale, role);
+    assert.equal(view.querySelector('#progress-support')!.querySelectorAll('[data-state="empty"]').length, 0);
+    assert.equal(view.querySelector('#progress-support')!.querySelectorAll('[data-state="unknown"]').length, 1);
+  }
+});
+
+test('native zero and an existing record with unavailable human context remain visible in a stale partial snapshot', () => {
+  fixture.error = null;
+  const ready = readyEmpty();
+  fixture.state = parseLearnerState({ ...ready, freshness: 'STALE',
+    academic: [{ resultId: 'result', referenceId: 'reference', referenceVersion: 'School v1', evidenceId: 'evidence', observedAt: '2026-10-05T00:00:00Z', nativeResult: { type: 'numeric', score: 0, maxScore: 10, policyVersion: 1, normalized: null } }],
+    projection: { ...ready.projection!, academic: { returnedCount: 1, totalCount: 101, truncated: true, nextCursor: '10000000-0000-4000-8000-000000000001' } } });
+  for (const locale of ['en', 'ar'] as const) for (const role of ['student', 'teacher', 'coordinator', 'admin', 'parent'] as const) {
+    const t = locale === 'ar' ? progressAr : progressEn, view = renderSelected(locale, role), academic = view.querySelector('#progress-academic')!;
+    assert.equal(academic.querySelectorAll('[data-result-id="result"]').length, 1);
+    assert.equal(academic.querySelectorAll('[data-state="empty"]').length, 0);
+    assert.ok(academic.textContent.includes(t.assessmentNameUnavailable));
+    assert.ok(academic.textContent.includes(t.objectiveUnavailable));
+    assert.ok(academic.querySelectorAll('strong').some(element => element.textContent === new Intl.NumberFormat(locale).format(0)));
+    assert.ok(view.querySelector('#progress-reports'));
+  }
+});
+
+test('a denied selected snapshot withholds its chapters for every role without affecting the known source value', () => {
+  fixture.state = readyEmpty(); fixture.error = new LearningApiError('denied');
+  for (const locale of ['en', 'ar'] as const) for (const role of ['student', 'teacher', 'coordinator', 'admin', 'parent'] as const) {
+    const view = renderSelected(locale, role);
+    assert.equal(view.querySelectorAll('[role="alert"]').length, 1);
+    assert.equal(view.querySelector('#progress-academic'), null);
+    assert.equal(view.querySelector('#progress-support'), null);
+  }
+  fixture.error = null;
+});
 
 test('Student zero snapshot counts explain their basis and lead to current released result pages without guessing a pending count', () => {
   for (const locale of ['en', 'ar'] as const) {
