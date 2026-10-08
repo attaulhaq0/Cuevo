@@ -1,3 +1,4 @@
+import {dataApiConfigurationObservationSchema,validateDisabledDataApiConfigurationEvidence} from './data-api-configuration';
 import { createRequire } from 'node:module';
 import { z } from 'zod';
 import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep,runtimeDeliveryArtifactStep,ciDatabaseJob,ciRequiredJob} from './verification-workflows';
@@ -33,7 +34,8 @@ const workerDependency = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('supabase-edge'), commitSha: sha, projectRef, functionName: z.literal('cuevo-worker'), artifactSha256: digest, denoLockSha256: digest, authVerified: z.literal(true), queueRecoveryVerified: z.literal(true), roleGrantsVerified: z.literal(true), transportPrivateVerified: z.literal(true), evidenceUrl: secureUrl }).strict(),
 ]);
 const migration = z.object({ version: z.string().regex(/^\d{14}$/), sha256: digest }).strict();
-const dataApiPosture = z.object({state:z.literal('DISABLED'),projectRef,commitSha:sha,verifiedAt:z.iso.datetime(),configurationVerified:z.literal(true),anonymousRestDenied:z.literal(true),authenticatedRestDenied:z.literal(true),serviceRestDenied:z.literal(true),graphqlDenied:z.literal(true),rpcDenied:z.literal(true),evidenceUrl:secureUrl}).strict();
+const legacyDataApiPosture = z.object({state:z.literal('DISABLED'),projectRef,commitSha:sha,verifiedAt:z.iso.datetime(),configurationVerified:z.literal(true),anonymousRestDenied:z.literal(true),authenticatedRestDenied:z.literal(true),serviceRestDenied:z.literal(true),graphqlDenied:z.literal(true),rpcDenied:z.literal(true),evidenceUrl:secureUrl}).strict();
+const dataApiPosture=z.union([legacyDataApiPosture,legacyDataApiPosture.extend({version:z.literal(2),configurationObservation:dataApiConfigurationObservationSchema}).strict()]);
 const manifestSchema = z.object({
   version: z.literal(2), environment: z.enum(['staging', 'production']), commitSha: sha, ciRunId: z.string().regex(/^\d+$/), verifiedAt: z.iso.datetime(),
   api: apiDependency, worker: workerDependency,
@@ -45,7 +47,7 @@ export function validateReleaseManifest(value: unknown, expected: { sha: string;
   const result = manifestSchema.parse(value); const verifiedAt = Date.parse(result.verifiedAt);
   if (result.commitSha !== expected.sha || result.api.commitSha !== expected.sha || result.worker.commitSha !== expected.sha || result.environment !== expected.environment || result.ciRunId !== expected.ciRunId) throw Error('Release identity is not the verified dependency commit.');
   if (verifiedAt > expected.now || expected.now - verifiedAt > 86400000) throw Error('Release dependency evidence must be current within 24 hours.');
-  const exposure=result.database.dataApi,exposureVerifiedAt=Date.parse(exposure.verifiedAt);
+  const exposure=result.database.dataApi;if('version'in exposure)validateDisabledDataApiConfigurationEvidence(exposure.configurationObservation.evidence,{projectRef:exposure.projectRef,sourceSha:exposure.commitSha,treeSha:exposure.configurationObservation.evidence.treeSha,now:expected.now});const exposureVerifiedAt=Date.parse(exposure.verifiedAt);
   if(exposure.projectRef!==result.database.projectRef||exposure.commitSha!==expected.sha||exposureVerifiedAt>expected.now||expected.now-exposureVerifiedAt>86400000)throw Error('Data API disabled posture must bind current exact-project source and observed endpoint denials.');
   if (result.publicConfig.apiUrl !== result.api.origin || new URL(result.publicConfig.supabaseUrl).hostname !== `${result.database.projectRef}.supabase.co`) throw Error('Public endpoints do not match the approved dependencies.');
   if (result.worker.kind === 'supabase-edge' && result.worker.projectRef !== result.database.projectRef) throw Error('Edge worker must use the approved database project.');

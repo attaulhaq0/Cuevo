@@ -14,6 +14,14 @@ const evidenceSchema = z.object({
   observedAt: stamp, verifiedAt: stamp, expiresAt: stamp, effectAuthority: z.literal(false), hostedAcceptance: z.literal(false),
 }).strict();
 export type DataApiConfigurationEvidence = z.infer<typeof evidenceSchema>;
+export const dataApiConfigurationObservationSchema = z.object({ evidence: evidenceSchema.extend({ configurationState: z.literal('DISABLED') }).strict(), sha256: digest }).strict().superRefine((value, context) => {
+  if (hash(canonicalReleaseExecutionJson(value.evidence)) !== value.sha256 || value.evidence.configurationValueSha256 !== hash(canonicalReleaseExecutionJson(''))) context.addIssue({ code: 'custom', message: 'Configuration observation identity requires review.' });
+});
+export type DataApiConfigurationObservation = z.infer<typeof dataApiConfigurationObservationSchema>;
+const manualEvidenceSchema = z.object({ sourceSha: sha, projectRef: project, dataApi: z.literal('DISABLED'), observer: z.string().min(1), status: z.literal('OBSERVED_PROVIDER_UI'), visibleText: z.literal('Data API is disabled'), observedAt: stamp, source: z.string() }).strict();
+export type DisabledDataApiConfigurationProof = { basis: 'AUTHENTICATED_DASHBOARD'; evidence: z.infer<typeof manualEvidenceSchema> } | { basis: 'SUPABASE_MANAGEMENT_POSTGREST_CONFIG'; observation: DataApiConfigurationObservation };
+export type DataApiConfigurationReceiptFields = { configurationEvidenceObservedManual: true; configurationObservation?: never } | { configurationEvidenceObservedManual: false; configurationObservation: DataApiConfigurationObservation };
+export const dataApiReceiptFields = { version: z.literal(2).optional(), configurationEvidenceObservedManual: z.boolean(), configurationObservation: dataApiConfigurationObservationSchema.optional(), configurationEvidenceSha256: digest.optional() };
 export type DataApiConfigurationInput = z.infer<typeof inputSchema>;
 export type DataApiConfigurationPorts = { admit(): Promise<unknown>; transport?: typeof fetch; now?: () => number; signal?: AbortSignal };
 const fail = () => Error('Data API configuration observation requires review; private contents withheld.');
@@ -41,6 +49,49 @@ export function validateDataApiConfigurationEvidence(value: unknown, expectedVal
       || result.configurationState === 'ENABLED' && result.configurationValueSha256 === hash(canonicalReleaseExecutionJson(''))) throw fail();
     return result;
   } catch { throw fail(); }
+}
+export function validateDisabledDataApiConfigurationEvidence(value: unknown, expectedValue: unknown): DisabledDataApiConfigurationProof {
+  try {
+    const expected = expectedSchema.parse(snapshot(expectedValue)), selected = snapshot(value);
+    if (selected && typeof selected === 'object' && Object.hasOwn(selected, 'status')) {
+      const evidence = manualEvidenceSchema.parse(selected), at = Date.parse(evidence.observedAt);
+      if (evidence.projectRef !== expected.projectRef || evidence.sourceSha !== expected.sourceSha || evidence.source !== `https://supabase.com/dashboard/project/${expected.projectRef}/integrations/data_api/settings` || at > expected.now || expected.now - at > 3600000) throw fail();
+      return { basis: 'AUTHENTICATED_DASHBOARD', evidence };
+    }
+    const evidence = validateDataApiConfigurationEvidence(selected, expected);
+    if (evidence.configurationState !== 'DISABLED') throw fail();
+    return { basis: 'SUPABASE_MANAGEMENT_POSTGREST_CONFIG', observation: dataApiConfigurationObservationSchema.parse({ evidence, sha256: hash(canonicalReleaseExecutionJson(evidence)) }) };
+  } catch { throw fail(); }
+}
+export function dataApiConfigurationReceiptFields(proof: DisabledDataApiConfigurationProof): DataApiConfigurationReceiptFields {
+  return proof.basis === 'AUTHENTICATED_DASHBOARD' ? { configurationEvidenceObservedManual: true } : { configurationEvidenceObservedManual: false, configurationObservation: dataApiConfigurationObservationSchema.parse(snapshot(proof.observation)) };
+}
+/** Reserved provider fields cannot downgrade through historical passthrough. */
+export function validateDataApiReceiptFields(value: unknown, expectedValue?: unknown) {
+  try {
+    const raw = snapshot(value) as Record<string, unknown>, fields = z.object(dataApiReceiptFields).parse(raw);
+    if (fields.version === undefined) {
+      if (fields.configurationEvidenceObservedManual !== true || ['configurationObservation', 'configurationEvidenceSha256'].some(key => Object.hasOwn(raw, key))) throw fail();
+      return;
+    }
+    if (fields.configurationEvidenceObservedManual !== false || !fields.configurationObservation || !fields.configurationEvidenceSha256) throw fail();
+    const evidence = fields.configurationObservation.evidence;
+    validateDisabledDataApiConfigurationEvidence(evidence, expectedValue ?? { projectRef: raw.projectRef, sourceSha: raw.sourceSha, treeSha: evidence.treeSha, now: Date.parse(String(raw.observedAt ?? raw.createdAt)) });
+  } catch { throw fail(); }
+}
+/** Current admission remains caller-owned. Its repeated reads cannot renew the
+ * original metadata receipt or turn configuration metadata into effect authority. */
+export async function observeDisabledDataApiConfiguration(value: { projectRef: string; sourceSha: string; treeSha: string; token: string; expiresAt: string }, admission: () => Promise<unknown>, signal?: AbortSignal) {
+  const input = inputSchema.parse(snapshot({ projectRef: value.projectRef, sourceSha: value.sourceSha, treeSha: value.treeSha, token: value.token }));
+  let original: z.infer<typeof metadataSchema> | undefined,originalPackage:string|undefined;
+  const result = await readDataApiConfiguration(input, { signal, admit: async () => {
+    const current=await admission(); const admitted=z.object({observedAt:stamp,approval:z.object({packageSha256:digest}).passthrough(),expected:z.object({releaseSha:sha,treeSha:sha,targets:z.object({supabase:z.object({projectRef:project})})})}).passthrough().parse(snapshot(current));if(admitted.expected.releaseSha!==input.sourceSha||admitted.expected.treeSha!==input.treeSha||admitted.expected.targets.supabase.projectRef!==input.projectRef)throw fail();if(originalPackage!==undefined&&originalPackage!==admitted.approval.packageSha256)throw fail();originalPackage=admitted.approval.packageSha256;const at=Date.parse(admitted.observedAt);
+    if(Date.parse(admitted.observedAt)>Date.now()||Date.now()-Date.parse(admitted.observedAt)>3600000)throw fail();if (!original) original = metadataSchema.parse({ status: 'CURRENT_METADATA_ONLY', projectRef: input.projectRef, sourceSha: input.sourceSha, treeSha: input.treeSha, observedAt: new Date(at).toISOString(), expiresAt: new Date(Math.min(Date.parse(value.expiresAt), at + 3600000)).toISOString() });
+    return original;
+  } });
+  const proof = validateDisabledDataApiConfigurationEvidence(result.evidence, { projectRef: input.projectRef, sourceSha: input.sourceSha, treeSha: input.treeSha, now: Date.now() });
+  if (proof.basis !== 'SUPABASE_MANAGEMENT_POSTGREST_CONFIG') throw fail();
+  return proof.observation;
 }
 function race<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {

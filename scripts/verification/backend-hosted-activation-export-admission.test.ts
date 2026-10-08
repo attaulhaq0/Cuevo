@@ -4,6 +4,7 @@ import {test} from 'node:test';
 import {createRequire} from 'node:module';
 import type {Readable} from 'node:stream';
 import {prepareBackendReleaseIntent} from './backend-release-contracts';
+import {providerWorkerExportFixture} from './backend-hosted-activation-export.fixture';
 import {canonicalReleaseExecutionJson} from './release-review';
 const sha='a'.repeat(40),tree='b'.repeat(40),base='c'.repeat(40),project='abcdefghijklmnopqrst',wakeKey='d'.repeat(64),created='2026-10-07T12:00:00Z',execution='2026-10-07T12:01:00Z',closed='2026-10-07T12:01:01Z',now=Date.parse('2026-10-08T12:00:00Z');
 const rawHash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex'),hash=(value:unknown)=>rawHash(canonicalReleaseExecutionJson(value)),bytes=(value:unknown)=>Buffer.from(canonicalReleaseExecutionJson(value)+'\n');
@@ -103,3 +104,6 @@ test('native wrapper refuses foreign signed-host redirects and credential canari
   const {now:_now,...selection}=value.selection;void _now;await assert.rejects(api.readOriginalWorkerActivationExecutionAdmission({...selection,githubToken:token}),error=>!String(error).includes(token));
  }}finally{globalThis.fetch=originalFetch;Date.now=originalNow;}
 });
+
+
+test('official original approval admits provider version two without converting it to manual evidence',async()=>{const api=await subject(),value=await officialFixture(),contracts=await import('./backend-hosted-activation-export-contracts'),fixture=providerWorkerExportFixture(),exported=contracts.createOriginalWorkerActivationExecutionExport(fixture);const result=api.validateOriginalWorkerActivationExecutionApproval({...value.run,updated_at:exported.envelope.exportedAt},[{...value.approvals[0],comment:fixture.preparedApproval.comment}],exported.envelope,now);assert.equal(result.envelope.version,2);assert.equal(result.envelope.originalActivation.configurationEvidenceObservedManual,false);assert.equal(result.effectAuthority,false);});

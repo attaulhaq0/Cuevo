@@ -84,3 +84,16 @@ for (const heldAdmission of [1, 2]) test(`held metadata admission ${heldAdmissio
     assert.equal(published, false); assert.equal(calls.length, heldAdmission === 1 ? 0 : 2);
   });
 });
+
+test('disabled evidence discriminator preserves manual context and reports truthful Management receipt identity', async () => {
+  const api = await subject(); await fixture(async ports => {
+    const observed = await api.readDataApiConfiguration(input, ports), expected = { projectRef: project, sourceSha: source, treeSha: tree, now: clock };
+    const provider = api.validateDisabledDataApiConfigurationEvidence(observed.evidence, expected), fields = api.dataApiConfigurationReceiptFields(provider);
+    assert.equal(fields.configurationEvidenceObservedManual, false); assert.equal(fields.configurationObservation?.sha256, observed.sha256);
+    const manual = { sourceSha: source, projectRef: project, dataApi: 'DISABLED', observer: 'Authenticated operator', status: 'OBSERVED_PROVIDER_UI', visibleText: 'Data API is disabled', observedAt: new Date(clock).toISOString(), source: `https://supabase.com/dashboard/project/${project}/integrations/data_api/settings` };
+    assert.deepEqual(api.dataApiConfigurationReceiptFields(api.validateDisabledDataApiConfigurationEvidence(manual, expected)), { configurationEvidenceObservedManual: true });
+    for (const value of [{ ...manual, configurationObservation: fields.configurationObservation }, { ...observed.evidence, source: 'AUTHENTICATED_DASHBOARD' }, { ...observed.evidence, configurationState: 'UNKNOWN' }]) assert.throws(() => api.validateDisabledDataApiConfigurationEvidence(value, expected));
+  });
+});
+
+test('current disabled observer keeps the actual original admitted clock and refuses package drift',async()=>{const api=await subject(),fetcher=globalThis.fetch,now=Date.now(),metadataAt=new Date(now-1000).toISOString(),expected={releaseSha:source,treeSha:tree,targets:{supabase:{projectRef:project}}};try{globalThis.fetch=async(raw,options)=>{assert.equal(String(raw),url);assert.equal(options?.method,'GET');const response=Response.json({db_schema:'',jwt_secret:jwt});Object.defineProperty(response,'url',{value:url});return response;};const result=await api.observeDisabledDataApiConfiguration({...input,expiresAt:new Date(now+60000).toISOString()},async()=>({expected,observedAt:metadataAt,approval:{packageSha256:'c'.repeat(64)}}));assert.equal(result.evidence.metadataObservedAt,metadataAt);assert.equal(result.evidence.effectAuthority,false);let admission=0;await assert.rejects(api.observeDisabledDataApiConfiguration({...input,expiresAt:new Date(now+60000).toISOString()},async()=>({expected,observedAt:metadataAt,approval:{packageSha256:(++admission===1?'c':'d').repeat(64)}})));}finally{globalThis.fetch=fetcher;}});
