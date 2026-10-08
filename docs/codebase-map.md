@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+The [current-source PR11 reconciliation plan](superpowers/plans/2026-10-08-pr11-current-reconciliation.md) preserves unique Home Parent heading, Progress incomplete-snapshot, Improvement Arabic ratio and Shell/Student reflow fixes in their existing owners. Units remain colocated and actual-component browser cases stay in tests/e2e. Old branch verification is separate from integrated and hosted UI acceptance.
+
 The existing native database owner keeps [official authority before fresh native proof](decisions/2026-10-08-native-proof-after-authority.md). Reconciliation receipts/permit refresh use new complete observations after awaited official checks; historical clocks and original uncertainty remain immutable.
 
 Native permit authority pairing remains inside hosted-migration-database.ts's private registry. Executor revalidation consumes its bound original official admission through `readNativeMigrationPermitAuthority` with unchanged source/package checks; no duplicate authority read occurs after refresh. Ordinary nonpermit execution retains its official reader. Paired evidence is native-only, identity/freshness checked and never supplied by caller JSON.

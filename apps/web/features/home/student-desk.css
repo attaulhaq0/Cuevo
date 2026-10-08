@@ -58,7 +58,7 @@
 .student-trail__stage-art { inline-size:2rem; block-size:2rem; position:relative; grid-row:1 / span 2; }
 .student-trail__stage-art img { inline-size:100%; block-size:100%; }
 .student-trail__stage strong { font-size:var(--type-sm); line-height:1.3; overflow-wrap:anywhere; }
-.student-trail__stage-status { font-size:var(--type-xs); color:var(--color-text-secondary); grid-column:2; line-height:1.35; }
+.student-trail__stage-status { min-inline-size:0; overflow-wrap:anywhere; font-size:var(--type-xs); color:var(--color-text-secondary); grid-column:2; line-height:1.35; }
 .student-trail__complete { position:absolute; inset-inline-end:-.2rem; inset-block-start:0; background:var(--color-positive); color:var(--color-on-accent); border-radius:var(--radius-pill); }
 .student-trail__complete svg { inline-size:1rem; block-size:1rem; }
 .student-trail__panel { min-inline-size:0; padding:var(--space-3); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-material-reading); }
@@ -162,6 +162,7 @@
 @media(max-width:540px) { .student-trail__content { padding-inline:var(--space-3); } .student-trail__notice { flex-wrap:wrap; } .student-trail__current { grid-template-columns:minmax(0,1fr); padding:var(--space-3); } .student-trail__task-art { inline-size:min(12rem,100%); justify-self:center; block-size:6rem; } .student-trail__stages { grid-template-columns:repeat(2,minmax(0,1fr)); } .student-trail__bottom-row { grid-template-columns:minmax(0,1fr); } .student-trail__period-control .field { grid-template-columns:minmax(0,1fr); } .student-trail__teacher,.student-trail__upcoming-task { flex-wrap:wrap; } }
 @media(max-width:767px) { .student-trail__foxi-crop { inline-size:50%; } }
 @media(max-width:600px) { .student-trail__feedback-actions { display:block; } .student-trail__feedback-actions > .button { inline-size:100%; } }
+@media(max-width:540px) { .student-trail__stages { grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr)); } }
 
 /* Home previews lead to existing period and reflection readers. Equal desktop ends use their current actions, never filler. */
 .student-trail__bottom-row--compact { grid-template-columns:minmax(0,.6fr) minmax(0,1.4fr); align-items:stretch; }
