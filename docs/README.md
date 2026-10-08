@@ -1,5 +1,7 @@
 # Cuevo documentation
 
+Current release repair: [safe native diagnostics and measured CI budget](decisions/2026-10-08-safe-release-preflight-and-ci-budget.md) separates complete source contracts from lint/types/units and retains native recovery uncertainty. Its [plan](superpowers/plans/2026-10-08-safe-release-preflight-and-ci-budget.md) records remaining protected integration and hosted milestones.
+
 For product requirements start with [product context](product/README.md) and its [task reading guide](product/context-map.md). For implementation navigation read [codebase-map.md](codebase-map.md). Root [AGENTS.md](../AGENTS.md) governs all contributors and agents; [repository-layout.md](architecture/repository-layout.md) governs placement/dependencies.
 
 | Need | Read |

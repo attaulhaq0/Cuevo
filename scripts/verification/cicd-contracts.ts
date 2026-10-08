@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { z } from 'zod';
-import {validateCiRuntimeJobs,runtimeLaneArtifactStep} from './verification-workflows';
+import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep} from './verification-workflows';
 import { canonicalReleaseReviewJson } from './release-review';
 import { verificationSteps } from './steps';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown };
@@ -147,11 +147,12 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     }
   }
   const ciJobs = mapping(ci.jobs); const technical = mapping(ciJobs['technical-mvp']); const steps = list(technical.steps).map(mapping);
-  for (const owner of ['fast-checks', 'technical-mvp','runtime-backend','runtime-browser']) {
+  for (const owner of ['fast-checks','source-contracts','technical-mvp','runtime-backend','runtime-browser']) {
     const checkouts = list(mapping(ciJobs[owner]).steps).map(mapping).filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
     if (checkouts.length !== 1 || mapping(checkouts[0]?.with)['fetch-depth'] !== 0 || checkouts[0]?.if !== undefined || checkouts[0]?.['continue-on-error'] !== undefined) issues.push(`${owner} verification requires one unconditional complete-history checkout for canonical source checks.`);
   }
   issues.push(...validateCiRuntimeJobs(ciJobs));
+  issues.push(...validateCiSourceJobs(ciJobs));
   if (!steps.some(step => step.if === 'always()' && step.run === 'node --import tsx scripts/verification/cicd-evidence.ts')) issues.push('Safe evidence must export even on failure.');
   if (JSON.stringify(ci).includes('secrets.')) issues.push('PR verification must not receive external secrets.');
   const codeql = mapping(ciJobs.codeql), codeqlSteps = list(codeql.steps).map(mapping);
@@ -165,7 +166,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     || mapping(codeqlSteps[analyzerIndex]?.with)['wait-for-processing'] !== true || codeqlSteps[alertIndex]?.if !== undefined || codeqlSteps[alertIndex]?.['continue-on-error'] !== undefined
     || mapping(codeqlSteps[alertIndex]?.env).GH_TOKEN !== '${{ github.token }}' || mapping(codeqlSteps[alertIndex]?.env).CUEVO_CODEQL_SARIF_ID !== '${{ steps.codeql-analyze.outputs.sarif-id }}') issues.push('CodeQL must gate current processed same-job security findings without skips.');
   const required = mapping(ciJobs.required);
-  if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks', 'technical-mvp', 'dependency-review', 'codeql', 'secret-scan']) || required.if !== 'always()') issues.push('Required status must include all verification jobs, including secret scan.');
+  if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks','source-contracts','technical-mvp','dependency-review','codeql','secret-scan']) || required.if !== 'always()') issues.push('Required status must include all verification jobs, including source contracts and secret scan.');
   const secretScan = mapping(ciJobs['secret-scan']); const secretSteps = list(secretScan.steps).map(mapping);
   const secretCheckout = secretSteps.filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
   if (secretScan.if !== undefined || secretScan['continue-on-error'] !== undefined || secretScan['runs-on'] !== 'ubuntu-latest'
@@ -173,6 +174,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     || !secretSteps.some(step => step.run === 'node --import tsx scripts/verification/secret-scan.ts')
     || secretSteps.some(step => step.if !== undefined || step['continue-on-error'] !== undefined)) issues.push('Required secret scan must run the pinned scanner on complete history without skip or waiver.');
   const aggregate = list(required.steps).map(mapping).find(step => step.name === 'Require every verification boundary');
+  if (mapping(aggregate?.env).SOURCE_CONTRACTS !== '${{ needs.source-contracts.result }}' || !String(aggregate?.run).includes('[ "$SOURCE_CONTRACTS" != success ]')) issues.push('Required aggregate must fail unless source contracts succeed.');
   if (mapping(aggregate?.env).SECRET_SCAN !== '${{ needs.secret-scan.result }}' || !String(aggregate?.run).includes('[ "$SECRET_SCAN" != success ]')) issues.push('Required aggregate must fail unless secret scan succeeds.');
   if (mapping(release.concurrency)['cancel-in-progress'] !== false) issues.push('Unsafe release concurrency.');
   if (mapping(release.concurrency).group !== 'cuevo-release-${{ inputs.environment }}') issues.push('Manual releases must serialize by protected environment.');

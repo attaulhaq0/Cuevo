@@ -50,6 +50,19 @@ test('reviewed schema continuation fixtures run once in their required replay an
  }
 });
 
+test('isolated source-contract placement preserves complete stateless inventory without a runtime operation',()=>{
+ const repo=resolve(import.meta.dirname,'../..'),ci=readFileSync(resolve(repo,'.github/workflows/ci.yml'),'utf8');
+ const source=ci.slice(ci.indexOf('\n  source-contracts:'),ci.indexOf('\n  runtime-backend:'));
+ const fast=ci.slice(ci.indexOf('\n  fast-checks:'),ci.indexOf('\n  source-contracts:'));
+ assert.equal(source.split('node --import tsx scripts/verification/stateless-checks.ts').length-1,1);
+ assert.equal(fast.includes('stateless-checks.ts'),false);
+ assert.equal(fast.split('npm run lint && npm run typecheck && npm test').length-1,1);
+ const files=statelessVerificationSteps.flatMap(step=>[...step.args]).filter(argument=>argument.endsWith('.test.ts'));
+ assert.equal(new Set(files).size,files.length);
+ for(const step of statelessVerificationSteps)assert.ok(verificationSteps.some(original=>original===step),step.name);
+ for(const name of ['database','integration','browser','runtime-outage','recovery','clean-bootstrap'])assert.equal(statelessVerificationSteps.some(step=>step.name===name),false,name);
+});
+
 test('every bootstrapped verification failure restores only after confirmed owned runtime stop', async () => {
  const rules = await import('./rules');
  assert.equal(typeof rules.restoreTechnicalState, 'function');
