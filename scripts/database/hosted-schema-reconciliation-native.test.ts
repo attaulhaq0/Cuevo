@@ -131,11 +131,11 @@ test('controlled held protocol consumes the original three files once and commit
 });
 
 test('controlled native Storage body deadline refuses a stalled read even when cancellation never settles',async context=>{
- await reset();const fetcher=globalThis.fetch;let bodyStarted=false,cancelled=false;
+ await reset();const fetcher=globalThis.fetch;let cancelled=false,started!:()=>void;const bodyStarted=new Promise<void>(done=>{started=done;});
  context.mock.timers.enable({apis:['setTimeout']});
- globalThis.fetch=async(raw,options)=>{const path=new URL(String(raw)).pathname;if(path.includes('/object/cuevo-release-operator/')){bodyStarted=true;return new Response(new ReadableStream({cancel(){cancelled=true;return new Promise(()=>{});}}));}return fetcher(raw,options);};
+ globalThis.fetch=async(raw,options)=>{const path=new URL(String(raw)).pathname;if(path.includes('/object/cuevo-release-operator/')){started();return new Response(new ReadableStream({cancel(){cancelled=true;return new Promise(()=>{});}}));}return fetcher(raw,options);};
  const pending=locked(db=>db.reconcileUnknownPrefix(request()).then(()=>undefined)).then(()=>false,error=>error instanceof Error&&!error.message.includes('controlled-private-db-password'));
- try{for(let turn=0;turn<100&&!bodyStarted;turn++)await new Promise<void>(done=>setImmediate(done));assert.equal(bodyStarted,true);context.mock.timers.tick(15000);assert.equal(await pending,true);assert.equal(cancelled,true);assert.equal(state.creates,0);}
+ try{const observed=await Promise.race([bodyStarted.then(()=>true),pending.then(()=>false)]);assert.equal(observed,true);await new Promise<void>(done=>setImmediate(done));context.mock.timers.tick(15000);assert.equal(await pending,true);assert.equal(cancelled,true);assert.equal(state.creates,0);}
  finally{globalThis.fetch=fetcher;context.mock.timers.reset();}
 });
 
