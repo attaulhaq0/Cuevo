@@ -57,6 +57,13 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   try { const result = schema.safeParse(JSON.parse(canonicalReleaseReviewJson(value))); if (!result.success) return fail(); return result.data; }
   catch { return fail(); }
 }
+/** The canonical fingerprint envelope and capability agree with the original
+ * package version/scope; database-only nulls never become runtime authority. */
+export function validateBackendReleaseFingerprints(value:unknown,contextValue:unknown){
+ const context=parse(z.object({version:z.union([z.literal(1),z.literal(2)]),executionScope:identity.shape.executionScope}).strict(),contextValue),result=parse(fingerprints,value),runtimeValues=[result.apiArtifactSha256,result.edgeArtifactSha256,result.denoLockSha256],databaseOnly=['schema-and-accounts','reconcile-schema'].includes(context.executionScope??'');
+ if(context.version===2&&databaseOnly?runtimeValues.some(value=>value!==null):runtimeValues.some(value=>value===null))fail();
+ return result;
+}
 function checkIntent(input: BackendReleaseIntent, expected: BackendReleaseExpected) {
   if(canonicalReleaseReviewJson(input.runtimeRollout??null)!==canonicalReleaseReviewJson(expected.runtimeRollout??null))fail();
   if(input.executionScope==='runtime-rollout'){
@@ -64,9 +71,7 @@ function checkIntent(input: BackendReleaseIntent, expected: BackendReleaseExpect
    if(rollout.version===2){if(rollout.executor.sourceSha!==input.releaseSha||rollout.executor.treeSha!==input.treeSha||rollout.executor.runId!==input.releaseRunId||rollout.executor.runAttempt!==input.runAttempt)fail();if(rollout.action==='RECOVER_ORIGINAL'){if(!rollout.recoveryOriginal||rollout.rollbackArtifacts||rollout.recoveryOriginal.runId===input.releaseRunId||rollout.recoveryOriginal.compatibilitySha256!==rollout.desired.compatibilitySha256)fail();}else{if(rollout.recoveryOriginal||!rollout.rollbackArtifacts||rollout.rollbackArtifacts.sourceSha!==rollout.desired.sourceSha||rollout.rollbackArtifacts.treeSha!==rollout.desired.treeSha||rollout.rollbackArtifacts.apiArtifactSha256!==rollout.desired.apiArtifactSha256||rollout.rollbackArtifacts.edgeArtifactSha256!==rollout.desired.edgeArtifactSha256||rollout.rollbackArtifacts.denoLockSha256!==rollout.desired.denoLockSha256)fail();}}
    const{operationSha256:_operation,...operation}=rollout;void _operation;const fingerprint=rollout.version===2&&rollout.action==='RECOVER_ORIGINAL'?{version:1,purpose:rollout.purpose,previous:rollout.previous,desired:rollout.desired}:operation;if(createHash('sha256').update(canonicalReleaseReviewJson(fingerprint)).digest('hex')!==rollout.operationSha256)fail();
   }else if(input.runtimeRollout||expected.runtimeRollout)fail();
-  const runtimeValues=[input.fingerprints.apiArtifactSha256,input.fingerprints.edgeArtifactSha256,input.fingerprints.denoLockSha256];
-  const databaseOnly=['schema-and-accounts','reconcile-schema'].includes(input.executionScope??'');
-  if(input.version===2&&databaseOnly?runtimeValues.some(value=>value!==null):runtimeValues.some(value=>value===null))fail();
+  validateBackendReleaseFingerprints(input.fingerprints,{version:input.version,...(input.executionScope===undefined?{}:{executionScope:input.executionScope})});
   if(canonicalReleaseReviewJson(input.schemaRecovery??null)!==canonicalReleaseReviewJson(expected.schemaRecovery??null))fail();if(input.schemaRecovery&&(!['schema-and-accounts','complete-backend','installed-runtime','pending-runtime-confirmation'].includes(input.executionScope??'')||input.reconciledPrefix||input.executionScope==='installed-runtime'&&!input.installedRuntime&&!input.currentRuntime))fail();
   if(canonicalReleaseReviewJson(input.reconciledPrefix??null)!==canonicalReleaseReviewJson(expected.reconciledPrefix??null))fail();
   if(input.executionScope==='reconcile-schema'){if(!input.reconciledPrefix||input.installedSource||input.installedRuntime)fail();}else if(input.reconciledPrefix)fail();
