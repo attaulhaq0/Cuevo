@@ -1,51 +1,15 @@
-import { createHash } from 'node:crypto';
-import { types } from 'node:util';
-import { z } from 'zod';
-import { hostedOperatorStorageHeaders } from './hosted-operator-storage-policy';
-import { canonicalHostedMigrationPlan, verifyCompletedMigrationPrefix, readHistoricalMigrationSources, verifyPriorSchemaPrefix, type HostedMigrationPlanV1, readCanonicalMigrationSources } from './hosted-migration-plan';
-import { replayPlan, posthogIntelligenceMigration } from './replay-plan';
-import { createHostedMigrationRemoteJournal } from './hosted-migration-remote-journal';
-import type { HostedExecutionJournal } from './hosted-migration-execution';
-import {deriveHostedMigrationBatches} from './hosted-migration-batches';
-import type {HostedMigrationBatchStage} from './hosted-migration-batches';
+import {createHash} from 'node:crypto';
+import {types} from 'node:util';
+import {z} from 'zod';
+import {hostedOperatorStorageHeaders} from './hosted-operator-storage-policy';
+import {createHostedMigrationRemoteJournal} from './hosted-migration-remote-journal';
 import {assertNativeReconciliationPermit} from './hosted-migration-database';
-
+import {schema,countsSchema,bucketSchema,objectSchema,own,same,validTimestamp,sourcePolicy,type HostedOperatorStorageInventory} from './hosted-operator-storage-observation';
+export {nativeHostedOperatorStorageCountsSchema,nativeHostedOperatorStorageBucketsSchema,nativeHostedOperatorStorageObjectsSchema,nativeHostedOperatorStorageBucketPolicy,prepareNativeHostedOperatorStorageInventory} from './hosted-operator-storage-observation';
+export type {HostedOperatorStorageInventory,NativeHostedOperatorStorageSnapshot} from './hosted-operator-storage-observation';
 const bucket='cuevo-release-operator',failure=()=>Error('Hosted operator Storage inventory, source or metadata requires review; contents withheld.');
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
-const digest=z.string().regex(/^[a-f0-9]{64}$/),sha=z.string().regex(/^[a-f0-9]{40}$/),ref=z.string().regex(/^[a-z]{20}$/),version=z.string().regex(/^[0-9]{14}$/);
-const token=z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/).refine(v=>!v.startsWith('sb_publishable_'));
-const identity=z.object({projectRef:ref,sourceSha:sha,treeSha:sha,planSha256:digest,stageId:z.enum(['prefix','native','pre-observability','remaining']),stageSha256:digest,databaseUrl:z.string().max(400),approvalDigest:digest,ciRunId:z.string().regex(/^[1-9][0-9]*$/).max(30),certificateSha256:digest}).strict();
-const schema=z.object({repoRoot:z.string(),sourceSha:sha,treeSha:sha,projectRef:ref,boundProjectRef:ref,providerToken:token,storageKey:token,identity,expectedVersions:z.array(version).max(1000),plan:z.unknown().optional(),batchStage:z.unknown().optional(),batchIndex:z.number().int().positive().optional()}).strict();
-const count=z.union([z.number().int().nonnegative().max(1000),z.string().regex(/^(0|[1-9][0-9]*)$/).refine(v=>Number(v)<=1000)]).transform(Number);
-const countsSchema=z.object({bucketCount:count,totalObjects:count,operatorObjects:count,otherObjects:count,invalidOperatorPaths:count}).strict();
-const bucketSchema=z.object({id:z.string().max(100),name:z.string().max(100),public:z.boolean(),type:z.string().max(30),file_size_limit:z.number().int().positive(),allowed_mime_types:z.array(z.string().max(100)).max(10)}).strict();
-const objectSchema=z.object({id:z.uuid(),name:z.string().max(200),version:z.string().min(1).max(100),size:z.string().regex(/^[1-9][0-9]*$/).refine(v=>Number(v)<=49152),mimetype:z.literal('application/json'),createdAt:z.string().min(1).max(100),updatedAt:z.string().min(1).max(100)}).strict();
-export type HostedOperatorStorageInventory={evidence:'VERIFIED_INITIAL_OPERATOR_STORAGE_INVENTORY';projectRef:string;sourceSha:string;treeSha:string;approvalDigest:string;ciRunId:string;planSha256:string;stageId:HostedExecutionJournal['identity']['stageId'];stageSha256:string;expectedVersionsSha256:string;observedAtMs:number;startedAtMs:number;bytesVerificationStartedAtMs:number;bytesVerifiedAtMs:number;countsVerifiedAtMs:number;completedAtMs:number;totalStorageObjects:number;verifiedOperatorObjects:number;applicationStorageObjects:0;bucketMetadataSha256:string;objectSetSha256:string;remoteProjectSha256:string;operations:{operation:string;state:'INTENT'|'COMMITTED'|'REQUIRES_REVIEW'|'OWNER_ONLY';identity:HostedExecutionJournal['identity'];identitySha256:string;chainSha256:string;objectCount:number}[]};
-function own(value:unknown,depth=0):unknown{
- if(depth>12)throw failure();if(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return value;
- if(!value||typeof value!=='object'||types.isProxy(value)||!Array.isArray(value)&&![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw failure();
- if(Array.isArray(value)){if(value.length>1000||Reflect.ownKeys(value).length!==value.length+1)throw failure();for(let i=0;i<value.length;i++){const field=Object.getOwnPropertyDescriptor(value,String(i));if(!field||!('value'in field)||!field.enumerable)throw failure();}}
- const output:Record<string,unknown>|unknown[]=Array.isArray(value)?[]:Object.create(null);for(const key of Reflect.ownKeys(value)){if(Array.isArray(value)&&key==='length')continue;const field=Object.getOwnPropertyDescriptor(value,key);if(typeof key!=='string'||!field||!('value'in field)||!field.enumerable)throw failure();Object.defineProperty(output,key,{value:own(field.value,depth+1),enumerable:true});}return output;
-}
-const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
-/** Every bounded read settles before refusal; no sibling remains behind a returned result. */
-async function readWave<const T extends readonly unknown[]>(requests:{[K in keyof T]:Promise<T[K]>}):Promise<T>{
- const results=await Promise.allSettled(requests);if(results.some(result=>result.status==='rejected'))throw failure();
- return results.map(result=>{if(result.status!=='fulfilled')throw failure();return result.value;}) as unknown as T;
-}
-function validTimestamp(value:string){if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{6}Z$/.test(value))return false;const date=new Date(value);return Number.isFinite(date.getTime())&&date.toISOString().slice(0,19)===value.slice(0,19);}
-function sourcePolicy(input:z.infer<typeof schema>){
- const loaded=readCanonicalMigrationSources(input),replay=replayPlan(loaded.sources),names=[...replay.before,replay.prerequisite,...replay.remaining],all=names.map(n=>n.slice(0,14)),stop=replay.remaining.indexOf(posthogIntelligenceMigration);
- const supplied=input.plan===undefined?undefined:JSON.parse(canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1).json) as HostedMigrationPlanV1;
- if(supplied&&(supplied.source.sha!==input.sourceSha||supplied.source.tree!==input.treeSha||supplied.projectRef!==input.projectRef||canonicalHostedMigrationPlan(supplied).sha256!==input.identity.planSha256||!(supplied.priorSchemaRelease?verifyPriorSchemaPrefix(input.repoRoot,supplied):verifyCompletedMigrationPrefix(input.repoRoot,supplied))))throw failure();
- const boundaries=[0,replay.before.length,replay.before.length+1,replay.before.length+1+stop,all.length].map(n=>Math.max(n,supplied?.applied.length??0));if(stop<0||new Set(input.expectedVersions).size!==input.expectedVersions.length||!boundaries.includes(input.expectedVersions.length)&&!input.batchStage||!same([...input.expectedVersions].sort(),all.slice(0,input.expectedVersions.length).sort()))throw failure();
- const stageIndex=['prefix','native','pre-observability','remaining'].indexOf(input.identity.stageId);if(input.batchStage){if(!supplied||!input.batchIndex)throw failure();const parent=input.batchStage as HostedMigrationBatchStage,completedSource=supplied.priorCompletedRelease&&parent.expectedBeforeVersions.length===supplied.priorCompletedRelease.migrationCount?readHistoricalMigrationSources(input.repoRoot,supplied.priorCompletedRelease.sourceSha,supplied.priorCompletedRelease.treeSha):undefined,derived=deriveHostedMigrationBatches({sources:loaded.sources,stage:parent,...(completedSource?{completedSource}:{}),...(supplied.reconciliationTemplate?{reconciliationTemplate:supplied.reconciliationTemplate}:{})}),child=derived.batches[input.batchIndex-1];if(!child||parent.id!==input.identity.stageId||derived.stageSha256!==input.identity.stageSha256||![child.expectedBeforeVersions,child.expectedAfterVersions].some(versions=>same(versions,[...input.expectedVersions].sort())))throw failure();}else if(![boundaries[stageIndex],boundaries[stageIndex+1]].includes(input.expectedVersions.length)||input.batchIndex)throw failure();
- const original=loaded.sources.find(s=>s.name==='20261001091554_private_asset_implementation.sql'),tightened=loaded.sources.find(s=>s.name==='20261001094217_private_asset_semantic_integrity.sql');
- if(!original||!tightened||hash(original.bytes)!=='5f9cef3b0f4e94decb55142a9adebf0452d9102d7139c4691f6bad1dd0a34f14'||hash(tightened.bytes)!=='a924f633d282b61bff17b50f646e288d05b59287c6fb560a3b665194e7ea0068')throw failure();
- const expected=[{id:bucket,name:bucket,public:false,type:'STANDARD',file_size_limit:49152,allowed_mime_types:['application/json']}];
- if(input.expectedVersions.includes('20261001091554'))expected.push({id:'learner-private',name:'learner-private',public:false,type:'STANDARD',file_size_limit:input.expectedVersions.includes('20261001094217')?524288:2097152,allowed_mime_types:['text/plain','image/png','image/jpeg','application/pdf']});
- return expected.sort((a,b)=>a.id.localeCompare(b.id));
-}
+async function readWave<const T extends readonly unknown[]>(requests:{[K in keyof T]:Promise<T[K]>}):Promise<T>{const results=await Promise.allSettled(requests);if(results.some(result=>result.status==='rejected'))throw failure();return results.map(result=>{if(result.status!=='fulfilled')throw failure();return result.value;}) as unknown as T;}
 /** Read-only exact initial operator-object inventory. Caller retains current
  * source/approval/DB-lease authority; this receipt is not private ACL proof. */
 export async function readHostedOperatorStorageInventory(value:unknown):Promise<HostedOperatorStorageInventory>{
