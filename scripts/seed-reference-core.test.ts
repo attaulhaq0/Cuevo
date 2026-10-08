@@ -56,6 +56,13 @@ test('unknown original reference receipt rolls back before any new domain source
  assert.equal(queries.at(-1),'ROLLBACK');assert.equal(queries.includes('COMMIT'),false);assert.equal(queries.some(sql=>/insert into|internal.begin_command|internal.configure_curriculum/i.test(sql)),false);
 });
 
+test('reference transaction re-admits after the awaited original receipt read before its first mutation',async()=>{
+ const queries:string[]=[];let current=true,admissions=0;
+ const client={query:async(sql:string)=>{queries.push(sql);if(sql.includes('populationMatches'))return{rows:[admission]};return{rows:[]};}} as unknown as PoolClient;
+ await assert.rejects(scenarios.seedReferenceScenarioTransaction(client,{read:async()=>{await Promise.resolve();current=false;return null;},beforeWrite:()=>{admissions++;if(!current)throw Error('Original execution authority expired during receipt read');},complete:async()=>{throw Error('No receipt permitted');}}),/authority expired/);
+ assert.equal(admissions,1);assert.equal(queries.at(-1),'ROLLBACK');assert.equal(queries.some(sql=>/internal.configure_curriculum|internal.begin_command|insert into|set_config\('app.actor_id'/i.test(sql)),false);
+});
+
 function firstCoursePort(reservationState: 'NEW' | 'COMPLETED', failure: Error) {
   const queries: { sql: string; args: unknown[] }[] = [];
   const versions = new Map<string, Record<string, unknown>>();

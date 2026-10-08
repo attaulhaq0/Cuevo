@@ -42,9 +42,9 @@ async function ownedFile(root: string, path: string, maxBytes: number) {
   if (bytes.length > maxBytes || before.ino !== after.ino || before.dev !== after.dev || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw failure();
   return bytes;
 }
-async function record(root: string, filename: string, value: unknown) {
+async function record(root: string, filename: string, value: unknown, canonical = false) {
   const path = join(root, '.local/hosted-release', filename), handle = await open(path, 'wx', 0o600);
-  try { await handle.writeFile(JSON.stringify(value) + '\n'); await handle.sync(); } finally { await handle.close(); }
+  try { await handle.writeFile(canonical ? canonicalReleaseExecutionJson(value) : JSON.stringify(value) + '\n'); await handle.sync(); } finally { await handle.close(); }
 }
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
@@ -80,7 +80,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
       if(scope.executionScope!=='reconcile-schema'||privateNames.some(key=>!!env[key])||env.GH_TOKEN||env.SUPABASE_ACCESS_TOKEN)throw failure();
       const result=z.object({status:z.literal('COMMITTED'),recoveryCompletion:z.unknown(),protocol:z.object({status:z.literal('COMMITTED'),commitment:z.literal('CONFIRMED'),primaryCode:z.null(),journalCode:z.null(),cleanupCode:z.null()})}).parse(JSON.parse((await ownedFile(repoRoot,join(repoRoot,'.local/hosted-release/schema-result.json'),1024*1024)).toString('utf8')));
       const envelope={version:1,purpose:'CUEVO_BACKEND_SCHEMA_RECOVERY_COMPLETION_EXPORT',completion:result.recoveryCompletion,preparedApproval:bundle.preparedApproval,originalExpected:bundle.expected};
-      validateSchemaRecoveryCompletionExport(envelope,Date.now());await record(repoRoot,'schema-recovery-completion.json',envelope);return{status:'RECOVERY_COMPLETION_EXPORTED',hostedAcceptance:false};
+      validateSchemaRecoveryCompletionExport(envelope,Date.now());await record(repoRoot,'schema-recovery-completion.json',envelope,true);return{status:'RECOVERY_COMPLETION_EXPORTED',hostedAcceptance:false};
     }
     const shared = { repoRoot, expected: bundle.expected, preparedApproval: bundle.preparedApproval, githubToken: required(env, 'GH_TOKEN') };
     const recoveryInputs={...(bundle.schemaRecoveryExport?{schemaRecoveryExport:bundle.schemaRecoveryExport}:{}),...(bundle.schemaRecoverySelection?{schemaRecoverySelection:bundle.schemaRecoverySelection}:{})};
