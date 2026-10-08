@@ -4,11 +4,12 @@ import { processingReceiptOutcome } from './processing-receipt';
 export type BoundedProcessSummary = { processed: number; attempted: number; deferred: number; reviewRequired: boolean; failureReceiptUnknown: boolean; processingReceiptUnknown: boolean; deadlineReached: boolean; executionUnavailable: boolean };
 export class OutboxProcessor{
  private running=false;
- constructor(private readonly pool:WorkerQueryPort,private readonly metric?:(value:DeliveryMetric)=>void){}
+ constructor(private readonly pool:WorkerQueryPort,private readonly metric?:(value:DeliveryMetric)=>void,private readonly generation:string|null=null){}
+ private claim(batch:number){return this.generation===null?this.pool.query('select id,lease_token from internal.claim_outbox($1,$2)',[batch,30]):this.pool.query('select id,lease_token from internal.claim_outbox($1,$2,$3)',[batch,30,this.generation]);}
  async tick(){
   if(this.running)return;this.running=true;
   try{
-   const events=(await this.pool.query('select id,lease_token from internal.claim_outbox($1,$2)',[10,30])).rows;
+   const events=(await this.claim(10)).rows;
    for(const event of events){
     const start=performance.now();let outcome:DeliveryMetric['outcome']='PROCESSING_RECEIPT_UNKNOWN';
     try{const result=await this.pool.query('select internal.process_learner_event($1,$2)',[event.id,event.lease_token]);outcome=processingReceiptOutcome(result);}
@@ -29,7 +30,7 @@ export class OutboxProcessor{
     // Claim, processing and failure receipt each retain the five-second SQL budget.
     if (deadline - now() < 15_000) { summary.deadlineReached = true; break; }
     let rows: WorkerRow[];
-    try { rows = (await this.pool.query('select id,lease_token from internal.claim_outbox($1,$2)', [1, 30])).rows; }
+    try { rows = (await this.claim(1)).rows; }
     catch { summary.executionUnavailable = true; summary.reviewRequired = true; break; }
     if (!rows.length) break;
     if (rows.length !== 1) { summary.executionUnavailable = true; summary.reviewRequired = true; break; }

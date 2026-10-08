@@ -1,9 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import type {Socket} from 'node:net';
 import * as edgeDiagnostics from './edge-worker';
 import { assertEdgeWorkerLocal, assertIdleWorkerDispatch, assertStartedEdgeRuntime, edgeRuntimeConnected, requireOwnedGatewayReload, assertOwnedWorkerEvents, assertOpaqueWake, signedWakeHeaders, ownedCronUnscheduleSql, requireCronRemoval, edgeVerificationFailure, safeEdgeFailureCode, readEdgeInventory, edgeWorkerEvidence, requireEdgeArtifactSource, requireNoAnalyticsActivation, inspectUnsignedWorkerResponse } from './edge-worker';
 const status = { API_URL: 'http://127.0.0.1:56321', DB_URL: 'postgresql://postgres:fixture@127.0.0.1:56322/postgres' };
 const worker = 'postgresql://cuevo_worker:fixture@127.0.0.1:56322/postgres';
+
+test('public denial probes use fresh connections after gateway reload instead of a closed readiness socket',async()=>{
+ const sockets=new Set<Socket>(),readinessSockets=new Set<Socket>(),seen:{path:string;connection:string|undefined;socket:Socket}[]=[];let reloaded=false;
+ const server=createServer((request,response)=>{const path=request.headers['x-fixture-probe'] as string??request.url!;seen.push({path,connection:request.headers.connection,socket:request.socket});if(path==='/ready')readinessSockets.add(request.socket);request.resume();if(reloaded&&readinessSockets.has(request.socket)){request.socket.destroy();return;}response.writeHead(path==='/extra'?400:401,{'Content-Type':'application/json'});response.end(JSON.stringify({code:'WORKER_AUTH_REQUIRED'}));});
+ server.on('connection',socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket));});
+ await new Promise<void>(done=>server.listen(0,'127.0.0.1',done));const address=server.address();assert(address&&typeof address!=='string');const origin=`http://127.0.0.1:${address.port}`;
+ try{
+  const request=async(path:string)=>fetch(origin+path,{method:'POST',body:'{}',signal:AbortSignal.timeout(2000)});await(await request('/ready')).text();await(await request('/ready')).text();reloaded=true;
+  await assert.rejects(request('/wrong'),error=>edgeDiagnostics.safeEdgeTransportCause(error)==='UND_ERR_SOCKET');assert.equal(readinessSockets.has(seen.at(-1)!.socket),true);
+  reloaded=false;readinessSockets.clear();seen.length=0;
+  const probe=(edgeDiagnostics as unknown as {requestPublicEdgeProbe:(url:string,init:RequestInit)=>Promise<Response>}).requestPublicEdgeProbe;assert.equal(typeof probe,'function');
+  for(let count=0;count<2;count++){const response=await probe(origin+'/functions/v1/cuevo-worker',{method:'POST',headers:{'X-Fixture-Probe':'/ready',Connection:'keep-alive'},body:'{}',signal:AbortSignal.timeout(2000)});assert.equal(await inspectUnsignedWorkerResponse(response),'WORKER_AUTH_REQUIRED');}reloaded=true;
+  const wrong=await probe(origin+'/functions/v1/cuevo-worker',{method:'POST',headers:{'X-Fixture-Probe':'/wrong','X-Cuevo-Wake-Signature':'fixture-denied'},body:'{}',signal:AbortSignal.timeout(2000)});assert.equal(wrong.status,401);await wrong.text();const extra=await probe(origin+'/functions/v1/cuevo-worker',{method:'POST',headers:{'X-Fixture-Probe':'/extra'},body:'{}',signal:AbortSignal.timeout(2000)});assert.equal(extra.status,400);await extra.text();
+  assert.equal(seen.length,4);assert.equal(new Set(seen.map(row=>row.socket)).size,4);assert(seen.every(row=>row.connection==='close'));assert.equal(readinessSockets.has(seen[2].socket),false);
+ }finally{for(const socket of sockets)socket.destroy();await new Promise<void>((done,reject)=>server.close(error=>error?reject(error):done()));}
+});
+
+test('public denial transport failure remains one-shot and cannot become an authentication receipt',async()=>{
+ let requests=0;const server=createServer(request=>{requests++;request.socket.destroy();});await new Promise<void>(done=>server.listen(0,'127.0.0.1',done));const address=server.address();assert(address&&typeof address!=='string');
+ try{const probe=(edgeDiagnostics as unknown as {requestPublicEdgeProbe:(url:string,init:RequestInit)=>Promise<Response>}).requestPublicEdgeProbe;assert.equal(typeof probe,'function');await assert.rejects(probe(`http://127.0.0.1:${address.port}/functions/v1/cuevo-worker`,{method:'POST',body:'{}',signal:AbortSignal.timeout(2000)}));assert.equal(requests,1);}finally{server.closeAllConnections();await new Promise<void>((done,reject)=>server.close(error=>error?reject(error):done()));}
+});
+
+test('public probe connection fencing preserves signed body and deadline while refusing credential or remote scope',async()=>{
+ const probe=(edgeDiagnostics as unknown as {requestPublicEdgeProbe:(url:string,init:RequestInit)=>Promise<Response>}).requestPublicEdgeProbe,previous=globalThis.fetch,signal=AbortSignal.timeout(5000),body=JSON.stringify({version:1,wakeId:'10000000-0000-4000-8000-000000000001'}),headers=signedWakeHeaders('a'.repeat(64),'10000000-0000-4000-8000-000000000001',1);let calls=0;
+ globalThis.fetch=async(url,init)=>{calls++;assert.equal(url,'http://127.0.0.1:56321/functions/v1/cuevo-worker');assert.equal(init?.signal,signal);assert.equal(init?.body,body);const sent=new Headers(init?.headers);assert.equal(sent.get('connection'),'close');assert.equal(sent.get('X-Cuevo-Wake-Signature'),headers['X-Cuevo-Wake-Signature']);return Response.json({code:'WORKER_AUTH_REQUIRED'},{status:401});};
+ try{assert.equal((await probe('http://127.0.0.1:56321/functions/v1/cuevo-worker',{method:'POST',headers,body,signal})).status,401);for(const url of ['https://127.0.0.1:56321/functions/v1/cuevo-worker','http://remote.invalid/functions/v1/cuevo-worker','http://user:secret@127.0.0.1:56321/functions/v1/cuevo-worker','http://127.0.0.1:56321/other','http://127.0.0.1:56321/functions/v1/cuevo-worker?other=1','http://127.0.0.1:56321/functions/v1/cuevo-worker#other'])assert.throws(()=>probe(url,{method:'POST',body,signal}));assert.throws(()=>probe('http://127.0.0.1:56321/functions/v1/cuevo-worker',{method:'GET',signal}));for(const credential of ['Authorization','apikey'])assert.throws(()=>probe('http://127.0.0.1:56321/functions/v1/cuevo-worker',{method:'POST',headers:{[credential]:'private'},body,signal}));assert.equal(calls,1);}finally{globalThis.fetch=previous;}
+});
 
 test('unsigned HTTP readiness identifies the exact worker denial rather than gateway status alone', async () => {
   const response = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

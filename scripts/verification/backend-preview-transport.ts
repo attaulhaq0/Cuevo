@@ -7,7 +7,11 @@ const fail=()=>Error('Current backend preview transport requires review; private
 function binding(input:Context):ProtectedPreviewBinding{
  const api=new URL(input.apiDeployment.url);
  if(api.protocol!=='https:'||api.origin!==input.apiDeployment.url||api.username||api.password||api.port||api.pathname!=='/'||api.search||api.hash||api.origin===input.expected.targets.api.origin)throw fail();
- return{owner:'api',repository:input.expected.repository,releaseSha:input.expected.releaseSha,treeSha:input.expected.treeSha,runId:input.expected.releaseRunId,runAttempt:input.expected.runAttempt,packageSha256:input.prepared.sha256,artifactSha256:input.expected.fingerprints.apiArtifactSha256,teamId:input.expected.targets.api.teamId,projectId:input.expected.targets.api.projectId,deploymentId:input.apiDeployment.id,origin:api.origin};
+ const desired=input.expected.runtimeRollout?.desired,current=input.expected.currentRuntime?.current;
+ if(current&&((current.executorSourceSha??current.sourceSha)!==input.expected.releaseSha||(current.executorTreeSha??current.treeSha)!==input.expected.treeSha||current.apiDeploymentId!==input.apiDeployment.id||current.apiUrl!==api.origin||current.apiArtifactSha256!==input.expected.fingerprints.apiArtifactSha256))throw fail();
+ const component=desired??current;if(component&&component.apiArtifactSha256!==input.expected.fingerprints.apiArtifactSha256)throw fail();
+ const componentSource=component&&component.sourceSha!==input.expected.releaseSha?{sourceSha:z.string().regex(/^[a-f0-9]{40}$/).parse(component.sourceSha),treeSha:z.string().regex(/^[a-f0-9]{40}$/).parse(component.treeSha)}:undefined;
+ return{owner:'api',repository:input.expected.repository,releaseSha:input.expected.releaseSha,treeSha:input.expected.treeSha,runId:input.expected.releaseRunId,runAttempt:input.expected.runAttempt,packageSha256:input.prepared.sha256,artifactSha256:z.string().regex(/^[a-f0-9]{64}$/).parse(input.expected.fingerprints.apiArtifactSha256),teamId:input.expected.targets.api.teamId,projectId:input.expected.targets.api.projectId,deploymentId:input.apiDeployment.id,origin:api.origin,...(componentSource?{componentSource}:{})};
 }
 /** Release-only transport through the Vercel gateway. Application scope and
  * the original protected package remain with the existing backend consumers. */

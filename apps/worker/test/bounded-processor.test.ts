@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { OutboxProcessor } from '../src/jobs/outbox/processor';
 
 describe('bounded outbox execution', () => {
+  it('binds every claim to the exact configured generation without changing event processing authority',async()=>{const calls:{sql:string;values:unknown[]|undefined}[]=[];const query=async(sql:string,values?:unknown[])=>{calls.push({sql,values});return{rows:[]};};await new OutboxProcessor({query},undefined,'9223372036854775807').process({maxEvents:1,deadline:20000,now:()=>0});expect(calls).toEqual([{sql:'select id,lease_token from internal.claim_outbox($1,$2,$3)',values:[1,30,'9223372036854775807']}]);});
   it('does not claim when insufficient time remains for claim, process and failure statements', async () => {
     const query = vi.fn(async () => ({ rows: [] }));
     const result = await new OutboxProcessor({ query }).process({ maxEvents: 10, deadline: 20_000, now: () => 6_000 });

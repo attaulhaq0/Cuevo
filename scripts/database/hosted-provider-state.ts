@@ -5,7 +5,7 @@ import { canonicalReleaseReviewJson } from '../verification/release-review';
 const sha = z.string().regex(/^[a-f0-9]{40}$/), digest = z.string().regex(/^[a-f0-9]{64}$/);
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const identity = z.object({ sourceSha: sha, treeSha: sha, apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest, runtimeSha256: digest,
-  teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), projectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), originalRunId: z.string().regex(/^[1-9][0-9]*$/), originalRunAttempt: positive, originalPackageSha256: digest }).strict();
+  teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), projectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), originalRunId: z.string().regex(/^[1-9][0-9]*$/), originalRunAttempt: positive, originalPackageSha256: digest,releaseGeneration:z.string().regex(/^[1-9][0-9]{0,18}$/).refine(value=>BigInt(value)<=9223372036854775807n).optional(),operationSha256:digest.optional(),executorSourceSha:sha.optional(),executorTreeSha:sha.optional() }).strict();
 const receipts = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('API_ENVIRONMENT'), keysSha256: digest, valuesSha256: digest, variables: z.array(z.object({ key: z.string().min(1).max(100), id: z.string().min(1).max(200), valueSha256: digest }).strict()).min(1).max(100) }).strict(),
   z.object({ kind: z.literal('API_DEPLOYMENT'), deploymentId: z.string().regex(/^dpl_[A-Za-z0-9]+$/), url: z.string().url().refine(value => { const url = new URL(value); return url.protocol === 'https:' && url.origin === value && /^[a-z0-9-]+\.vercel\.app$/.test(url.hostname); }) }).strict(),
@@ -14,14 +14,14 @@ const receipts = z.discriminatedUnion('kind', [
 ]);
 export const providerPhaseOrder = ['API_ENVIRONMENT', 'API_DEPLOYMENT', 'EDGE_SECRETS', 'EDGE_DEPLOYMENT'] as const;
 const phase = z.object({ name: z.enum(providerPhaseOrder), state: z.enum(['INTENT', 'CONFIRMED']), receipt: receipts.nullable() }).strict();
-export const providerDeploymentStateSchema = z.object({ version: z.literal(1), purpose: z.literal('CUEVO_PRIVATE_PROVIDER_DEPLOYMENT_STATE'), projectRef: z.string().regex(/^[a-z]{20}$/), operations: z.array(z.object({ identity, phases: z.array(phase).min(1).max(4) }).strict()).min(1).max(20) }).strict().superRefine((state, context) => {
+export const providerDeploymentStateSchema = z.object({ version: z.union([z.literal(1),z.literal(2)]), purpose: z.literal('CUEVO_PRIVATE_PROVIDER_DEPLOYMENT_STATE'), projectRef: z.string().regex(/^[a-z]{20}$/), operations: z.array(z.object({ identity, phases: z.array(phase).min(1).max(4) }).strict()).min(1).max(20) }).strict().superRefine((state, context) => {
+  const legacy=state.operations.filter(row=>row.identity.operationSha256===undefined),modern=state.operations.filter(row=>row.identity.operationSha256!==undefined);if(state.operations.some(row=>(row.identity.operationSha256===undefined)!==(row.identity.releaseGeneration===undefined))||state.operations.some(row=>(row.identity.executorSourceSha===undefined)!==(row.identity.executorTreeSha===undefined)||row.identity.executorSourceSha!==undefined&&row.identity.operationSha256===undefined)||state.version===1&&modern.length||new Set(legacy.map(row=>row.identity.sourceSha)).size!==legacy.length||new Set(modern.map(row=>row.identity.operationSha256)).size!==modern.length||state.operations.some((row,index)=>row.identity.operationSha256===undefined&&state.operations.slice(0,index).some(prior=>prior.identity.operationSha256!==undefined)))context.addIssue({code:'custom',message:'Original legacy and generation-bound provider identities require exact unique history.'});
   for (const [operationIndex, operation] of state.operations.entries()) for (const [index, row] of operation.phases.entries()) {
     if (row.name !== providerPhaseOrder[index] || row.state === 'INTENT' && (row.receipt !== null || index !== operation.phases.length - 1 || operationIndex !== state.operations.length - 1)
       || row.state === 'CONFIRMED' && row.receipt?.kind !== row.name) context.addIssue({ code: 'custom', message: 'Original provider phases must be ordered and confirmed before continuation.' });
     if (row.receipt?.kind === 'API_ENVIRONMENT' && (new Set(row.receipt.variables.map(variable => variable.key)).size !== row.receipt.variables.length || new Set(row.receipt.variables.map(variable => variable.id)).size !== row.receipt.variables.length)
       || row.receipt?.kind === 'EDGE_SECRETS' && new Set(row.receipt.variables.map(variable => variable.name)).size !== row.receipt.variables.length) context.addIssue({ code: 'custom', message: 'Provider recipients must be unique.' });
   }
-  if (new Set(state.operations.map(operation => operation.identity.sourceSha)).size !== state.operations.length) context.addIssue({ code: 'custom', message: 'One original provider operation is retained for each source.' });
   if (state.operations.slice(0, -1).some(operation => operation.phases.length !== 4 || operation.phases.some(row => row.state !== 'CONFIRMED'))) context.addIssue({ code: 'custom', message: 'Prior provider operation requires review.' });
 });
 export type ProviderDeploymentState = z.infer<typeof providerDeploymentStateSchema>;
@@ -39,6 +39,7 @@ export function validateProviderDeploymentTransition(beforeValue: unknown | null
     return after;
   }
   const before = providerDeploymentStateSchema.parse(JSON.parse(canonicalReleaseReviewJson(beforeValue)));
+  if(before.version===2&&after.version!==2||before.version===1&&after.version===2&&!after.operations.some(row=>row.identity.operationSha256!==undefined))throw Error('Provider history version cannot be downgraded or relabeled.');
   if (before.projectRef !== projectRef || after.operations.length < before.operations.length || after.operations.length > before.operations.length + 1) throw Error('Private provider history cannot be replaced.');
   for (const [index, operation] of before.operations.entries()) {
     const next = after.operations[index];

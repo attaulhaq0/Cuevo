@@ -12,8 +12,8 @@ const config = parseServerConfig(process.env, 'worker');
 const pool = createWorkerPool(config.workerDatabaseUrl, { tls: config.databaseTls, ca: config.databaseTlsCa });
 let ready = false;
 let metrics:unknown=null;
-const processor=pool?new OutboxProcessor(pool,value=>console.log(JSON.stringify(deliveryRecord(value)))):undefined;
-const liveAnalytics = pool ? new PosthogDelivery(pool, config.analytics) : undefined;
+const processor=pool?new OutboxProcessor(pool,value=>console.log(JSON.stringify(deliveryRecord(value))),config.workerReleaseGeneration):undefined;
+const liveAnalytics = pool ? new PosthogDelivery(pool, config.analytics,undefined,config.workerReleaseGeneration) : undefined;
 let analytics:AnalyticsFixtureDelivery|undefined;
 if(pool&&process.env.ANALYTICS_FIXTURE_ENABLED==='true'){
  if(config.nodeEnv==='production'||!config.workerDatabaseUrl||!['localhost','127.0.0.1'].includes(new URL(config.workerDatabaseUrl).hostname)||new URL(config.workerDatabaseUrl).port!=='56322')throw Error('Fixture analytics requires local Cuevo.');

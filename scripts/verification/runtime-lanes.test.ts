@@ -13,10 +13,22 @@ test('isolated backend and browser lanes retain exact complete selected scope an
  for(const args of [['--profile=full','--lane=backend'],['--lane=browser'],['--profile=ci','--lane=other']])assert.throws(()=>subject.readTechnicalRequest(args));
  for(const profile of ['routine','full-runtime','main-staging'] as const){
   const backend:string[]=subject.runtimeLaneSteps(profile,'backend').map(row=>row.name),browser:string[]=subject.runtimeLaneSteps(profile,'browser').map(row=>row.name);
-  assert.ok(backend.includes('database'));assert.ok(backend.includes('edge-runtime'));assert.equal(backend.includes('critical-browser'),false);
+  assert.equal(backend.includes('database'),false);assert.equal(backend.includes('database-advisors'),false);assert.ok(backend.includes('edge-runtime'));assert.equal(backend.includes('critical-browser'),false);
   for(const step of ['clean-browser-seed','build','critical-browser','demo-seed-restore'])assert.ok(browser.includes(step));
   assert.equal(browser.includes('database'),false);assert.equal(browser.includes('integration'),false);
  }
+});
+
+test('database lane proves only replay grants and advisors and cannot replace either application lane',async()=>{
+ const subject=await import('./runtime-lanes');
+ assert.deepEqual(subject.readTechnicalRequest(['--profile=ci','--lane=database']),{profile:'ci',lane:'database'});
+ const common={repository:'owner/repo',sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),sourceDigest:'c'.repeat(64),githubRunId:'31',runAttempt:1,profile:'routine' as const,browserFiles:['foundation.spec.ts','role-home.spec.ts','role-accessibility.spec.ts','hydration-diagnostics.spec.ts','learning-lifecycle.spec.ts','customer-browser-learning-loop.spec.ts','customer-command-scope.spec.ts']};
+ assert.deepEqual(subject.runtimeLaneSteps('routine','database').map(row=>row.name),['clean-bootstrap','database-advisors','database','demo-seed-restore']);
+ const database=subject.runtimeLaneEvidence({...common,lane:'database',rows:[...subject.runtimeLaneSteps('routine','database').map(step=>({name:step.name,exitCode:0,required:true,durationMs:1})),{name:'source-freeze',exitCode:0,required:true,durationMs:1}]});
+ assert.equal(database.status,'LANE_VERIFIED');
+ const browser=subject.runtimeLaneEvidence({...common,lane:'browser',rows:[...subject.runtimeLaneSteps('routine','browser').map(step=>({name:step.name,exitCode:0,required:true,durationMs:1})),{name:'source-freeze',exitCode:0,required:true,durationMs:1}]});
+ assert.throws(()=>subject.combineRuntimeLanes([database,browser],common));
+ assert.throws(()=>subject.runtimeLaneEvidence({...common,lane:'database',rows:database.rows.filter(row=>row.name!=='database')}));
 });
 
 test('actual aggregate consumes only bounded same-attempt JSON and refuses private or missing artifact files',async()=>{
@@ -26,7 +38,7 @@ test('actual aggregate consumes only bounded same-attempt JSON and refuses priva
   const sha=git('rev-parse','HEAD'),manifest=git('ls-files').split('\n').map(path=>({path,sha256:createHash('sha256').update(path==='README.md'?'Frozen lane source\n':'.local/\n').digest('hex')}));
   const {routineBrowserFiles}=await import('./verification-profiles');
   const common={repository:'owner/repo',sourceSha:sha,treeSha:git('rev-parse','HEAD^{tree}'),sourceDigest:createHash('sha256').update(JSON.stringify(manifest.sort((a,b)=>a.path.localeCompare(b.path)))).digest('hex'),githubRunId:'31',runAttempt:2,profile:'full-runtime' as const,browserFiles:routineBrowserFiles};
-  for(const lane of ['backend','browser'] as const){await mkdir(join(root,'.local/runtime-lane-inputs',lane),{recursive:true});await writeFile(join(root,'.local/runtime-lane-inputs',lane,'lane.json'),JSON.stringify(subject.runtimeLaneEvidence({...common,lane,rows:[...subject.runtimeLaneSteps(common.profile,lane).map(step=>({name:step.name,exitCode:0,required:true,durationMs:1})),{name:'source-freeze',exitCode:0,required:true,durationMs:1}]})));}
+  for(const lane of ['backend','browser','database'] as const){await mkdir(join(root,'.local/runtime-lane-inputs',lane),{recursive:true});await writeFile(join(root,'.local/runtime-lane-inputs',lane,'lane.json'),JSON.stringify(subject.runtimeLaneEvidence({...common,lane,rows:[...subject.runtimeLaneSteps(common.profile,lane).map(step=>({name:step.name,exitCode:0,required:true,durationMs:1})),{name:'source-freeze',exitCode:0,required:true,durationMs:1}]})));}
   const run=()=>spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,resolve('scripts/verification/runtime-lane-aggregate.ts')],{cwd:root,encoding:'utf8',env:{...process.env,GITHUB_ACTIONS:'true',CI:'true',GITHUB_JOB:'technical-mvp',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REPOSITORY:'owner/repo',GITHUB_SHA:sha,GITHUB_RUN_ID:'31',GITHUB_RUN_ATTEMPT:'2'}});
   const first=run();assert.equal(first.status,0,first.stderr);
   for(const mutation of ['tracked','untracked']){
@@ -42,12 +54,12 @@ test('actual aggregate consumes only bounded same-attempt JSON and refuses priva
 test('runtime aggregate refuses missing failed foreign attempt source scope and substituted required lane rows',async()=>{
  const subject=await import('./runtime-lanes');
  const common={repository:'owner/repo',sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),sourceDigest:'c'.repeat(64),githubRunId:'31',runAttempt:2,profile:'routine' as const,browserFiles:['foundation.spec.ts','role-home.spec.ts','role-accessibility.spec.ts','hydration-diagnostics.spec.ts','learning-lifecycle.spec.ts','customer-browser-learning-loop.spec.ts','customer-command-scope.spec.ts']};
- const receipt=(lane:'backend'|'browser')=>subject.runtimeLaneEvidence({...common,lane,rows:[...subject.runtimeLaneSteps('routine',lane).map(step=>({name:step.name,exitCode:0,required:true,durationMs:1})),{name:'source-freeze',exitCode:0,required:true,durationMs:1}]});
- const backend=receipt('backend'),browser=receipt('browser');
- const combined=subject.combineRuntimeLanes([backend,browser],common);assert.equal(combined.status,'ROUTINE_VERIFIED');assert.ok(combined.rows.some(row=>row.name==='critical-browser'));
+ const receipt=(lane:'backend'|'browser'|'database')=>subject.runtimeLaneEvidence({...common,lane,rows:[...subject.runtimeLaneSteps('routine',lane).map(step=>({name:step.name,exitCode:0,required:true,durationMs:1})),{name:'source-freeze',exitCode:0,required:true,durationMs:1}]});
+ const backend=receipt('backend'),browser=receipt('browser'),database=receipt('database');
+ const combined=subject.combineRuntimeLanes([backend,browser,database],common);assert.equal(combined.status,'ROUTINE_VERIFIED');assert.ok(combined.rows.some(row=>row.name==='critical-browser'));
  assert.equal(backend.status,'LANE_VERIFIED');assert.notEqual(backend.status,'VERIFIED');
  for(const change of ['missing','attempt','source','rows','failed','private','duplicate']){
-  const values=[structuredClone(backend),structuredClone(browser)] as Record<string,unknown>[];
+  const values=[structuredClone(backend),structuredClone(browser),structuredClone(database)] as Record<string,unknown>[];
   if(change==='missing')values.pop();if(change==='attempt')values[1].runAttempt=3;if(change==='source')values[1].sourceDigest='d'.repeat(64);
   if(change==='rows')(values[1].rows as unknown[]).pop();if(change==='failed')(values[1].rows as {exitCode:number}[])[0].exitCode=1;
   if(change==='private')values[1].rawConsole='private';if(change==='duplicate')values[1]=values[0];

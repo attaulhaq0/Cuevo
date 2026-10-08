@@ -21,3 +21,10 @@ test('backend transport binds the original API source/package and forwards only 
  for(const url of ['https://api.vercel.com/v9/projects/current','https://project.supabase.co/auth/v1/token','https://other.vercel.app/v1/me','https://immutable-api.vercel.app.attacker.invalid/v1/me'])assert.deepEqual(await owner.backendPreviewHeaders({...input,url}),{});
  assert.equal(JSON.stringify(last).includes(secret),false);
 });
+
+test('retained runtime preview keeps executor approval and exact component provenance separate',async()=>{
+ const owner=await import('./backend-preview-transport'),componentSha='e'.repeat(40),componentTree='f'.repeat(40),current={current:{sourceSha:componentSha,treeSha:componentTree,executorSourceSha:expected.releaseSha,executorTreeSha:expected.treeSha,apiArtifactSha256:expected.fingerprints.apiArtifactSha256,apiDeploymentId:input.apiDeployment.id,apiUrl:input.apiDeployment.url}};
+ await owner.createBackendPreviewTransport({...input,expected:{...expected,currentRuntime:current} as BackendReleaseExpected,vercelToken:'private-vercel-token-canary'},async()=>{});
+ const result=last!.binding as {releaseSha:string;packageSha256:string;componentSource?:{sourceSha:string;treeSha:string}};assert.equal(result.releaseSha,expected.releaseSha);assert.equal(result.packageSha256,prepared.sha256);assert.deepEqual(result.componentSource,{sourceSha:componentSha,treeSha:componentTree});
+ for(const field of ['executorSourceSha','executorTreeSha','apiArtifactSha256','apiDeploymentId']){const changed={current:{...current.current,[field]:'wrong'}};await assert.rejects(owner.createBackendPreviewTransport({...input,expected:{...expected,currentRuntime:changed} as BackendReleaseExpected,vercelToken:'private-vercel-token-canary'},async()=>{}),field);}
+});

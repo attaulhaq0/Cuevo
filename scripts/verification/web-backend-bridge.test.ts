@@ -29,6 +29,7 @@ test('only complete numeric manual staging selection is admitted; no partial fal
     assert.throws(() => backendSelectionForWebEvent({ inputs: changed }, mode === 'automatic' ? 'workflow_run' : 'workflow_dispatch', mode === 'production' ? 'production' : 'staging'));
   }
 });
+test('operating web bridge requires explicit manual staging purpose and refuses production selection',()=>{const inputs={backend_run_id:'51',backend_run_attempt:'1',backend_artifact_id:'71',backend_transfer_sha256:'a'.repeat(64),backend_handoff:'operating-staging'},selection=backendSelectionForWebEvent({inputs},'workflow_dispatch','staging');assert.equal(selection?.handoff,'operating-staging');assert.deepEqual(readWebBackendSelection(encodeWebBackendSelection(selection)),selection);assert.throws(()=>backendSelectionForWebEvent({inputs},'workflow_dispatch','production'));assert.throws(()=>backendSelectionForWebEvent({inputs:{...inputs,backend_handoff:'customer-ready'}},'workflow_dispatch','staging'));});
 
 function reviewFixture() {
   const fixture = backendWebTransferFixture(), admitted = validateBackendWebTransfer(fixture.transfer, fixture.now), b = admitted.body;

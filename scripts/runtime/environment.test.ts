@@ -16,6 +16,7 @@ const input = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_example', NEXT_PUBLIC_UNREVIEWED_KEY: 'unreviewed',
   AI_GENERATION_MODE: 'FIXTURE', AI_FIXTURE_ENABLED: 'true', ANALYTICS_FIXTURE_ENABLED: 'true',
 };
+test('worker generation remains a private worker-only runtime input',()=>{const current={...input,CUEVO_WORKER_RELEASE_GENERATION:'9223372036854775807'};assert.equal(runtimeEnvironment('worker',current).CUEVO_WORKER_RELEASE_GENERATION,'9223372036854775807');assert.equal(runtimeEnvironment('api',current).CUEVO_WORKER_RELEASE_GENERATION,undefined);assert.equal(runtimeEnvironment('web',current).CUEVO_WORKER_RELEASE_GENERATION,undefined);});
 
 test('mapped presentation profile preserves strict local admission and cannot sanitize hosted or provisioning authority',()=>{
   const local={CUEVO_LOCAL_DEMO_MODE:'INTEGRATION_PRESENTATION',NODE_ENV:'development',CUEVO_DEPLOYMENT_ENVIRONMENT:'local',SUPABASE_URL:'http://127.0.0.1:57421',DATABASE_URL:'postgresql://cuevo_api:fixture@127.0.0.1:57422/cuevo_integration_20261004',API_ALLOWED_ORIGIN:'http://127.0.0.1:54131',API_PORT:'54132',AI_GENERATION_MODE:'FIXTURE',AI_FIXTURE_ENABLED:'true',POSTHOG_CAPTURE_MODE:'DISABLED'};

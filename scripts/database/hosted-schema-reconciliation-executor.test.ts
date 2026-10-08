@@ -34,17 +34,24 @@ type AdmissionTimingEvent = { kind: 'official' | 'catalogue' | 'target' | 'provi
 type AdmissionTiming = { events: AdmissionTimingEvent[]; pending: { deadline: number; done: () => void }[]; scheduled: boolean; activeCatalogue: number; activeStorage: number; managementDuringCatalogue: number; quiescenceDuringStorage: number; overlaps: number; postconditions: number; sourceCharged: number; sourceChecks: number; nativeMetadata: number; nativeSnapshots:number; forbiddenActivity: boolean; catalogueMs: number; finalSourceMs: number; holdStorage: boolean; heldStorage?: () => void; heldStoragePromise?: Promise<void>; failConcurrentCatalogue: boolean; nativeFailureIssued: boolean; catalogueEntered?:()=>void; catalogueGate?:Promise<void>; synchronizeStorageStart:boolean; introduceUnacknowledgedIntent:boolean; introducedIntent:boolean; heldReady:Promise<void>; heldReadyResolve:()=>void; nativeFailureReady:Promise<void>; nativeFailureResolve:()=>void; fastStorage:boolean };
 let admissionTiming: AdmissionTiming | null = null;
 let hostReadsPending = 0;
+let schedulerPumpRuns=0;
+const hostIdleWaiters=new Set<()=>void>();
+function finishHostWork(){
+ hostReadsPending--;if(hostReadsPending!==0)return;
+ const ready=[...hostIdleWaiters];hostIdleWaiters.clear();for(const done of ready)done();
+}
 function transportDelay(milliseconds: number, kind: AdmissionTimingEvent['kind']) {
   const timing = admissionTiming;
   if (!timing) return Promise.resolve();
-  const startedAt = clock;
+ const startedAt = clock;
   const pump = () => {
+    schedulerPumpRuns++;
     timing.scheduled = false;
     if (!timing.pending.length) return;
     // Native filesystem reads keep their actual output and validation, but
     // this transport profile assigns no extra latency to their host promises.
     // Settle those reads before advancing the synthetic network deadline.
-    if (hostReadsPending) { timing.scheduled = true; setImmediate(pump); return; }
+    if (hostReadsPending) { timing.scheduled = true;hostIdleWaiters.add(()=>setImmediate(pump));return; }
     const next = Math.min(...timing.pending.map(item => item.deadline));
     clock = Math.max(clock, next);
     const ready = timing.pending.filter(item => item.deadline <= clock);
@@ -77,6 +84,12 @@ function observeActualStageSource() {
   timing.events.push({ kind: 'source', startedAt, completedAt: clock });
 }
 function history(){return rows.slice(0,state.historyCount).map(row=>({version:row.version,name:row.name.slice(15,-4),statements:files.find(file=>file.name===row.name)!.bytes.byteLength?[new TextDecoder().decode(files.find(file=>file.name===row.name)!.bytes).trim()]:[]}));}
+let hostCompletionVariance=false,heldCloseIssued=false;
+async function completeHostWork<T>(operation:()=>Promise<T>):Promise<T>{
+ const tracked=admissionTiming!==null;if(tracked)hostReadsPending++;
+ try{return await operation();}finally{if(tracked)finishHostWork();}
+}
+Object.assign(globalThis,{executorHostImport:completeHostWork});
 class PgTransport extends EventEmitter {
  connection={stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('controlled-peer'),subjectaltname:'DNS:'+host})}};
  async connect(){}async end(){this.emit('end');}
@@ -124,8 +137,8 @@ class PgTransport extends EventEmitter {
 }
 const globals=globalThis as typeof globalThis&{executorPg?:typeof PgTransport;executorOfficial?:(value:Record<string,unknown>)=>Promise<unknown>;executorProvider?:()=>Promise<unknown>;executorPrepared?:(value:unknown)=>unknown;executorProcess?:()=>Promise<unknown>;executorPolicy?:(rows:unknown,version:number,count?:number)=>unknown;executorStageFilesObserved?:()=>void};
 globals.executorPg=PgTransport;globals.executorPrepared=value=>value;globals.executorOfficial=async()=>{state.officialCalls++;if(admissionTiming)await transportDelay(state.officialDelayMs,'official');else clock+=state.officialDelayMs;return({provenance:'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE',observedAt:new Date(clock).toISOString(),expected:input.expected,approval:{packageSha256:(input.preparedApproval as{sha256:string}).sha256}});};globals.executorProvider=async()=>{if(admissionTiming)await transportDelay(477,'provider');return({evidence:'OFFICIAL_SUPABASE_PROJECT_METADATA',projectRef:ref,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',observedAtMs:clock,directEndpoint:{projectRef:ref,kind:'direct',host:'db.'+ref+'.supabase.co',port:5432,database:'postgres'},sessionEndpoint:input.endpoint});};globals.executorPolicy=(_rows,version,count=120)=>{assert.equal(version,170011);state.policyCounts.push(count);clock+=state.nativeProofMs;};globals.executorProcess=async()=>({runCli:async(args:string[],env:Record<string,string>)=>{state.commands++;state.events.push('cli');assert.ok(args.includes('--skip-vault'));assert.equal(env.PGPASSWORD,'controlled-db-password');assert.equal(state.historyCount,120);const path=[...state.objects.keys()].find(path=>!path.includes(hash(JSON.stringify(template.originalIdentity)))&&path.endsWith('000001.record.json'));assert.ok(path);assert.equal(JSON.parse(state.objects.get(path)!).payload.state,'INTENT');if(state.cliKind==='UNKNOWN')return{kind:'UNKNOWN'};state.historyCount=123;return{kind:'EXITED',exitCode:0};}});
-const hooks=registerHooks({load(url,context,next){const path=url.replaceAll('\\','/'),name=path.split('/').at(-1);if(/\/node_modules\/pg\/(lib\/index\.js|esm\/index\.mjs)$/.test(path))return{format:'module',shortCircuit:true,source:'export const Client=globalThis.executorPg;export default{Client};'};const replace:Record<string,string>={'backend-release-admission.ts':'export const readBackendReleaseAdmission=globalThis.executorOfficial;','backend-release-contracts.ts':'export const validatePreparedBackendReleaseIntent=globalThis.executorPrepared;','hosted-migration-native-process.ts':'export const createHostedMigrationNativeProcess=globalThis.executorProcess;','hosted-schema-reconciliation-policy.ts':`export const unknownPrefixCataloguePolicySha256='${policySha}',unknownPrefixAbsencePolicySha256='${absenceSha}',unknownPrefixAbsentMarkersSql='/* CUEVO_CONTROLLED_ABSENCE */ select false';export const verifyUnknownPrefixCataloguePolicy=globalThis.executorPolicy;`};if(name==='hosted-migration-stage-files.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",','globalThis.executorStageFilesObserved?.();return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",')};if(name==='hosted-migration-provider.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('async function readHostedMigrationProvider(value) {','async function readHostedMigrationProvider(value) { return globalThis.executorProvider(value);')};if(name&&replace[name])return{format:'module',shortCircuit:true,source:replace[name]};return next(url,context);}});
-const fetcher=globalThis.fetch;globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),body=options?.body?JSON.parse(String(options.body)):null;
+const hooks=registerHooks({load(url,context,next){const path=url.replaceAll('\\','/'),name=path.split('/').at(-1);if(/\/node_modules\/pg\/(lib\/index\.js|esm\/index\.mjs)$/.test(path))return{format:'module',shortCircuit:true,source:'export const Client=globalThis.executorPg;export default{Client};'};const replace:Record<string,string>={'backend-release-admission.ts':'export const readBackendReleaseAdmission=globalThis.executorOfficial;','backend-release-contracts.ts':'export const validatePreparedBackendReleaseIntent=globalThis.executorPrepared;','hosted-migration-native-process.ts':'export const createHostedMigrationNativeProcess=globalThis.executorProcess;','hosted-schema-reconciliation-policy.ts':`export const unknownPrefixCataloguePolicySha256='${policySha}',unknownPrefixAbsencePolicySha256='${absenceSha}',unknownPrefixAbsentMarkersSql='/* CUEVO_CONTROLLED_ABSENCE */ select false';export const verifyUnknownPrefixCataloguePolicy=globalThis.executorPolicy;`};if(name==='hosted-migration-database.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace(/import\(([^)]+)\)/g,'globalThis.executorHostImport(()=>import($1))')};if(name==='hosted-migration-stage-files.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",','globalThis.executorStageFilesObserved?.();return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",')};if(name==='hosted-migration-provider.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('async function readHostedMigrationProvider(value) {','async function readHostedMigrationProvider(value) { return globalThis.executorProvider(value);')};if(name&&replace[name])return{format:'module',shortCircuit:true,source:replace[name]};return next(url,context);}});
+const fetcher=globalThis.fetch;async function observedResponse(response:Response){const timing=admissionTiming;if(!timing||!response.body)return response;const body=response.body,getReader=body.getReader.bind(body);body.getReader=(()=>{const reader=getReader(),read=reader.read.bind(reader),cancel=reader.cancel.bind(reader);reader.read=()=>completeHostWork(async()=>{const result=await read();if(hostCompletionVariance)await new Promise<void>(done=>setImmediate(done));return result;});reader.cancel=reason=>completeHostWork(()=>cancel(reason));return reader;}) as typeof body.getReader;return response;}globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),body=options?.body?JSON.parse(String(options.body)):null;
  const timing = admissionTiming;
  const management = url.origin === 'https://api.supabase.com';
  const storageRead = !management && !(options?.method === 'POST' && url.pathname.includes('/object/cuevo-release-operator/'));
@@ -153,16 +166,16 @@ const fetcher=globalThis.fetch;globalThis.fetch=async(raw,options)=>{const url=n
    await transportDelay(timing.fastStorage&&storageRead?0:privateBytes ? 333 : 1000, privateBytes ? 'private' : 'metadata');
   } finally { if (storageRead) timing.activeStorage--; }
  }
- if(url.origin==='https://api.supabase.com'){const sql=body.query as string;if(sql.includes('CUEVO_STORAGE_INVENTORY_COUNTS'))return Response.json([{bucketCount:2,totalObjects:state.objects.size,operatorObjects:state.objects.size,otherObjects:0,invalidOperatorPaths:0}]);if(sql.includes('CUEVO_STORAGE_INVENTORY_BUCKETS'))return Response.json([bucket,{id:'learner-private',name:'learner-private',public:false,type:'STANDARD',file_size_limit:524288,allowed_mime_types:['text/plain','image/png','image/jpeg','application/pdf']}]);if(sql.includes('CUEVO_STORAGE_INVENTORY_OBJECTS'))return Response.json([...state.objects.keys()].sort().map(metadata));return Response.json([bucket]);}
- assert.equal(url.origin,'https://'+ref+'.supabase.co');const path=url.pathname.slice('/storage/v1/'.length);if(path==='bucket/'+bucket.id)return Response.json(bucket);
- if(path==='object/list/'+bucket.id){const prefix=body.prefix as string,entries=new Map<string,{name:string;id:string|null;metadata:unknown}>();for(const[key,bytes]of state.objects){if(!key.startsWith(prefix+'/'))continue;const part=key.slice(prefix.length+1),name=part.split('/')[0];entries.set(name,part.includes('/')?{name,id:null,metadata:null}:{name,id:id(key),metadata:{size:Buffer.byteLength(bytes),mimetype:'application/json'}});}return Response.json([...entries.values()].sort((a,b)=>a.name.localeCompare(b.name)).slice(body.offset,body.offset+body.limit));}
- if(path.startsWith('object/info/'+bucket.id+'/')){const key=path.slice(('object/info/'+bucket.id+'/').length);return state.objects.has(key)?Response.json(info(key)):new Response('',{status:404});}
- if(path.startsWith('object/'+bucket.id+'/')){const key=path.slice(('object/'+bucket.id+'/').length);if(options?.method==='POST'){assert.equal(new Headers(options.headers).get('x-upsert'),'false');if(state.objects.has(key))return new Response('',{status:409});state.objects.set(key,String(options.body));state.events.push('journal-upload');return Response.json({Key:key});}return state.objects.has(key)?new Response(state.objects.get(key),{headers:{'content-type':'application/json'}}):new Response('',{status:404});}throw Error('Unmapped controlled HTTP');};
+ if(url.origin==='https://api.supabase.com'){const sql=body.query as string;if(sql.includes('CUEVO_STORAGE_INVENTORY_COUNTS'))return observedResponse(Response.json([{bucketCount:2,totalObjects:state.objects.size,operatorObjects:state.objects.size,otherObjects:0,invalidOperatorPaths:0}]));if(sql.includes('CUEVO_STORAGE_INVENTORY_BUCKETS'))return observedResponse(Response.json([bucket,{id:'learner-private',name:'learner-private',public:false,type:'STANDARD',file_size_limit:524288,allowed_mime_types:['text/plain','image/png','image/jpeg','application/pdf']}]));if(sql.includes('CUEVO_STORAGE_INVENTORY_OBJECTS'))return observedResponse(Response.json([...state.objects.keys()].sort().map(metadata)));return observedResponse(Response.json([bucket]));}
+ assert.equal(url.origin,'https://'+ref+'.supabase.co');const path=url.pathname.slice('/storage/v1/'.length);if(path==='bucket/'+bucket.id)return observedResponse(Response.json(bucket));
+ if(path==='object/list/'+bucket.id){const prefix=body.prefix as string,entries=new Map<string,{name:string;id:string|null;metadata:unknown}>();for(const[key,bytes]of state.objects){if(!key.startsWith(prefix+'/'))continue;const part=key.slice(prefix.length+1),name=part.split('/')[0];entries.set(name,part.includes('/')?{name,id:null,metadata:null}:{name,id:id(key),metadata:{size:Buffer.byteLength(bytes),mimetype:'application/json'}});}return observedResponse(Response.json([...entries.values()].sort((a,b)=>a.name.localeCompare(b.name)).slice(body.offset,body.offset+body.limit)));}
+ if(path.startsWith('object/info/'+bucket.id+'/')){const key=path.slice(('object/info/'+bucket.id+'/').length);return observedResponse(state.objects.has(key)?Response.json(info(key)):new Response('',{status:404}));}
+ if(path.startsWith('object/'+bucket.id+'/')){const key=path.slice(('object/'+bucket.id+'/').length);if(options?.method==='POST'){assert.equal(new Headers(options.headers).get('x-upsert'),'false');if(state.objects.has(key))return new Response('',{status:409});state.objects.set(key,String(options.body));state.events.push('journal-upload');return observedResponse(Response.json({Key:key}));}return observedResponse(state.objects.has(key)?new Response(state.objects.get(key),{headers:{'content-type':'application/json'}}):new Response('',{status:404}));}throw Error('Unmapped controlled HTTP');};
 const fsPromises=createRequire(import.meta.url)('node:fs/promises') as typeof import('node:fs/promises'),nativeOpen=fsPromises.open;
 const nativeHostReads=new Map<string,(...args:unknown[])=>Promise<unknown>>();
 function installActualReadTiming(){
  const mutable=fsPromises as unknown as Record<string,(...args:unknown[])=>Promise<unknown>>;
- for(const name of ['readFile','lstat','readdir','realpath','open']){
+ for(const name of ['readFile','lstat','readdir','realpath','open','mkdir','writeFile','unlink','rename']){
   const original=mutable[name];nativeHostReads.set(name,original);
   mutable[name]=async(...args:unknown[])=>{
    const tracked=admissionTiming!==null;if(tracked)hostReadsPending++;
@@ -170,20 +183,41 @@ function installActualReadTiming(){
     const result=await original(...args);
     if(tracked&&name==='open'&&result&&typeof result==='object'){
      const handle=result as Record<string,unknown>;
-     for(const method of ['stat','readFile'])if(typeof handle[method]==='function'){
+     for(const method of ['stat','readFile','writeFile','sync','close'])if(typeof handle[method]==='function'){
       const read=(handle[method] as(...values:unknown[])=>Promise<unknown>).bind(handle);
-      handle[method]=async(...values:unknown[])=>{hostReadsPending++;try{return await read(...values);}finally{hostReadsPending--;}};
+      handle[method]=async(...values:unknown[])=>completeHostWork(async()=>{const answer=await read(...values);if(hostCompletionVariance&&method==='close'&&!heldCloseIssued){heldCloseIssued=true;await new Promise<void>(done=>setTimeout(done,5));}return answer;});
      }
     }
+    if(tracked&&hostCompletionVariance&&name==='readFile')await new Promise<void>(done=>setImmediate(done));
     return result;
-   }finally{if(tracked)hostReadsPending--;}
+   }finally{if(tracked)finishHostWork();}
   };
  }
 }
 function restoreActualReadTiming(){const mutable=fsPromises as unknown as Record<string,(...args:unknown[])=>Promise<unknown>>;for(const[name,read]of nativeHostReads)mutable[name]=read;nativeHostReads.clear();}
 const originalNow=Date.now,mutableCrypto=createRequire(import.meta.url)('node:crypto')as typeof import('node:crypto'),originalCreateHash=mutableCrypto.createHash;
 before(async()=>{if(process.platform==='win32')fsPromises.open=(async(path:Parameters<typeof nativeOpen>[0],...args:unknown[])=>{let stat;try{stat=await fsPromises.lstat(path);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}if(stat?.isDirectory())return{sync:async()=>{state.events.push('controlled-directory-sync');},close:async()=>{}};return nativeOpen(path,...args as [string,number?]);}) as typeof nativeOpen;mutableCrypto.createHash=((algorithm:string)=>{const result=originalCreateHash(algorithm),update=result.update.bind(result),digest=result.digest.bind(result);let fixture=false;result.update=((value:Uint8Array|string)=>{if(Buffer.from(value).equals(Buffer.from(ca)))fixture=true;update(value);return result;})as typeof result.update;result.digest=((encoding:never)=>fixture?certSha:digest(encoding))as typeof result.digest;return result;})as typeof originalCreateHash;installActualReadTiming();syncBuiltinESMExports();Date.now=()=>clock;globals.executorStageFilesObserved=observeActualStageSource;executor=await import(pathToFileURL(resolve(import.meta.dirname,'hosted-migration-executor.ts')).href);});
-after(()=>{restoreActualReadTiming();fsPromises.open=nativeOpen;Date.now=originalNow;mutableCrypto.createHash=originalCreateHash;syncBuiltinESMExports();globalThis.fetch=fetcher;hooks.deregister();delete globals.executorPg;delete globals.executorOfficial;delete globals.executorProvider;delete globals.executorPrepared;delete globals.executorProcess;delete globals.executorPolicy;delete globals.executorStageFilesObserved;});
+after(()=>{restoreActualReadTiming();fsPromises.open=nativeOpen;Date.now=originalNow;mutableCrypto.createHash=originalCreateHash;syncBuiltinESMExports();globalThis.fetch=fetcher;hooks.deregister();delete globals.executorPg;delete globals.executorOfficial;delete globals.executorProvider;delete globals.executorPrepared;delete globals.executorProcess;delete globals.executorPolicy;delete globals.executorStageFilesObserved;delete (globalThis as unknown as {executorHostImport?:unknown}).executorHostImport;});
+test('zero-cost host continuation cannot make an independent request finish before its catalogue sibling',async()=>{
+ clock=baseClock;const timing=beginAdmissionTiming();
+ try{
+  const storage=transportDelay(1000,'metadata');
+  const catalogue=completeHostWork(async()=>{await new Promise<void>(done=>setTimeout(done,5));}).then(()=>transportDelay(10000,'catalogue'));
+  await Promise.all([storage,catalogue]);
+  const observed=timing.events.find(event=>event.kind==='catalogue')!;
+  assert.equal(observed.startedAt,baseClock,'The host callback has zero assigned model latency');
+  assert.equal(observed.completedAt,baseClock+10000,'Independent request durations share their original virtual start');
+ }finally{admissionTiming=null;}
+});
+test('the virtual scheduler waits for zero-cost host completion without polling its event loop',async()=>{
+ clock=baseClock;beginAdmissionTiming();schedulerPumpRuns=0;
+ let release!:()=>void;const held=new Promise<void>(done=>{release=done;}),host=completeHostWork(()=>held),request=transportDelay(1000,'metadata');
+ try{
+  await new Promise<void>(done=>setTimeout(done,10));
+  assert.equal(clock,baseClock,'The pending host operation consumes zero virtual duration');
+  assert.ok(schedulerPumpRuns<=1,'A pending host read parks one pump rather than continuously polling');
+ }finally{release();await Promise.all([host,request]);admissionTiming=null;}
+});
 async function fixture(run:()=>Promise<void>){clock=baseClock;root=await mkdtemp(join(tmpdir(),'cuevo-reconciliation-executor-'));try{execFileSync('git',['clone','--shared','--no-checkout','--quiet',resolve(import.meta.dirname,'../..'),root],{windowsHide:true,stdio:'ignore'});execFileSync('git',['-C',root,'checkout','--detach','--quiet',sha],{windowsHide:true,stdio:'ignore'});Object.assign(state,{objects:new Map(),vault:new Map(),pendingVault:null,historyCount:120,commands:0,cliKind:'EXITED',cleanupFail:false,events:[],policyCounts:[],catalogueFails:false,commitFails:false,readbackFails:false,officialDelayMs:0,nativeProofMs:0,officialCalls:0});await mkdir(join(root,'.local/hosted-release'),{recursive:true});
  const initial=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:sha,treeSha:tree,now:clock,target:{projectRef:ref,boundProjectRef:ref,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(clock).toISOString(),authUsers:0,storageObjects:0,appSchemas:[],migrationVersions:[],dispatchDisabled:true,population:'EMPTY'}}).plan;rows=initial.migrations;
  const endpoint={projectRef:ref,kind:'session-pooler',host,port:5432,database:'postgres'},endpointSha=hash(canonicalReleaseExecutionJson(endpoint));template=createOriginalPrefixReconciliationTemplate({recoverySource:{sourceSha:sha,treeSha:tree,ciRunId:'37710000000',releaseRunId:'37710000001',runAttempt:1},stageRows:rows.slice(0,123),historySha256:hash(canonicalReleaseExecutionJson(rows.slice(0,120).map(row=>({version:row.version,sourceReceiptSha256:row.sha256})))),cataloguePolicySha256:policySha,catalogueSha256:miniHash,absencePolicySha256:absenceSha,endpointSha256:endpointSha});
@@ -216,6 +250,8 @@ test('native executor consumes the paired official observation without aging its
 });
 
 test('full captured admission profile reaches only the original three-file effect with drained native and Storage observations', async () => {
+ try{for(const variance of [false,true]){
+ hostCompletionVariance=variance;heldCloseIssued=false;
  await fixture(async () => {
   const original = [...state.objects], timing = beginAdmissionTiming({synchronizeStorageStart:false});
   try {
@@ -236,6 +272,8 @@ test('full captured admission profile reaches only the original three-file effec
     return{officialAgeMs:source.completedAt-authority.completedAt,providerAgeMs:source.completedAt-provider.completedAt,finalSourceMs:source.completedAt-source.startedAt};
    });
    assert.ok(admissions.length>0);for(const admission of admissions)assert.ok(admission.officialAgeMs<=30000&&admission.providerAgeMs<=30000);
+   if(variance)assert.equal(heldCloseIssued,true,'The variance scenario must perturb an actual completed FileHandle.close');
+   console.log(JSON.stringify({purpose:'CAPTURED_ADMISSION_CAPACITY_BEFORE_ASSERT',hostCompletionVariance:variance,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),sourceChecks:timing.sourceChecks,sourceCharges:sourceEvents.length,hostedAcceptance:false}));
    assert.ok(Math.min(...admissions.map(admission=>30000-admission.officialAgeMs))>=6000,'The captured profile must leave at least six seconds after actual final source verification');
    console.log(JSON.stringify({purpose:'CONTROLLED_CAPTURED_ADMISSION_PROFILE',runtime:process.version,network:'none',forcedStorageStart:false,status:result.status,commands:state.commands,historyCount:state.historyCount,overlaps:timing.overlaps,managementDuringCatalogue:timing.managementDuringCatalogue,quiescenceDuringStorage:timing.quiescenceDuringStorage,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),hostFilesystemLatency:'Actual read outputs retained; no extra modeled latency beyond recorded final-source cost',hostedAcceptance:false}));
    for (const [path, bytes] of original) assert.equal(state.objects.get(path), bytes);
@@ -244,6 +282,7 @@ test('full captured admission profile reaches only the original three-file effec
    assert.equal(result.hostedAcceptance, false);
   } finally { admissionTiming = null; }
  });
+ }}finally{hostCompletionVariance=false;}
 });
 
 test('forbidden postgres activity still refuses native admission before any current intent or migration', async () => {

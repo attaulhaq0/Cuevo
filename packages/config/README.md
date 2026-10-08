@@ -1,5 +1,7 @@
 # Server configuration
 
+Hosted worker release generation is a canonical positive PostgreSQL int8 string. The private admission fence preserves current completion/failure leases while blocking new claims during operator pause. Source/runtime health is separate from native current-generation and hosted acceptance proof. See [incremental release ownership](../../docs/decisions/2026-10-08-incremental-release-lifecycle.md).
+
 Public API: @cuevo/config through src/index.ts for environment validation. analytics.ts is the existing server-only minimized fixture event mapper; live capture remains worker-owned. Keep secrets, provider policy and server I/O out of browser/domain/contracts/UI imports. Tests live in test. New public package subpaths require exports plus architecture guard updates.
 
 `authProvisioning` defaults to `{mode:'DISABLED'}` and returns an enabled target only from the explicit API consumer. `CUEVO_AUTH_PROVISIONING_MODE=LOCAL_SYNTHETIC` requires its dedicated key, exact `CUEVO_AUTH_PROVISIONING_URL=http://127.0.0.1:56321`, `CUEVO_AUTH_PROVISIONING_PROJECT_REF=LOCAL_CUEVO`, and one reviewed local web origin in `CUEVO_AUTH_PROVISIONING_WEB_ORIGIN`, matching explicit SUPABASE_URL/API_ALLOWED_ORIGIN. Admission/recovery redirects are derived only from that origin. Production and hosted staging cannot enable this mode; worker/default-all consumers ignore these inputs and return no key. Storage credentials never provide a fallback. This configuration grants no school/source/lease/delivery permission and does not start an executor or sender.
