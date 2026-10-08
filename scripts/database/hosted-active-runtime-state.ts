@@ -12,6 +12,14 @@ export const publicActiveRuntimeStateSchema=z.object({version:z.literal(1),purpo
 export const activeRuntimeStateSchema=publicActiveRuntimeStateSchema.extend({wakeKey:digest,runtimeConfig:z.unknown().optional()}).strict();
 export type ActiveRuntimeState=z.infer<typeof activeRuntimeStateSchema>;
 export function activeRuntimePublicQuery(projectRef:string){ref.parse(projectRef);return `/* CUEVO_INSTALLED_ACTIVE_RUNTIME */ select (decrypted_secret::jsonb-'wakeKey'-'runtimeConfig') as state from vault.decrypted_secrets where name='cuevo_active_runtime_${projectRef}'`;}
+export function activeRuntimeConfirmationPublicQuery(projectRef:string){return activeRuntimePublicQuery(projectRef).replace('CUEVO_INSTALLED_ACTIVE_RUNTIME','CUEVO_PENDING_ACTIVE_RUNTIME_CONFIRMATION');}
+/** Independent export digests bind this public candidate; it is never ordinary
+ * installed-runtime metadata or a native confirmation permit. */
+export function readPendingRuntimeConfirmationMetadata(value:unknown,bindingValue:unknown,projectRef:string){
+ try{const binding=z.object({configuredPublicStateSha256:digest,confirmedPublicStateSha256:digest}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(bindingValue))),rows=z.array(z.object({state:publicActiveRuntimeStateSchema}).strict()).length(1).parse(JSON.parse(canonicalReleaseExecutionJson(value))),state=rows[0].state;
+ if(state.projectRef!==projectRef||!['CONFIGURED','CONFIRMED'].includes(state.phase)||binding.configuredPublicStateSha256===binding.confirmedPublicStateSha256)throw fail();const observedPublicStateSha256=hash(state);if(observedPublicStateSha256!==(state.phase==='CONFIGURED'?binding.configuredPublicStateSha256:binding.confirmedPublicStateSha256))throw fail();if(state.phase==='CONFIRMED')terminal(state);return{observedPhase:state.phase as 'CONFIGURED'|'CONFIRMED',observedPublicStateSha256,...binding};
+ }catch{throw fail();}
+}
 
 function terminal(state:z.infer<typeof publicActiveRuntimeStateSchema>){
  const a=state.activation,c=state.cleanup,i=state.identity;
@@ -21,6 +29,22 @@ function terminal(state:z.infer<typeof publicActiveRuntimeStateSchema>){
 /** Public package metadata contains hashes and original identities only. */
 export function readInstalledRuntimeMetadata(value:unknown,projectRef:string){
  try{const rows=z.array(z.object({state:publicActiveRuntimeStateSchema}).strict()).length(1).parse(JSON.parse(canonicalReleaseExecutionJson(value))),state=rows[0].state;if(state.projectRef!==projectRef)throw fail();terminal(state);const{createdAt:_createdAt,...identity}=state.identity;void _createdAt;return{version:1 as const,purpose:'CUEVO_INSTALLED_ACTIVE_RUNTIME' as const,...identity,jobId:state.jobId!,activationReceiptSha256:hash(state.activation)};}catch{throw fail();}
+}
+
+/** Exact original evidence only; this candidate grants no installed-runtime authority. */
+export function validateActiveRuntimeConfirmationCandidate(stateValue:unknown,originalValue:unknown,projectRef:string):ActiveRuntimeState{
+ try{
+  const state=activeRuntimeStateSchema.parse(JSON.parse(canonicalReleaseExecutionJson(stateValue))),original=z.object({identity:identitySchema,wakeKeySha256:digest,runtimeConfigSha256:digest,activation:activationSchema,cleanup:cleanupSchema}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(originalValue)));
+  if(state.projectRef!==projectRef||hash(state.identity)!==hash(original.identity)||createHash('sha256').update(state.wakeKey).digest('hex')!==original.wakeKeySha256||hash(state.runtimeConfig??null)!==original.runtimeConfigSha256||hash(state.activation)!==hash(original.activation)||state.jobId!==original.activation.jobId)throw fail();
+  if(state.phase==='CONFIGURED'){
+   if(state.cleanup!==null)throw fail();
+   validateActiveRuntimeTransition(state,{...state,phase:'CONFIRMED',cleanup:original.cleanup},projectRef);
+  }else if(state.phase==='CONFIRMED'){
+   if(hash(state.cleanup)!==hash(original.cleanup))throw fail();
+   terminal(state);
+  }else throw fail();
+  return state;
+ }catch{throw fail();}
 }
 
 export function validateActiveRuntimeTransition(beforeValue:unknown|null,afterValue:unknown,projectRef:string):ActiveRuntimeState{

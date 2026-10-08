@@ -3,7 +3,7 @@ import { lstat, open, readFile, realpath, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson, parseReleaseExecutionJson } from './release-review';
-import { readBackendReleaseAdmission } from './backend-release-admission';
+import { readBackendReleaseAdmission,readBackendActivationExecutionAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from './backend-release-contracts';
 import { prepareHostedRuntimeRecipients } from './backend-provider-deploy';
 import { validateReleaseManifest, validateVercelDeployment } from './cicd-contracts';
@@ -12,6 +12,7 @@ import { createHostedMigrationJournal } from '../database/hosted-migration-journ
 import { installedPopulationVerificationSchema, revalidateInstalledBackendState } from '../database/hosted-synthetic-population';
 import { revalidateInstalledSyntheticAuth } from '../database/hosted-synthetic-auth';
 import {revalidateActiveRuntime} from './backend-runtime-resume';
+import {confirmHostedWorkerActivation} from './backend-hosted-activation-confirmation';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const digest = z.string().regex(/^[a-f0-9]{64}$/), sha = z.string().regex(/^[a-f0-9]{40}$/), time = z.iso.datetime({ offset: true });
@@ -130,7 +131,7 @@ export async function prepareBackendWebHandover(value: unknown): Promise<Backend
     const raw = await file(root, join(directory, 'backend-bundle.json')); if (hash(raw) !== input.bundleSha256) throw fail();
     const bundle = z.object({ version: z.literal(1), purpose: z.literal('CUEVO_BACKEND_RELEASE_EXECUTION'), repoRoot: z.literal(root), expected: z.unknown(), preparedApproval: z.unknown(), plan: z.unknown(), schemaRecoveryExport:z.unknown().optional(),schemaRecoverySelection:z.unknown().optional(), migrationEndpoint: z.unknown(), stages: z.array(z.unknown()).length(4), toolchainManifestPath: z.string(), operatorStoragePolicyPath: z.string(), artifacts: z.object({ apiRoot: z.string(), edgeRoot: z.string() }).strict() }).strict().parse(parseReleaseExecutionJson(raw.toString('utf8')));
     const expected = bundle.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(bundle.preparedApproval, { ...expected, now: Date.now() });
-    const admit = () => readBackendReleaseAdmission({ repoRoot: root, expected, prepared, githubToken: input.githubToken }); await admit();
+    const admit = () => readBackendReleaseAdmission({ repoRoot: root, expected, prepared, githubToken: input.githubToken }); await admit();if(!expected.installedRuntime)await readBackendActivationExecutionAdmission({repoRoot:root,expected,prepared,githubToken:input.githubToken});
     const plan = bundle.plan as HostedMigrationPlanV1, planned = canonicalHostedMigrationPlan(plan), sources = readCanonicalMigrationSources({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha });
     if (plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== expected.targets.supabase.projectRef || planned.sha256 !== expected.fingerprints.migrationPlanSha256 || hash(canonicalReleaseExecutionJson(bundle.migrationEndpoint)) !== expected.fingerprints.migrationEndpointSha256 || plan.migrations.length !== sources.sources.length || plan.migrations.some(row => !sources.sources.some(source => source.name === row.name && hash(source.bytes) === row.sha256))) throw fail();
     if((expected.installedSource||expected.installedSchema)&&!input.installedOperator||!(expected.installedSource||expected.installedSchema)&&input.installedOperator)throw fail();
@@ -143,6 +144,7 @@ export async function prepareBackendWebHandover(value: unknown): Promise<Backend
     const runtime = rawRuntime ? await gate('RUNTIME_CONFIGURATION_ADMISSION', async () => prepareHostedRuntimeRecipients(rawRuntime, expected)) : null;
     const deployment = await gate('PROVIDER_DEPLOYMENT', () => read('provider-result.json'));
     const activeRuntime=expected.installedRuntime?await gate('CURRENT_ACTIVE_RUNTIME',async()=>{if(!input.installedOperator||!rawRuntime)throw fail();const endpoint=z.object({kind:z.enum(['direct','session-pooler']),host:z.string(),projectRef:z.string()}).parse(bundle.migrationEndpoint),url=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);url.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;const proof=await revalidateActiveRuntime({repoRoot:root,expected,preparedApproval:prepared,runtimeConfig:rawRuntime,githubToken:input.githubToken,vercelToken:input.vercelToken,providerToken:input.installedOperator.providerToken,operatorDatabaseUrl:url.toString(),operatorPassword:input.installedOperator.migrationPassword});if(proof.status!=='INSTALLED_RUNTIME_REVALIDATED'||!proof.nativeExecutionVerified||!proof.lockReleased)throw fail();return proof;}):null;
+    if(!expected.installedRuntime)await gate('CURRENT_ORIGINAL_CONFIRMED_RUNTIME',async()=>{if(!input.installedOperator||!rawRuntime)throw fail();const endpoint=z.object({kind:z.enum(['direct','session-pooler']),host:z.string(),projectRef:z.string()}).parse(bundle.migrationEndpoint),url=new URL(`postgresql://${endpoint.host}:5432/postgres?sslmode=verify-full`);url.username=endpoint.kind==='direct'?'postgres':'postgres.'+endpoint.projectRef;const proof=await confirmHostedWorkerActivation({repoRoot:root,expected,preparedApproval:prepared,runtimeConfig:rawRuntime,githubToken:input.githubToken,vercelToken:input.vercelToken,providerToken:input.installedOperator.providerToken,operatorDatabaseUrl:url.toString(),operatorPassword:input.installedOperator.migrationPassword,observationOnly:true});if(proof.status!=='ORIGINAL_ACTIVATION_CONFIRMED'||!proof.canonicalReceipt||!proof.lockReleased||!proof.sessionClosed||proof.basis!=='EXACT_CONFIRMED_READBACK')throw fail();});
     await gate('RUNTIME_ARTIFACT_SOURCE', async () => {
       for (const [folder, expectedHash, service] of [[bundle.artifacts.apiRoot, expected.fingerprints.apiArtifactSha256, 'api'], [bundle.artifacts.edgeRoot, expected.fingerprints.edgeArtifactSha256, 'cuevo-worker']]) {
         if (folder !== join(root, service === 'api' ? '.local/runtime-artifacts/api-vercel' : '.local/edge-artifacts/cuevo-worker')) throw fail();
