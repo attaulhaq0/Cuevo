@@ -22,6 +22,15 @@ export const assertNativeMigrationEffectPermit=(value,current)=>globalThis.journ
 export const assertNativeReconciliationPermit=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,false):actual.assertNativeReconciliationPermit(value,current);
 export const assertNativeReconciliationSafetyRecord=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,true):actual.assertNativeReconciliationSafetyRecord(value,current);`};return next(url,context);}});
 const payload = (state: HostedExecutionJournal['state']): HostedExecutionJournal => ({ version: 1, identity, state, schemaHistoryAtomic: false, evidence: 'SUPPLIED_PORT_EXECUTION_ONLY' });
+
+test('remote compare and write proves the actual predecessor rather than trusting supplied comparison metadata',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{const journal=await createHostedMigrationRemoteJournal(input),compare=(journal as unknown as {compareAndWriteJournal:(prior:HostedExecutionJournal|null,value:HostedExecutionJournal)=>Promise<{kind:string;sha256?:string;payload?:HostedExecutionJournal}>}).compareAndWriteJournal;assert.equal(typeof compare,'function');assert.equal((await compare(null,payload('INTENT'))).kind,'SYNCED');const before=state.requests.filter(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')).length;assert.equal((await compare(null,payload('COMMITTED'))).kind,'UNCONFIRMED');assert.equal(state.requests.filter(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')).length,before);assert.equal((await compare(payload('INTENT'),payload('COMMITTED'))).kind,'UNCONFIRMED','mismatch latches uncertainty and never retries');});
+ await fixture(async()=>{const journal=await createHostedMigrationRemoteJournal(input),intent=payload('INTENT');assert.equal((await journal.compareAndWriteJournal(null,intent)).kind,'SYNCED');const result=await journal.compareAndWriteJournal(intent,payload('COMMITTED'));assert.equal(result.kind,'SYNCED');if(result.kind==='SYNCED'){assert.deepEqual(result.payload,payload('COMMITTED'));assert.equal(result.sha256,hash(JSON.stringify(payload('COMMITTED'))));result.payload.state='REQUIRES_REVIEW';assert.deepEqual(await journal.readJournal(),payload('COMMITTED'));}});
+});
+
+test('remote compared transition preserves original review state and refuses a foreign intent introduced during publication',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{const journal=await createHostedMigrationRemoteJournal(input),fetcher=globalThis.fetch;let introduced=false;globalThis.fetch=async(raw,options)=>{const result=await fetcher(raw,options);if(!introduced&&options?.method==='POST'&&new URL(String(raw)).pathname.endsWith('/000001.record.json')){introduced=true;storedChain(state,{...identity,approvalDigest:'0'.repeat(64)},['INTENT']);}return result;};const result=await journal.compareAndWriteJournal(null,payload('INTENT'));assert.equal(result.kind,'UNCONFIRMED');assert.equal(state.objects.size,4);const writes=state.requests.filter(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')).length;assert.equal((await journal.compareAndWriteJournal(payload('INTENT'),payload('COMMITTED'))).kind,'UNCONFIRMED');assert.equal(state.requests.filter(row=>row.method==='POST'&&row.path.startsWith('object/'+bucket+'/')).length,writes);});
+});
 type Fixture = { objects: Map<string, string>; requests: { method: string; path: string; body: string | undefined; upsert: string | null }[]; public: boolean; failUpload: boolean; corruptRead: boolean; duplicateList: boolean; noiseFile: boolean; failedList: boolean; changedPrivacyAfterUpload: boolean; managementType: string | null; managementDenied: boolean; storageTypeOmitted: boolean; metadataMismatch: boolean };
 async function api() { let result: Record<string, unknown> = {}; try { result = await import(pathToFileURL(resolve(import.meta.dirname, 'hosted-migration-remote-journal.ts')).href); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw error; } assert.equal(typeof result.createHostedMigrationRemoteJournal, 'function', 'remote original-intent journal factory exists'); return result as typeof import('./hosted-migration-remote-journal'); }
 async function fixture(run: (state: Fixture) => Promise<void>, activeStorageKey = key) {
@@ -185,7 +194,7 @@ test('listed owner bytes and INFO start together and both settle before chain ad
  });
 });
 
-test('listed body failure waits for its INFO sibling and unlisted missing publish readback never requests INFO',async()=>{
+test('listed and published body failures settle their INFO siblings without acknowledging missing bytes',async()=>{
  const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{
   const prefix=storedChain(state,identity),journal=await createHostedMigrationRemoteJournal(input),fetcher=globalThis.fetch;let release!:()=>void;const held=new Promise<void>(done=>release=done);let infoStarted=false,settled=false;
   globalThis.fetch=async(url,options)=>{const path=new URL(String(url)).pathname;if(path.endsWith(prefix+'/owner.json')){if(path.includes('/object/info/')){infoStarted=true;await held;}else return Response.json({error:'missing'},{status:404});}return fetcher(url,options)};
@@ -196,7 +205,7 @@ test('listed body failure waits for its INFO sibling and unlisted missing publis
  await fixture(async state=>{
   const journal=await createHostedMigrationRemoteJournal(input),fetcher=globalThis.fetch;let infoReads=0;
   globalThis.fetch=async(url,options)=>{const path=new URL(String(url)).pathname;if(path.startsWith('/storage/v1/object/info/'))infoReads++;if(options?.method==='GET'&&path.endsWith('/owner.json')&&!path.includes('/object/info/'))return Response.json({error:'missing'},{status:404});return fetcher(url,options)};
-  assert.deepEqual(await journal.writeJournal(payload('INTENT')),{kind:'UNCONFIRMED'});assert.equal(infoReads,0);assert.equal(state.objects.size,1);
+  assert.deepEqual(await journal.writeJournal(payload('INTENT')),{kind:'UNCONFIRMED'});assert.equal(infoReads,1);assert.equal(state.objects.size,1);
  });
 });
 

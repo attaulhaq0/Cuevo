@@ -225,7 +225,17 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     const ports: Omit<HostedExecutionPorts, 'withLock'> = {
       now: Date.now,
       readJournal: async () => { live(); if (!journal) throw failure(); const saved = await journal.readJournal(); live(); if (!stage.pending.length && (saved === null || (saved as HostedExecutionJournal).state !== 'COMMITTED')) throw failure(); if (saved !== null && (saved as HostedExecutionJournal).state === 'COMMITTED') { phase = 'after'; originalCommitted = true; } return saved; },
-      writeJournal: async value => { if (!journal) throw failure(); const receipt = await journal.writeJournal(value); if (receipt.kind === 'SYNCED' && receipt.sha256 === hash(JSON.stringify(value)) && value.state === 'INTENT') {confirmedIntent = true;if(continuation&&reconciliationPermit)await database.ownSchemaContinuationIntent(reconciliationPermit,identity);} return receipt; }, revalidate,
+      writeJournal: async value => { if (!journal) throw failure();
+        // A complete earlier admission can be followed by inventory and intent
+        // preparation I/O. Recheck actual native authority immediately before
+        // the bounded immutable journal operation; safety review remains usable
+        // after execution authority has been lost.
+        if(reconciliationPermit&&value.state!=='REQUIRES_REVIEW'){
+          if(continuation)await database.refreshSchemaContinuation(reconciliationPermit,identity,expectedCurrentVersions());
+          else await database.refreshReconciliationPermit(reconciliationPermit,identity,phase==='before'?120:123);
+          live();requireOfficial(readNativeMigrationPermitAuthority(reconciliationPermit,identity));
+        }
+        const receipt = await journal.writeJournal(value); if (receipt.kind === 'SYNCED' && receipt.sha256 === hash(JSON.stringify(value)) && value.state === 'INTENT') {confirmedIntent = true;if(continuation&&reconciliationPermit)await database.ownSchemaContinuationIntent(reconciliationPermit,identity);} return receipt; }, revalidate,
       runCli: async (args, env) => {
         const held = live(); if (!stage.pending.length || phase !== 'before') throw failure();
         await database.requireInstalledSchemaStorage();live();
