@@ -23,6 +23,13 @@ export function requireNoAnalyticsActivation(value: unknown) {
 type DispatchControl = { enabled: boolean; state: string; wake_id: string | null; endpoint: string | null; vault_secret_name: string | null; allow_local: boolean };
 type EventRecord = { id: string; school_id: string; actor_id: string; type: string; entity_type: string; entity_id: string; version: number; metadata: unknown; deduplication_key: string };
 type Check = { name: string; passed: boolean; durationMs?: number; count?: number };
+/** Local verifier requests cannot retain a socket across an owned Kong reload.
+ * Caller deadlines and bodies remain unchanged; transport failure is never retried. */
+export function requestPublicEdgeProbe(url:string,init:RequestInit):Promise<Response>{
+ const target=new URL(url),headers=new Headers(init.headers);
+ if(target.protocol!=='http:'||!['127.0.0.1','localhost'].includes(target.hostname)||target.username||target.password||target.search||target.hash||target.pathname!=='/functions/v1/cuevo-worker'||init.method!=='POST'||headers.has('Authorization')||headers.has('apikey'))throw Error('Edge public probes require the local verifier endpoint and no service credentials.');
+ headers.set('Connection','close');return fetch(url,{...init,headers});
+}
 /** HTTP status alone may belong to Kong or an unavailable default route. */
 export async function inspectUnsignedWorkerResponse(response: Response): Promise<'WORKER_AUTH_REQUIRED' | 'UNKNOWN_RESPONSE'> {
   if (response.status !== 401) { void response.body?.cancel().catch(() => undefined); return 'UNKNOWN_RESPONSE'; }
@@ -160,7 +167,7 @@ async function main() {
   const publicEndpoint = status.API_URL.replace(/\/$/, '') + '/functions/v1/cuevo-worker';
   let existingWorker = false;
   let baselineHttp: { status: number | null; identity: 'WORKER_AUTH_REQUIRED' | 'UNKNOWN_RESPONSE' | 'TRANSPORT_UNAVAILABLE' } = { status: null, identity: 'TRANSPORT_UNAVAILABLE' };
-  try { const existing = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); const identity = await inspectUnsignedWorkerResponse(existing); baselineHttp = { status: existing.status, identity }; existingWorker = identity === 'WORKER_AUTH_REQUIRED'; } catch { /* Docker inventory independently rejects every active runtime baseline. */ }
+  try { const existing = await requestPublicEdgeProbe(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); const identity = await inspectUnsignedWorkerResponse(existing); baselineHttp = { status: existing.status, identity }; existingWorker = identity === 'WORKER_AUTH_REQUIRED'; } catch { /* Docker inventory independently rejects every active runtime baseline. */ }
   process.stdout.write('Edge baseline HTTP observation: ' + JSON.stringify(baselineHttp) + '\n');
   if (existingWorker) throw Error('An existing Edge worker is active; stop it before verification.');
   const docker = (...args: string[]) => safeExecute('docker', args);
@@ -244,7 +251,7 @@ async function main() {
     server.on('error', () => { canceled = true; });
     phase = 'AUTH';
     authProbe='PUBLIC_UNSIGNED_READY';
-    await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
+    await waitFor(async () => { try { const response = await requestPublicEdgeProbe(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
     authProbe=null;
     await waitFor(async () => { const current = (await containers()).find(row => row.name === '/supabase_edge_runtime_cuevo'); if (!edgeRuntimeConnected(current)) return false; ownedEdge = assertStartedEdgeRuntime(baselineEdge, current); return true; }, 30000);
     check('owned-edge-runtime', true);
@@ -254,9 +261,9 @@ async function main() {
     authProbe=null;
     const probeId = randomUUID();
     authProbe='WRONG_SIGNATURE';
-    const invalid = await fetch(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(randomBytes(32).toString('hex'), probeId, Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: probeId }), signal: AbortSignal.timeout(5000) }); check('wrong-signature-denied', invalid.status === 401);
+    const invalid = await requestPublicEdgeProbe(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(randomBytes(32).toString('hex'), probeId, Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: probeId }), signal: AbortSignal.timeout(5000) }); check('wrong-signature-denied', invalid.status === 401);
     authProbe='EXTRA_SCOPE';
-    const extra = await fetch(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(purposeKey, probeId, Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: probeId, learnerId: actor }), signal: AbortSignal.timeout(5000) }); check('extra-scope-denied', extra.status === 400);
+    const extra = await requestPublicEdgeProbe(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(purposeKey, probeId, Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: probeId, learnerId: actor }), signal: AbortSignal.timeout(5000) }); check('extra-scope-denied', extra.status === 400);
     authProbe='CONTROL_UNCHANGED';
     check('auth-denial-preserves-control', JSON.stringify(await control()) === JSON.stringify(baselineControl));
     authProbe=null;
@@ -267,7 +274,7 @@ async function main() {
     check('committed-generation-requested', firstControl.state === 'REQUESTED' && typeof firstControl.wake_id === 'string');
     check('opaque-signed-queue-no-reusable-key', true);
     const firstDuration = await waitFor(async () => await completed(first) && (await control()).state === 'IDLE', 30000); check('signed-committed-source-processed', true, { durationMs: firstDuration, count: 1 });
-    const replay = await fetch(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(purposeKey, String(firstControl.wake_id), Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: firstControl.wake_id }), signal: AbortSignal.timeout(5000) }); check('consumed-generation-not-admitted', replay.status === 202 && (await replay.json()).status === 'NOT_ADMITTED');
+    const replay = await requestPublicEdgeProbe(publicEndpoint, { method: 'POST', headers: signedWakeHeaders(purposeKey, String(firstControl.wake_id), Math.floor(Date.now() / 1000)), body: JSON.stringify({ version: 1, wakeId: firstControl.wake_id }), signal: AbortSignal.timeout(5000) }); check('consumed-generation-not-admitted', replay.status === 202 && (await replay.json()).status === 'NOT_ADMITTED');
     phase = 'BURST';
     const { batch: burst, issued: burstControl } = await enqueue(25);
     const burstDuration = await waitFor(async () => { const current = await control(); if (typeof current.wake_id === 'string') generationIds.add(current.wake_id); return await completed(burst) && current.state === 'IDLE'; }, 60000);
@@ -291,7 +298,7 @@ async function main() {
     phase = 'RESTART';
     server = spawnOwnedProcess(process.execPath, [cli, 'functions', 'serve', 'cuevo-worker', '--env-file=' + envFile, '--network-id=cuevo-local'], { cwd: resolve('.'), env: childEnvironment, stdio: 'ignore' }); server.on('error', () => { canceled = true; });
     await waitFor(async () => { const current = (await containers()).find(row => row.name === '/supabase_edge_runtime_cuevo'); if (!edgeRuntimeConnected(current)) return false; ownedEdge = assertStartedEdgeRuntime(stoppedEdge ? { ...stoppedEdge, running: false } : undefined, current); return true; }, 30000);
-    await waitFor(async () => { try { const response = await fetch(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
+    await waitFor(async () => { try { const response = await requestPublicEdgeProbe(publicEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, wakeId: randomUUID() }), redirect: 'error', signal: AbortSignal.timeout(1500) }); return await inspectUnsignedWorkerResponse(response) === 'WORKER_AUTH_REQUIRED'; } catch { return false; } }, 30000);
     phase = 'GATEWAY_RELOAD';
     await readyGateway('restart');
     phase = 'RECOVERY';

@@ -15,7 +15,17 @@ on:
         required: true
         type: choice
         default: schema-and-accounts
-        options: [schema-and-accounts, complete-backend, installed-runtime, reconcile-schema, pending-runtime-confirmation]
+        options: [schema-and-accounts, complete-backend, installed-runtime, reconcile-schema, pending-runtime-confirmation, runtime-rollout]
+      handoff:
+        description: Operating synthetic staging or full customer candidate prerequisites
+        required: true
+        type: choice
+        default: operating-staging
+        options: [operating-staging, customer-candidate]
+      runtime_action:
+        description: Optional runtime-rollout action ROLL_FORWARD RECOVER_ORIGINAL or ROLL_BACK
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
@@ -193,6 +203,49 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts activate
+      - name: Initialize retained runtime generation
+        if: inputs.scope == 'complete-backend' && inputs.handoff == 'operating-staging'
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_DATABASE_TLS_CA: ${{ secrets.CUEVO_DATABASE_TLS_CA }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts initialize-runtime
+      - name: Roll out reviewed runtime generation
+        id: runtime-rollout
+        if: inputs.scope == 'runtime-rollout' && inputs.handoff == 'operating-staging'
+        env:
+          CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON: ${{ vars.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON }}
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_DATABASE_TLS_CA: ${{ secrets.CUEVO_DATABASE_TLS_CA }}
+          CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts rollout-runtime
+      - name: Export original runtime rollout recovery evidence
+        if: always() && inputs.scope == 'runtime-rollout' && (inputs.runtime_action == '' || inputs.runtime_action == 'ROLL_FORWARD') && (steps.runtime-rollout.outcome == 'failure' || steps.runtime-rollout.outcome == 'cancelled')
+        id: runtime-recovery-export
+        env:
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts export-runtime-recovery
+      - name: Retain original runtime rollout recovery evidence
+        if: always() && inputs.scope == 'runtime-rollout' && (inputs.runtime_action == '' || inputs.runtime_action == 'ROLL_FORWARD') && (steps.runtime-rollout.outcome == 'failure' || steps.runtime-rollout.outcome == 'cancelled') && steps.runtime-recovery-export.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-runtime-rollout-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/hosted-release/runtime-rollout-recovery.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
       - name: Export immutable original worker execution evidence
         id: original-worker-export
         if: always() && inputs.scope == 'complete-backend'
@@ -221,7 +274,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts confirm-pending-activation
       - name: Verify original worker lease retry and backoff recovery
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: (inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime') && inputs.handoff == 'customer-candidate'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -232,10 +285,10 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify-recovery
       - name: Acquire the exact isolated restoration image
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: (inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime') && inputs.handoff == 'customer-candidate'
         run: docker pull public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53
       - name: Verify isolated database and owned private-file restoration
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: (inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime') && inputs.handoff == 'customer-candidate'
         env:
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -262,6 +315,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
           CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
@@ -273,6 +327,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
           CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
@@ -285,6 +340,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
           CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
@@ -348,6 +404,11 @@ jobs:
             .local/hosted-release/web-handover-result.json
             .local/hosted-release/web-handover-manifest.json
             .local/hosted-release/web-handover-public.json
+            .local/hosted-release/runtime-initialization-result.json
+            .local/hosted-release/runtime-rollout-result.json
+            .local/hosted-release/operating-handover-result.json
+            .local/hosted-release/operating-staging-handoff.json
+            .local/hosted-release/operating-staging-public.json
             .local/hosted-release/web-settings-intent.json
             .local/hosted-release/web-settings-result.json
             .local/hosted-release/population-*/

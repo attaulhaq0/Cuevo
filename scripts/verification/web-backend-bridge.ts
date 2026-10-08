@@ -6,7 +6,7 @@ import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, type Relea
 const fail = () => Error('Web release backend bridge requires exact completed evidence and review; contents withheld.');
 const id = z.string().regex(/^[1-9][0-9]{0,19}$/).refine(value => Number.isSafeInteger(Number(value)));
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
-const selectionSchema = z.object({ backendRunId: id, backendRunAttempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), artifactId: id, transferSha256: digest }).strict();
+const selectionSchema = z.object({ handoff:z.enum(['customer-candidate','operating-staging']).optional(),backendRunId: id, backendRunAttempt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), artifactId: id, transferSha256: digest }).strict();
 export type WebBackendSelection = z.infer<typeof selectionSchema>;
 type Admission = Awaited<ReturnType<typeof readCompletedBackendWebTransferAdmission>>;
 export type WebBackendBridge = Omit<Admission, 'observedAt'>;
@@ -18,10 +18,10 @@ export function backendSelectionForWebEvent(raw: unknown, eventName: string, env
   try {
     const event = z.object({ inputs: z.record(z.string(), z.unknown()).optional() }).passthrough().parse(JSON.parse(canonicalReleaseReviewJson(raw)));
     const values = ['backend_run_id', 'backend_run_attempt', 'backend_artifact_id', 'backend_transfer_sha256'].map(key => event.inputs?.[key]);
-    if (values.every(value => value === undefined || value === '')) return null;
+    if (values.every(value => value === undefined || value === '')) {if(event.inputs?.backend_handoff!==undefined&&event.inputs.backend_handoff!=='')throw fail();return null;}
     if (eventName !== 'workflow_dispatch' || environment !== 'staging' || values.some(value => typeof value !== 'string' || value.length === 0)
       || !/^[1-9][0-9]{0,19}$/.test(String(values[1]))) throw fail();
-    return selectionSchema.parse({ backendRunId: values[0], backendRunAttempt: Number(values[1]), artifactId: values[2], transferSha256: values[3] });
+    return selectionSchema.parse({...(event.inputs?.backend_handoff?{handoff:event.inputs.backend_handoff}:{}),backendRunId: values[0], backendRunAttempt: Number(values[1]), artifactId: values[2], transferSha256: values[3] });
   } catch { throw fail(); }
 }
 export function readWebBackendSelection(encoded: string): WebBackendSelection | null {

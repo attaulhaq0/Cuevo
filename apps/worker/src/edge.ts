@@ -1,7 +1,7 @@
 import { createWorkerHandler } from './jobs/outbox/edge-handler';
 import { createEdgeWorkerConnection } from './platform/edge-database';
 import { parseWorkerAnalyticsConfig } from './platform/posthog';
-import { hostedSyntheticRuntime, requireHostedSyntheticDatabase } from '@cuevo/config/synthetic-runtime';
+import { hostedSyntheticRuntime, requireHostedSyntheticDatabase,workerReleaseGeneration } from '@cuevo/config/synthetic-runtime';
 
 const deno = (globalThis as typeof globalThis & { Deno?: { env: { get(name: string): string | undefined }; serve(handler: (request: Request) => Promise<Response>): void } }).Deno;
 if (!deno) throw new Error('Deno worker entrypoint required.');
@@ -13,6 +13,6 @@ const databaseUrl = deno.env.get('CUEVO_WORKER_DATABASE_URL') ?? '';
 if (hosted) requireHostedSyntheticDatabase(databaseUrl, hosted, 'cuevo_worker');
 const analytics = parseWorkerAnalyticsConfig(environment);
 if (analytics.mode === 'LIVE_SYNTHETIC' && mode !== 'local-synthetic' && !hosted) throw new Error('Synthetic analytics requires explicit local or hosted synthetic worker execution.');
-deno.serve(createWorkerHandler({ purposeKey: deno.env.get('CUEVO_WORKER_WAKE_KEY') ?? '', databaseUrl, analytics }, config => createEdgeWorkerConnection(config, {
+deno.serve(createWorkerHandler({ purposeKey: deno.env.get('CUEVO_WORKER_WAKE_KEY') ?? '', databaseUrl, analytics,generation:workerReleaseGeneration(deno.env.get('CUEVO_WORKER_RELEASE_GENERATION')) }, config => createEdgeWorkerConnection(config, {
   mode, ca: deno.env.get('CUEVO_WORKER_TLS_CA'), syntheticProjectRef: hosted?.projectRef, syntheticWebOrigin: hosted?.webOrigin, supabaseUrl: hosted?.supabaseUrl,
 })));

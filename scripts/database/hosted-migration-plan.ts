@@ -223,6 +223,16 @@ export function createCanonicalInstalledRuntimePlan(input:{repoRoot:string;sourc
 export function createCanonicalPendingRuntimeConfirmationPlan(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'PENDING_RUNTIME_CONFIRMATION'}){
  if(input.operation!=='PENDING_RUNTIME_CONFIRMATION')throw failure();return createCanonicalInstalledRuntimePlan({...input,operation:'INSTALLED_RUNTIME_READ_ONLY'});
 }
+/** An operating update can have different repository provenance while retaining
+ * the exact installed migration set. No SQL authority comes from this plan. */
+export function createCanonicalRuntimeRolloutPlan(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE'}){
+ if(input.operation!=='RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE')throw failure();
+ const active=targetSchema.extend({population:z.literal('ACTIVE_SYNTHETIC'),dispatchDisabled:z.boolean()}).parse(input.target),prior=priorSchema.parse(input.priorReceipt);
+ if(active.authUsers!==133||prior.completedSourceMigrationCount!==prior.migrations.length||active.migrationVersions.length!==prior.migrations.length)throw failure();
+ const result=createCanonicalHostedMigrationPlan({...input,target:{...active,population:'GUARDED_SYNTHETIC',dispatchDisabled:true}});
+ if(result.plan.pending.length||result.plan.stages.some(stage=>stage.names.length)||result.plan.migrations.length!==prior.migrations.length)throw failure();
+ const plan:HostedMigrationPlanV1={...result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(plan);return{...result,plan};
+}
 const plannedRowSchema = rowSchema.extend({ name: z.string().regex(/^\d{14}_[a-z0-9_]+\.sql$/) }).strict();
 const planSchema = z.object({
   version: z.literal(1), mode: z.enum(['EMPTY_INITIAL', 'INCREMENTAL']), provenance: z.literal('CALLER_SUPPLIED_SOURCE'), source: identitySchema,

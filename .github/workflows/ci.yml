@@ -44,6 +44,31 @@ jobs:
       - run: node --import tsx scripts/verification/stateless-checks.ts
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  database-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: '24.16.0', cache: npm }
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify isolated database boundary
+        run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=database
+      - name: Retain exact safe database lane
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-runtime-database-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-lanes/database/lane.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
   runtime-backend:
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -66,6 +91,22 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+      - name: Bind verified runtime delivery artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node --import tsx scripts/verification/runtime-artifact-receipt.ts
+      - name: Retain verified runtime delivery artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-runtime-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/runtime-artifacts/api-vercel/
+            .local/edge-artifacts/cuevo-worker/
+            .local/runtime-artifact-receipt.json
+            .local/runtime-contract-manifest.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
       - name: Stop owned local Supabase
         if: always()
         run: npx --no-install supabase stop --project-id cuevo
@@ -96,7 +137,7 @@ jobs:
         if: always()
         run: npx --no-install supabase stop --project-id cuevo
   technical-mvp:
-    needs: [runtime-backend, runtime-browser]
+    needs: [database-checks, runtime-backend, runtime-browser]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -117,6 +158,11 @@ jobs:
         with:
           name: cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/browser
+      - name: Read exact database lane from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-runtime-database-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-lane-inputs/database
       - name: Combine exact source and required runtime lanes
         run: node --import tsx scripts/verification/runtime-lane-aggregate.ts
       - name: Export sanitized status evidence
@@ -190,7 +236,7 @@ jobs:
         run: node --import tsx scripts/verification/secret-scan.ts
   required:
     if: always()
-    needs: [fast-checks, source-contracts, technical-mvp, dependency-review, codeql, secret-scan]
+    needs: [fast-checks, source-contracts, database-checks, technical-mvp, dependency-review, codeql, secret-scan]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -198,10 +244,11 @@ jobs:
         env:
           FAST: ${{ needs.fast-checks.result }}
           SOURCE_CONTRACTS: ${{ needs.source-contracts.result }}
+          DATABASE: ${{ needs.database-checks.result }}
           TECHNICAL: ${{ needs.technical-mvp.result }}
           DEPENDENCY: ${{ needs.dependency-review.result }}
           CODEQL: ${{ needs.codeql.result }}
           SECRET_SCAN: ${{ needs.secret-scan.result }}
         run: |
-          if [ "$FAST" != success ] || [ "$SOURCE_CONTRACTS" != success ] || [ "$TECHNICAL" != success ] || [ "$CODEQL" != success ] || [ "$SECRET_SCAN" != success ]; then exit 1; fi
+          if [ "$FAST" != success ] || [ "$SOURCE_CONTRACTS" != success ] || [ "$DATABASE" != success ] || [ "$TECHNICAL" != success ] || [ "$CODEQL" != success ] || [ "$SECRET_SCAN" != success ]; then exit 1; fi
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then test "$DEPENDENCY" = success; else test "$DEPENDENCY" = skipped; fi

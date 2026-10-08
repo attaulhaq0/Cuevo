@@ -5,10 +5,10 @@ import { pathToFileURL } from 'node:url';
 import { createRequire, registerHooks } from 'node:module';
 import { canonicalReleaseExecutionJson } from './release-review';
 import {prepareBackendReleaseIntent} from './backend-release-contracts';
-import {ciRuntimeJobs,ciSourceJobs} from './verification-workflows';
+import {ciRuntimeJobs,ciSourceJobs,ciDatabaseJob} from './verification-workflows';
 import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 import { backendWebTransferFixture, transferFixtureHash } from './backend-web-transfer-fixtures';
-import { readBackendWebTransferArchive, validateCompletedBackendWebApproval } from './backend-web-transfer-admission';
+import { readBackendWebTransferArchive, validateCompletedBackendWebApproval,validateSelectedBackendWebTransfer } from './backend-web-transfer-admission';
 import type { Readable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { transformSync } from 'esbuild';
-import { backendWebTransferProducerPaths } from './backend-web-transfer';
+import { backendWebTransferProducerPaths,operatingBackendWebTransferProducerPaths,operatingBackendWebTransferEvidenceNames } from './backend-web-transfer';
 
 const { yazl } = createRequire(import.meta.url)('playwright-core/lib/utilsBundle') as { yazl: { ZipFile: new () => { outputStream: Readable; addBuffer(bytes: Buffer, name: string, options?: object): void; end(): void } } };
 async function archive(files: { name: string; bytes: Buffer; options?: object }[]) {
@@ -38,6 +38,7 @@ test('a completed success consumes its exact original founder receipt without re
   assert.equal(canonicalReleaseExecutionJson(completedRun), before);
   assert.equal(admitted.prepared.sha256, transfer.preparedApproval.sha256);
 });
+test('selected backend consumer defaults to customer evidence and refuses purpose substitution before admission',()=>{const fixture=backendWebTransferFixture();assert.equal(typeof validateSelectedBackendWebTransfer,'function');assert.equal(validateSelectedBackendWebTransfer(fixture.transfer,fixture.now,'customer-candidate').transfer.purpose,'CUEVO_COMPLETED_BACKEND_WEB_HANDOVER');assert.throws(()=>validateSelectedBackendWebTransfer(fixture.transfer,fixture.now,'operating-staging'));assert.throws(()=>validateSelectedBackendWebTransfer({...fixture.transfer,purpose:'CUEVO_OPERATING_BACKEND_WEB_HANDOVER'},fixture.now,'customer-candidate'));});
 
 test('official whole-second timestamp serialization does not falsely reject original same-second chronology or extend expiry', () => {
   const { transfer, completedRun, approvals, now } = backendWebTransferFixture();
@@ -100,14 +101,14 @@ async function nativeReader() {
   } });
   try { return await import(pathToFileURL(resolve(import.meta.dirname, 'backend-web-transfer-admission.ts')).href + '?controlled'); } finally { hooks.deregister(); }
 }
-async function officialFixture(run: (value: { input: Record<string, unknown>; responses: Map<string, unknown>; root: string; calls: string[] }) => Promise<void>, precision: 'ordinary' | 'same-second' = 'ordinary') {
+async function officialFixture(run: (value: { input: Record<string, unknown>; responses: Map<string, unknown>; root: string; calls: string[] }) => Promise<void>, precision: 'ordinary' | 'same-second' = 'ordinary',operating=false) {
   const root = await mkdtemp(join(tmpdir(), 'cuevo-transfer-admission-')), oldFetch = globalThis.fetch;
   const keys = ['GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'GITHUB_WORKSPACE', 'GITHUB_SHA', 'GITHUB_REF', 'GITHUB_EVENT_NAME', 'GITHUB_REPOSITORY'];
   const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   try {
     await writeFile(join(root, '.gitattributes'), '* text eol=lf\n'); await writeFile(join(root, 'README.md'), 'Original source\n');
-    for (const path of backendWebTransferProducerPaths) { await mkdir(resolve(root, path, '..'), { recursive: true }); await writeFile(join(root, path), 'Controlled producer source\n'); }
+    for (const path of [...new Set([...backendWebTransferProducerPaths,...(operating?operatingBackendWebTransferProducerPaths:[])])]) { await mkdir(resolve(root, path, '..'), { recursive: true }); await writeFile(join(root, path), 'Controlled producer source\n'); }
     await mkdir(join(root, 'supabase/migrations'), { recursive: true }); await writeFile(join(root, 'supabase/migrations/20261001000000_fixture.sql'), 'select 1;\n');
     git('init', '--quiet'); git('add', '.'); git('-c', 'user.name=Controlled source', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'base');
     const baseSha = git('rev-parse', 'HEAD').toString().trim(); await writeFile(join(root, 'README.md'), 'Current source\n'); git('add', '.'); git('-c', 'user.name=Controlled source', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'current');
@@ -118,11 +119,13 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
     fixture.transfer.manifestSha256 = transferFixtureHash(canonicalReleaseExecutionJson(manifest));
     if (precision === 'same-second') fixture.transfer.exportedAt = new Date(Math.floor((fixture.now - 30000) / 1000) * 1000 + 750).toISOString();
     const rawCi={...fixture.expected.ciRun,run_attempt:2};
-    const runtimeJobs=Object.entries({...ciRuntimeJobs,...ciSourceJobs}).map(([name,contract],index)=>({id:100+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:contract.steps.map((step,number)=>({name:'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`,number:number+1,status:'completed',conclusion:'success'}))}));
+    const runtimeJobs=Object.entries({...ciRuntimeJobs,...ciSourceJobs,'database-checks':ciDatabaseJob}).map(([name,contract],index)=>({id:100+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:contract.steps.map((step,number)=>({name:'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`,number:number+1,status:'completed',conclusion:'success'}))}));
     const otherJobs=['codeql','secret-scan','required'].map((name,index)=>({id:200+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:[{name:'Required original work',number:1,status:'completed',conclusion:'success'}]}));
     const jobsResponse={total_count:runtimeJobs.length+otherJobs.length,jobs:[...runtimeJobs,...otherJobs]},canonical=await readCanonicalRuntimeJobs(rawCi,async path=>path==='actions/runs/31'?rawCi:jobsResponse),body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson);
     fixture.transfer.preparedApproval=prepareBackendReleaseIntent({...body,canonicalRuntimeVerification:canonical},{...fixture.expected,canonicalRuntimeVerification:canonical});fixture.approvals[0].comment=fixture.transfer.preparedApproval.comment;
-    const text = canonicalReleaseExecutionJson(fixture.transfer), zip = await archive([{ name: 'web-transfer.json', bytes: Buffer.from(text) }]);
+    let selected:unknown=fixture.transfer;
+    if(operating){const full=fixture.transfer.manifest as {api:{deploymentUrl:string};database:{migrations:{version:string;sha256:string}[]};publicConfig:unknown},body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson),digest='b'.repeat(64),receipt={version:1,purpose:'CUEVO_OPERATING_SYNTHETIC_STAGING_HANDOFF',repository:body.repository,sourceSha:sourceSha,treeSha,runId:'51',runAttempt:1,packageSha256:fixture.transfer.preparedApproval.sha256,observedAt:fixture.transfer.earliestProofAt,generation:'2',database:{projectRef:body.targets.supabase.projectRef,migrationCount:full.database.migrations.length,migrationManifestSha256:transferFixtureHash(canonicalReleaseExecutionJson([...full.database.migrations].sort((a,b)=>a.version.localeCompare(b.version)))),historySha256:digest,authIdentities:133,schools:2,permissionsVerified:true},api:{projectId:'prj_Api',teamId:'team_Cuevo',deploymentId:'dpl_Api',deploymentUrl:full.api.deploymentUrl,origin:body.targets.api.origin,artifactSha256:body.fingerprints.apiArtifactSha256,healthVerified:true,currentActorVerified:true,corsVerified:true},worker:{edgeId:'edge',edgeVersion:2,artifactSha256:body.fingerprints.edgeArtifactSha256,denoLockSha256:body.fingerprints.denoLockSha256,runtimeSha256:digest,generation:'2',operatingVerified:true,privateTransportVerified:true,admissionPaused:false},privateAccess:{dataApiDisabled:true,anonymousDenied:true,authenticatedDenied:true,serviceDenied:true,storageVerified:true,realtimeVerified:true},cleanup:{lockReleased:true,sessionsClosed:true,receiptSha256:digest},publicConfig:full.publicConfig,customerAcceptance:false,remainingAcceptance:['FULL_HOSTED_CUSTOMER_ACCEPTANCE','RESTORE_AND_OPERATIONAL_APPROVAL','CURRICULUM_RIGHTS_AND_SCHOOL_APPROVAL']};const producers=[];for(const path of operatingBackendWebTransferProducerPaths){const bytes=readFileSync(join(root,path));producers.push({path,sha256:transferFixtureHash(bytes)});}selected={...fixture.transfer,version:2,purpose:'CUEVO_OPERATING_BACKEND_WEB_HANDOVER',status:'EXPORTED_OPERATING_BACKEND_HANDOVER',manifest:receipt,manifestSha256:transferFixtureHash(canonicalReleaseExecutionJson(receipt)),receiptScope:'ORIGINAL_NATIVE_OPERATING_BACKEND_AND_CLEANUP',producers,evidence:operatingBackendWebTransferEvidenceNames.map(name=>({name,sha256:digest}))};}
+    const text = canonicalReleaseExecutionJson(selected), zip = await archive([{ name: 'web-transfer.json', bytes: Buffer.from(text) }]);
     const artifact = { id: 71, name: 'cuevo-web-handover-51-1', size_in_bytes: zip.length, expired: false, digest: 'sha256:' + transferFixtureHash(zip), created_at: precision === 'same-second' ? new Date(Math.floor(Date.parse(fixture.transfer.exportedAt) / 1000) * 1000).toISOString() : new Date(fixture.now - 20000).toISOString(), expires_at: new Date(fixture.now + 86400000).toISOString(), workflow_run: { id: 51, head_branch: 'main', head_sha: sourceSha } };
     const environment = { id: 123, name: 'staging', can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }], deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } };
     const responses = new Map<string, unknown>([
@@ -142,7 +145,7 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
       if (path === 'actions/artifacts/71/zip') { assert.equal(options?.redirect, 'manual'); return new Response(null, { status: 302, headers: { location: 'https://productionresultssafixture.blob.core.windows.net/artifacts/archive?sig=controlled' } }); }
       assert.equal(options?.redirect, 'error'); if (!responses.has(path)) throw Error('Unexpected fixed path'); return Response.json(responses.get(path));
     };
-    await run({ input: { repoRoot: root, githubToken: 'private-github-canary', releaseSha: sourceSha, ciRunId: '31', backendRunId: '51', backendRunAttempt: 1, artifactId: '71', transferSha256: transferFixtureHash(text), web: { teamId: 'team_Cuevo', projectId: 'prj_Web', target: 'preview' } }, responses, root, calls });
+    await run({ input: {...(operating?{handoff:'operating-staging'}:{}),repoRoot: root, githubToken: 'private-github-canary', releaseSha: sourceSha, ciRunId: '31', backendRunId: '51', backendRunAttempt: 1, artifactId: '71', transferSha256: transferFixtureHash(text), web: { teamId: 'team_Cuevo', projectId: 'prj_Web', target: 'preview' } }, responses, root, calls });
   } finally {
     globalThis.fetch = oldFetch; for (const key of keys) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; }
     assert.equal(resolve(root, '..'), resolve(tmpdir())); await rm(root, { recursive: true, force: true });
@@ -158,6 +161,7 @@ test('controlled official completed artifact source and review reader sends no t
     assert(fixture.calls.includes('productionresultssafixture.blob.core.windows.net/artifacts/archive'));
   });
 });
+test('actual operating artifact admission preserves distinct purpose and refuses default full consumption',async()=>{const api=await nativeReader();await officialFixture(async fixture=>{const result=await api.readCompletedBackendWebTransferAdmission(fixture.input);assert.equal(result.purpose,'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION');assert.equal(result.customerReady,false);assert.equal(result.privateProofReexecuted,false);assert.equal(result.backendIdentity.runId,'51');await assert.rejects(api.readCompletedBackendWebTransferAdmission({...fixture.input,handoff:'customer-candidate'}));},'ordinary',true);});
 test('completed handover consumption rejects changed canonical runtime attempts or missing runtime jobs',async()=>{
  const api=await nativeReader();for(const mode of ['attempt','missing'])await officialFixture(async f=>{if(mode==='attempt'){const row=f.responses.get('actions/runs/31') as Record<string,unknown>;f.responses.set('actions/runs/31',{...row,run_attempt:3});}else{const path='actions/runs/31/attempts/2/jobs?per_page=100&page=1',row=f.responses.get(path) as {total_count:number;jobs:Record<string,unknown>[]};row.jobs=row.jobs.filter(job=>job.name!=='runtime-browser');row.total_count=row.jobs.length;}await assert.rejects(api.readCompletedBackendWebTransferAdmission(f.input));});
 });

@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createRequire} from 'node:module';
-import {ciRuntimeJobs,ciSourceJobs} from './verification-workflows';
+import {ciRuntimeJobs,ciSourceJobs,ciDatabaseJob} from './verification-workflows';
 
 test('canonical runtime admission binds original run attempt and every successful isolated lane step',async()=>{
  const {readCanonicalRuntimeJobs}=await import('./canonical-runtime-jobs');
  const run={id:31,run_attempt:2,head_sha:'a'.repeat(40),head_branch:'main',event:'push',path:'.github/workflows/ci.yml',status:'completed',conclusion:'success',repository:{full_name:'owner/repo'}};
- const jobs=Object.entries({...ciRuntimeJobs,...ciSourceJobs}).map(([name,job],index)=>({id:index+1,name,run_id:31,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:'success',steps:job.steps.map((step,position)=>({name:'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`,number:position+1,status:'completed',conclusion:'success'}))}));
+ const jobs=Object.entries({...ciRuntimeJobs,...ciSourceJobs,'database-checks':ciDatabaseJob}).map(([name,job],index)=>({id:index+1,name,run_id:31,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:'success',steps:job.steps.map((step,position)=>({name:'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`,number:position+1,status:'completed',conclusion:'success'}))}));
  for(const[name,index]of ['codeql','secret-scan','required'].map((name,index)=>[name,index] as const))jobs.push({id:10+index,name,run_id:31,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:'success',steps:[{name:'Required source-owned check',number:1,status:'completed',conclusion:'success'}]});
  const get=async(path:string)=>path==='actions/runs/31'?run:{total_count:jobs.length,jobs};
  const result=await readCanonicalRuntimeJobs(run,get);assert.equal(result.runAttempt,2);assert.match(result.jobsSha256,/^[a-f0-9]{64}$/);
  const skippedDependency={id:99,name:'dependency-review',run_id:31,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:'skipped',steps:[]};
- assert.equal((await readCanonicalRuntimeJobs(run,async(path)=>path==='actions/runs/31'?run:{total_count:9,jobs:[...jobs,skippedDependency]})).runAttempt,2);
- await assert.rejects(readCanonicalRuntimeJobs(run,async(path)=>path==='actions/runs/31'?run:{total_count:9,jobs:[...jobs,{...skippedDependency,conclusion:'success'}]}));
+ assert.equal((await readCanonicalRuntimeJobs(run,async(path)=>path==='actions/runs/31'?run:{total_count:10,jobs:[...jobs,skippedDependency]})).runAttempt,2);
+ await assert.rejects(readCanonicalRuntimeJobs(run,async(path)=>path==='actions/runs/31'?run:{total_count:10,jobs:[...jobs,{...skippedDependency,conclusion:'success'}]}));
  for(const mode of ['attempt-missing','attempt','missing','skipped','extra','drift','missing-security','failed-security','extra-job']){
   const current=structuredClone(run),rows=structuredClone(jobs);let reads=0;
   if(mode==='attempt-missing')delete(current as Partial<typeof run>).run_attempt;
@@ -28,7 +28,7 @@ test('canonical admission requires the independently successful source-contract 
  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):unknown},fs=await import('node:fs/promises');
  const workflow=yaml.load(await fs.readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,{steps:{name?:string;uses?:string;run?:string}[]}>};
  const source=workflow.jobs['source-contracts'];assert.ok(source,'Source-contract producer must exist before canonical success.');
- const exact=['runtime-backend','runtime-browser','technical-mvp','fast-checks','source-contracts'];
+ const exact=['runtime-backend','runtime-browser','technical-mvp','fast-checks','source-contracts','database-checks'];
  const jobs=exact.map((name,index)=>({id:index+1,name,run_id:31,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:'success',steps:workflow.jobs[name].steps.map((step,position)=>({name:step.name??('Run '+(step.uses??step.run)),number:position+1,status:'completed',conclusion:'success'}))}));
  for(const[name,index]of ['codeql','secret-scan','required'].map((name,index)=>[name,index]as const))jobs.push({id:20+index,name,run_id:31,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:'success',steps:[{name:'Required source-owned check',number:1,status:'completed',conclusion:'success'}]});
  const read=async(rows:typeof jobs)=>readCanonicalRuntimeJobs(run,async path=>path==='actions/runs/31'?run:{total_count:rows.length,jobs:rows});

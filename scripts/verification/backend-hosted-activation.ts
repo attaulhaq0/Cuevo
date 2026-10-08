@@ -13,7 +13,7 @@ import { verifyHostedPrivateAccess } from './backend-hosted-private';
 import { readHostedMigrationProvider, requireCurrentHostedMigrationEndpoint } from '../database/hosted-migration-provider';
 import { verifyScheduledWorkerRecovery, type ScheduledRecoveryResult } from './backend-hosted-recovery';
 import { backendPreviewHeaders } from './backend-preview-transport';
-import {activeRuntimeStateSchema,validateActiveRuntimeTransition,type ActiveRuntimeState} from './backend-runtime-resume';
+import {activeRuntimeStateSchema,validateActiveRuntimeTransition,type ActiveRuntimeState} from '../database/hosted-active-runtime-state';
 import {confirmHostedWorkerActivation} from './backend-hosted-activation-confirmation';
 
 const fail=()=>Error('Hosted worker activation requires review; private contents withheld.');

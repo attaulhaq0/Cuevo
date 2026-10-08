@@ -5,7 +5,7 @@ import type { WorkerAnalyticsConfig, LiveAnalyticsConfig, PosthogEvent } from '.
 import type { WorkerQueryPort } from '../../platform/query-port';
 
 export interface WorkerConnection extends WorkerQueryPort { close(): Promise<void> }
-export type WorkerEdgeConfig = { purposeKey: string; databaseUrl: string; analytics?: WorkerAnalyticsConfig };
+export type WorkerEdgeConfig = { purposeKey: string; databaseUrl: string; analytics?: WorkerAnalyticsConfig; generation?:string|null };
 export type WorkerConnectionFactory = (config: WorkerEdgeConfig) => Promise<WorkerConnection>;
 type FailurePhase = 'CONNECTION' | 'HEALTH' | 'ADMISSION' | 'DOMAIN' | 'ANALYTICS' | 'FINISH' | 'CLOSE';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
@@ -54,14 +54,14 @@ export function createWorkerHandler(config: WorkerEdgeConfig, factory: WorkerCon
       const health = (await connection.query('select internal.worker_health()as health')).rows[0]?.health;
       if (!health || typeof health !== 'object' || !('ready' in health) || health.ready !== true) throw new Error('Worker role unavailable.');
       phase = 'ADMISSION';
-      const admission = (await connection.query('select internal.begin_worker_wake($1)as wake', [wake.wakeId])).rows[0]?.wake;
+      const admission = (await connection.query(config.generation==null?'select internal.begin_worker_wake($1)as wake':'select internal.begin_worker_wake($1,$2)as wake', config.generation==null?[wake.wakeId]:[wake.wakeId,config.generation])).rows[0]?.wake;
       if (typeof admission !== 'boolean') throw new Error('Wake admission outcome unknown.');
       admitted = admission;
       if (!admitted) duplicate = true;
       else {
         const started = now();
         phase = 'DOMAIN';
-        const result = await new OutboxProcessor(connection).process({ maxEvents: 10, deadline: started + 20_000, now });
+        const result = await new OutboxProcessor(connection,undefined,config.generation??null).process({ maxEvents: 10, deadline: started + 20_000, now });
         processed = result.processed; processingReceiptUnknown = result.processingReceiptUnknown; failed = result.executionUnavailable || processingReceiptUnknown;
         if (failed) failurePhase = 'DOMAIN';
         state = result.failureReceiptUnknown ? 'FAILURE_RECEIPT_UNKNOWN' : result.reviewRequired ? 'REQUIRES_REVIEW' : 'COMPLETED';
@@ -69,7 +69,7 @@ export function createWorkerHandler(config: WorkerEdgeConfig, factory: WorkerCon
           phase = 'ANALYTICS';
           // Domain source progression gets the first batch; network capture adds at most one
           // effect to a domain-bearing wake, while analytics-only recovery can drain up to ten.
-          const analytics = await new PosthogDelivery(connection, config.analytics, capture).process({ maxEvents: result.attempted > 0 ? 1 : 10, deadline: started + 30_000, now });
+          const analytics = await new PosthogDelivery(connection, config.analytics, capture,config.generation??null).process({ maxEvents: result.attempted > 0 ? 1 : 10, deadline: started + 30_000, now });
           analyticsAccepted = analytics.accepted;
           if (analytics.reviewRequired && state === 'COMPLETED') state = 'REQUIRES_REVIEW';
         }

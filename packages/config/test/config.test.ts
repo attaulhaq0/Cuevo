@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseServerConfig } from '../src/index';
 describe('configuration fails closed', () => {
+  it('only the worker consumer receives the exact private release generation',()=>{expect(parseServerConfig({CUEVO_WORKER_RELEASE_GENERATION:'9223372036854775807'},'worker').workerReleaseGeneration).toBe('9223372036854775807');expect(parseServerConfig({CUEVO_WORKER_RELEASE_GENERATION:'2'},'api').workerReleaseGeneration).toBeNull();expect(parseServerConfig({},'worker').workerReleaseGeneration).toBeNull();expect(()=>parseServerConfig({CUEVO_WORKER_RELEASE_GENERATION:'01'},'worker')).toThrow();});
   it('reports unavailable integrations without fabricated secrets', () => {
     const config = parseServerConfig({});
     expect(config.databaseUrl).toBeUndefined(); expect(config.supabaseUrl).toBeUndefined();

@@ -311,6 +311,17 @@ test('canonical schema-only prefix at a former full-source boundary admits only 
   const forged={...plan,priorSchemaRelease:{...plan.priorSchemaRelease!,migrationCount:plan.priorSchemaRelease!.migrationCount-1}};assert.throws(()=>subject.verifyPriorSchemaPrefix(root,forged));
  },true);
 });
+test('normal runtime rollout permits changed source provenance with exact installed schema and never admits pending SQL',async()=>{
+ const subject=await api();await fixture(async(root,sourceSha,treeSha)=>{
+  const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:target(),now}).plan,priorReceipt={projectRef,sourceSha,treeSha,completedSourceMigrationCount:initial.migrations.length,migrations:initial.migrations.map(({version,sha256})=>({version,sha256}))};
+  writeFileSync(join(root,'README.md'),'Verified ordinary API correction\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','runtime source changes with installed schema');
+  const input={repoRoot:root,sourceSha:git(root,'rev-parse','HEAD'),treeSha:git(root,'rev-parse','HEAD^{tree}'),target:{...target(),population:'ACTIVE_SYNTHETIC',authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version),dispatchDisabled:false},priorReceipt,now,operation:'RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE' as const};
+  const result=subject.createCanonicalRuntimeRolloutPlan(input);assert.equal(result.plan.runtimeOnly,true);assert.equal(result.plan.pending.length,0);assert.notEqual(result.plan.source.sha,sourceSha);
+  assert.throws(()=>subject.createCanonicalInstalledRuntimePlan({...input,operation:'INSTALLED_RUNTIME_READ_ONLY'}));
+  writeFileSync(join(root,'supabase/migrations/20261008150000_requires_compatibility.sql'),'begin;select 1;commit;\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','pending SQL requires separate compatibility');
+  assert.throws(()=>subject.createCanonicalRuntimeRolloutPlan({...input,sourceSha:git(root,'rev-parse','HEAD'),treeSha:git(root,'rev-parse','HEAD^{tree}')}));
+ },true);
+});
 
 function reconciliationTemplateFor(rows:{name:string;version:string;sha256:string}[],recovery:{sha:string;tree:string}){
  const originalIdentity={projectRef,sourceSha:'d87455114cac2d22d63d040ce5b13e6b2e74e743',treeSha:'1e85393d46beb4f5356e07277a13a7ef33cc67d9',planSha256:'413d23ed86f7379b3e88b90e09370762ce576d0395f4c4fceaa44d0f3abf3cf1',stageId:'prefix',stageSha256:'5f9e1d7804d816dc3ee387f126f946a0ee0ac3b192b3d4973774cbf33b2ba506',databaseUrl:'postgresql://postgres.mqxdjvsyckzocokuikmx@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full',approvalDigest:'d46d4616c1b9eecdcd474b080bfefac98ee959fb7c54819d510773fc661a98de',ciRunId:'37702851953',certificateSha256:'700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'};

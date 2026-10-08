@@ -4,6 +4,8 @@
 
 Inherit root AGENTS.md. Read this app README and relevant source specs/tests before adding a job.
 
+- Hosted release admission uses the exact positive int8 string `CUEVO_WORKER_RELEASE_GENERATION`. Preserve its value through SQL parameters without Number conversion. Admission pause blocks new wake/begin/domain/analytics claims; held event completion/failure and invocation finish retain original lease authority. Legacy entrypoints remain fenced after generation bootstrap. Read the [incremental release decision](../../docs/decisions/2026-10-08-incremental-release-lifecycle.md); runtime health alone does not establish current generation or hosted operating acceptance.
+
 - Keep src/main.ts for local/persistent lifecycle and src/edge.ts for bounded hosted composition; processors live under src/jobs/<job> and pool/provider adapters under src/platform. Both use the same domain processor and private outbox functions.
 - Jobs consume shared packages or local platform, never another application's implementation. Platform cannot depend on jobs.
 - Authorize purpose and retrieve tenant-matched immutable source records through constrained private functions. Validate lease, dedup and acknowledgment atomically; preserve bounded retry/failure behavior.
