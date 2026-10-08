@@ -25,7 +25,8 @@ export const ciSourceJobs={
   {run:'npm run lint && npm run typecheck && npm test'},frozenSourceStep,
  ]},
  'source-contracts':{'runs-on':'ubuntu-latest','timeout-minutes':30,steps:[
-  ...ciSetup,{run:'node --import tsx scripts/verification/stateless-checks.ts'},frozenSourceStep,
+  ...ciSetup,{run:'node --import tsx scripts/verification/stateless-checks.ts'},
+  {name:'Retain exact safe source contracts',if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/verification/source-contracts/result.json\n.local/verification/source-contracts/failure.json\n','include-hidden-files':true,'if-no-files-found':'error','retention-days':14}},frozenSourceStep,
  ]},
 };
 export function validateCiSourceJobs(value:unknown):string[]{

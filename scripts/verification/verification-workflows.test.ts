@@ -68,3 +68,14 @@ test('isolated source contracts execute each stateless owner once while fast che
   assert.equal(new Set(stateless.map(step=>step.name)).size,stateless.length);
   assert.ok(ci.includes('npm run lint && npm run typecheck && npm test'));
 });
+
+test('source-contract evidence is retained only by its exact required producer with original source freeze',async()=>{
+ const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,Record<string,unknown>>};
+ assert.deepEqual(validateCiSourceJobs(workflow.jobs),[]);
+ const source=workflow.jobs['source-contracts'] as {steps:{name?:string;run?:string;uses?:string;with?:Record<string,unknown>;if?:string}[]},step=source.steps.find(item=>item.name==='Retain exact safe source contracts')!;
+ assert.ok(step);assert.equal(step.if,'always()');assert.equal(step.with?.path,'.local/verification/source-contracts/result.json\n.local/verification/source-contracts/failure.json\n');
+ for(const mode of ['missing','extra-path','optional','clock','budget']){const jobs=structuredClone(workflow.jobs),steps=(jobs['source-contracts'] as {steps:typeof source.steps}).steps,artifact=steps.find(item=>item.name===step.name)!;
+  if(mode==='missing')steps.splice(steps.indexOf(artifact),1);if(mode==='extra-path')artifact.with!.path='.local/';if(mode==='optional')artifact.if='success()';if(mode==='clock')artifact.with!.name='cuevo-source-contracts-latest';if(mode==='budget')jobs['source-contracts']['timeout-minutes']=60;
+  assert.ok(validateCiSourceJobs(jobs).length,mode);
+ }
+});

@@ -1,15 +1,44 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdtemp, mkdir, readFile, rm, writeFile,lstat,realpath } from 'node:fs/promises';
+import { existsSync,readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve,relative,isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
 import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-review';
+import {runInNewContext} from 'node:vm';
+import {isDeepStrictEqual} from 'node:util';
+import ts from 'typescript';
+
+test('actual web CLI resolves pinned executable before delayed current approval and launches once without PATH discovery',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-web-cli-'));
+ try{
+  const globalRoot=join(root,'global'),cliRoot=join(globalRoot,'vercel');await mkdir(join(cliRoot,'dist'),{recursive:true});await writeFile(join(cliRoot,'package.json'),JSON.stringify({name:'vercel',version:'62.1.0',bin:{vercel:'dist/index.js'}}));await writeFile(join(cliRoot,'dist/index.js'),'// Controlled tool never executed.\n');
+  const file=resolve(import.meta.dirname,'cicd-release.ts'),source=ts.createSourceFile(file,readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true),selected=source.statements.filter(ts.isFunctionDeclaration).filter(node=>['prepareWebCli','webCliFile'].includes(node.name?.text??''));const body=ts.transpileModule(selected.map(node=>node.getText(source)).join('\n')+'\n(typeof prepareWebCli==="undefined"?undefined:prepareWebCli);',{compilerOptions:{target:ts.ScriptTarget.ES2023,module:ts.ModuleKind.None}}).outputText;
+  let now=1000,admissions=0,launches=0;const env={VERCEL_TOKEN:'private-web-cli-canary',VERCEL_ORG_ID:'team_Cuevo',VERCEL_PROJECT_ID:'prj_Web'};
+  const execute=(command:string,args:string[])=>{if(command==='npm'){now+=32000;assert.deepEqual(Array.from(args),['root','--global']);return globalRoot;}assert.equal(command,'controlled-node');assert.equal(args[0],join(cliRoot,'dist/index.js'));assert.ok(args.includes('--target=preview'));assert.equal(admissions,1);launches++;return'https://cuevo-prepared-web.vercel.app';};
+  const prepare=runInNewContext(body,{execFileSync:execute,readFile,lstat,realpath,resolve,join,relative,isAbsolute,createHash,process:{platform:'linux',execPath:'controlled-node',env},runtimeEnvironment:()=>({}),required:(key:keyof typeof env)=>env[key],webIdentity:()=>({teamId:env.VERCEL_ORG_ID,projectId:env.VERCEL_PROJECT_ID,target:'preview'}),isDeepStrictEqual}) as ((args:string[])=>Promise<(admit:()=>Promise<()=>Promise<()=>void>>)=>Promise<string>>)|undefined;
+  assert.equal(typeof prepare,'function','actual executable preparation must be independent of the final approval');const launch=await prepare!(['deploy','--prebuilt','--yes','--target=preview']);assert.equal(now,33000);assert.equal(launches,0);
+  const admit=async()=>{await Promise.resolve();admissions++;return async()=>()=>undefined;};assert.equal(await launch(admit),'https://cuevo-prepared-web.vercel.app');assert.equal(launches,1);await assert.rejects(launch(admit));assert.equal(launches,1);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('prepared web CLI refuses tool or recipient drift during approval and preserves original package expiry before execution',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-web-cli-denial-'));
+ try{
+  const globalRoot=join(root,'global'),cliRoot=join(globalRoot,'vercel'),packagePath=join(cliRoot,'package.json'),cliPath=join(cliRoot,'dist/index.js'),packageBytes=JSON.stringify({name:'vercel',version:'62.1.0',bin:{vercel:'dist/index.js'}});await mkdir(join(cliRoot,'dist'),{recursive:true});
+  const file=resolve(import.meta.dirname,'cicd-release.ts'),source=ts.createSourceFile(file,readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true),selected=source.statements.filter(ts.isFunctionDeclaration).filter(node=>['prepareWebCli','webCliFile','requireOriginalWebPackageClock'].includes(node.name?.text??'')),body=ts.transpileModule(selected.map(node=>node.getText(source)).join('\n')+'\n({prepareWebCli,requireOriginalWebPackageClock});',{compilerOptions:{target:ts.ScriptTarget.ES2023,module:ts.ModuleKind.None}}).outputText;
+  for(const mode of ['executable','package','target','expiry','consume-executable','consume-package','final-hash-expiry']as const){await writeFile(packagePath,packageBytes);await writeFile(cliPath,'// original\n');let launches=0,now=1000,consumed=false;const env={VERCEL_TOKEN:'private-web-canary',VERCEL_ORG_ID:'team_Cuevo',VERCEL_PROJECT_ID:'prj_Web'};
+   const scopedRead=async(...args:Parameters<typeof readFile>)=>{const bytes=await readFile(...args);if(mode==='final-hash-expiry'&&consumed)now=24*60*60*1000+1001;return bytes;};
+   const subject=runInNewContext(body,{execFileSync:(command:string)=>{if(command==='npm')return globalRoot;launches++;return'https://cuevo-invalid.vercel.app';},readFile:scopedRead,lstat,realpath,resolve,join,relative,isAbsolute,createHash,process:{platform:'linux',execPath:'controlled-node',env},runtimeEnvironment:()=>({}),required:(key:keyof typeof env)=>env[key],webIdentity:()=>({teamId:env.VERCEL_ORG_ID,projectId:env.VERCEL_PROJECT_ID,target:'preview'}),isDeepStrictEqual,z:createRequire(import.meta.url)('zod').z,parseCanonicalReleaseReviewJson:JSON.parse,Date:{parse:Date.parse,now:()=>now}})as{prepareWebCli:(args:string[])=>Promise<(admit:()=>Promise<()=>Promise<()=>void>>)=>Promise<string>>;requireOriginalWebPackageClock:(prepared:{canonicalJson:string})=>void};
+   const launch=await subject.prepareWebCli(['deploy','--prebuilt','--yes','--target=preview']);await assert.rejects(launch(async()=>{if(mode==='executable')await writeFile(cliPath,'substituted during approval');if(mode==='package')await writeFile(packagePath,'{}');if(mode==='target')env.VERCEL_PROJECT_ID='prj_Foreign';if(mode==='expiry')now=24*60*60*1000+1001;return async()=>{if(mode==='consume-executable')await writeFile(cliPath,'substituted during final input digest');if(mode==='consume-package')await writeFile(packagePath,'{}');consumed=true;return()=>{subject.requireOriginalWebPackageClock({canonicalJson:'{"preparedAt":"1970-01-01T00:00:01.000Z"}'});};};}));assert.equal(launches,0,mode);
+  }
+ }finally{await rm(root,{recursive:true,force:true});}
+});
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
 test('required aggregate cannot bypass executed producers with dead guard text environment overrides or omitted checks',async()=>{

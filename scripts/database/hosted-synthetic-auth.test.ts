@@ -13,26 +13,36 @@ import { transformSync } from 'esbuild';
 import { readCanonicalMigrationSources, planHostedMigrations, canonicalHostedMigrationPlan, type MigrationSource } from './hosted-migration-plan';
 import type { admitHostedMigrationStageFiles } from './hosted-migration-stage-files';
 import { createHostedMigrationWorkdirs } from './hosted-migration-workdirs';
-import type { SyntheticAuthSeedManifest, SyntheticAuthSeedReceipt } from '../seed-auth';
+import {syntheticAuthOriginalCreateMetadata,type SyntheticAuthSeedManifest,type SyntheticAuthSeedReceipt} from '../seed-auth';
 
 const ref = 'mqxdjvsyckzocokuikmx', secret = 'sb_secret_native-auth-private-canary', root = resolve(import.meta.dirname, '../..'), rawManifest = await readFile(join(root, 'supabase/seed/identities.json')), manifest = JSON.parse(rawManifest.toString('utf8')) as SyntheticAuthSeedManifest;
 const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root, encoding: 'utf8' }).trim(), sources = readCanonicalMigrationSources({ repoRoot: root, sourceSha: sha, treeSha: tree }).sources;
 // A distinct module identity keeps the production file port intercepted while these two source cases execute its real implementation.
 const { admitHostedMigrationStageFiles: admitActualStageFiles } = await import(pathToFileURL(resolve(import.meta.dirname, 'hosted-migration-stage-files.ts')).href + '?actual-auth-inventory-fixture') as { admitHostedMigrationStageFiles: typeof admitHostedMigrationStageFiles };
-type State = { events: string[]; users: Map<string, ReturnType<typeof user>>; receipt: SyntheticAuthSeedReceipt | null; failures: string[]; posts: number; held: boolean; loseAck: boolean; controller: AbortController; input: Record<string, unknown>; path: string; sources: MigrationSource[]; attemptIdentities: unknown[]; actualFiles: boolean; recoveryPermit: object; recoveryAdmissions: number; recoveryAssertions: number; recoveryValid: boolean };
+type State = { events: string[]; users: Map<string, ReturnType<typeof user>>; receipt: SyntheticAuthSeedReceipt | null; failures: string[]; posts: number; held: boolean; loseAck: boolean; controller: AbortController; input: Record<string, unknown>; path: string; sources: MigrationSource[]; attemptIdentities: unknown[]; actualFiles: boolean; recoveryPermit: object; recoveryAdmissions: number; recoveryAssertions: number; recoveryValid: boolean;recoveryRenewals:number;recoveryAt:number;managementReads:number;recoveryPopulation:ReturnType<typeof authPopulation>|null };
 let state: State;
-const user = (actor: SyntheticAuthSeedManifest['actors'][number]) => ({ id: actor.actorId, email: actor.email, is_anonymous: false, user_metadata: { synthetic: true }, email_confirmed_at: '2026-10-06T00:00:00Z', created_at: '2026-10-06T00:00:00Z', aud: 'authenticated', role: 'authenticated' });
+const user = (actor: SyntheticAuthSeedManifest['actors'][number],app_metadata:Record<string,unknown>={}) => ({ id: actor.actorId, email: actor.email, is_anonymous: false, user_metadata: { synthetic: true },app_metadata, email_confirmed_at: '2026-10-06T00:00:00Z', created_at: '2026-10-06T00:00:00Z', aud: 'authenticated', role: 'authenticated' });
 const fail = (name: string) => { if (state.failures.includes(name)) throw Error(secret); };
+function authPopulation(observedAtMs:number){
+ fail('population');const people=manifest.actors.map(actor=>({schoolId:actor.schoolId,actorId:actor.actorId,displayName:actor.displayName,synthetic:true}));if(state.failures.includes('mixed'))people[0].synthetic=false;
+ return{observedAtMs,population:{schools:[{id:manifest.schoolId,name:'Cuevo Reference Academy – Doha',countryCode:'QA',languages:['en','ar'],status:'active'},{id:manifest.denialSchoolId,name:'Synthetic Isolation School',countryCode:'QA',languages:['en','ar'],status:'active'}],people,memberships:manifest.actors.map(actor=>({id:'21000000-0000-4000-8000-'+actor.actorId.slice(-12),schoolId:actor.schoolId,actorId:actor.actorId,role:actor.role,status:'active',effectiveFrom:'2026-09-01T00:00:00Z',effectiveTo:null}))},authUsers:[...state.users.values()].map(row=>({id:row.id,email:row.email,emailConfirmedAt:row.email_confirmed_at,synthetic:row.user_metadata.synthetic,isAnonymous:row.is_anonymous,deletedAt:null,bannedUntil:null}))};
+}
 Object.assign(globalThis, { nativeAuthFixture: {
   prepared: (value: unknown) => { fail('prepared'); return value; },
-  admission: async (value: { expected: unknown; prepared: { sha256: string } }) => { state.events.push('admission'); fail('admission'); return { expected: value.expected, approval: { packageSha256: value.prepared.sha256 }, provenance: 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' }; },
+  admission: async (value: { expected: unknown; prepared: { sha256: string } }) => { state.events.push('admission'); fail('admission'); return { expected: value.expected, approval: { packageSha256: value.prepared.sha256 }, provenance: 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE', observedAt:new Date(Date.now()).toISOString() }; },
   provider: async () => ({ observedAtMs: Date.now(), projectRef: ref, directEndpoint: { projectRef: ref, kind: 'direct', host: `db.${ref}.supabase.co`, port: 5432, database: 'postgres' },sessionEndpoint:{projectRef:ref,kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'} }),
   files: async (input: Parameters<typeof admitActualStageFiles>[0]) => { state.events.push('files'); fail('files'); const result=state.actualFiles ? await admitActualStageFiles(input) : { sources: state.sources };if(state.failures.includes('slow-source'))(globalThis as unknown as {nativeAuthFixture:{advanceSourceClock:()=>void}}).nativeAuthFixture.advanceSourceClock();return result; },
   reference: () => { fail('mixed'); },
   // The issuer is controlled here; real native authority is covered separately.
   recoveryAssertion: (permit:unknown,identity:{projectRef:string;sourceSha:string;approvalDigest:string},purpose:string) => { state.recoveryAssertions++;assert.equal(permit,state.recoveryPermit);assert.equal(identity.projectRef,ref);assert.equal(identity.sourceSha,(state.input.expected as {releaseSha:string}).releaseSha);assert.equal(identity.approvalDigest,'b'.repeat(64));assert.equal(purpose,(state.input.expected as {currentRuntime?:unknown;installedRuntime?:unknown}).currentRuntime||(state.input.expected as {installedRuntime?:unknown}).installedRuntime?'INSTALLED_SYNTHETIC_RUNTIME_READ_ONLY':'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');if(!state.held||!state.recoveryValid)throw Error('Controlled native consumption became stale'); },
+  recoveryFacts: (permit:unknown,identity:unknown,versions:string[]) => {
+    assert.equal(permit,state.recoveryPermit);assert.equal(state.held,true);if(!state.recoveryValid||Date.now()-state.recoveryAt>30000)throw Error('Controlled native consumption became stale');
+    return{identity,expectedVersions:versions,observedAtMs:state.recoveryAt,authority:{observedAt:new Date(state.recoveryAt).toISOString()},consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',provider:{observedAtMs:state.recoveryAt,projectRef:ref,directEndpoint:{projectRef:ref,kind:'direct',host:`db.${ref}.supabase.co`,port:5432,database:'postgres'},sessionEndpoint:{projectRef:ref,kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'}},target:{historyPresent:true,history:state.sources.map(source=>({version:source.name.slice(0,14),name:source.name.slice(15,-4),statements:[new TextDecoder().decode(source.bytes).trim()].filter(Boolean)}))},post:{checks:{foundation:true,dispatchInactive:!state.failures.includes('active')}},population:structuredClone(state.recoveryPopulation)};
+  },
   database: async () => ({ signal: state.controller.signal,
-    admitSchemaContinuation: async (request:{consumption:string}) => { assert.equal(state.held,true);assert.equal(request.consumption,(state.input.expected as {currentRuntime?:unknown;installedRuntime?:unknown}).currentRuntime||(state.input.expected as {installedRuntime?:unknown}).installedRuntime?'INSTALLED_SYNTHETIC_RUNTIME_READ_ONLY':'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');state.recoveryAdmissions++;state.recoveryPermit=Object.freeze({});state.recoveryValid=true;return state.recoveryPermit; },
+    readOriginalSyntheticAuthUser:async(request:{actorId:string;email:string})=>{const selected=[...state.users.values()].filter(row=>row.id===request.actorId||row.email.toLowerCase()===request.email.toLowerCase()),users=selected.map(row=>({id:row.id,email:row.email,createdAt:row.created_at,emailConfirmedAt:row.email_confirmed_at,synthetic:row.user_metadata.synthetic,isAnonymous:row.is_anonymous,deletedAt:null,bannedUntil:null,appMetadata:row.app_metadata}));if(state.failures.includes('multiple-original')&&users.length)users.push({...users[0],id:manifest.actors[0].actorId});if(state.failures.includes('foreign-native')&&users.length)users[0].appMetadata={};if(state.failures.includes('old-created')&&users.length)users[0].createdAt='2026-01-01T00:00:00Z';if(state.failures.includes('slow-original-read'))(globalThis as unknown as {nativeAuthFixture:{advanceSourceClock:()=>void}}).nativeAuthFixture.advanceSourceClock();return{observedAtMs:Date.now(),users};},
+    admitSchemaContinuation: async (request:{consumption:string}) => { assert.equal(state.held,true);assert.equal(request.consumption,(state.input.expected as {currentRuntime?:unknown;installedRuntime?:unknown}).currentRuntime||(state.input.expected as {installedRuntime?:unknown}).installedRuntime?'INSTALLED_SYNTHETIC_RUNTIME_READ_ONLY':'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');state.recoveryAdmissions++;if(state.failures.includes('slow-recovery'))(globalThis as unknown as {nativeAuthFixture:{advanceSourceClock:()=>void}}).nativeAuthFixture.advanceSourceClock();state.recoveryPermit=Object.freeze({});state.recoveryAt=Date.now();state.recoveryPopulation=authPopulation(state.recoveryAt);state.recoveryValid=true;return state.recoveryPermit; },
+    refreshSchemaContinuation:async(permit:unknown)=>{assert.equal(permit,state.recoveryPermit);assert.equal(state.held,true);state.recoveryRenewals++;if(state.failures.includes('slow-current'))(globalThis as unknown as {nativeAuthFixture:{advanceSourceClock:()=>void}}).nativeAuthFixture.advanceSourceClock();state.recoveryAt=Date.now();state.recoveryPopulation=authPopulation(state.recoveryAt);state.recoveryValid=true;},
     withLock: async (key: string, run: (lease: unknown) => Promise<void>) => { assert.equal(key, ref + ':HOSTED_SCHEMA_MIGRATION'); state.held = true; state.events.push('lock'); try { await run({ kind: 'HELD', id: 'native-auth-lease', key }); } finally { state.held = false; } return { kind: state.failures.includes('unlock') ? 'RELEASE_UNCONFIRMED' : 'RELEASED' }; },
     observe: async () => { fail('history'); return { operator: 'postgres', database: 'postgres', tls: { kind: 'PEER_VERIFIED', host: (state.input.endpoint as {host:string}).host, certificateSha256: 'a'.repeat(64) }, historyPresent: true, history: state.sources.map(source => { const text = new TextDecoder().decode(source.bytes).trim(); return { version: source.name.slice(0, 14), name: source.name.slice(15, -4), statements: text ? [text] : [] }; }) }; },
     observeStage: async () => ({ observedAtMs: Date.now(), checks: { foundation: true, rls: true, privateRelations: true, privateFunctions: true, runtimeRoles: true, nativeSourceBridge: true, curriculumLifecycle: true, dispatchInactive: !state.failures.includes('active'), analyticsInactive: true, recoveryCronInactive: true, transportPrivate: true } }),
@@ -40,12 +50,12 @@ Object.assign(globalThis, { nativeAuthFixture: {
       fail('population');if(state.failures.includes('stale-consumption')&&state.recoveryAdmissions>=2)state.recoveryValid=false; const people = manifest.actors.map(actor => ({ schoolId: actor.schoolId, actorId: actor.actorId, displayName: actor.displayName, synthetic: true })); if (state.failures.includes('mixed')) people[0].synthetic = false;
       return { observedAtMs: Date.now(), population: { schools: [{ id: manifest.schoolId, name: 'Cuevo Reference Academy – Doha', countryCode: 'QA', languages: ['en', 'ar'], status: 'active' }, { id: manifest.denialSchoolId, name: 'Synthetic Isolation School', countryCode: 'QA', languages: ['en', 'ar'], status: 'active' }], people, memberships: manifest.actors.map(actor => ({ id: '21000000-0000-4000-8000-' + actor.actorId.slice(-12), schoolId: actor.schoolId, actorId: actor.actorId, role: actor.role, status: 'active', effectiveFrom: '2026-09-01T00:00:00Z', effectiveTo: null })) }, authUsers: [...state.users.values()].map(row => ({ id: row.id, email: row.email, emailConfirmedAt: row.email_confirmed_at, synthetic: row.user_metadata.synthetic, isAnonymous: row.is_anonymous, deletedAt: null, bannedUntil: null })) };
     },
-    readAuthSeedAttempt: async (identity: unknown) => { state.attemptIdentities.push(structuredClone(identity)); state.events.push('read-attempt'); fail('receipt-read'); return structuredClone(state.receipt); },
+    readAuthSeedAttempt: async (identity: unknown) => { state.attemptIdentities.push(structuredClone(identity)); state.events.push('read-attempt'); fail('receipt-read');if(state.failures.includes('changed-intent')&&state.recoveryRenewals>=2&&state.receipt){const changed=structuredClone(state.receipt);changed.actors[0].state='OUTCOME_UNKNOWN';return changed;}return structuredClone(state.receipt); },
     readInstalledPopulation:async()=>{const expected=state.input.expected as {releaseSha:string;treeSha:string};return{version:1,purpose:'CUEVO_INSTALLED_SYNTHETIC_POPULATION',sourceSha:expected.releaseSha,treeSha:expected.treeSha,projectRef:ref,seedSha256:'7be612e9a30e916ec4b460a2ae14a2796cb3f4f542cbdec8f7db2f49c95d9903',manifestSha256:createHash('sha256').update(canonicalReleaseExecutionJson(manifest)).digest('hex')};},
     persistAuthSeedAttempt: async (identity: unknown, receipt: SyntheticAuthSeedReceipt) => { state.attemptIdentities.push(structuredClone(identity)); assert.equal(state.held, true); state.events.push('persist:' + receipt.actors.filter(actor => actor.state === 'INTENT').length); state.receipt = structuredClone(receipt); if (state.failures.includes('persist')) throw Error(secret); },
   }),
 } });
-const replacements: Record<string, string> = { 'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.nativeAuthFixture.admission;', 'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.nativeAuthFixture.prepared;', 'hosted-migration-provider.ts': 'export const readHostedMigrationProvider=globalThis.nativeAuthFixture.provider;', 'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeAuthFixture.files;', 'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeAuthFixture.database;export const assertNativeSchemaRecoveryConsumption=globalThis.nativeAuthFixture.recoveryAssertion;', 'hosted-reference-population.ts': 'export const validateHostedReferencePopulation=globalThis.nativeAuthFixture.reference;' };
+const replacements: Record<string, string> = { 'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.nativeAuthFixture.admission;', 'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.nativeAuthFixture.prepared;', 'hosted-migration-provider.ts': 'export const readHostedMigrationProvider=globalThis.nativeAuthFixture.provider;', 'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeAuthFixture.files;', 'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeAuthFixture.database;export const assertNativeSchemaRecoveryConsumption=globalThis.nativeAuthFixture.recoveryAssertion;export const readNativeSchemaStageAdmission=globalThis.nativeAuthFixture.recoveryFacts;', 'hosted-reference-population.ts': 'export const validateHostedReferencePopulation=globalThis.nativeAuthFixture.reference;' };
 // Native observations and the separately tested full reference mapping are
 // intercepted. Real SDK, seed core, current Auth-subset validation, connection
 // configuration, raw-history and HTTP/body/source guards execute.
@@ -61,14 +71,14 @@ async function fixture(run: (input: Record<string, unknown>) => Promise<void>, a
     const sourceSha = git('rev-parse', 'HEAD'), treeSha = git('rev-parse', 'HEAD^{tree}'), now = Date.now(), plan = planHostedMigrations({ sources: fixtureSources, source: { sha: sourceSha, tree: treeSha }, now, target: { projectRef: ref, boundProjectRef: ref, projectName: 'Cuevo', projectStatus: 'ACTIVE_HEALTHY', deploymentEnvironment: 'synthetic-staging', observedAt: new Date(now).toISOString(), authUsers: 0, storageObjects: 0, appSchemas: [], migrationVersions: [], dispatchDisabled: true, population: 'EMPTY' } });
     await mkdir(join(path, '.local/hosted-release'), { recursive: true });
     const finalStage = actualFiles ? (await createHostedMigrationWorkdirs({ repoRoot: path, sourceSha, treeSha, plan, outputRoot: join(path, '.local/hosted-release') })).stages.at(-1)! : { id: 'remaining', included: plan.migrations };
-    const expected = { releaseSha: sourceSha, treeSha, fingerprints: { migrationPlanSha256: canonicalHostedMigrationPlan(plan).sha256 }, targets: { supabase: { projectRef: ref, authOrigin: `https://${ref}.supabase.co` } } }, preparedApproval = { sha256: 'b'.repeat(64) };
+    const expected = { releaseSha: sourceSha, treeSha,releaseRunId:'31',runAttempt:1, fingerprints: { migrationPlanSha256: canonicalHostedMigrationPlan(plan).sha256 }, targets: { supabase: { projectRef: ref, authOrigin: `https://${ref}.supabase.co` } } }, preparedApproval = { sha256: 'b'.repeat(64) };
     const endpoint={projectRef:ref,kind:'direct',host:`db.${ref}.supabase.co`,port:5432,database:'postgres'}; const input = { endpoint, repoRoot: path, expected, preparedApproval, githubToken: secret, providerToken: secret, certificate: { path: join(path, '.local/hosted-release/ca.pem'), sha256: 'a'.repeat(64) }, migrationPassword: secret, plan, finalStage, authProvisioningKey: secret, syntheticPassword: 'native-synthetic-password-private', originalKey: 'cuevo-initial-hosted-synthetic-auth' };
-    (input.expected as {fingerprints:Record<string,string>}).fingerprints.migrationEndpointSha256=createHash('sha256').update(canonicalReleaseExecutionJson(endpoint)).digest('hex');state = { events: [], users: new Map(), receipt: null, failures: [], posts: 0, held: false, loseAck: false, controller: new AbortController(), input, path, sources: fixtureSources, attemptIdentities: [], actualFiles, recoveryPermit:{},recoveryAdmissions:0,recoveryAssertions:0,recoveryValid:false };
+    (input.expected as {fingerprints:Record<string,string>}).fingerprints.migrationEndpointSha256=createHash('sha256').update(canonicalReleaseExecutionJson(endpoint)).digest('hex');state = { events: [], users: new Map(), receipt: null, failures: [], posts: 0, held: false, loseAck: false, controller: new AbortController(), input, path, sources: fixtureSources, attemptIdentities: [], actualFiles, recoveryPermit:{},recoveryAdmissions:0,recoveryAssertions:0,recoveryValid:false,recoveryRenewals:0,recoveryAt:0,managementReads:0,recoveryPopulation:null };
     globalThis.fetch = async (raw, options) => {
       const url = new URL(String(raw)); assert.equal(options?.redirect, 'error');
-      if (url.origin === 'https://api.supabase.com') { assert.equal(url.pathname, `/v1/projects/${ref}/database/query`); assert.equal(options?.method, 'POST'); assert.equal(new Headers(options?.headers).get('Authorization'), 'Bearer ' + secret); assert.deepEqual(Object.keys(JSON.parse(String(options?.body))), ['query']); return Response.json([{ authUsers: state.users.size + (state.failures.includes('count') ? 1 : 0) }]); }
+      if (url.origin === 'https://api.supabase.com') { state.managementReads++;if(state.failures.includes('stale-consumption')&&state.recoveryRenewals>=2)state.recoveryValid=false;assert.equal(url.pathname, `/v1/projects/${ref}/database/query`); assert.equal(options?.method, 'POST'); assert.equal(new Headers(options?.headers).get('Authorization'), 'Bearer ' + secret); assert.deepEqual(Object.keys(JSON.parse(String(options?.body))), ['query']); return Response.json([{ authUsers: state.users.size + (state.failures.includes('count') ? 1 : 0) }]); }
       assert.equal(url.origin, `https://${ref}.supabase.co`); const headers = new Headers(options?.headers); assert.equal(headers.get('apikey'), secret); assert.equal(headers.has('Authorization'), false); assert.equal(state.held, true);
-      if (options?.method === 'POST') { assert.equal(url.pathname, '/auth/v1/admin/users'); assert.ok(state.receipt); const body = JSON.parse(String(options.body)), actor = manifest.actors.find(row => row.actorId === body.id)!; assert.equal(state.receipt!.actors.find(row => row.actorId === body.id)!.state, 'INTENT'); assert.deepEqual(body, { id: actor.actorId, email: actor.email, password: input.syntheticPassword, email_confirm: true, user_metadata: { synthetic: true } }); state.posts++; state.events.push('post'); state.users.set(actor.actorId, user(actor)); if (state.loseAck) { state.loseAck = false; throw Error(secret); } return Response.json(user(actor)); }
+      if (options?.method === 'POST') { assert.equal(url.pathname, '/auth/v1/admin/users'); assert.ok(state.receipt); const body = JSON.parse(String(options.body)), actor = manifest.actors.find(row => row.actorId === body.id)!; assert.equal(state.receipt!.actors.find(row => row.actorId === body.id)!.state, 'INTENT'); const original=state.receipt!.version===2?state.receipt!.actors.find(row=>row.actorId===actor.actorId)!.originalCreate:null;assert.deepEqual(body, { id: actor.actorId, email: actor.email, password: input.syntheticPassword, email_confirm: true, user_metadata: { synthetic: true },...(original?{app_metadata:syntheticAuthOriginalCreateMetadata(original.operationSha256)}:{}) }); state.posts++; state.events.push('post');const created=user(actor,body.app_metadata??{});created.created_at=new Date(Date.now()).toISOString();created.email_confirmed_at=created.created_at;state.users.set(actor.actorId,created); if (state.loseAck) { state.loseAck = false; throw Error(secret); } return Response.json(user(actor)); }
       assert.equal(options?.method, 'GET'); const id = url.pathname.split('/').at(-1)!; const found = state.users.get(id); return found ? Response.json(found) : Response.json({ code: 'user_not_found', message: 'User not found' }, { status: 404, headers: { 'X-Supabase-Api-Version': '2024-01-01' } });
     };
     await run(input);
@@ -84,6 +94,35 @@ test('slow exact source proof refreshes official authority after it without exte
  });}finally{Date.now=realNow;}
 });
 test('lost create acknowledgement persists original intent and later exact identity reconciles with no duplicate', async () => { const { provisionHostedSyntheticAuth } = await api(); await fixture(async input => { state.loseAck = true; assert.equal((await provisionHostedSyntheticAuth(input)).status, 'OUTCOME_UNKNOWN'); assert.equal(state.posts, 1); assert.equal(state.receipt?.actors[0].state, 'OUTCOME_UNKNOWN'); const result = await provisionHostedSyntheticAuth(input); assert.equal(result.status, 'CONFIRMED'); assert.equal(state.posts, 133); }); });
+
+test('fresh approved recovery adopts only the proven original lost-create actor and issues zero additional Auth POSTs',async()=>{
+ const {provisionHostedSyntheticAuth}=await api();await fixture(async input=>{
+  for(const actor of manifest.actors.slice(0,-1))state.users.set(actor.actorId,user(actor));state.loseAck=true;const failed=await provisionHostedSyntheticAuth(input);assert.equal(failed.status,'OUTCOME_UNKNOWN');assert.equal(state.posts,1);assert.equal(state.receipt?.version,2);const original=structuredClone(state.receipt!);
+  input.preparedApproval={sha256:'c'.repeat(64)};const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'CONFIRMED');assert.equal(result.confirmed,133);assert.equal(state.posts,1);assert.equal(state.receipt?.originalKey,original.originalKey);if(state.receipt?.version===2&&original.version===2)assert.deepEqual(state.receipt.originalCreateContext,original.originalCreateContext);
+ });
+});
+
+test('lost-create recovery refuses ambiguous foreign or pre-intent native accounts without another POST',async()=>{
+ const {provisionHostedSyntheticAuth}=await api();for(const failure of['multiple-original','foreign-native','old-created'])await fixture(async input=>{
+  for(const actor of manifest.actors.slice(0,-1))state.users.set(actor.actorId,user(actor));state.loseAck=true;assert.equal((await provisionHostedSyntheticAuth(input)).status,'OUTCOME_UNKNOWN');assert.equal(state.posts,1);state.failures=[failure];
+  const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'OUTCOME_UNKNOWN');assert.equal(state.posts,1);assert.equal(state.receipt?.actors.at(-1)?.state,'OUTCOME_UNKNOWN');
+ });
+});
+
+test('lost-create recovery rejects a changed password before account read or adoption',async()=>{
+ const {provisionHostedSyntheticAuth}=await api();await fixture(async input=>{
+  for(const actor of manifest.actors.slice(0,-1))state.users.set(actor.actorId,user(actor));state.loseAck=true;assert.equal((await provisionHostedSyntheticAuth(input)).status,'OUTCOME_UNKNOWN');const posts=state.posts;input.syntheticPassword='another-private-synthetic-password';
+  const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(state.posts,posts);assert.equal(state.receipt?.actors.at(-1)?.state,'OUTCOME_UNKNOWN');
+ });
+});
+
+test('lost-create adoption refuses an SDK observation aged beyond30seconds by native verification',async()=>{
+ const {provisionHostedSyntheticAuth}=await api(),realNow=Date.now;let clock=realNow();try{Date.now=()=>clock;await fixture(async input=>{
+  for(const actor of manifest.actors.slice(0,-1))state.users.set(actor.actorId,user(actor));state.loseAck=true;assert.equal((await provisionHostedSyntheticAuth(input)).status,'OUTCOME_UNKNOWN');
+  const owner=globalThis as unknown as {nativeAuthFixture:{advanceSourceClock?:()=>void}};state.failures=['slow-original-read'];owner.nativeAuthFixture.advanceSourceClock=()=>{clock+=30001;};
+  try{const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'OUTCOME_UNKNOWN');assert.equal(state.posts,1);assert.equal(state.receipt?.actors.at(-1)?.state,'OUTCOME_UNKNOWN');}finally{delete owner.nativeAuthFixture.advanceSourceClock;}
+ });}finally{Date.now=realNow;}
+});
 
 test('a freshly approved installed continuation preserves original Auth identity through partial reconciliation',async()=>{
  const {provisionHostedSyntheticAuth}=await api();await fixture(async input=>{
@@ -150,9 +189,44 @@ test('schema recovery consumption is reasserted after the final native count bef
   Object.assign(input.expected as object,{schemaRecovery:{}});input.schemaRecoveryExport={};input.journalStorageKey=secret;
   if(stale)state.failures=['stale-consumption'];else state.loseAck=true;
   const result=await provisionHostedSyntheticAuth(input);
-  assert.ok(state.recoveryAdmissions>=2,'last create reaches current native admission');
+  assert.equal(state.recoveryAdmissions,1,'immutable completion is admitted once');assert.ok(state.recoveryRenewals>=2,'last create reaches current native renewal');
   assert.ok(state.recoveryAssertions>=1,'consumer asserts opaque consumption permit');
   assert.equal(state.posts,stale?0:1);assert.equal(result.status,'OUTCOME_UNKNOWN','seed core retains the original actor intent when create cannot be confirmed');
   assert.ok(state.receipt,'original durable actor intent remains retained');
  });
+});
+
+test('Auth consumes one retained native recovery owner after slow historical admission for all133 actors',async()=>{
+ const {provisionHostedSyntheticAuth}=await api(),realNow=Date.now;let clock=realNow();
+ try{Date.now=()=>clock;await fixture(async input=>{
+  Object.assign(input.expected as object,{schemaRecovery:{}});input.schemaRecoveryExport={};input.journalStorageKey=secret;state.failures=['slow-recovery','slow-current'];
+  const owner=(globalThis as unknown as {nativeAuthFixture:{advanceSourceClock?:()=>void}}).nativeAuthFixture;owner.advanceSourceClock=()=>{clock+=31000;};
+  try{const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'CONFIRMED');assert.equal(state.posts,133);assert.equal(state.recoveryAdmissions,1,'immutable completion is admitted once under the held owner');}
+  finally{delete owner.advanceSourceClock;}
+ });}finally{Date.now=realNow;}
+});
+
+test('a final Auth count that ages the native cohort past30seconds cannot POST or restamp its original intent',async()=>{
+ const {provisionHostedSyntheticAuth}=await api(),realNow=Date.now;let clock=realNow();
+ try{Date.now=()=>clock;await fixture(async input=>{
+  Object.assign(input.expected as object,{schemaRecovery:{}});input.schemaRecoveryExport={};input.journalStorageKey=secret;
+  const priorFetch=globalThis.fetch;globalThis.fetch=async(raw,options)=>{const response=await priorFetch(raw,options);if(new URL(String(raw)).origin==='https://api.supabase.com'&&state.recoveryRenewals>=2)clock+=30001;return response;};
+  const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'OUTCOME_UNKNOWN');assert.equal(state.posts,0);assert.equal(state.receipt?.actors[0].state,'INTENT');assert.equal(state.recoveryAdmissions,1);assert.equal(clock-state.recoveryAt,30001);
+ });}finally{Date.now=realNow;}
+});
+
+test('changed durable Auth intent after current renewal cannot authorize the original actor POST',async()=>{
+ const {provisionHostedSyntheticAuth}=await api();await fixture(async input=>{
+  Object.assign(input.expected as object,{schemaRecovery:{}});input.schemaRecoveryExport={};input.journalStorageKey=secret;state.failures=['changed-intent'];
+  const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'OUTCOME_UNKNOWN');assert.equal(state.posts,0);assert.equal(state.receipt?.actors[0].state,'OUTCOME_UNKNOWN');assert.equal(state.recoveryAdmissions,1);
+ });
+});
+
+test('slow read-only Auth discovery renews actual native clocks while confirming all133 original identities without POST',async()=>{
+ const {provisionHostedSyntheticAuth}=await api(),realNow=Date.now;let clock=realNow();
+ try{Date.now=()=>clock;await fixture(async input=>{
+  Object.assign(input.expected as object,{schemaRecovery:{}});input.schemaRecoveryExport={};input.journalStorageKey=secret;for(const actor of manifest.actors)state.users.set(actor.actorId,user(actor));
+  const priorFetch=globalThis.fetch;globalThis.fetch=async(raw,options)=>{const response=await priorFetch(raw,options);if(new URL(String(raw)).origin===`https://${ref}.supabase.co`&&options?.method==='GET')clock+=1000;return response;};
+  const result=await provisionHostedSyntheticAuth(input);assert.equal(result.status,'CONFIRMED');assert.equal(result.confirmed,133);assert.equal(state.posts,0);assert.equal(state.recoveryAdmissions,1);assert.ok(state.recoveryRenewals>=8);
+ });}finally{Date.now=realNow;}
 });
