@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+The [current-source PR11 reconciliation plan](superpowers/plans/2026-10-08-pr11-current-reconciliation.md) preserves unique Home Parent heading, Progress incomplete-snapshot, Improvement Arabic ratio and Shell/Student reflow fixes in their existing owners. Units remain colocated and actual-component browser cases stay in tests/e2e. Old branch verification is separate from integrated and hosted UI acceptance.
+
 [Release evolution diagrams and tradeoffs](architecture/cuevo-release-evolution-guide.md) teach the original gate, first repairs, current design and proportional MVP/full-app choices. This dated guide distinguishes source verification from hosted delivery.
 
 [Staging release runbook](operations/synthetic-staging-release-runbook.md) records the actual phase sequence, evidence and remaining customer gates. It does not establish hosted completion.
