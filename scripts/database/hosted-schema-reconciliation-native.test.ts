@@ -26,13 +26,16 @@ const miniRows=[...['app','authorization','internal'].map(name=>({category:'sche
 const miniDigest=canonicalizeHostedSchemaCatalogue(miniRows).sha256,ca='-----BEGIN CERTIFICATE-----\ncontrolled composition CA\n-----END CERTIFICATE-----\n',certificateSha='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7',policySha='c'.repeat(64),absenceSha='d'.repeat(64),planSha='4'.repeat(64),packageSha='7'.repeat(64),baseClock=Date.parse('2026-10-08T02:00:00Z');
 let root='',caPath='',clock=baseClock;
 let owner:typeof import('./hosted-migration-database');
-const state={client:null as ControlledClient|null,queries:[] as string[],events:[] as string[],historyCount:120,quiescent:true,foreignChain:false,tamperedBody:false,creates:0,vault:null as string|null,pendingVault:null as string|null,writeTransaction:false,commitFails:false,readbackFails:false,expireAtRead:false,loseAtRead:false,sourceDriftAtRead:false,officialCalls:0,policyCalls:[] as number[],catalogueFails:false,absenceFails:false};
+// Real node-postgres int8 decoder preserves bigint metadata as canonical text.
+const int8BucketLimit=createRequire(import.meta.url)('pg').types.getTypeParser(20,'text')('49152') as string;
+assert.equal(typeof int8BucketLimit,'string');
+const state={client:null as ControlledClient|null,queries:[] as string[],events:[] as string[],historyCount:120,quiescent:true,foreignChain:false,tamperedBody:false,creates:0,vault:null as string|null,pendingVault:null as string|null,writeTransaction:false,commitFails:false,readbackFails:false,expireAtRead:false,loseAtRead:false,sourceDriftAtRead:false,officialCalls:0,policyCalls:[] as number[],catalogueFails:false,absenceFails:false,bucketLimit:int8BucketLimit as unknown};
 const expectedHistory=()=>sourceRows.slice(0,state.historyCount).map(row=>({version:row.version,name:row.name.slice(15,-4),statements:files.find(file=>file.name===row.name)!.bytes.byteLength?[new TextDecoder().decode(files.find(file=>file.name===row.name)!.bytes).trim()]:[]}));
 const template=()=>createOriginalPrefixReconciliationTemplate({recoverySource:{sourceSha:originalSource,treeSha:originalTree,ciRunId:'37710000000',releaseRunId:'37710000001',runAttempt:1},stageRows:sourceRows.slice(0,123),historySha256:hash(canonicalReleaseExecutionJson(sourceRows.slice(0,120).map(row=>({version:row.version,sourceReceiptSha256:row.sha256})))),cataloguePolicySha256:policySha,catalogueSha256:miniDigest,absencePolicySha256:absenceSha,endpointSha256:'3'.repeat(64)});
 const approved=(value:ReconciliationTemplate)=>({packageSha256:packageSha,runId:'37710000001',runAttempt:1,sourceSha:originalSource,treeSha:originalTree,ciRunId:'37710000000',templateSha256:hash(canonicalReleaseExecutionJson(value)),expiresAtMs:baseClock+600000});
 const identity=(value:ReconciliationTemplate):HostedExecutionJournal['identity']=>({...value.originalIdentity,sourceSha:originalSource,treeSha:originalTree,ciRunId:'37710000000',approvalDigest:packageSha,planSha256:planSha});
 const request=(value=template())=>({template:value,expectedApproval:approved(value),expected:{sourceSha:originalSource,treeSha:originalTree},prepared:{sha256:packageSha,canonicalJson:JSON.stringify({expiresAt:new Date(approved(value).expiresAtMs).toISOString()})},githubToken:'g'.repeat(30),providerToken:'p'.repeat(30),storageKey:'s'.repeat(30)});
-const reset=async()=>{clock=baseClock;Object.assign(state,{queries:[],events:[],historyCount:120,quiescent:true,foreignChain:false,tamperedBody:false,creates:0,vault:null,pendingVault:null,writeTransaction:false,commitFails:false,readbackFails:false,expireAtRead:false,loseAtRead:false,sourceDriftAtRead:false,officialCalls:0,policyCalls:[],catalogueFails:false,absenceFails:false});if(root)execFileSync('git',['-C',root,'checkout','--quiet','--','supabase/migrations'],{windowsHide:true,stdio:'ignore'});};
+const reset=async()=>{clock=baseClock;Object.assign(state,{queries:[],events:[],historyCount:120,quiescent:true,foreignChain:false,tamperedBody:false,creates:0,vault:null,pendingVault:null,writeTransaction:false,commitFails:false,readbackFails:false,expireAtRead:false,loseAtRead:false,sourceDriftAtRead:false,officialCalls:0,policyCalls:[],catalogueFails:false,absenceFails:false,bucketLimit:int8BucketLimit});if(root)execFileSync('git',['-C',root,'checkout','--quiet','--','supabase/migrations'],{windowsHide:true,stdio:'ignore'});};
 class ControlledClient extends EventEmitter {
  connection={stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('controlled-peer'),subjectaltname:'DNS:'+host})}};
  constructor(){super();Object.assign(state,{client:this});}
@@ -41,7 +44,7 @@ class ControlledClient extends EventEmitter {
   const sql=typeof raw==='string'?raw:raw.text;state.queries.push(sql);
   if(sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_')){if(state.catalogueFails)throw Error('private-catalogue-diagnostic-canary');return{rows:sql.includes('STRUCTURAL')?miniRows:[]};}
   if(sql.includes('CUEVO_CATALOGUE_READ_ONLY'))return{rows:[{readOnly:true,isolation:'repeatable read'}]};
-  if(sql.includes('CUEVO_RECONCILIATION_BUCKET'))return{rows:[{id:'cuevo-release-operator',name:'cuevo-release-operator',public:false,type:'STANDARD',file_size_limit:49152,allowed_mime_types:['application/json']}]};
+  if(sql.includes('CUEVO_RECONCILIATION_BUCKET'))return{rows:[{id:'cuevo-release-operator',name:'cuevo-release-operator',public:false,type:'STANDARD',file_size_limit:state.bucketLimit,allowed_mime_types:['application/json']}]};
   if(sql.includes('CUEVO_RECONCILIATION_OBJECTS')){const value=template(),prefix='migration/v1/'+projectRef+'/'+hash(JSON.stringify(value.originalIdentity))+'/',objects=[value.ownerJson,...value.recordJson].map((bytes,index)=>({name:prefix+['owner.json','000001.record.json','000002.record.json'][index],size:String(Buffer.byteLength(bytes)),mimetype:'application/json'}));return{rows:[...objects,...(state.foreignChain?[{name:'migration/v1/'+projectRef+'/'+ 'a'.repeat(64)+'/owner.json',size:'100',mimetype:'application/json'}]:[])]};}
   if(sql.includes('CUEVO_NATIVE_QUIESCENCE'))return{rows:[{quiescent:state.quiescent}]};
   if(sql.includes('CUEVO_CONTROLLED_ABSENCE')){if(state.absenceFails)throw Error('private-absence-diagnostic-canary');return{rows:[Object.fromEntries(Array.from({length:17},(_,index)=>['marker'+index,false]))]};}
@@ -158,4 +161,14 @@ test('native reconciliation diagnostics confirm only actual original receipt rea
 
 test('native diagnostics distinguish an exactly reread stored receipt from a new receipt attempt',async()=>{
  await reset();const first=await database();await first.withLock(projectRef+':HOSTED_SCHEMA_MIGRATION',async()=>{await first.reconcileUnknownPrefix(request());});assert.equal(state.creates,1);const original=state.vault,second=await database();assert.equal(second.getDiagnostics().partialReceipt,'NOT_ATTEMPTED');await second.withLock(projectRef+':HOSTED_SCHEMA_MIGRATION',async()=>{await second.reconcileUnknownPrefix(request());assert.equal(second.getDiagnostics().partialReceipt,'CONFIRMED');});assert.equal(state.creates,1);assert.equal(state.vault,original);assert.equal(second.getDiagnostics().lease,'RELEASED');assert.equal(second.getDiagnostics().failurePhase,null);
+});
+
+
+test('real pg bigint bucket metadata reaches native original receipt admission with strict canonical limit',async()=>{
+ await reset();assert.equal(state.bucketLimit,'49152');const db=await database();await db.withLock(projectRef+':HOSTED_SCHEMA_MIGRATION',async()=>{await db.reconcileUnknownPrefix(request());});assert.equal(state.creates,1);assert.equal(db.getDiagnostics().partialReceipt,'CONFIRMED');assert.ok(state.events.includes('storage-info'));assert.ok(state.events.includes('storage-body'));
+});
+
+
+test('native recovery bucket accepts only exact canonical bigint text and refuses altered or missing limits before private reads',async()=>{
+ await reset();for(const limit of ['049152','49152.0','+49152','49152 ','49151','49153',49152,null]as unknown[]){state.bucketLimit=limit;const db=await database(),reads=state.events.filter(event=>event.startsWith('storage-')).length;await assert.rejects(db.withLock(projectRef+':HOSTED_SCHEMA_MIGRATION',async()=>{await db.reconcileUnknownPrefix(request());}));assert.equal(db.getDiagnostics().failurePhase,'ORIGINAL_OBJECTS');assert.equal(state.creates,0);assert.equal(state.events.filter(event=>event.startsWith('storage-')).length,reads);}
 });
