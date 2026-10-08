@@ -17,20 +17,26 @@ function Action({ action, primary = false }: { action: ParentTrailAction; primar
 export function ParentTrailHomeView({ context, locale = 'en', background, headingRef }: { context: ParentTrailContext; locale?: 'en' | 'ar'; background?: string; headingRef?: Ref<HTMLHeadingElement> }) {
   const t = locale === 'ar' ? parentTrailAr : parentTrailEn;
   const id = useId();
-  if (context.availability === 'denied' || context.availability === 'offline' || context.availability === 'error') return <section className="parent-trail parent-trail__recovery" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={-1}>{t.heading}</h1><WorkspaceState kind={context.availability === 'denied' ? 'denied' : 'unavailable'} icon="parent" description={context.notice || t[context.availability]} role={context.availability === 'error' ? 'alert' : 'status'} actions={context.recovery ? <Action action={context.recovery} /> : null}/></section>;
-  if (context.child.status !== 'ready') {
+  const blockedAvailability = context.availability === 'denied' || context.availability === 'offline' || context.availability === 'error' ? context.availability : null;
+  const blocked = blockedAvailability !== null;
+  const child = context.child.status === 'ready' ? context.child : null;
+  const ready = !blocked && child !== null && context.availability !== 'loading' && context.snapshot !== null && context.snapshot.childKey === child.key && context.snapshot.status !== 'loading';
+  let recovery = null;
+  if (blockedAvailability) recovery = <WorkspaceState kind={blockedAvailability === 'denied' ? 'denied' : 'unavailable'} icon="parent" description={context.notice || t[blockedAvailability]} role={blockedAvailability === 'error' ? 'alert' : 'status'} actions={context.recovery ? <Action action={context.recovery} /> : null}/>;
+  else if (context.child.status !== 'ready') {
     const message = context.child.status === 'resolving' ? t.checkingChildren : context.child.status === 'selection-required' ? t.chooseChild : context.child.status === 'requires-review' ? t.identityReview : t.childUnavailable;
-    return <section className="parent-trail parent-trail__recovery" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={-1}>{t.heading}</h1>{context.selector}<WorkspaceState kind={context.child.status === 'resolving' ? 'loading' : context.child.status === 'requires-review' ? 'review' : context.child.status === 'unavailable' ? 'unavailable' : 'unknown'} icon="parent" description={message} role="status" actions={context.recovery ? <Action action={context.recovery} /> : null}/></section>;
+    recovery = <WorkspaceState kind={context.child.status === 'resolving' ? 'loading' : context.child.status === 'requires-review' ? 'review' : context.child.status === 'unavailable' ? 'unavailable' : 'unknown'} icon="parent" description={message} role="status" actions={context.recovery ? <Action action={context.recovery} /> : null}/>;
   }
-  if (context.availability === 'loading' || !context.snapshot || context.snapshot.childKey !== context.child.key || context.snapshot.status === 'loading') return <section className="parent-trail parent-trail__recovery" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}><h1 ref={headingRef} tabIndex={-1}>{t.heading}</h1>{context.selector}<WorkspaceState kind="loading" icon="refresh" description={t.checkingRecords} role="status" actions={context.recovery ? <Action action={context.recovery} /> : null}/></section>;
-  const child = context.child;
-  const snapshot = context.snapshot.status === 'unavailable' ? { ...context.snapshot, feedback: null, portfolio: null, upcoming: [], upcomingAction: undefined, communication: null, updates:undefined, support: null } : context.snapshot;
-  const feedback = snapshot.feedback?.publication === 'approved' ? snapshot.feedback : null;
-  const portfolio = snapshot.portfolio?.publication === 'approved' ? snapshot.portfolio : null;
-  const communication = snapshot.communication?.status === 'available' ? snapshot.communication : null;
+  else if (!ready) recovery = <WorkspaceState kind="loading" icon="refresh" description={t.checkingRecords} role="status" actions={context.recovery ? <Action action={context.recovery} /> : null}/>;
+  const snapshot = ready && context.snapshot ? context.snapshot.status === 'unavailable' ? { ...context.snapshot, feedback: null, portfolio: null, upcoming: [], upcomingAction: undefined, communication: null, updates:undefined, support: null } : context.snapshot : null;
+  const feedback = snapshot?.feedback?.publication === 'approved' ? snapshot.feedback : null;
+  const portfolio = snapshot?.portfolio?.publication === 'approved' ? snapshot.portfolio : null;
+  const communication = snapshot?.communication?.status === 'available' ? snapshot.communication : null;
   return <div className="parent-trail" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
-    {background ? <TrailBackground className="parent-trail__background" src={background} /> : null}
-    <div className="parent-trail__content"><header className="parent-trail__intro"><div><h1 ref={headingRef} tabIndex={-1}>{child.name ? <>{t.childHeading} <bdi>{child.name}</bdi></> : t.heading}</h1><p>{t.introduction}</p></div><div className="parent-trail__child-context"><CuevoIcon name="school" variant="filled" size={28} /><div>{context.selector}</div></div></header>
+    {background && ready ? <TrailBackground className="parent-trail__background" src={background} /> : null}
+    <div className={`parent-trail__content${ready ? '' : ' parent-trail__recovery'}`}><header className="parent-trail__intro"><div><h1 ref={headingRef} tabIndex={-1}>{ready && child?.name ? <>{t.childHeading} <bdi>{child.name}</bdi></> : t.heading}</h1>{ready ? <p>{t.introduction}</p> : null}</div>{!blocked && context.selector ? <div className="parent-trail__child-context"><CuevoIcon name="school" variant="filled" size={28} /><div>{context.selector}</div></div> : null}</header>
+      {recovery}
+      {snapshot ? <>
       {context.availability !== 'ready' || snapshot.status === 'partial' ? <WorkspaceState kind="unknown" description={context.notice || (snapshot.status === 'partial' ? t.partial : t[context.availability === 'ready' ? 'loading' : context.availability])} role="status"/> : null}
       <div className="parent-trail__grid"><div className="parent-trail__left"><section className="parent-trail__feedback parent-trail__panel" aria-labelledby={`${id}-feedback`}>
         <div className="parent-trail__panel-heading"><span><CuevoIcon name="reflection" variant="filled" size={25} /></span><h2 id={`${id}-feedback`}>{feedback?.latest ? t.latestFeedback : t.availableFeedback}</h2>{feedback ? <Status tone="positive">{t.approved}</Status> : null}</div>
@@ -44,6 +50,7 @@ export function ParentTrailHomeView({ context, locale = 'en', background, headin
         <HomeDisclosure className="parent-trail__communication parent-trail__panel" title={t.communication} compact={!communication && !snapshot.sourceControls?.communication}><div className="parent-trail__panel-heading"><span><CuevoIcon name="feedback" variant="filled" size={25} /></span><h2 id={`${id}-communication`}>{t.communication}</h2></div>{communication ? <div className="parent-trail__communication-body"><span><CuevoIcon name="feedback" size={30} /></span><div><h3><bdi>{communication.title}</bdi></h3><p>{communication.description}</p><p><bdi>{communication.teacherName || t.teacherUnknown}</bdi></p>{communication.action ? <Action action={communication.action} /> : null}</div></div> : snapshot.sourceControls?.communication ? null : <WorkspaceState kind="unknown" description={t.communicationUnknown}/>}{snapshot.sourceControls?.communication}{snapshot.continuations?.communication}</HomeDisclosure>
         <section className="parent-trail__support parent-trail__panel" aria-labelledby={`${id}-support`}><div className="parent-trail__panel-heading"><span><CuevoIcon name="parent" variant="filled" size={27} /></span><h2 id={`${id}-support`}>{t.support}</h2></div>{snapshot.support ? <div className="parent-trail__support-body"><h3>{snapshot.support.title}</h3><p>{snapshot.support.description}</p>{snapshot.support.action ? <Action action={snapshot.support.action} /> : null}<CuevoIcon className="parent-trail__support-symbol" name="community" variant="filled" size={92} /></div> : <WorkspaceState kind="unknown" description={t.supportUnknown}/>}</section>
       </div></div>
+      </> : null}
     </div>
   </div>;
 }
