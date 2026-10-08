@@ -19,7 +19,7 @@ import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type
 import { canonicalHostedMigrationPlan, verifyCompletedMigrationPrefix, verifyPriorSchemaPrefix, readHistoricalMigrationSources, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { prepareHostedMigrationConnection } from './hosted-migration-connection';
 import { prepareHeldHostedMigrationStage, type HeldHostedMigrationStage, type HostedExecutionJournal, type HostedExecutionPorts, type HostedExecutionResult } from './hosted-migration-execution';
-import { createHostedMigrationDatabase,assertNativeReconciliationPermit,type NativeReconciliationPermit } from './hosted-migration-database';
+import { createHostedMigrationDatabase,assertNativeReconciliationPermit,readNativeMigrationPermitAuthority,type NativeReconciliationPermit } from './hosted-migration-database';
 import { createHostedMigrationNativeProcess } from './hosted-migration-native-process';
 import { createHostedMigrationJournal } from './hosted-migration-journal';
 import { createHostedMigrationDurableJournal } from './hosted-migration-durable-journal';
@@ -122,7 +122,8 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       return manifest;
     };
     const storagePolicy = async () => { const path = input.operatorStoragePolicyPath, part = relative(join(root, '.local/hosted-release'), path); if (!part || isAbsolute(part) || part.split(/[\\/]/).some(piece => !piece || piece === '.' || piece === '..')) throw failure(); const bytes = await boundedFile(root, path, 8192); if (hash(bytes) !== expected.fingerprints.operatorStoragePolicySha256) throw failure(); const relativePath = relative(root, path).replaceAll('\\', '/'); if (git(root, ['check-ignore', '--no-index', '--stdin'], relativePath + '\n').toString().trim() !== relativePath || git(root, ['ls-files', '--cached', '--', relativePath]).length) throw failure(); const policy = validateHostedOperatorStoragePolicy(new TextDecoder('utf8', { fatal: true }).decode(bytes), { sourceSha: expected.releaseSha, treeSha: expected.treeSha, projectRef: plan.projectRef }); if (policy.sha256 !== expected.fingerprints.operatorStoragePolicySha256) throw failure(); return policy; };
-    const official = async () => { const result = await readBackendReleaseAdmission({effectScope:'SCHEMA_AND_SYNTHETIC_AUTH', repoRoot: root, prepared, expected, githubToken: input.githubToken }); if (result.provenance !== 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' || result.approval.packageSha256 !== prepared.sha256 || result.expected.releaseSha !== expected.releaseSha || result.expected.treeSha !== expected.treeSha || result.expected.ciRunId !== expected.ciRunId || !same(result.expected.fingerprints, expected.fingerprints)) throw failure(); return result; };
+    const requireOfficial = (result:Awaited<ReturnType<typeof readBackendReleaseAdmission>>) => { if (result.provenance !== 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' || result.approval.packageSha256 !== prepared.sha256 || result.expected.releaseSha !== expected.releaseSha || result.expected.treeSha !== expected.treeSha || result.expected.ciRunId !== expected.ciRunId || !same(result.expected.fingerprints, expected.fingerprints)) throw failure(); return result; };
+    const official = async () => requireOfficial(await readBackendReleaseAdmission({effectScope:'SCHEMA_AND_SYNTHETIC_AUTH', repoRoot: root, prepared, expected, githubToken: input.githubToken }));
     const provider = async () => { const result = await readHostedMigrationProvider({ projectRef: plan.projectRef, boundProjectRef: expected.targets.supabase.projectRef, providerToken: input.providerToken }); fresh(result.observedAtMs); if (result.evidence !== 'OFFICIAL_SUPABASE_PROJECT_METADATA' || result.projectRef !== plan.projectRef || result.projectName.toLowerCase() !== 'cuevo' || result.projectStatus !== 'ACTIVE_HEALTHY' || result.directEndpoint.projectRef !== plan.projectRef || result.directEndpoint.host !== `db.${plan.projectRef}.supabase.co` || result.directEndpoint.kind !== 'direct' || result.directEndpoint.port !== 5432 || result.directEndpoint.database !== 'postgres') throw failure(); requireCurrentHostedMigrationEndpoint(input.endpoint,result,expected.fingerprints.migrationEndpointSha256); return result; };
     compositionPhase='OFFICIAL_AUTHORITY';await official();compositionPhase='PROVIDER';const currentProvider = await provider();compositionPhase='TOOLCHAIN';const manifest = await toolchain();compositionPhase='STORAGE_POLICY';await storagePolicy();
     const artifacts: Awaited<ReturnType<typeof admitHostedMigrationStageFiles>>[] = [];
@@ -190,7 +191,7 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       try{
       await database.requireInstalledSchemaStorage();live();
       if(reconciliationPermit){if(continuation)await database.refreshSchemaContinuation(reconciliationPermit,identity,expectedCurrentVersions());else await database.refreshReconciliationPermit(reconciliationPermit,identity,phase==='before'?120:123);live();}
-      const held = live();phaseName='PRIOR_JOURNALS'; await priorJournals();phaseName='OFFICIAL_AUTHORITY';const authority = await official();const officialObservedAt=Date.parse(authority.observedAt);observations.official=officialObservedAt;fresh(officialObservedAt);phaseName='PROVIDER';const currentProvider=await provider();observations.provider=currentProvider.observedAtMs;phaseName='TOOLCHAIN';const checkedToolchain = await toolchain(); if (!same(checkedToolchain, manifest)) throw failure();phaseName='SOURCE_FILES';const files = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage }); live(); if (files.planSha256 !== identity.planSha256 || files.stageSha256 !== identity.stageSha256) throw failure();
+      const held = live();phaseName='PRIOR_JOURNALS'; await priorJournals();phaseName='OFFICIAL_AUTHORITY';const authority = reconciliationPermit ? requireOfficial(readNativeMigrationPermitAuthority(reconciliationPermit,identity)) : await official();const officialObservedAt=Date.parse(authority.observedAt);observations.official=officialObservedAt;fresh(officialObservedAt);phaseName='PROVIDER';const currentProvider=await provider();observations.provider=currentProvider.observedAtMs;phaseName='TOOLCHAIN';const checkedToolchain = await toolchain(); if (!same(checkedToolchain, manifest)) throw failure();phaseName='SOURCE_FILES';const files = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage }); live(); if (files.planSha256 !== identity.planSha256 || files.stageSha256 !== identity.stageSha256) throw failure();
       phaseName='TARGET';
       const target = targetSchema.parse(own(await database.observeTarget())); observations.target=target.observedAtMs;fresh(target.observedAtMs); live(); const expectedVersions = expectedCurrentVersions();
       const installed=expected.installedSource;
@@ -224,7 +225,17 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     const ports: Omit<HostedExecutionPorts, 'withLock'> = {
       now: Date.now,
       readJournal: async () => { live(); if (!journal) throw failure(); const saved = await journal.readJournal(); live(); if (!stage.pending.length && (saved === null || (saved as HostedExecutionJournal).state !== 'COMMITTED')) throw failure(); if (saved !== null && (saved as HostedExecutionJournal).state === 'COMMITTED') { phase = 'after'; originalCommitted = true; } return saved; },
-      writeJournal: async value => { if (!journal) throw failure(); const receipt = await journal.writeJournal(value); if (receipt.kind === 'SYNCED' && receipt.sha256 === hash(JSON.stringify(value)) && value.state === 'INTENT') {confirmedIntent = true;if(continuation&&reconciliationPermit)await database.ownSchemaContinuationIntent(reconciliationPermit,identity);} return receipt; }, revalidate,
+      writeJournal: async value => { if (!journal) throw failure();
+        // A complete earlier admission can be followed by inventory and intent
+        // preparation I/O. Recheck actual native authority immediately before
+        // the bounded immutable journal operation; safety review remains usable
+        // after execution authority has been lost.
+        if(reconciliationPermit&&value.state!=='REQUIRES_REVIEW'){
+          if(continuation)await database.refreshSchemaContinuation(reconciliationPermit,identity,expectedCurrentVersions());
+          else await database.refreshReconciliationPermit(reconciliationPermit,identity,phase==='before'?120:123);
+          live();requireOfficial(readNativeMigrationPermitAuthority(reconciliationPermit,identity));
+        }
+        const receipt = await journal.writeJournal(value); if (receipt.kind === 'SYNCED' && receipt.sha256 === hash(JSON.stringify(value)) && value.state === 'INTENT') {confirmedIntent = true;if(continuation&&reconciliationPermit)await database.ownSchemaContinuationIntent(reconciliationPermit,identity);} return receipt; }, revalidate,
       runCli: async (args, env) => {
         const held = live(); if (!stage.pending.length || phase !== 'before') throw failure();
         await database.requireInstalledSchemaStorage();live();
