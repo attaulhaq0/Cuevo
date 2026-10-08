@@ -33,3 +33,24 @@ test('physical stage admission independently verifies completed prior Git prefix
   const final=built.stages.at(-1)!,file=join(final.workdir,'supabase/migrations',name);await writeFile(file,'select 999;\n');await assert.rejects(admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage:final}));
  });
 });
+
+const recoveryProjectRef='mqxdjvsyckzocokuikmx',recoveryHash=(value:string)=>createHash('sha256').update(value).digest('hex');
+function reconciliationTemplateFor(rows:{name:string;version:string;sha256:string}[],recovery:{sha:string;tree:string}){
+ const originalIdentity={projectRef:recoveryProjectRef,sourceSha:'d87455114cac2d22d63d040ce5b13e6b2e74e743',treeSha:'1e85393d46beb4f5356e07277a13a7ef33cc67d9',planSha256:'413d23ed86f7379b3e88b90e09370762ce576d0395f4c4fceaa44d0f3abf3cf1',stageId:'prefix',stageSha256:'5f9e1d7804d816dc3ee387f126f946a0ee0ac3b192b3d4973774cbf33b2ba506',databaseUrl:'postgresql://postgres.mqxdjvsyckzocokuikmx@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full',approvalDigest:'d46d4616c1b9eecdcd474b080bfefac98ee959fb7c54819d510773fc661a98de',ciRunId:'37702851953',certificateSha256:'700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'};
+ const ownerJson=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity:originalIdentity})+'\n',payload=(state:string)=>({version:1,identity:originalIdentity,state,schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'});
+ const first=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:1,previousSha256:null,payload:payload('INTENT'),payloadSha256:recoveryHash(JSON.stringify(payload('INTENT')))})+'\n',second=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:2,previousSha256:recoveryHash(first),payload:payload('REQUIRES_REVIEW'),payloadSha256:recoveryHash(JSON.stringify(payload('REQUIRES_REVIEW')))})+'\n';
+ return{version:1,purpose:'CUEVO_UNKNOWN_PREFIX_RECONCILIATION_TEMPLATE',recoverySource:{sourceSha:recovery.sha,treeSha:recovery.tree,ciRunId:'37710000000',releaseRunId:'37710000001',runAttempt:1},originalRunId:'37703459549',originalRunAttempt:1,originalIdentity,ownerJson,recordJson:[first,second],stageRows:rows.slice(0,123),prefixRows:rows.slice(0,120),configSha256:'cc91534b07b96e61b993f179225a9929b65e965d19a5a02e242c79126166b4ff',historySha256:'e'.repeat(64),cataloguePolicySha256:'f'.repeat(64),catalogueSha256:'1'.repeat(64),absencePolicySha256:'2'.repeat(64),endpointSha256:'3'.repeat(64)};
+}
+
+
+test('physical stage admission accepts only exact original120 template recovery and rejects removal or pending drift',async()=>{
+ const {admitHostedMigrationStageFiles}=await api(),repository=resolve(import.meta.dirname,'../..'),root=await mkdtemp(join(tmpdir(),'cuevo-reconciliation-stage-'));
+ try{git(root,'clone','--shared','--no-checkout','--quiet',repository,'.');git(root,'checkout','--quiet','--detach','d87455114cac2d22d63d040ce5b13e6b2e74e743');
+  const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}'),loaded=readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}),now=Date.parse('2026-10-08T01:00:00Z'),source={sha:sourceSha,tree:treeSha};
+  const empty={projectRef:recoveryProjectRef,boundProjectRef:recoveryProjectRef,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(now).toISOString(),authUsers:0,storageObjects:0,appSchemas:[],migrationVersions:[],dispatchDisabled:true,population:'EMPTY'},initial=planHostedMigrations({sources:loaded.sources,source,target:empty,now}),prefix=initial.migrations.slice(0,120),priorReceipt={projectRef:recoveryProjectRef,sourceSha,treeSha,migrations:prefix.map(({version,sha256})=>({version,sha256}))},template=reconciliationTemplateFor(initial.migrations,source);
+  const plan=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,now,target:{...empty,population:'SCHEMA_ONLY',appSchemas:['app','authorization','internal'],migrationVersions:prefix.map(r=>r.version)},priorReceipt,reconciliationTemplate:template}).plan,built=await createHostedMigrationWorkdirs({repoRoot:root,sourceSha,treeSha,plan,outputRoot:join(root,'.local/hosted-release')}),input={repoRoot:root,sourceSha,treeSha,plan,stage:built.stages[0]};
+  const receipt=await admitHostedMigrationStageFiles(input);assert.equal(receipt.evidence,'VERIFIED_GIT_AND_PHYSICAL_STAGE');assert.equal(input.stage.pending.length,3);
+  await assert.rejects(admitHostedMigrationStageFiles({...input,plan:{...plan,reconciliationTemplate:undefined}}));
+  await assert.rejects(admitHostedMigrationStageFiles({...input,stage:{...input.stage,pending:input.stage.pending.slice(1)}}));
+ }finally{await rm(root,{recursive:true,force:true});}
+});

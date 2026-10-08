@@ -1,0 +1,599 @@
+{
+  "version": 1,
+  "purpose": "CUEVO_FIXED_UNKNOWN_PREFIX_CATALOGUE_POLICY",
+  "originalSourceSha": "d87455114cac2d22d63d040ce5b13e6b2e74e743",
+  "originalTreeSha": "1e85393d46beb4f5356e07277a13a7ef33cc67d9",
+  "prefixCount": 120,
+  "stageCount": 123,
+  "prefixRowsSha256": "617c3c4de9d0ca18a9d0df7fc09c52006f9ce443b50eef5de935040aa4ca6fa9",
+  "sourceInventorySha256": "85051a55c152345e8002143daa831e3cf81cff50b4077141c5b1de5b57853756",
+  "querySha256": "9dff3867279215dc1e19537d1442e941f1465e362c14e25328c0d34649f497b2",
+  "producerSha256": "28e179cc4374c6519d8c80022f2bdbc40366747f466222877dbd03be817ca9f9",
+  "serverVersion": 170011,
+  "scratch": {
+    "catalogueSha256": "8dde9ed4dd0c1e3a1073e5c64ddd9a9844051ba78542f6a766d1bfdc20503929",
+    "categories": [
+      {
+        "category": "column",
+        "count": 1495,
+        "sha256": "8d9d6a9b6e3cf8b1e8ccc3b587c9ec234a3f5bd224e2b2c9da329312fc8c2508"
+      },
+      {
+        "category": "constraint",
+        "count": 689,
+        "sha256": "0ca88344a81ae805ab2b250cf282ec1d9369613c6f68b934a68cba1dbc26ea80"
+      },
+      {
+        "category": "defaultAcl",
+        "count": 1,
+        "sha256": "7eccd30450cb779ab6a72b3031bf6d824fad26db515313362d1cb426aef428de"
+      },
+      {
+        "category": "dependency",
+        "count": 5318,
+        "sha256": "0957a04a0fdeb85ef3269a44e36e9445b86cf33ed18c636c5fbfd5c0482cbe10"
+      },
+      {
+        "category": "function",
+        "count": 229,
+        "sha256": "fcbb06b1aa41425e8f54f7da40aa8add1a41c3d562402017c11729497272af66"
+      },
+      {
+        "category": "index",
+        "count": 219,
+        "sha256": "147bcafefb8cd928f7b1195d9133e2175cb19b3691cb8e63985a600bf6cf1f5b"
+      },
+      {
+        "category": "membership",
+        "count": 29,
+        "sha256": "a6f04e5b3ef72084e59a5366404e88f9bd4bcd20b0e912fd8c9e57570e66262d"
+      },
+      {
+        "category": "policy",
+        "count": 68,
+        "sha256": "be9c08f4910e303d18f794003ceaa353574c32b8d29bacb77f8172a09a345e8f"
+      },
+      {
+        "category": "prerequisite",
+        "count": 5,
+        "sha256": "d941f4d206bb87fd720545a5f2cd71e7d05bfbe18f9c7484bd30c640c015c645"
+      },
+      {
+        "category": "relation",
+        "count": 329,
+        "sha256": "58d38a12cc91789d82ad4bffb01305010ab2ae59cf662da6c9c530631145ec91"
+      },
+      {
+        "category": "role",
+        "count": 23,
+        "sha256": "365860d38b6870e15708de93e23a43cf5115627c88aa9d0984f0b1b54b416a62"
+      },
+      {
+        "category": "roleSetting",
+        "count": 10,
+        "sha256": "9bacf2366e88374e42baf8a115338302e314f30ed90797a92b0f5be451ceebcf"
+      },
+      {
+        "category": "schema",
+        "count": 3,
+        "sha256": "185a6f3fd128db92e1173b5cefe64c37017a2818600f2bb44b1d27a11c1d79bf"
+      },
+      {
+        "category": "sequence",
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "category": "trigger",
+        "count": 1131,
+        "sha256": "c7f5590fbfc3b1a9faba8926755a63507c607f90e40be085be974b42375bea11"
+      },
+      {
+        "category": "type",
+        "count": 220,
+        "sha256": "5461f8615adf19fe7152ccf43f57855ceb60535b3bcd93ac0879719136125f2d"
+      }
+    ],
+    "rows": 9769,
+    "bytes": 6344479,
+    "image": "public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53",
+    "nodeVersion": "v24.19.0",
+    "referenceArtifactSha256": "34b3d16436622e5acde42198c3a9643031a1bcb33b8e6f90d2f8036d7173f6f0"
+  },
+  "expected": {
+    "catalogueSha256": "1ed45f0ba9ba3f03c35c11c36e51dbd36fbf906558554dd4b10132d995037c7e",
+    "categories": [
+      {
+        "category": "column",
+        "count": 1495,
+        "sha256": "8d9d6a9b6e3cf8b1e8ccc3b587c9ec234a3f5bd224e2b2c9da329312fc8c2508"
+      },
+      {
+        "category": "constraint",
+        "count": 689,
+        "sha256": "0ca88344a81ae805ab2b250cf282ec1d9369613c6f68b934a68cba1dbc26ea80"
+      },
+      {
+        "category": "defaultAcl",
+        "count": 1,
+        "sha256": "7eccd30450cb779ab6a72b3031bf6d824fad26db515313362d1cb426aef428de"
+      },
+      {
+        "category": "dependency",
+        "count": 5318,
+        "sha256": "0957a04a0fdeb85ef3269a44e36e9445b86cf33ed18c636c5fbfd5c0482cbe10"
+      },
+      {
+        "category": "function",
+        "count": 229,
+        "sha256": "fcbb06b1aa41425e8f54f7da40aa8add1a41c3d562402017c11729497272af66"
+      },
+      {
+        "category": "index",
+        "count": 219,
+        "sha256": "147bcafefb8cd928f7b1195d9133e2175cb19b3691cb8e63985a600bf6cf1f5b"
+      },
+      {
+        "category": "membership",
+        "count": 29,
+        "sha256": "2e96bf4e7c03557d79bef51a04752567f9b26868030d411268053407d6906e1d"
+      },
+      {
+        "category": "policy",
+        "count": 68,
+        "sha256": "be9c08f4910e303d18f794003ceaa353574c32b8d29bacb77f8172a09a345e8f"
+      },
+      {
+        "category": "prerequisite",
+        "count": 5,
+        "sha256": "c742fc8e04b9ee10d61b31ffc7722b3cc2c12450970e094201ed4eeebe02fde8"
+      },
+      {
+        "category": "relation",
+        "count": 329,
+        "sha256": "58d38a12cc91789d82ad4bffb01305010ab2ae59cf662da6c9c530631145ec91"
+      },
+      {
+        "category": "role",
+        "count": 23,
+        "sha256": "0d2626414f2f6ea338019cebd59b2a28608ffd72c0387ee93c8306328d5b10a0"
+      },
+      {
+        "category": "roleSetting",
+        "count": 9,
+        "sha256": "4ff5ec9b7d15049ed6603318f043ecbb294e40000b4a6d90565181a936b4205f"
+      },
+      {
+        "category": "schema",
+        "count": 3,
+        "sha256": "185a6f3fd128db92e1173b5cefe64c37017a2818600f2bb44b1d27a11c1d79bf"
+      },
+      {
+        "category": "sequence",
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "category": "trigger",
+        "count": 1131,
+        "sha256": "c7f5590fbfc3b1a9faba8926755a63507c607f90e40be085be974b42375bea11"
+      },
+      {
+        "category": "type",
+        "count": 220,
+        "sha256": "5461f8615adf19fe7152ccf43f57855ceb60535b3bcd93ac0879719136125f2d"
+      }
+    ],
+    "rows": 9768,
+    "bytes": 6344233
+  },
+  "exactProviderDeltas": [
+    {
+      "id": "membership:[\"supabase_functions_admin\",\"postgres\",\"supabase_admin\"]",
+      "expected": {
+        "category": "membership",
+        "key": "[\"supabase_functions_admin\",\"postgres\",\"supabase_admin\"]",
+        "facts": {
+          "role": "supabase_functions_admin",
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "admin": false,
+          "inherit": true,
+          "set": true
+        }
+      },
+      "observed": null
+    },
+    {
+      "id": "prerequisite:[\"pg_stat_statements\"]",
+      "expected": {
+        "category": "prerequisite",
+        "key": "[\"pg_stat_statements\"]",
+        "facts": {
+          "name": "pg_stat_statements",
+          "version": "1.11",
+          "schema": "extensions",
+          "owner": "supabase_admin"
+        }
+      },
+      "observed": {
+        "category": "prerequisite",
+        "key": "[\"pg_stat_statements\"]",
+        "facts": {
+          "name": "pg_stat_statements",
+          "version": "1.11",
+          "schema": "extensions",
+          "owner": "postgres"
+        }
+      }
+    },
+    {
+      "id": "prerequisite:[\"pgcrypto\"]",
+      "expected": {
+        "category": "prerequisite",
+        "key": "[\"pgcrypto\"]",
+        "facts": {
+          "name": "pgcrypto",
+          "version": "1.3",
+          "schema": "extensions",
+          "owner": "supabase_admin"
+        }
+      },
+      "observed": {
+        "category": "prerequisite",
+        "key": "[\"pgcrypto\"]",
+        "facts": {
+          "name": "pgcrypto",
+          "version": "1.3",
+          "schema": "extensions",
+          "owner": "postgres"
+        }
+      }
+    },
+    {
+      "id": "prerequisite:[\"uuid-ossp\"]",
+      "expected": {
+        "category": "prerequisite",
+        "key": "[\"uuid-ossp\"]",
+        "facts": {
+          "name": "uuid-ossp",
+          "version": "1.1",
+          "schema": "extensions",
+          "owner": "supabase_admin"
+        }
+      },
+      "observed": {
+        "category": "prerequisite",
+        "key": "[\"uuid-ossp\"]",
+        "facts": {
+          "name": "uuid-ossp",
+          "version": "1.1",
+          "schema": "extensions",
+          "owner": "postgres"
+        }
+      }
+    },
+    {
+      "id": "role:[\"supabase_admin\"]",
+      "expected": {
+        "category": "role",
+        "key": "[\"supabase_admin\"]",
+        "facts": {
+          "name": "supabase_admin",
+          "superuser": true,
+          "inherit": true,
+          "createRole": true,
+          "createDb": true,
+          "login": true,
+          "replication": true,
+          "bypassRls": true,
+          "connectionLimit": -1,
+          "validUntil": null,
+          "config": [
+            "search_path=\"\\$user\", public, auth, extensions",
+            "log_statement=none"
+          ]
+        }
+      },
+      "observed": {
+        "category": "role",
+        "key": "[\"supabase_admin\"]",
+        "facts": {
+          "name": "supabase_admin",
+          "superuser": true,
+          "inherit": true,
+          "createRole": true,
+          "createDb": true,
+          "login": true,
+          "replication": true,
+          "bypassRls": true,
+          "connectionLimit": -1,
+          "validUntil": null,
+          "config": [
+            "search_path=\"$user\", public, auth, extensions",
+            "log_statement=none"
+          ]
+        }
+      }
+    },
+    {
+      "id": "role:[\"supabase_functions_admin\"]",
+      "expected": {
+        "category": "role",
+        "key": "[\"supabase_functions_admin\"]",
+        "facts": {
+          "name": "supabase_functions_admin",
+          "superuser": false,
+          "inherit": false,
+          "createRole": true,
+          "createDb": false,
+          "login": true,
+          "replication": false,
+          "bypassRls": false,
+          "connectionLimit": -1,
+          "validUntil": null,
+          "config": [
+            "search_path=supabase_functions"
+          ]
+        }
+      },
+      "observed": null
+    },
+    {
+      "id": "roleSetting:[\"supabase_admin\",\"ALL_DATABASES\"]",
+      "expected": {
+        "category": "roleSetting",
+        "key": "[\"supabase_admin\",\"ALL_DATABASES\"]",
+        "facts": {
+          "role": "supabase_admin",
+          "database": "ALL_DATABASES",
+          "config": [
+            "search_path=\"\\$user\", public, auth, extensions",
+            "log_statement=none"
+          ]
+        }
+      },
+      "observed": {
+        "category": "roleSetting",
+        "key": "[\"supabase_admin\",\"ALL_DATABASES\"]",
+        "facts": {
+          "role": "supabase_admin",
+          "database": "ALL_DATABASES",
+          "config": [
+            "search_path=\"$user\", public, auth, extensions",
+            "log_statement=none"
+          ]
+        }
+      }
+    },
+    {
+      "id": "roleSetting:[\"supabase_functions_admin\",\"ALL_DATABASES\"]",
+      "expected": {
+        "category": "roleSetting",
+        "key": "[\"supabase_functions_admin\",\"ALL_DATABASES\"]",
+        "facts": {
+          "role": "supabase_functions_admin",
+          "database": "ALL_DATABASES",
+          "config": [
+            "search_path=supabase_functions"
+          ]
+        }
+      },
+      "observed": null
+    },
+    {
+      "id": "membership:[\"postgres\",\"cli_login_postgres\",\"supabase_admin\"]",
+      "expected": null,
+      "observed": {
+        "category": "membership",
+        "key": "[\"postgres\",\"cli_login_postgres\",\"supabase_admin\"]",
+        "facts": {
+          "role": "postgres",
+          "member": "cli_login_postgres",
+          "grantor": "supabase_admin",
+          "admin": false,
+          "inherit": false,
+          "set": true
+        }
+      }
+    },
+    {
+      "id": "role:[\"cli_login_postgres\"]",
+      "expected": null,
+      "observed": {
+        "category": "role",
+        "key": "[\"cli_login_postgres\"]",
+        "facts": {
+          "name": "cli_login_postgres",
+          "superuser": false,
+          "inherit": false,
+          "createRole": false,
+          "createDb": false,
+          "login": true,
+          "replication": false,
+          "bypassRls": false,
+          "connectionLimit": -1,
+          "validUntil": "2026-10-05 13:30:51.384224+00",
+          "config": null
+        }
+      }
+    }
+  ],
+  "completedPrefix": {
+    "stageRowsSha256": "a79a3e69cc6adb548d412f77e45fba1e9997903b023a7d66034cdb0c2838d081",
+    "scratch": {
+      "catalogueSha256": "97d1a6fd432e243018cee83de0a8d4712631dcb537260156e18e8af49c9a7447",
+      "categories": [
+        {
+          "category": "column",
+          "count": 1542,
+          "sha256": "418f4c7a20b6e2132df2bfe20eea77c716f2a8b1b8f5233847ec62f8e8809f73"
+        },
+        {
+          "category": "constraint",
+          "count": 713,
+          "sha256": "64387c719661d835c217ab9dd459d6f847cbb88693ebd70db14fec3697ec3164"
+        },
+        {
+          "category": "defaultAcl",
+          "count": 1,
+          "sha256": "7eccd30450cb779ab6a72b3031bf6d824fad26db515313362d1cb426aef428de"
+        },
+        {
+          "category": "dependency",
+          "count": 5547,
+          "sha256": "851e73762b634535353aff5662b01236098bd2a82bb7dfaf5ea0545f0a282b3a"
+        },
+        {
+          "category": "function",
+          "count": 248,
+          "sha256": "541484c79eefd05fdf4e7203db4d16ae9d98a7a9f8ee576cbca4a676f55eb86d"
+        },
+        {
+          "category": "index",
+          "count": 226,
+          "sha256": "e95ff71ef5bfdba20f194fcd694bd94f65299e47cba60828975527723d783fbd"
+        },
+        {
+          "category": "membership",
+          "count": 29,
+          "sha256": "a6f04e5b3ef72084e59a5366404e88f9bd4bcd20b0e912fd8c9e57570e66262d"
+        },
+        {
+          "category": "policy",
+          "count": 68,
+          "sha256": "be9c08f4910e303d18f794003ceaa353574c32b8d29bacb77f8172a09a345e8f"
+        },
+        {
+          "category": "prerequisite",
+          "count": 5,
+          "sha256": "d941f4d206bb87fd720545a5f2cd71e7d05bfbe18f9c7484bd30c640c015c645"
+        },
+        {
+          "category": "relation",
+          "count": 340,
+          "sha256": "67ad9fb4e8751430bf26f40443b69d1383fcaffdf30176661a970344c0c83a9d"
+        },
+        {
+          "category": "role",
+          "count": 23,
+          "sha256": "365860d38b6870e15708de93e23a43cf5115627c88aa9d0984f0b1b54b416a62"
+        },
+        {
+          "category": "roleSetting",
+          "count": 10,
+          "sha256": "9bacf2366e88374e42baf8a115338302e314f30ed90797a92b0f5be451ceebcf"
+        },
+        {
+          "category": "schema",
+          "count": 3,
+          "sha256": "185a6f3fd128db92e1173b5cefe64c37017a2818600f2bb44b1d27a11c1d79bf"
+        },
+        {
+          "category": "sequence",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "category": "trigger",
+          "count": 1185,
+          "sha256": "c37b07b5de8880a3c8434642cd0424bdfc3657b32d2a8454022e09536a9a26de"
+        },
+        {
+          "category": "type",
+          "count": 228,
+          "sha256": "06c77a45e8e8d41b245ef2be2f9a6512d351dfa0136496b29f4431e0092c2c1c"
+        }
+      ],
+      "rows": 10168,
+      "bytes": 6666494
+    },
+    "expected": {
+      "catalogueSha256": "b703b1064c03905a896c9fb7c5690097369ded7afef293bbf60e5b91c4632b7f",
+      "categories": [
+        {
+          "category": "column",
+          "count": 1542,
+          "sha256": "418f4c7a20b6e2132df2bfe20eea77c716f2a8b1b8f5233847ec62f8e8809f73"
+        },
+        {
+          "category": "constraint",
+          "count": 713,
+          "sha256": "64387c719661d835c217ab9dd459d6f847cbb88693ebd70db14fec3697ec3164"
+        },
+        {
+          "category": "defaultAcl",
+          "count": 1,
+          "sha256": "7eccd30450cb779ab6a72b3031bf6d824fad26db515313362d1cb426aef428de"
+        },
+        {
+          "category": "dependency",
+          "count": 5547,
+          "sha256": "851e73762b634535353aff5662b01236098bd2a82bb7dfaf5ea0545f0a282b3a"
+        },
+        {
+          "category": "function",
+          "count": 248,
+          "sha256": "541484c79eefd05fdf4e7203db4d16ae9d98a7a9f8ee576cbca4a676f55eb86d"
+        },
+        {
+          "category": "index",
+          "count": 226,
+          "sha256": "e95ff71ef5bfdba20f194fcd694bd94f65299e47cba60828975527723d783fbd"
+        },
+        {
+          "category": "membership",
+          "count": 29,
+          "sha256": "2e96bf4e7c03557d79bef51a04752567f9b26868030d411268053407d6906e1d"
+        },
+        {
+          "category": "policy",
+          "count": 68,
+          "sha256": "be9c08f4910e303d18f794003ceaa353574c32b8d29bacb77f8172a09a345e8f"
+        },
+        {
+          "category": "prerequisite",
+          "count": 5,
+          "sha256": "c742fc8e04b9ee10d61b31ffc7722b3cc2c12450970e094201ed4eeebe02fde8"
+        },
+        {
+          "category": "relation",
+          "count": 340,
+          "sha256": "67ad9fb4e8751430bf26f40443b69d1383fcaffdf30176661a970344c0c83a9d"
+        },
+        {
+          "category": "role",
+          "count": 23,
+          "sha256": "0d2626414f2f6ea338019cebd59b2a28608ffd72c0387ee93c8306328d5b10a0"
+        },
+        {
+          "category": "roleSetting",
+          "count": 9,
+          "sha256": "4ff5ec9b7d15049ed6603318f043ecbb294e40000b4a6d90565181a936b4205f"
+        },
+        {
+          "category": "schema",
+          "count": 3,
+          "sha256": "185a6f3fd128db92e1173b5cefe64c37017a2818600f2bb44b1d27a11c1d79bf"
+        },
+        {
+          "category": "sequence",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "category": "trigger",
+          "count": 1185,
+          "sha256": "c37b07b5de8880a3c8434642cd0424bdfc3657b32d2a8454022e09536a9a26de"
+        },
+        {
+          "category": "type",
+          "count": 228,
+          "sha256": "06c77a45e8e8d41b245ef2be2f9a6512d351dfa0136496b29f4431e0092c2c1c"
+        }
+      ],
+      "rows": 10167,
+      "bytes": 6666248
+    }
+  }
+}

@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Interrupted hosted schema recovery stays under `scripts/database` and the existing backend workflow. [The8October recovery decision](decisions/2026-10-08-unknown-prefix-reconciliation.md) records exact120/123 catalogue evidence, immutable original journal linkage and the bounded `reconcile-schema` scope. `hosted-schema-catalogue.ts`, `hosted-schema-reconciliation-policy.ts` and `hosted-schema-reconciliation.ts` own fixed projections/policy and supplied contracts; `hosted-migration-database.ts` owns native locked observation/receipt/opaque permits. `hosted-migration-batches.ts` supplies cumulative metadata only. The existing planner/workdirs/stage/executor/journal owners retain SQL execution and uncertainty rules. Hosted recovery and subsequent accounts/deployment acceptance remain separate.
+
 The [junior developer learning guide](architecture/cuevo-release-learning-guide.md) explains request authority, test scope, the measured release incident and remaining recovery work. It is a dated teaching document, not product or release authority.
 
 The CI runtime lanes and aggregate are owned by `scripts/verification/runtime-lanes.ts`, `runtime-lane-aggregate.ts` and `canonical-runtime-jobs.ts`. They bind exact source/run/attempt evidence across isolated Docker jobs; canonical source proof remains separate from hosted effects. `backend-runtime-resume.ts` owns private original activation state and same-source current verification; its public projection contains no runtime credentials or signing key.
