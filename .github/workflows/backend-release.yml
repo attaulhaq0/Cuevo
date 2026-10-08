@@ -147,7 +147,6 @@ jobs:
       - name: Revalidate original active runtime without provider deployment
         if: inputs.scope == 'installed-runtime'
         env:
-          CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON: ${{ vars.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -199,7 +198,6 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
           CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
-          CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON: ${{ vars.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON }}
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts activate
@@ -219,7 +217,6 @@ jobs:
         id: runtime-rollout
         if: inputs.scope == 'runtime-rollout' && inputs.handoff == 'operating-staging'
         env:
-          CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON: ${{ vars.CUEVO_DATA_API_CONFIGURATION_EVIDENCE_JSON }}
           GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

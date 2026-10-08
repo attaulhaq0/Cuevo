@@ -58,7 +58,7 @@ Object.assign(globalThis, { nativeObserverTransportClient: ObserverTransportClie
 // connection preparation, raw-history verifier, filesystem and factory run.
 const replacements: Record<string, string> = {
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.nativeCompositionFixture.admission;',
-  'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.nativeCompositionFixture.prepared;',
+  'backend-release-contracts.ts': "export * from './backend-release-contracts.ts?actual-fingerprint-validator';export const validatePreparedBackendReleaseIntent=globalThis.nativeCompositionFixture.prepared;",
   'hosted-migration-provider.ts': 'export const readHostedMigrationProvider=globalThis.nativeCompositionFixture.provider;',
   'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeCompositionFixture.files;export const admitHostedMigrationBatchFiles=()=>{throw Error("No batch in ordinary adapter fixture");};',
   'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeCompositionFixture.database;export const assertNativeReconciliationPermit=()=>{throw Error("Unregistered controlled permit");};export const readNativeMigrationPermitAuthority=()=>{throw Error("Unregistered controlled permit authority");};export const readNativeSchemaStageAdmission=()=>{throw Error("Ordinary fixture must not consume a native cohort");};',

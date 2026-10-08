@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {test} from 'node:test';
 import {canonicalReleaseExecutionJson} from './release-review';
 
-import {originalWorkerExportFixture} from './backend-hosted-activation-export.fixture';
+import {originalWorkerExportFixture,providerWorkerExportFixture} from './backend-hosted-activation-export.fixture';
 
 const wakeKey='d'.repeat(64),now=Date.parse('2026-10-08T12:00:00Z');
 const rawHash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex'),hash=(value:unknown)=>rawHash(canonicalReleaseExecutionJson(value)),bytes=(value:unknown)=>Buffer.from(canonicalReleaseExecutionJson(value)+'\n');
@@ -61,3 +61,7 @@ test('frozen original prefix remains usable when a bounded later journal grows w
  const api=await subject(),fixture=originalWorkerExportFixture(),prefix=fixture.journalBytes.toString('utf8');fixture.journalBytes=Buffer.concat([fixture.journalBytes,Buffer.from('untrusted late bytes\n'.repeat(5000))]);assert.equal(api.createOriginalWorkerActivationExecutionExport(fixture).envelope.originalJournalPrefix,prefix);
  const large=originalWorkerExportFixture();large.journalBytes=Buffer.alloc(1024*1024+1,32);assert.throws(()=>api.createOriginalWorkerActivationExecutionExport(large));
 });
+
+test('provider original export retains distinct raw configuration bytes and exact false-manual proof without rewriting legacy export',async()=>{const api=await subject(),input=providerWorkerExportFixture(),proof=api.createOriginalWorkerActivationExecutionExport(input);assert.equal(proof.envelope.version,2);assert.equal(proof.envelope.originalActivation.configurationEvidenceObservedManual,false);assert.equal(proof.envelope.originalConfigurationBytesBase64,input.configurationBytes.toString('base64'));assert.equal(proof.envelope.originalIntent.configurationEvidenceSha256,rawHash(input.configurationBytes));assert.deepEqual(api.validateOriginalWorkerActivationExecutionExport(proof.envelope,now),proof);for(const patch of[{version:1},{originalConfigurationBytesBase64:undefined},{originalActivation:{...proof.envelope.originalActivation,configurationEvidenceObservedManual:true}},{originalIntent:{...proof.envelope.originalIntent,configurationEvidenceSha256:proof.envelope.originalActivation.configurationObservation!.sha256}}])assert.throws(()=>api.validateOriginalWorkerActivationExecutionExport({...proof.envelope,...patch},now));const legacy=api.createOriginalWorkerActivationExecutionExport(originalWorkerExportFixture());assert.equal(legacy.envelope.version,1);assert.equal('originalConfigurationBytesBase64'in legacy.envelope,false);});
+
+test('new original configuration optional input cannot execute a supplied getter',async()=>{const api=await subject(),input=originalWorkerExportFixture();let reads=0;assert.throws(()=>api.createOriginalWorkerActivationExecutionExport({...input,get configurationBytes(){reads++;return Buffer.from('{}');}}));assert.equal(reads,0);});
