@@ -267,7 +267,7 @@ test('full captured admission profile reaches only the original three-file effec
  try{for(const variance of [false,true]){
  hostCompletionVariance=variance;heldCloseIssued=false;
  await fixture(async () => {
-  const original = [...state.objects], timing = beginAdmissionTiming({synchronizeStorageStart:false});
+   const original = [...state.objects], timing = beginAdmissionTiming({synchronizeStorageStart:false,stageReadCosts:{initialMs:10000,finalMs:5226}});
   try {
    const result = await executor.executeNativeHostedMigrationStage(input);
    const diagnostic = JSON.stringify({ result, finalEvents: timing.events.slice(-16), managementDuringCatalogue: timing.managementDuringCatalogue, quiescenceDuringStorage: timing.quiescenceDuringStorage, overlaps: timing.overlaps, sourceChecks: timing.sourceChecks, sourceCharged: timing.sourceCharged });
@@ -279,17 +279,22 @@ test('full captured admission profile reaches only the original three-file effec
    assert.equal(timing.quiescenceDuringStorage, 0, 'Quiescence follows complete Storage request settlement');
    assert.ok(timing.nativeSnapshots>=2&&timing.nativeSnapshots%2===0, 'Actual distinct PRE/POST snapshot requests retain native metadata and target facts');
    assert.equal(timing.nativeMetadata,timing.nativeSnapshots,'One fixed native query carries each complete snapshot');
-   assert.ok(timing.sourceChecks > 0 && timing.sourceCharged > 0, 'The captured synchronous cost follows an actual final source check');
+    const initialReads=timing.events.filter(event=>event.kind==='source-initial'),sourceEvents=timing.events.filter(event=>event.kind==='source-final');
+    assert.equal(timing.sourceChecks,9,'The single-stage protocol performs one preflight and four actual initial/final read pairs');
+    assert.equal(initialReads.length,4);assert.equal(sourceEvents.length,4);
    assert.equal(timing.pending.length, 0); assert.equal(timing.activeCatalogue, 0); assert.equal(timing.activeStorage, 0);
-   const sourceEvents=timing.events.filter(event=>event.kind==='source'),admissions=sourceEvents.map(source=>{
-    const authority=timing.events.filter(event=>event.kind==='official'&&event.completedAt<=source.completedAt).at(-1)!,provider=timing.events.filter(event=>event.kind==='provider'&&event.completedAt<=source.completedAt).at(-1)!;
+    const admissions=sourceEvents.map((source,index)=>{
+     const initial=initialReads[index];assert.equal(initial.completedAt-initial.startedAt,10000);assert.equal(source.completedAt-source.startedAt,5226);
+     const authorities=timing.events.filter(event=>event.kind==='official'&&event.startedAt>=initial.completedAt&&event.completedAt<=source.startedAt),providers=timing.events.filter(event=>event.kind==='provider'&&event.startedAt>=initial.completedAt&&event.completedAt<=source.startedAt);
+     assert.equal(authorities.length,1,'Each final read uses its own renewed official observation');assert.equal(providers.length,1,'Each final read uses its own renewed provider observation');
+     const authority=authorities[0],provider=providers[0];
     return{officialAgeMs:source.completedAt-authority.completedAt,providerAgeMs:source.completedAt-provider.completedAt,finalSourceMs:source.completedAt-source.startedAt};
    });
    assert.ok(admissions.length>0);for(const admission of admissions)assert.ok(admission.officialAgeMs<=30000&&admission.providerAgeMs<=30000);
    if(variance)assert.equal(heldCloseIssued,true,'The variance scenario must perturb an actual completed FileHandle.close');
    console.log(JSON.stringify({purpose:'CAPTURED_ADMISSION_CAPACITY_BEFORE_ASSERT',hostCompletionVariance:variance,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),sourceChecks:timing.sourceChecks,sourceCharges:sourceEvents.length,hostedAcceptance:false}));
    assert.ok(Math.min(...admissions.map(admission=>30000-admission.officialAgeMs))>=6000,'The captured profile must leave at least six seconds after actual final source verification');
-   console.log(JSON.stringify({purpose:'CONTROLLED_CAPTURED_ADMISSION_PROFILE',runtime:process.version,network:'none',forcedStorageStart:false,status:result.status,commands:state.commands,historyCount:state.historyCount,overlaps:timing.overlaps,managementDuringCatalogue:timing.managementDuringCatalogue,quiescenceDuringStorage:timing.quiescenceDuringStorage,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),hostFilesystemLatency:'Actual read outputs retained; no extra modeled latency beyond recorded final-source cost',hostedAcceptance:false}));
+    console.log(JSON.stringify({purpose:'CONTROLLED_CAPTURED_ADMISSION_PROFILE',runtime:process.version,network:'none',forcedStorageStart:false,status:result.status,commands:state.commands,historyCount:state.historyCount,overlaps:timing.overlaps,managementDuringCatalogue:timing.managementDuringCatalogue,quiescenceDuringStorage:timing.quiescenceDuringStorage,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),hostFilesystemLatency:'Actual read outputs retained; modeled preparatory 10000ms and final 5226ms costs follow completed byte admission',hostedAcceptance:false}));
    for (const [path, bytes] of original) assert.equal(state.objects.get(path), bytes);
    const records = [...state.objects].filter(([path]) => !original.some(([previous]) => previous === path) && path.endsWith('.record.json')).map(([, bytes]) => JSON.parse(bytes).payload.state);
    assert.deepEqual(records, ['INTENT', 'COMMITTED']);
