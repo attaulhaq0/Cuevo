@@ -11,6 +11,8 @@ import { readBackendReleaseAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
 import { createBackendPreviewTransport, backendPreviewHeaders } from './backend-preview-transport';
 import { createHostedMigrationDatabase } from '../database/hosted-migration-database';
+import {assertNativeSchemaRecoveryConsumption,type NativeReconciliationPermit} from '../database/hosted-migration-database';
+import {canonicalHostedMigrationPlan,type HostedMigrationPlanV1} from '../database/hosted-migration-plan';
 import { readHostedMigrationProvider, requireCurrentHostedMigrationEndpoint } from '../database/hosted-migration-provider';
 import { providerDeploymentStateSchema, providerStateSha256, validateProviderDeploymentTransition, type ProviderDeploymentState, type ProviderDeploymentOperation, type ProviderDeploymentPhase } from '../database/hosted-provider-state';
 import {readCanonicalMigrationSources} from '../database/hosted-migration-plan';
@@ -86,7 +88,7 @@ export async function prepareBackendProviderDeployment(value: { repoRoot: string
   } catch { throw failure(); }
 }
 
-type DeploymentInput = { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; vercelToken: string; providerToken: string; githubToken: string; runtimeConfig: unknown; operator: { databaseUrl: string; certificate: { path: string; sha256: string }; password: string } };
+type DeploymentInput = { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; vercelToken: string; providerToken: string; githubToken: string; runtimeConfig: unknown; plan?:unknown;schemaRecoveryExport?:unknown;schemaRecoverySelection?:unknown;journalStorageKey?:string;operator: { databaseUrl: string; certificate: { path: string; sha256: string }; password: string } };
 export type BackendProviderDeploymentResult = { status: 'DEPLOYED_INACTIVE' | 'REQUIRES_REVIEW'; purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT'; api: { deploymentId: string; url: string; artifactSha256: string; metadataVerified: true; healthVerified: boolean } | null; edge: { id: string; version: number; artifactSha256: string; denoLockSha256: string; customAuthenticationVerified: boolean; state: 'INACTIVE' } | null; mutation: 'NOT_ATTEMPTED' | 'ATTEMPTED'; hostedAcceptance: false };
 async function responseBytes(response: Response, signal: AbortSignal) {
   if (response.redirected || !response.body) throw failure(); const declared = response.headers.get('content-length'); if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > 1024 * 1024)) throw failure();
@@ -119,7 +121,7 @@ async function apiCli(root: string, artifact: VerifiedArtifact, expected: Backen
 export async function deployBackendProviders(value: DeploymentInput): Promise<BackendProviderDeploymentResult> {
   const result: BackendProviderDeploymentResult = { status: 'REQUIRES_REVIEW', purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT', api: null, edge: null, mutation: 'NOT_ATTEMPTED', hostedAcceptance: false };
   try {
-    const input = z.object({ repoRoot: z.string(), preparedApproval: z.unknown(), expected: z.unknown(), apiArtifactRoot: z.string(), edgeArtifactRoot: z.string(), vercelToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), providerToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), githubToken: z.string().min(1), runtimeConfig: z.unknown(), operator: z.object({ databaseUrl: z.string().max(400), password: privateValue, certificate: z.object({ path: z.string(), sha256: digest }).strict() }).strict() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
+    const input = z.object({ repoRoot: z.string(), preparedApproval: z.unknown(), expected: z.unknown(), apiArtifactRoot: z.string(), edgeArtifactRoot: z.string(), vercelToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), providerToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), githubToken: z.string().min(1), runtimeConfig: z.unknown(),plan:z.unknown().optional(),schemaRecoveryExport:z.unknown().optional(),schemaRecoverySelection:z.unknown().optional(),journalStorageKey:z.string().min(20).max(4096).optional(), operator: z.object({ databaseUrl: z.string().max(400), password: privateValue, certificate: z.object({ path: z.string(), sha256: digest }).strict() }).strict() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
     const expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }), recipients = prepareHostedRuntimeRecipients(input.runtimeConfig, expected), root = input.repoRoot;
     const admission = async () => { await readBackendReleaseAdmission({ repoRoot: root, expected, prepared, githubToken: input.githubToken }); };
     const artifacts = async () => { const api = await artifact(root, input.apiArtifactRoot, expected.fingerprints.apiArtifactSha256, 'api'), edge = await artifact(root, input.edgeArtifactRoot, expected.fingerprints.edgeArtifactSha256, 'cuevo-worker'); if (edge.manifest.denoLockSha256 !== expected.fingerprints.denoLockSha256) throw failure(); return { api, edge }; };
@@ -131,15 +133,18 @@ export async function deployBackendProviders(value: DeploymentInput): Promise<Ba
     const migrationSources=readCanonicalMigrationSources({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha}).sources;
     const included=migrationSources.map(source=>({name:source.name,version:source.name.slice(0,14),sha256:hash(source.bytes)})),versions=included.map(row=>row.version).sort();
     const released = await database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`, async () => {
+      let recoveryPermit:NativeReconciliationPermit|undefined;const recoveryPlan=input.plan as HostedMigrationPlanV1|undefined,recoveryIdentity=recoveryPlan?{projectRef,sourceSha:expected.releaseSha,treeSha:expected.treeSha,planSha256:canonicalHostedMigrationPlan(recoveryPlan).sha256,stageId:'remaining' as const,stageSha256:hash(JSON.stringify({included:recoveryPlan.migrations,configSha256:hash('project_id = "cuevo"\n\n[db]\nmajor_version = 17\n\n[db.migrations]\nenabled = true\n\n[db.seed]\nenabled = false\n')})),databaseUrl:input.operator.databaseUrl,approvalDigest:prepared.sha256,ciRunId:expected.ciRunId,certificateSha256:input.operator.certificate.sha256}:undefined;
+      const recoveryLive=()=>{if(expected.schemaRecovery){if(!recoveryPermit||!recoveryIdentity)throw failure();assertNativeSchemaRecoveryConsumption(recoveryPermit,recoveryIdentity,'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');}};
       const live = () => { if (database.signal.aborted) throw failure(); };
       const inactive=async()=>{
+       if(expected.schemaRecovery){if(!input.plan||!input.schemaRecoveryExport||!input.journalStorageKey)throw failure();recoveryPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan:input.plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});}
        live();const observed=await database.observe(),post=await database.observeStage({stageId:'remaining',expectedAfterVersions:versions});
        if(observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||post.observedAtMs>Date.now()||Date.now()-post.observedAtMs>30000||Object.values(post.checks).some(value=>value!==true))throw failure();
-       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});live();
+       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});live();recoveryLive();
       };
       await inactive();
-      const vercel = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string) => { live(); const response = await providerRequest('https://api.vercel.com' + path, input.vercelToken, method, body, false, {}, database.signal); live(); return response; };
-      const supabase = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string | FormData) => { live(); const response = await providerRequest(`https://api.supabase.com/v1/projects/${projectRef}/` + path, input.providerToken, method, body, false, {}, database.signal); live(); return response; };
+      const vercel = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string) => { live();if(method==='POST')recoveryLive(); const response = await providerRequest('https://api.vercel.com' + path, input.vercelToken, method, body, false, {}, database.signal); live(); return response; };
+      const supabase = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string | FormData) => { live();if(method==='POST')recoveryLive(); const response = await providerRequest(`https://api.supabase.com/v1/projects/${projectRef}/` + path, input.providerToken, method, body, false, {}, database.signal); live(); return response; };
       z.object({ id: z.literal(project), accountId: z.literal(team) }).parse((await vercel('/v9/projects/' + project + query)).value);
       const identity: ProviderDeploymentOperation['identity'] = { sourceSha: expected.releaseSha, treeSha: expected.treeSha, apiArtifactSha256: built.api.sha256, edgeArtifactSha256: built.edge.sha256, denoLockSha256: expected.fingerprints.denoLockSha256, runtimeSha256: recipients.runtimeSha256, teamId: team, projectId: project, originalRunId: expected.releaseRunId, originalRunAttempt: expected.runAttempt, originalPackageSha256: prepared.sha256 };
       const same = (left: unknown, right: unknown) => canonicalReleaseReviewJson(left) === canonicalReleaseReviewJson(right);
@@ -203,7 +208,7 @@ export async function deployBackendProviders(value: DeploymentInput): Promise<Ba
         if (!state) state = { version: 1, purpose: 'CUEVO_PRIVATE_PROVIDER_DEPLOYMENT_STATE', projectRef, operations: [] };
         if (!operation) { operation = { identity, phases: [] }; state.operations.push(operation); }
         const next: ProviderDeploymentPhase = { name, state: 'INTENT', receipt: null }; operation.phases.push(next); await persist();
-        result.mutation = 'ATTEMPTED'; await admission(); built = await artifacts();await inactive(); live(); await effect(); live();
+        result.mutation = 'ATTEMPTED'; await admission(); built = await artifacts();await inactive(); live();recoveryLive(); await effect(); live();
         const receipt = await observe(); if (!receipt) throw failure(); next.state = 'CONFIRMED'; next.receipt = receipt; await persist(); return receipt;
       };
       await phase('API_ENVIRONMENT', envReceipt, async () => {

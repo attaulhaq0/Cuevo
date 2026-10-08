@@ -42,6 +42,30 @@ test('completed stage boundaries become no-op metadata and never reapply histori
  }
 });
 
+function singleAppend(){
+ const appended={name:'20261008120000_completed_batch_append.sql',bytes:Buffer.from('begin;\nselect 231;\ncommit;\n')},current=[...sources,appended],next={name:appended.name,version:appended.name.slice(0,14),sha256:hash(appended.bytes)};
+ const final=stage(3,230);final.included=[...rows,next];final.pending=[next];final.expectedAfterVersions=final.included.map(row=>row.version).sort();
+ return{current,final,next};
+}
+
+test('exact completed230 source permits one231 append and unchanged earlier no-op stages',()=>{
+ const{current,final,next}=singleAppend();
+ const result=deriveHostedMigrationBatches({sources:current,stage:final,completedSource:sources});
+ assert.deepEqual(result.batches.map(batch=>batch.pending),[[next]]);assert.equal(result.batches[0].expectedBeforeVersions.length,230);assert.equal(result.batches[0].expectedAfterVersions.length,231);
+ for(let index=0;index<3;index++){const noop=deriveHostedMigrationBatches({sources:current,stage:stage(index,230),completedSource:sources});assert.deepEqual(noop.pending,[]);assert.deepEqual(noop.batches,[]);assert.equal(noop.included.length,230);}
+ assert.throws(()=>deriveHostedMigrationBatches({sources:current,stage:final}));
+});
+
+test('historical append boundary refuses changed incomplete nonprefix sparse and proxy source evidence',()=>{
+ const{current,final}=singleAppend();let traps=0;
+ for(const completedSource of[sources.slice(0,-1),[...sources,current.at(-1)!],sources.map((row,index)=>index?row:{...row,bytes:Buffer.from('select forged;')}),new Array(sources.length),new Proxy(sources,{get(){traps++;return undefined;}})])assert.throws(()=>deriveHostedMigrationBatches({sources:current,stage:final,completedSource}));
+ const changed=structuredClone(final);changed.expectedBeforeVersions.pop();changed.pending=changed.included.slice(229);assert.throws(()=>deriveHostedMigrationBatches({sources:current,stage:changed,completedSource:sources}));
+ const coherent=structuredClone(final);coherent.included[200].sha256=hash('coherently forged historical statement');const forged=current.map(row=>row.name===coherent.included[200].name?{...row,bytes:Buffer.from('coherently forged historical statement')}:row);assert.throws(()=>deriveHostedMigrationBatches({sources:forged,stage:coherent,completedSource:sources}));
+ assert.throws(()=>deriveHostedMigrationBatches({...{sources:current,stage:final},completedSourceCount:230} as never));
+ assert.throws(()=>deriveHostedMigrationBatches({sources:current,stage:final,get completedSource(){traps++;return sources;}}));assert.equal(traps,0);
+ assert.throws(()=>deriveHostedMigrationBatches({sources,stage:stage(0,120),completedSource:sources.slice(0,120)}));
+});
+
 function reconciliationTemplate(){
  const identity={projectRef:'mqxdjvsyckzocokuikmx',sourceSha:source,treeSha:'1e85393d46beb4f5356e07277a13a7ef33cc67d9',planSha256:'413d23ed86f7379b3e88b90e09370762ce576d0395f4c4fceaa44d0f3abf3cf1',stageId:'prefix',stageSha256:hash(JSON.stringify({included:rows.slice(0,123),configSha256})),databaseUrl:'postgresql://postgres.mqxdjvsyckzocokuikmx@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full',approvalDigest:'d46d4616c1b9eecdcd474b080bfefac98ee959fb7c54819d510773fc661a98de',ciRunId:'37702851953',certificateSha256:'700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'};
  const ownerJson=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity})+'\n';

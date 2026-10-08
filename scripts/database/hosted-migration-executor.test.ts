@@ -60,7 +60,7 @@ const replacements: Record<string, string> = {
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.nativeCompositionFixture.admission;',
   'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.nativeCompositionFixture.prepared;',
   'hosted-migration-provider.ts': 'export const readHostedMigrationProvider=globalThis.nativeCompositionFixture.provider;',
-  'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeCompositionFixture.files;',
+  'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeCompositionFixture.files;export const admitHostedMigrationBatchFiles=()=>{throw Error("No batch in ordinary adapter fixture");};',
   'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeCompositionFixture.database;export const assertNativeReconciliationPermit=()=>{throw Error("Unregistered controlled permit");};',
   'hosted-migration-native-process.ts': 'export const createHostedMigrationNativeProcess=globalThis.nativeCompositionFixture.process;',
   'hosted-migration-journal.ts': 'export const createHostedMigrationJournal=globalThis.nativeCompositionFixture.journal;',

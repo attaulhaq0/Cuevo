@@ -57,6 +57,7 @@ export async function createHostedMigrationDurableJournal(value: unknown): Promi
       writeJournal: async value => {
         if (active) { uncertain = true; return { kind: 'UNCONFIRMED' }; } active = true;
         try {
+          if(captured.permitPresent){const native=await import('./hosted-migration-database');if(own(value)&&typeof value==='object'&&value!==null&&Object.getOwnPropertyDescriptor(value,'state')?.value==='REQUIRES_REVIEW'&&ownedIntentHash!==null)native.assertNativeReconciliationSafetyRecord(captured.reconciliationPermit,input.identity);else native.assertNativeMigrationEffectPermit(captured.reconciliationPermit,input.identity);}
           const raw = own(value), requested = payloadSchema.parse(raw); if (hash(requested.identity) !== hash(input.identity)) throw failure(); const payload = JSON.parse(JSON.stringify(raw)) as HostedExecutionJournal, expected = hash(payload),safety=captured.permitPresent&&payload.state==='REQUIRES_REVIEW'&&ownedIntentHash!==null;
           if(uncertain&&!safety)throw failure();const before = safety?await safetyPair():await pair(true);
           if (before && hash(before) === expected) return { kind: 'SYNCED', sha256: expected };
