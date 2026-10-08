@@ -12,12 +12,19 @@ import { canonicalReleaseReviewJson } from './release-review';
 
 const secret = 'private-backend-phase-canary';
 const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED', activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED',recoveryStatus:'FAULT_RECOVERY_VERIFIED',restoreStatus:'VERIFIED',originStatus:'API_ORIGIN_BOUND',handoverStatus:'PREPARED_STAGING_MANIFEST',webStatus:'WEB_PUBLIC_SETTINGS_CONFIRMED',transferFailure:false, bundle: {} as Record<string, unknown> };
+
+test('approved reconciliation scope reaches only the original prefix consumer and cannot provision or deploy',async()=>{const api=await subject();await fixture(async(repoRoot,env)=>{
+ const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='reconcile-schema';expected.installedSchema={migrationCount:120};
+ await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));
+ const result=await api.runBackendReleasePhase({mode:'reconcile-prefix',repoRoot,env});assert.equal(result.status,'COMMITTED');assert.deepEqual(state.events,['approval','schema']);
+ for(const mode of['bootstrap-schema','provision','deploy','activate','handover']as const){state.events=[];await assert.rejects(api.runBackendReleasePhase({mode,repoRoot,env}));assert.deepEqual(state.events,[]);}
+});});
 const replacements: Record<string, string> = {
   'backend-release-prepare.ts': 'export const prepareNativeBackendRelease=globalThis.backendPhaseFixture.prepare;',
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.backendPhaseFixture.admission;',
   'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.backendPhaseFixture.validate;',
   'hosted-operator-storage-bootstrap.ts': 'export const createHostedOperatorStorageBootstrap=globalThis.backendPhaseFixture.bootstrap;',
-  'hosted-migration-executor.ts': 'export const executeNativeHostedMigrations=globalThis.backendPhaseFixture.schema;',
+  'hosted-migration-executor.ts': 'export const executeNativeHostedMigrations=globalThis.backendPhaseFixture.schema;export const executeNativeHostedMigrationStage=globalThis.backendPhaseFixture.schema;',
   'hosted-synthetic-population.ts': 'export const seedHostedSyntheticPopulation=globalThis.backendPhaseFixture.population;',
   'hosted-synthetic-auth.ts': 'export const provisionHostedSyntheticAuth=globalThis.backendPhaseFixture.auth;',
   'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.backendPhaseFixture.database;',

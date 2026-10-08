@@ -53,3 +53,25 @@ test('completed prior Git release keeps its populated prefix in all workdirs and
   await assert.rejects(createHostedMigrationWorkdirs({...input,sourceSha,treeSha,plan:{...plan,priorCompletedRelease:{...plan.priorCompletedRelease!,treeSha:'0'.repeat(40)}}}));
  });
 });
+
+const recoveryProjectRef='mqxdjvsyckzocokuikmx',recoveryHash=(value:string)=>createHash('sha256').update(value).digest('hex');
+function reconciliationTemplateFor(rows:{name:string;version:string;sha256:string}[],recovery:{sha:string;tree:string}){
+ const originalIdentity={projectRef:recoveryProjectRef,sourceSha:'d87455114cac2d22d63d040ce5b13e6b2e74e743',treeSha:'1e85393d46beb4f5356e07277a13a7ef33cc67d9',planSha256:'413d23ed86f7379b3e88b90e09370762ce576d0395f4c4fceaa44d0f3abf3cf1',stageId:'prefix',stageSha256:'5f9e1d7804d816dc3ee387f126f946a0ee0ac3b192b3d4973774cbf33b2ba506',databaseUrl:'postgresql://postgres.mqxdjvsyckzocokuikmx@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full',approvalDigest:'d46d4616c1b9eecdcd474b080bfefac98ee959fb7c54819d510773fc661a98de',ciRunId:'37702851953',certificateSha256:'700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'};
+ const ownerJson=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity:originalIdentity})+'\n',payload=(state:string)=>({version:1,identity:originalIdentity,state,schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'});
+ const first=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:1,previousSha256:null,payload:payload('INTENT'),payloadSha256:recoveryHash(JSON.stringify(payload('INTENT')))})+'\n',second=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:2,previousSha256:recoveryHash(first),payload:payload('REQUIRES_REVIEW'),payloadSha256:recoveryHash(JSON.stringify(payload('REQUIRES_REVIEW')))})+'\n';
+ return{version:1,purpose:'CUEVO_UNKNOWN_PREFIX_RECONCILIATION_TEMPLATE',recoverySource:{sourceSha:recovery.sha,treeSha:recovery.tree,ciRunId:'37710000000',releaseRunId:'37710000001',runAttempt:1},originalRunId:'37703459549',originalRunAttempt:1,originalIdentity,ownerJson,recordJson:[first,second],stageRows:rows.slice(0,123),prefixRows:rows.slice(0,120),configSha256:'cc91534b07b96e61b993f179225a9929b65e965d19a5a02e242c79126166b4ff',historySha256:'e'.repeat(64),cataloguePolicySha256:'f'.repeat(64),catalogueSha256:'1'.repeat(64),absencePolicySha256:'2'.repeat(64),endpointSha256:'3'.repeat(64)};
+}
+
+
+test('exact original120 recovery workdirs retain123 original bytes and only three pending files',async()=>{
+ const {createHostedMigrationWorkdirs}=await api();
+ const repository=resolve(import.meta.dirname,'../..'),root=mkdtempSync(join(tmpdir(),'cuevo-reconciliation-workdirs-'));
+ try{git(root,'clone','--shared','--no-checkout','--quiet',repository,'.');git(root,'checkout','--quiet','--detach','d87455114cac2d22d63d040ce5b13e6b2e74e743');
+  const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}'),loaded=readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}),now=Date.parse('2026-10-08T01:00:00Z'),source={sha:sourceSha,tree:treeSha};
+  const empty={projectRef:recoveryProjectRef,boundProjectRef:recoveryProjectRef,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(now).toISOString(),authUsers:0,storageObjects:0,appSchemas:[],migrationVersions:[],dispatchDisabled:true,population:'EMPTY'},initial=planHostedMigrations({sources:loaded.sources,source,target:empty,now}),prefix=initial.migrations.slice(0,120),priorReceipt={projectRef:recoveryProjectRef,sourceSha,treeSha,migrations:prefix.map(({version,sha256})=>({version,sha256}))},template=reconciliationTemplateFor(initial.migrations,source);
+  const plan=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,now,target:{...empty,population:'SCHEMA_ONLY',appSchemas:['app','authorization','internal'],migrationVersions:prefix.map(r=>r.version)},priorReceipt,reconciliationTemplate:template}).plan;
+  const input={repoRoot:root,sourceSha,treeSha,plan,outputRoot:join(root,'.local/hosted-release')};const built=await createHostedMigrationWorkdirs(input),stage=built.stages[0];assert.equal(stage.included.length,123);assert.equal(stage.expectedBeforeVersions.length,120);assert.deepEqual(stage.pending,initial.migrations.slice(120,123));
+  for(const row of stage.included)assert.equal(hash(readFileSync(join(stage.workdir,'supabase/migrations',row.name))),row.sha256);
+  await assert.rejects(createHostedMigrationWorkdirs({...input,plan:{...plan,reconciliationTemplate:undefined}}));
+ }finally{rmSync(root,{recursive:true,force:true});}
+});

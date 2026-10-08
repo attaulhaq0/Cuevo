@@ -4,6 +4,8 @@ import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
+import { types } from 'node:util';
+import { parseReconciliationTemplate, verifyReconciledPrefix, type ReconciliationTemplate } from './hosted-schema-reconciliation';
 import { replayPlan, nativeSourceMigration, posthogEnvironmentMigration, posthogIntelligenceMigration } from './replay-plan';
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
@@ -38,10 +40,11 @@ export type HostedMigrationPlanV1 = {
   priorCompletedRelease?: {sourceSha:string;treeSha:string;migrationCount:number};
   priorSchemaRelease?: {sourceSha:string;treeSha:string;migrationCount:number};
   runtimeOnly?:true;
+  reconciliationTemplate?:ReconciliationTemplate;
 };
 
 /** Caller-supplied source/history is planning input, never execution admission or proof of Git review. */
-export function planHostedMigrations(input: { sources: MigrationSource[]; source: unknown; target: unknown; priorReceipt?: unknown; now: number }): HostedMigrationPlanV1 {
+export function planHostedMigrations(input: { sources: MigrationSource[]; source: unknown; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; now: number }): HostedMigrationPlanV1 {
   const identity = identitySchema.safeParse(input.source), target = targetSchema.safeParse(input.target);
   if (!identity.success || !target.success || !Number.isSafeInteger(input.now) || input.now < 0) throw failure();
   const current = target.data, observedAt = Date.parse(current.observedAt);
@@ -53,6 +56,8 @@ export function planHostedMigrations(input: { sources: MigrationSource[]; source
   const order = [...replay.before, replay.prerequisite, ...replay.remaining];
   if (order.length !== input.sources.length || new Set(order).size !== order.length) throw failure();
   const migrations = order.map(name => ({ version: name.slice(0, 14), sha256: hash(input.sources.find(row => row.name === name)!.bytes), name }));
+  let reconciliationTemplate:ReconciliationTemplate|undefined;
+  if(input.reconciliationTemplate!==undefined){reconciliationTemplate=parseReconciliationTemplate(input.reconciliationTemplate);verifyReconciledPrefix(reconciliationTemplate,migrations);if(reconciliationTemplate.recoverySource.sourceSha!==identity.data.sha||reconciliationTemplate.recoverySource.treeSha!==identity.data.tree||reconciliationTemplate.originalIdentity.projectRef!==current.projectRef||current.population!=='SCHEMA_ONLY'||current.migrationVersions.length!==120)throw failure();}
   const history = [...current.migrationVersions].sort();
   let applied: { version: string; sha256: string }[] = [];
   const initial = history.length === 0;
@@ -68,7 +73,8 @@ export function planHostedMigrations(input: { sources: MigrationSource[]; source
     if (canonicalRows(prior.data.migrations) !== canonicalRows(prefix.map(({ version, sha256 }) => ({ version, sha256 })))) throw failure();
     const boundaries = [replay.before.length, replay.before.length + 1, replay.before.length + 1 + replay.remaining.indexOf(posthogIntelligenceMigration), migrations.length];
     const completedPrior = prior.data.completedSourceMigrationCount === prior.data.migrations.length && prior.data.completedSourceMigrationCount === history.length;
-    if (!boundaries.includes(history.length) && !completedPrior&&current.population!=='SCHEMA_ONLY') throw failure();
+    if (!boundaries.includes(history.length) && !completedPrior&&!(current.population==='SCHEMA_ONLY'&&(history.length!==120||reconciliationTemplate))) throw failure();
+    if(reconciliationTemplate&&(prior.data.sourceSha!==reconciliationTemplate.originalIdentity.sourceSha||prior.data.treeSha!==reconciliationTemplate.originalIdentity.treeSha||prior.data.completedSourceMigrationCount!==undefined))throw failure();
     applied = prefix.map(({ version, sha256 }) => ({ version, sha256 }));
   }
   const pending = migrations.slice(applied.length);
@@ -83,6 +89,7 @@ export function planHostedMigrations(input: { sources: MigrationSource[]; source
   return { version: 1, mode: initial ? 'EMPTY_INITIAL' : 'INCREMENTAL', provenance: 'CALLER_SUPPLIED_SOURCE', source: identity.data,
     projectRef: current.projectRef, observedAt: current.observedAt, migrations, applied, pending, stages,
     sourceSetSha256: hash(JSON.stringify(migrations)), observedHistorySha256: hash(JSON.stringify(history)), dispatch: 'DISABLED', seed: 'DISABLED', vault: 'DISABLED',
+    ...(reconciliationTemplate?{reconciliationTemplate}:{}),
     ...(current.population!=='SCHEMA_ONLY'&&input.priorReceipt!==undefined&&priorSchema.parse(input.priorReceipt).completedSourceMigrationCount!==undefined?{priorCompletedRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:priorSchema.parse(input.priorReceipt).completedSourceMigrationCount!}}:{}),
     ...(current.population==='SCHEMA_ONLY'?{priorSchemaRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:applied.length}}:{}) };
 }
@@ -170,18 +177,19 @@ export function verifyPriorSchemaPrefix(repoRoot:string,plan:HostedMigrationPlan
  git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
  const sources=readHistoricalMigrationSources(repoRoot,prior.sourceSha,prior.treeSha),replay=replayPlan(sources);
  const order=[...replay.before,replay.prerequisite,...replay.remaining],boundaries=[replay.before.length,replay.before.length+1,replay.before.length+1+replay.remaining.indexOf(posthogIntelligenceMigration),order.length];
- if(!boundaries.includes(prior.migrationCount))throw failure();
+ if(!boundaries.includes(prior.migrationCount)){if(prior.migrationCount!==120||!plan.reconciliationTemplate)throw failure();const template=parseReconciliationTemplate(plan.reconciliationTemplate);verifyReconciledPrefix(template,plan.migrations);if(template.recoverySource.sourceSha!==plan.source.sha||template.recoverySource.treeSha!==plan.source.tree||template.originalIdentity.sourceSha!==prior.sourceSha||template.originalIdentity.treeSha!==prior.treeSha)throw failure();}
+ else if(plan.reconciliationTemplate)throw failure();
  for(const[index,row]of plan.migrations.slice(0,prior.migrationCount).entries())if(row.name!==order[index]||hash(sources.find(source=>source.name===row.name)!.bytes)!==row.sha256)throw failure();
  return true;
 }
 
 /** A release entry also requires all tracked and untracked authored source to match the admitted commit. */
-export function createCanonicalHostedMigrationPlan(input: { repoRoot: string; sourceSha: string; treeSha: string; target: unknown; priorReceipt?: unknown; now: number }) {
+export function createCanonicalHostedMigrationPlan(input: { repoRoot: string; sourceSha: string; treeSha: string; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; now: number }) {
   const loaded = readCanonicalMigrationSources(input);
   const { git } = checkedRoot(input.repoRoot);
   git(['diff', '--quiet', '--no-ext-diff', '--no-textconv', input.sourceSha, '--']);
   if (git(['ls-files', '--others', '--exclude-standard', '-z']).length) throw failure();
-  const plan = planHostedMigrations({ sources: loaded.sources, source: { sha: input.sourceSha, tree: input.treeSha }, target: input.target, priorReceipt: input.priorReceipt, now: input.now });
+  const plan = planHostedMigrations({ sources: loaded.sources, source: { sha: input.sourceSha, tree: input.treeSha }, target: input.target, priorReceipt: input.priorReceipt, reconciliationTemplate:input.reconciliationTemplate, now: input.now });
   if (input.priorReceipt !== undefined) {
     const prior = priorSchema.parse(input.priorReceipt);
     if (git(['rev-parse', '--verify', `${prior.sourceSha}^{commit}`]).toString('utf8').trim() !== prior.sourceSha
@@ -218,12 +226,13 @@ const planSchema = z.object({
   priorCompletedRelease: z.object({sourceSha:sha,treeSha:sha,migrationCount:z.number().int().positive().max(1000)}).strict().optional(),
   priorSchemaRelease: z.object({sourceSha:sha,treeSha:sha,migrationCount:z.number().int().positive().max(1000)}).strict().optional(),
   runtimeOnly:z.literal(true).optional(),
+  reconciliationTemplate:z.unknown().optional(),
   sourceSetSha256: digest, observedHistorySha256: digest, dispatch: z.literal('DISABLED'), seed: z.literal('DISABLED'), vault: z.literal('DISABLED'),
 }).strict();
 function jsonSnapshot(value: unknown, depth = 0): unknown {
   if (depth > 20) throw failure();
   if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value)) return value;
-  if (!value || typeof value !== 'object') throw failure();
+  if (!value || typeof value !== 'object' || types.isProxy(value)) throw failure();
   const prototype = Object.getPrototypeOf(value);
   if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) throw failure();
   const result: Record<string, unknown> | unknown[] = Array.isArray(value) ? [] : Object.create(null);
@@ -246,6 +255,8 @@ export function canonicalHostedMigrationPlan(plan: HostedMigrationPlanV1) {
     || JSON.stringify(value.stages.flatMap(stage => stage.names)) !== JSON.stringify(value.pending.map(row => row.name))) throw failure();
   if(value.priorCompletedRelease&&value.priorCompletedRelease.migrationCount!==value.applied.length)throw failure();
   if(value.priorSchemaRelease&&(value.priorSchemaRelease.migrationCount!==value.applied.length||value.priorCompletedRelease))throw failure();
+  if(value.reconciliationTemplate!==undefined){const template=parseReconciliationTemplate(value.reconciliationTemplate);verifyReconciledPrefix(template,value.migrations);if(value.applied.length!==120||!value.priorSchemaRelease||template.recoverySource.sourceSha!==value.source.sha||template.recoverySource.treeSha!==value.source.tree||template.originalIdentity.sourceSha!==value.priorSchemaRelease.sourceSha||template.originalIdentity.treeSha!==value.priorSchemaRelease.treeSha||template.originalIdentity.projectRef!==value.projectRef||value.runtimeOnly)throw failure();value.reconciliationTemplate=template;}
+  if(value.priorSchemaRelease?.migrationCount===120&&value.reconciliationTemplate===undefined)throw failure();
   if(value.runtimeOnly&&(!value.priorCompletedRelease||value.pending.length||value.stages.some(stage=>stage.names.length)))throw failure();
   const canonical = (item: unknown): string => {
     if (Array.isArray(item)) return '[' + item.map(canonical).join(',') + ']';

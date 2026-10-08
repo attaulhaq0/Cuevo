@@ -22,6 +22,10 @@ const hash = (value: string | Uint8Array) => createHash('sha256').update(value).
 const ref = 'mqxdjvsyckzocokuikmx', secret = 'private-native-composition-canary';
 type State = { events: string[]; journal: HostedExecutionJournal | null; journals: Map<string, HostedExecutionJournal | null>; after: boolean; lost: boolean; failures: string[]; input?: Record<string, unknown>; sources: { name: string; bytes: Uint8Array }[]; stage?: Record<string, unknown>; controller: AbortController; commands: number; phaseVersions: string[][]; seenIntent: boolean; driftFiles: boolean; aggregate?: boolean; nativeProducer?: boolean; nativePeerAuthorized?: boolean; nativeSignal?: AbortSignal; nativeTargetKeys?: string[][];installed?:InstalledPopulationReceipt };
 const state: State = { events: [], journal: null, journals: new Map(), after: false, lost: false, failures: [], sources: [], controller: new AbortController(), commands: 0, phaseVersions: [], seenIntent: false, driftFiles: false };
+
+test('reconciliation scope cannot use the ordinary aggregate lane or missing exact recovery template',async()=>{
+ const module=await api();await fixture(async input=>{const changed={...input,expected:{...(input.expected as object),executionScope:'reconcile-schema'}};const result=await module.executeNativeHostedMigrations(aggregateInput(changed));assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(state.commands,0);assert.equal(state.seenIntent,false);});
+});
 let canonicalSources: State['sources'] | undefined;
 
 /** Transport-only fake for the unchanged database owner. Its real identity,
@@ -57,7 +61,7 @@ const replacements: Record<string, string> = {
   'backend-release-contracts.ts': 'export const validatePreparedBackendReleaseIntent=globalThis.nativeCompositionFixture.prepared;',
   'hosted-migration-provider.ts': 'export const readHostedMigrationProvider=globalThis.nativeCompositionFixture.provider;',
   'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeCompositionFixture.files;',
-  'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeCompositionFixture.database;',
+  'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeCompositionFixture.database;export const assertNativeReconciliationPermit=()=>{throw Error("Unregistered controlled permit");};',
   'hosted-migration-native-process.ts': 'export const createHostedMigrationNativeProcess=globalThis.nativeCompositionFixture.process;',
   'hosted-migration-journal.ts': 'export const createHostedMigrationJournal=globalThis.nativeCompositionFixture.journal;',
   'hosted-migration-durable-journal.ts': 'export const createHostedMigrationDurableJournal=globalThis.nativeCompositionFixture.durable;',

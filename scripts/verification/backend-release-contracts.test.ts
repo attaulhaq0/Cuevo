@@ -10,6 +10,15 @@ const fingerprints = { sourceManifestSha256: '1'.repeat(64), diffSha256: '2'.rep
 const targets = { web: { teamId: 'team_Cuevo', projectId: 'prj_Web', origin: 'https://cuevo-web.vercel.app', target: 'preview' }, api: { teamId: 'team_Cuevo', projectId: 'prj_Api', origin: 'https://cuevo-api.vercel.app', target: 'preview' }, supabase: { projectRef: ref, authOrigin: `https://${ref}.supabase.co`, edgeOrigin: `https://${ref}.supabase.co/functions/v1/cuevo-worker` } };
 const assignments = [{ category: 'source-spec-code', taskId: 'source-review', reportSha256: '8'.repeat(64), evidenceSha256: '9'.repeat(64) }, { category: 'qa-regression-operations', taskId: 'qa-review', reportSha256: 'a'.repeat(64), evidenceSha256: 'b'.repeat(64) }];
 const identity = { repository: 'attaulhaq0/Cuevo', releaseSha: sha, treeSha: tree, baseSha: base, ciRunId: '31', releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: 'staging', deploymentEnvironment: 'synthetic-staging', canonicalRuntimeVerification:{runAttempt:2,jobsSha256:'e'.repeat(64)} };
+
+test('reconciliation schema scope requires its explicit immutable template fingerprint and refuses deployment scope borrowing',async()=>{
+ const api=await subject(),reconciledPrefix={templateSha256:'a'.repeat(64),originalOperationSha256:'b'.repeat(64),originalChainSha256:'c'.repeat(64),prefixCount:120,stageCount:123,cataloguePolicySha256:'d'.repeat(64),catalogueSha256:'e'.repeat(64)};
+ const body={...input(),executionScope:'reconcile-schema',reconciledPrefix},current={...expected(),executionScope:'reconcile-schema',reconciledPrefix};
+ assert.doesNotThrow(()=>api.prepareBackendReleaseIntent(body,current));
+ assert.throws(()=>api.prepareBackendReleaseIntent({...body,reconciledPrefix:undefined},current));
+ assert.throws(()=>api.prepareBackendReleaseIntent({...body,executionScope:'complete-backend'},{...current,executionScope:'complete-backend'}));
+ assert.throws(()=>api.prepareBackendReleaseIntent(body,{...current,reconciledPrefix:{...reconciledPrefix,templateSha256:'f'.repeat(64)}}));
+});
 function input() { return { version: 1, purpose: 'BACKEND_SYNTHETIC_STAGING', ...identity, targets: structuredClone(targets), fingerprints: { ...fingerprints }, preparedAt: '2026-10-06T11:00:00Z', expiresAt: '2026-10-07T11:00:00Z', reviews: assignments.map(row => ({ ...row, releaseSha: sha, treeSha: tree, baseSha: base, sourceManifestSha256: fingerprints.sourceManifestSha256, diffSha256: fingerprints.diffSha256, reviewedAt: '2026-10-06T10:00:00Z' })) }; }
 function expected() { return { ...identity, targets: structuredClone(targets), fingerprints: { ...fingerprints }, reviews: structuredClone(assignments), now, currentMainSha: sha,
   ciRun: { id: 31, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', path: '.github/workflows/ci.yml', repository: { full_name: 'attaulhaq0/Cuevo' } },

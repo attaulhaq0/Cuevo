@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { registerHooks } from 'node:module';
 import type { HostedExecutionJournal } from './hosted-migration-execution';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -10,6 +11,15 @@ const projectRef = 'mqxdjvsyckzocokuikmx', key = 'private-operator-storage-canar
 const providerToken = 'private-metadata-operator-canary';
 const identity: HostedExecutionJournal['identity'] = { projectRef, sourceSha: 'a'.repeat(40), treeSha: 'b'.repeat(40), planSha256: 'c'.repeat(64), stageId: 'prefix', stageSha256: 'd'.repeat(64), databaseUrl: `postgresql://postgres@db.${projectRef}.supabase.co:5432/postgres?sslmode=verify-full`, approvalDigest: 'e'.repeat(64), ciRunId: '31', certificateSha256: 'f'.repeat(64) };
 const input = { projectRef, boundProjectRef: projectRef, storageKey: key, providerToken, identity };
+type SafetyFixture={permit:object;current:HostedExecutionJournal['identity'];original:HostedExecutionJournal['identity'];chainSha256:string;live:boolean};
+let safetyFixture:SafetyFixture|null=null;
+Object.assign(globalThis,{journalPermitTransportFixture:(value:unknown,current:HostedExecutionJournal['identity'],safety:boolean)=>{
+ const fixture=safetyFixture;if(!fixture||value!==fixture.permit||JSON.stringify(current)!==JSON.stringify(fixture.current)||!safety&&!fixture.live)throw Error('Controlled unavailable native permit');
+ return{originalIdentity:fixture.original,originalOperationSha256:hash(JSON.stringify(fixture.original)),originalChainSha256:fixture.chainSha256,receiptSha256:'1'.repeat(64)};
+}});
+registerHooks({load(url,context,next){if(url.endsWith('/hosted-migration-database.ts'))return{format:'module',shortCircuit:true,source:`import * as actual from './hosted-migration-database.ts?actual-native-permit';
+export const assertNativeReconciliationPermit=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,false):actual.assertNativeReconciliationPermit(value,current);
+export const assertNativeReconciliationSafetyRecord=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,true):actual.assertNativeReconciliationSafetyRecord(value,current);`};return next(url,context);}});
 const payload = (state: HostedExecutionJournal['state']): HostedExecutionJournal => ({ version: 1, identity, state, schemaHistoryAtomic: false, evidence: 'SUPPLIED_PORT_EXECUTION_ONLY' });
 type Fixture = { objects: Map<string, string>; requests: { method: string; path: string; body: string | undefined; upsert: string | null }[]; public: boolean; failUpload: boolean; corruptRead: boolean; duplicateList: boolean; noiseFile: boolean; failedList: boolean; changedPrivacyAfterUpload: boolean; managementType: string | null; managementDenied: boolean; storageTypeOmitted: boolean; metadataMismatch: boolean };
 async function api() { let result: Record<string, unknown> = {}; try { result = await import(pathToFileURL(resolve(import.meta.dirname, 'hosted-migration-remote-journal.ts')).href); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw error; } assert.equal(typeof result.createHostedMigrationRemoteJournal, 'function', 'remote original-intent journal factory exists'); return result as typeof import('./hosted-migration-remote-journal'); }
@@ -54,6 +64,56 @@ function storedChain(state:Fixture,currentIdentity:HostedExecutionJournal['ident
  const prefix='migration/v1/'+projectRef+'/'+hash(JSON.stringify(currentIdentity));state.objects.set(prefix+'/owner.json',JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity:currentIdentity})+'\n');let previous:string|null=null;
  for(const[index,stateName]of states.entries()){const next={...payload(stateName),identity:currentIdentity},bytes=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:index+1,previousSha256:previous,payload:next,payloadSha256:hash(JSON.stringify(next))})+'\n';state.objects.set(prefix+'/'+String(index+1).padStart(6,'0')+'.record.json',bytes);previous=hash(bytes);}return prefix;
 }
+
+test('opaque supplied reconciliation metadata stays readable but cannot exempt an uncertain original without native provenance',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();
+ for(const reconciliationPermit of [true,{},Object.freeze({originalOperationSha256:'a'.repeat(64),originalChainSha256:'b'.repeat(64),receiptSha256:'c'.repeat(64),originalIdentity:identity})])await fixture(async state=>{
+  storedChain(state,identity,['INTENT','REQUIRES_REVIEW']);const original=[...state.objects.entries()],currentIdentity={...identity,sourceSha:'1'.repeat(40),approvalDigest:'2'.repeat(64)};
+  const journal=await createHostedMigrationRemoteJournal({...input,identity:currentIdentity,reconciliationPermit});
+  const inspected=await journal.inspectProject();assert.equal(inspected.operations[0].state,'REQUIRES_REVIEW');assert.deepEqual([...state.objects.entries()],original);
+  await assert.rejects(journal.readJournal(),/requires review; contents withheld/);
+  assert.deepEqual(await journal.writeJournal({...payload('INTENT'),identity:currentIdentity}),{kind:'UNCONFIRMED'});
+  assert.deepEqual([...state.objects.entries()],original);assert(!state.requests.some(row=>row.method==='POST'&&row.path.startsWith(`object/${bucket}/`)));
+ });
+});
+
+test('reconciliation field descriptors are read without invoking getters or proxy traps',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{
+  let traps=0;await assert.rejects(createHostedMigrationRemoteJournal({...input,get reconciliationPermit(){traps++;return{};}}));
+  const permit=new Proxy({},{get(){traps++;return true;},ownKeys(){traps++;return[];},getPrototypeOf(){traps++;return Object.prototype;}});
+  const journal=await createHostedMigrationRemoteJournal({...input,reconciliationPermit:permit});assert.deepEqual((await journal.inspectProject()).operations,[]);
+  await assert.rejects(journal.readJournal());assert.equal(traps,0);assert.equal(state.objects.size,0);
+ });
+});
+
+test('expired native authority blocks commitment but the same confirmed current intent may append a safety review',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{
+  const prefix=storedChain(state,identity,['INTENT','REQUIRES_REVIEW']),current={...identity,sourceSha:'1'.repeat(40),approvalDigest:'2'.repeat(64)},permit=Object.freeze({});
+  safetyFixture={permit,current,original:identity,chainSha256:hash(['owner.json','000001.record.json','000002.record.json'].map(name=>state.objects.get(prefix+'/'+name)!).join('')),live:true};
+  Object.assign(globalThis,{journalPermitTransportFixtureActive:true});
+  try{
+   const journal=await createHostedMigrationRemoteJournal({...input,identity:current,reconciliationPermit:permit}),intent={...payload('INTENT'),identity:current};assert.equal((await journal.writeJournal(intent)).kind,'SYNCED');
+   safetyFixture.live=false;assert.deepEqual(await journal.writeJournal({...payload('COMMITTED'),identity:current}),{kind:'UNCONFIRMED'});
+   assert.equal((await journal.writeJournal({...payload('REQUIRES_REVIEW'),identity:current})).kind,'SYNCED');
+   const inspected=await(await createHostedMigrationRemoteJournal({...input,identity:current})).inspectProject();assert.equal(inspected.operations.filter(row=>row.state==='REQUIRES_REVIEW').length,2);
+   assert.deepEqual(await journal.writeJournal({...payload('INTENT'),identity:current}),{kind:'UNCONFIRMED'});
+  }finally{safetyFixture=null;delete(globalThis as{journalPermitTransportFixtureActive?:boolean}).journalPermitTransportFixtureActive;}
+ });
+});
+
+test('lost native lease permits only the adapter-owned committed safety downgrade and refuses changed original evidence',async()=>{
+ const{createHostedMigrationRemoteJournal}=await api();
+ for(const kind of ['owned-committed','changed-original','unowned']as const)await fixture(async state=>{
+  const prefix=storedChain(state,identity,['INTENT','REQUIRES_REVIEW']),current={...identity,sourceSha:'1'.repeat(40),approvalDigest:'2'.repeat(64)},permit=Object.freeze({});
+  safetyFixture={permit,current,original:identity,chainSha256:hash(['owner.json','000001.record.json','000002.record.json'].map(name=>state.objects.get(prefix+'/'+name)!).join('')),live:true};Object.assign(globalThis,{journalPermitTransportFixtureActive:true});
+  try{const journal=await createHostedMigrationRemoteJournal({...input,identity:current,reconciliationPermit:permit});
+   if(kind==='unowned')storedChain(state,current,['INTENT']);else{assert.equal((await journal.writeJournal({...payload('INTENT'),identity:current})).kind,'SYNCED');assert.equal((await journal.writeJournal({...payload('COMMITTED'),identity:current})).kind,'SYNCED');}
+   if(kind==='changed-original'){const bytes=JSON.parse(state.objects.get(prefix+'/000002.record.json')!);bytes.payload.state='COMMITTED';bytes.payloadSha256=hash(JSON.stringify(bytes.payload));state.objects.set(prefix+'/000002.record.json',JSON.stringify(bytes)+'\n');}
+   safetyFixture.live=false;const count=state.objects.size,result=await journal.writeJournal({...payload('REQUIRES_REVIEW'),identity:current});assert.equal(result.kind,kind==='owned-committed'?'SYNCED':'UNCONFIRMED');assert.equal(state.objects.size,count+(kind==='owned-committed'?1:0));
+   assert.deepEqual(await journal.writeJournal({...payload('COMMITTED'),identity:current}),{kind:'UNCONFIRMED'});
+  }finally{safetyFixture=null;delete(globalThis as{journalPermitTransportFixtureActive?:boolean}).journalPermitTransportFixtureActive;}
+ });
+});
 
 test('independent authoritative bucket reads overlap before any private chain download',async()=>{
  const{createHostedMigrationRemoteJournal}=await api();await fixture(async state=>{

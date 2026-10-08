@@ -55,7 +55,7 @@ export async function readBackendReleaseSourceEvidence(root:string,expected:Pick
 export async function readBackendReleaseAdmission(value:unknown):Promise<NativeBackendReleaseAdmission>{
  try{
   const input=inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));const boundaryNow=Date.now(),supplied=JSON.parse(canonicalReleaseReviewJson(input.expected)) as BackendReleaseExpected,expected={...supplied,now:boundaryNow};const prepared=validatePreparedBackendReleaseIntent(input.prepared,expected);
-  if(input.effectScope==='COMPLETE_BACKEND'&&(expected.stagingVerification!==undefined||expected.executionScope==='schema-and-accounts'))throw failure();
+  if(input.effectScope==='COMPLETE_BACKEND'&&(expected.stagingVerification!==undefined||['schema-and-accounts','reconcile-schema'].includes(expected.executionScope??'')))throw failure();
   await readBackendReleaseSourceEvidence(input.repoRoot,expected);
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),180000);
   const github=async(path:string)=>{const url=`https://api.github.com/repos/${expected.repository}${path?'/'+path:''}`;const requestSignal=AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]);const response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+input.githubToken,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},signal:requestSignal,redirect:'error'});return boundedJson(response,requestSignal);};

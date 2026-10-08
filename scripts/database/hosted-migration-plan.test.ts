@@ -310,3 +310,34 @@ test('canonical schema-only prefix at a former full-source boundary admits only 
   const forged={...plan,priorSchemaRelease:{...plan.priorSchemaRelease!,migrationCount:plan.priorSchemaRelease!.migrationCount-1}};assert.throws(()=>subject.verifyPriorSchemaPrefix(root,forged));
  },true);
 });
+
+function reconciliationTemplateFor(rows:{name:string;version:string;sha256:string}[],recovery:{sha:string;tree:string}){
+ const originalIdentity={projectRef,sourceSha:'d87455114cac2d22d63d040ce5b13e6b2e74e743',treeSha:'1e85393d46beb4f5356e07277a13a7ef33cc67d9',planSha256:'413d23ed86f7379b3e88b90e09370762ce576d0395f4c4fceaa44d0f3abf3cf1',stageId:'prefix',stageSha256:'5f9e1d7804d816dc3ee387f126f946a0ee0ac3b192b3d4973774cbf33b2ba506',databaseUrl:'postgresql://postgres.mqxdjvsyckzocokuikmx@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full',approvalDigest:'d46d4616c1b9eecdcd474b080bfefac98ee959fb7c54819d510773fc661a98de',ciRunId:'37702851953',certificateSha256:'700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'};
+ const ownerJson=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity:originalIdentity})+'\n',payload=(state:string)=>({version:1,identity:originalIdentity,state,schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'});
+ const first=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:1,previousSha256:null,payload:payload('INTENT'),payloadSha256:digest(JSON.stringify(payload('INTENT')))})+'\n',second=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:2,previousSha256:digest(first),payload:payload('REQUIRES_REVIEW'),payloadSha256:digest(JSON.stringify(payload('REQUIRES_REVIEW')))})+'\n';
+ return{version:1,purpose:'CUEVO_UNKNOWN_PREFIX_RECONCILIATION_TEMPLATE',recoverySource:{sourceSha:recovery.sha,treeSha:recovery.tree,ciRunId:'37710000000',releaseRunId:'37710000001',runAttempt:1},originalRunId:'37703459549',originalRunAttempt:1,originalIdentity,ownerJson,recordJson:[first,second],stageRows:rows.slice(0,123),prefixRows:rows.slice(0,120),configSha256:'cc91534b07b96e61b993f179225a9929b65e965d19a5a02e242c79126166b4ff',historySha256:'e'.repeat(64),cataloguePolicySha256:'f'.repeat(64),catalogueSha256:'1'.repeat(64),absencePolicySha256:'2'.repeat(64),endpointSha256:'3'.repeat(64)};
+}
+
+test('120 schema-only planning requires the exact original reconciliation template and current recovery source',async()=>{
+ const subject=await api(),files=sources(),initial=subject.planHostedMigrations({sources:files,source,target:target(),now}),prefix=initial.migrations.slice(0,120),priorReceipt={projectRef,sourceSha:'d87455114cac2d22d63d040ce5b13e6b2e74e743',treeSha:'1e85393d46beb4f5356e07277a13a7ef33cc67d9',migrations:prefix.map(({version,sha256})=>({version,sha256}))};
+ const current={...target(),population:'SCHEMA_ONLY',appSchemas:['app','authorization','internal'],migrationVersions:prefix.map(row=>row.version)},input={sources:files,source,target:current,priorReceipt,now};
+ assert.throws(()=>subject.planHostedMigrations(input));
+ const template=reconciliationTemplateFor(initial.migrations,source),plan=subject.planHostedMigrations({...input,reconciliationTemplate:template});assert.equal(plan.applied.length,120);assert.deepEqual(plan.stages[0].names,initial.migrations.slice(120,123).map(row=>row.name));assert.ok(plan.reconciliationTemplate);subject.canonicalHostedMigrationPlan(plan);
+ assert.throws(()=>subject.planHostedMigrations({...input,reconciliationTemplate:{...template,originalRunId:'37703459550'}}));
+ assert.throws(()=>subject.planHostedMigrations({...input,reconciliationTemplate:{...template,recoverySource:{...template.recoverySource,sourceSha:'9'.repeat(40)}}}));
+ assert.throws(()=>subject.canonicalHostedMigrationPlan({...plan,reconciliationTemplate:undefined}));
+ assert.throws(()=>subject.canonicalHostedMigrationPlan({...plan,reconciliationTemplate:{...template,prefixRows:template.prefixRows.slice(0,-1)}} as never));
+});
+
+
+test('native original-prefix verifier rejects120 without template and re-admits exact Git-linked recovery',async()=>{
+ const subject=await api(),repository=resolve(import.meta.dirname,'../..'),root=mkdtempSync(join(tmpdir(),'cuevo-exact-prefix-recovery-'));
+ try{
+  git(root,'clone','--shared','--no-checkout','--quiet',repository,'.');git(root,'checkout','--quiet','--detach','d87455114cac2d22d63d040ce5b13e6b2e74e743');
+  const sha=git(root,'rev-parse','HEAD'),tree=git(root,'rev-parse','HEAD^{tree}'),loaded=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree}),initial=subject.planHostedMigrations({sources:loaded.sources,source:{sha,tree},target:target(),now}),prefix=initial.migrations.slice(0,120),priorReceipt={projectRef,sourceSha:sha,treeSha:tree,migrations:prefix.map(({version,sha256})=>({version,sha256}))};
+  const current={...target(),population:'SCHEMA_ONLY',appSchemas:['app','authorization','internal'],migrationVersions:prefix.map(row=>row.version)},template=reconciliationTemplateFor(initial.migrations,{sha,tree}),input={repoRoot:root,sourceSha:sha,treeSha:tree,target:current,priorReceipt,now,reconciliationTemplate:template};
+  assert.throws(()=>subject.createCanonicalHostedMigrationPlan({...input,reconciliationTemplate:undefined}));
+  const admitted=subject.createCanonicalHostedMigrationPlan(input).plan;assert.equal(subject.verifyPriorSchemaPrefix(root,admitted),true);assert.throws(()=>subject.verifyPriorSchemaPrefix(root,{...admitted,reconciliationTemplate:undefined}));
+  assert.throws(()=>subject.verifyPriorSchemaPrefix(root,{...admitted,priorSchemaRelease:{...admitted.priorSchemaRelease!,migrationCount:119}}));
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
