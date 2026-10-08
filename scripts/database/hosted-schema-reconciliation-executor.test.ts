@@ -9,7 +9,7 @@ import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {transformSync} from 'esbuild';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 import {readHistoricalMigrationSources,createCanonicalHostedMigrationPlan,canonicalHostedMigrationPlan} from './hosted-migration-plan';
 import {createHostedMigrationWorkdirs} from './hosted-migration-workdirs';
 import {createOriginalPrefixReconciliationTemplate,reconciliationTemplateFingerprint} from './hosted-schema-reconciliation';
@@ -30,8 +30,8 @@ const bucket={id:'cuevo-release-operator',name:'cuevo-release-operator',public:f
 const id=(path:string)=>hash(path).slice(0,8)+'-'+hash(path).slice(8,12)+'-4'+hash(path).slice(13,16)+'-a'+hash(path).slice(17,20)+'-'+hash(path).slice(20,32);
 const info=(path:string)=>({id:id(path),name:path,bucket_id:bucket.id,size:Buffer.byteLength(state.objects.get(path)!),content_type:'application/json',version:'controlled-version'});
 const metadata=(path:string)=>({id:id(path),name:path,version:'controlled-version',size:String(Buffer.byteLength(state.objects.get(path)!)),mimetype:'application/json',createdAt:'2026-10-08T03:00:00.000000Z',updatedAt:'2026-10-08T03:00:00.000000Z'});
-type AdmissionTimingEvent = { kind: 'official' | 'catalogue' | 'target' | 'provider' | 'private' | 'metadata' | 'native-metadata' | 'source'; startedAt: number; completedAt: number };
-type AdmissionTiming = { events: AdmissionTimingEvent[]; pending: { deadline: number; done: () => void }[]; scheduled: boolean; activeCatalogue: number; activeStorage: number; managementDuringCatalogue: number; quiescenceDuringStorage: number; overlaps: number; postconditions: number; sourceCharged: number; sourceChecks: number; nativeMetadata: number; nativeSnapshots:number; forbiddenActivity: boolean; catalogueMs: number; finalSourceMs: number; holdStorage: boolean; heldStorage?: () => void; heldStoragePromise?: Promise<void>; failConcurrentCatalogue: boolean; nativeFailureIssued: boolean; catalogueEntered?:()=>void; catalogueGate?:Promise<void>; synchronizeStorageStart:boolean; introduceUnacknowledgedIntent:boolean; introducedIntent:boolean; heldReady:Promise<void>; heldReadyResolve:()=>void; nativeFailureReady:Promise<void>; nativeFailureResolve:()=>void; fastStorage:boolean };
+type AdmissionTimingEvent = { kind: 'official' | 'catalogue' | 'target' | 'provider' | 'private' | 'metadata' | 'native-metadata' | 'source' | 'source-initial' | 'source-final'; startedAt: number; completedAt: number };
+type AdmissionTiming = { events: AdmissionTimingEvent[]; pending: { deadline: number; done: () => void }[]; scheduled: boolean; activeCatalogue: number; activeStorage: number; managementDuringCatalogue: number; quiescenceDuringStorage: number; overlaps: number; postconditions: number; sourceCharged: number; sourceChecks: number; nativeMetadata: number; nativeSnapshots:number; forbiddenActivity: boolean; catalogueMs: number; finalSourceMs: number; stageReadCosts?:{initialMs:number;finalMs:number}; driftInitialStageFile:boolean; holdStorage: boolean; heldStorage?: () => void; heldStoragePromise?: Promise<void>; failConcurrentCatalogue: boolean; nativeFailureIssued: boolean; catalogueEntered?:()=>void; catalogueGate?:Promise<void>; synchronizeStorageStart:boolean; introduceUnacknowledgedIntent:boolean; introducedIntent:boolean; heldReady:Promise<void>; heldReadyResolve:()=>void; nativeFailureReady:Promise<void>; nativeFailureResolve:()=>void; fastStorage:boolean };
 let admissionTiming: AdmissionTiming | null = null;
 let hostReadsPending = 0;
 let schedulerPumpRuns=0;
@@ -64,9 +64,9 @@ function transportDelay(milliseconds: number, kind: AdmissionTimingEvent['kind']
     if (!timing.scheduled) { timing.scheduled = true; setImmediate(pump); }
   });
 }
-function beginAdmissionTiming(options: { catalogueMs?: number; finalSourceMs?: number; forbiddenActivity?: boolean; holdStorage?: boolean; failConcurrentCatalogue?: boolean; synchronizeStorageStart?:boolean; introduceUnacknowledgedIntent?:boolean; fastStorage?:boolean } = {}): AdmissionTiming {
+function beginAdmissionTiming(options: { catalogueMs?: number; finalSourceMs?: number; stageReadCosts?:{initialMs:number;finalMs:number}; driftInitialStageFile?:boolean; forbiddenActivity?: boolean; holdStorage?: boolean; failConcurrentCatalogue?: boolean; synchronizeStorageStart?:boolean; introduceUnacknowledgedIntent?:boolean; fastStorage?:boolean } = {}): AdmissionTiming {
   let heldReadyResolve!:()=>void,nativeFailureResolve!:()=>void;const heldReady=new Promise<void>(done=>{heldReadyResolve=done;}),nativeFailureReady=new Promise<void>(done=>{nativeFailureResolve=done;});
-  const timing: AdmissionTiming = { events: [], pending: [], scheduled: false, activeCatalogue: 0, activeStorage: 0, managementDuringCatalogue: 0, quiescenceDuringStorage: 0, overlaps: 0, postconditions: 0, sourceCharged: 0, sourceChecks: 0, nativeMetadata: 0,nativeSnapshots:0, forbiddenActivity: options.forbiddenActivity ?? false, catalogueMs: options.catalogueMs ?? 10000, finalSourceMs: options.finalSourceMs ?? 5226, holdStorage: options.holdStorage ?? false, failConcurrentCatalogue: options.failConcurrentCatalogue ?? false, nativeFailureIssued: false, synchronizeStorageStart:options.synchronizeStorageStart??false, introduceUnacknowledgedIntent:options.introduceUnacknowledgedIntent??false, introducedIntent:false,heldReady,heldReadyResolve,nativeFailureReady,nativeFailureResolve,fastStorage:options.fastStorage??false };
+  const timing: AdmissionTiming = { events: [], pending: [], scheduled: false, activeCatalogue: 0, activeStorage: 0, managementDuringCatalogue: 0, quiescenceDuringStorage: 0, overlaps: 0, postconditions: 0, sourceCharged: 0, sourceChecks: 0, nativeMetadata: 0,nativeSnapshots:0, forbiddenActivity: options.forbiddenActivity ?? false, catalogueMs: options.catalogueMs ?? 10000, finalSourceMs: options.finalSourceMs ?? 5226, ...(options.stageReadCosts?{stageReadCosts:options.stageReadCosts}:{}),driftInitialStageFile:options.driftInitialStageFile??false, holdStorage: options.holdStorage ?? false, failConcurrentCatalogue: options.failConcurrentCatalogue ?? false, nativeFailureIssued: false, synchronizeStorageStart:options.synchronizeStorageStart??false, introduceUnacknowledgedIntent:options.introduceUnacknowledgedIntent??false, introducedIntent:false,heldReady,heldReadyResolve,nativeFailureReady,nativeFailureResolve,fastStorage:options.fastStorage??false };
   admissionTiming = timing;
   state.officialDelayMs = 19177;
   return timing;
@@ -75,6 +75,20 @@ function observeActualStageSource() {
   const timing = admissionTiming;
   if (!timing) return;
   timing.sourceChecks++;
+  if(timing.stageReadCosts){
+   // The first successful read is executor preflight. Every subsequent pair is
+   // the real initial/final stage-file read for one single-stage revalidation.
+   // Assign latency only after native filesystem admission has actually passed.
+   if(timing.sourceChecks===1)return;
+   const initial=timing.sourceChecks%2===0,startedAt=clock;
+   clock+=initial?timing.stageReadCosts.initialMs:timing.stageReadCosts.finalMs;
+   timing.events.push({kind:initial?'source-initial':'source-final',startedAt,completedAt:clock});
+   if(timing.driftInitialStageFile&&timing.sourceChecks===2){
+    const stage=input.stage as {workdir:string;pending:{name:string}[]},path=join(stage.workdir,'supabase/migrations',stage.pending[0].name);
+    writeFileSync(path,Buffer.concat([readFileSync(path),Buffer.from('\n-- changed after initial admission\n')]));state.events.push('stage-file-drift');
+   }
+   return;
+  }
   // Charge the real, completed stage/Git read after a new native postcondition
   // observation. This changes elapsed cost only, never its values or checks.
   if (timing.postconditions <= timing.sourceCharged) return;
@@ -283,6 +297,56 @@ test('full captured admission profile reaches only the original three-file effec
   } finally { admissionTiming = null; }
  });
  }}finally{hostCompletionVariance=false;}
+});
+
+test('initial immutable stage reads precede renewed observations while the final full read retains the thirty-second boundary',async()=>{
+ await fixture(async()=>{
+  const original=[...state.objects],timing=beginAdmissionTiming({stageReadCosts:{initialMs:10000,finalMs:5226}});
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(result.status,'COMMITTED',JSON.stringify({status:result.status,commitment:result.protocol?.commitment,primaryCode:result.protocol?.primaryCode,admissionFailure:result.admissionFailure,events:timing.events.slice(-12)}));
+   const initial=timing.events.filter(event=>event.kind==='source-initial'),final=timing.events.filter(event=>event.kind==='source-final');
+   assert.equal(initial.length,4);assert.equal(final.length,4);assert.equal(timing.sourceChecks,9);
+   for(const[index,read]of initial.entries()){
+    const authority=timing.events.find(event=>event.kind==='official'&&event.startedAt>=read.completedAt&&event.completedAt<=final[index].startedAt);
+    assert.ok(authority,'The initial actual file read must finish before the renewed official observation');
+    assert.equal(read.completedAt-read.startedAt,10000);assert.equal(final[index].completedAt-final[index].startedAt,5226);
+    assert.ok(final[index].completedAt-authority.completedAt<=30000,'Original official observation age remains bounded after the final actual file read');
+   }
+   assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.equal(result.protocol?.commitment,'CONFIRMED');
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.deepEqual([...state.objects].filter(([path])=>!original.some(([old])=>old===path)&&path.endsWith('.record.json')).map(([,bytes])=>JSON.parse(bytes).payload.state),['INTENT','COMMITTED']);
+   assert.equal(result.hostedAcceptance,false);assert.equal(timing.pending.length,0);
+  }finally{admissionTiming=null;}
+ },true);
+});
+
+test('a final full stage read still expires original observations or the absolute package after preparatory reads',async()=>{
+ for(const finalMs of [30001,600001])await fixture(async()=>{
+  const original=[...state.objects],timing=beginAdmissionTiming({stageReadCosts:{initialMs:10000,finalMs}});
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.commitment,'NOT_ATTEMPTED');
+   assert.equal(state.commands,0);assert.equal(state.historyCount,120);assert.equal(state.events.includes('journal-upload'),false);
+   const final=timing.events.find(event=>event.kind==='source-final');assert.ok(final);assert.equal(final.completedAt-final.startedAt,finalMs);
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.equal(timing.pending.length,0);assert.equal(timing.activeStorage,0);assert.equal(result.hostedAcceptance,false);
+  }finally{admissionTiming=null;}
+ },true);
+});
+
+test('the final full read refuses an actual staged SQL change after its initial admission',async()=>{
+ await fixture(async()=>{
+  const original=[...state.objects],timing=beginAdmissionTiming({stageReadCosts:{initialMs:10000,finalMs:5226},driftInitialStageFile:true});
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(state.events.includes('stage-file-drift'),true);assert.equal(result.status,'REQUIRES_REVIEW');
+   assert.equal(result.protocol?.commitment,'NOT_ATTEMPTED');assert.equal(result.admissionFailure?.phase,'FINAL_SOURCE');
+   assert.equal(state.commands,0);assert.equal(state.historyCount,120);assert.equal(state.events.includes('journal-upload'),false);
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.equal(timing.pending.length,0);assert.equal(timing.activeStorage,0);assert.equal(result.hostedAcceptance,false);
+  }finally{admissionTiming=null;}
+ },true);
 });
 
 test('forbidden postgres activity still refuses native admission before any current intent or migration', async () => {

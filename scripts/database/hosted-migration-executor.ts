@@ -191,9 +191,17 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       const began=Date.now(),observations:Record<keyof AdmissionFailure['agesMs'],number|null>={official:null,provider:null,target:null,postconditions:null,inventory:null};let phaseName:AdmissionFailure['phase']='STORAGE_CAPABILITY';
       try{
       await database.requireInstalledSchemaStorage();live();
-      if(reconciliationPermit){await database.refreshSchemaStageAdmission(reconciliationPermit,identity,expectedCurrentVersions());live();}
+      const initialFiles=async()=>{
+        phaseName='TOOLCHAIN';const checkedToolchain=await toolchain();if(!same(checkedToolchain,manifest))throw failure();
+        phaseName='SOURCE_FILES';const files=await admitHostedMigrationStageFiles({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage});live();if(files.planSha256!==identity.planSha256||files.stageSha256!==identity.stageSha256)throw failure();return files;
+      };
+      // Preparatory immutable reads precede renewed native observations. The
+      // complete final byte checks below still detect changes during admission.
+      let files=reconciliationPermit?await initialFiles():undefined;
+      if(reconciliationPermit){phaseName='OFFICIAL_AUTHORITY';await database.refreshSchemaStageAdmission(reconciliationPermit,identity,expectedCurrentVersions());live();}
       const cohort=reconciliationPermit?readNativeSchemaStageAdmission(reconciliationPermit,identity,expectedCurrentVersions()):null;
-      const held = live();phaseName='PRIOR_JOURNALS'; await priorJournals();phaseName='OFFICIAL_AUTHORITY';const authority = reconciliationPermit ? requireOfficial(readNativeMigrationPermitAuthority(reconciliationPermit,identity)) : await official();const officialObservedAt=Date.parse(authority.observedAt);observations.official=officialObservedAt;fresh(officialObservedAt);phaseName='PROVIDER';const currentProvider=cohort?.provider??await provider();fresh(currentProvider.observedAtMs);requireCurrentHostedMigrationEndpoint(input.endpoint,currentProvider,expected.fingerprints.migrationEndpointSha256);observations.provider=currentProvider.observedAtMs;phaseName='TOOLCHAIN';const checkedToolchain = await toolchain(); if (!same(checkedToolchain, manifest)) throw failure();phaseName='SOURCE_FILES';const files = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage }); live(); if (files.planSha256 !== identity.planSha256 || files.stageSha256 !== identity.stageSha256) throw failure();
+      const held = live();phaseName='PRIOR_JOURNALS'; await priorJournals();phaseName='OFFICIAL_AUTHORITY';const authority = reconciliationPermit ? requireOfficial(readNativeMigrationPermitAuthority(reconciliationPermit,identity)) : await official();const officialObservedAt=Date.parse(authority.observedAt);observations.official=officialObservedAt;fresh(officialObservedAt);phaseName='PROVIDER';const currentProvider=cohort?.provider??await provider();fresh(currentProvider.observedAtMs);requireCurrentHostedMigrationEndpoint(input.endpoint,currentProvider,expected.fingerprints.migrationEndpointSha256);observations.provider=currentProvider.observedAtMs;
+      files??=await initialFiles();
       phaseName='TARGET';
       const target = targetSchema.parse(own(cohort?.target??await database.observeTarget())); observations.target=target.observedAtMs;fresh(target.observedAtMs); live(); const expectedVersions = expectedCurrentVersions();
       const installed=expected.installedSource;
@@ -206,7 +214,7 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       const capability: Record<typeof checkNames[number], boolean> = { foundation: expectedVersions.includes('20260930234201'), rls: expectedVersions.includes('20260930234201'), privateRelations: expectedVersions.includes('20260930234201'), privateFunctions: expectedVersions.includes('20260930234201'), runtimeRoles: expectedVersions.includes('20260930234201'), nativeSourceBridge: expectedVersions.includes('20261002021737'), curriculumLifecycle: expectedVersions.includes('20261002021206'), dispatchInactive: expectedVersions.includes('20261002122236'), analyticsInactive: expectedVersions.includes('20261002182213'), recoveryCronInactive: true, transportPrivate: expectedVersions.includes('20261005132902') };
       for (const name of checkNames) if (post.checks[name] !== (capability[name] ? true : null)) throw failure();
       // Complete official/source admission precedes these actual observations.
-      // Cheap current artifact/lock checks cannot restamp their freshness.
+      // Final complete source/artifact validation never restamps the earlier observations.
       phaseName='FINAL_SOURCE';await storagePolicy(); const finalToolchain = await toolchain(); if (!same(finalToolchain, manifest)) throw failure();
       const finalFiles = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage }); live();
       if (finalFiles.planSha256 !== identity.planSha256 || finalFiles.stageSha256 !== identity.stageSha256) throw failure();
