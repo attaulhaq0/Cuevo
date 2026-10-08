@@ -52,7 +52,8 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
     const permit=await requirePermit(safety);
     const matchesOriginal=(row:Chain)=>permit!==null&&row.operation===permit.originalOperationSha256&&JSON.stringify(row.identity)===JSON.stringify(permit.originalIdentity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===permit.originalChainSha256;
     if(permit&&(permit.originalOperationSha256===operation||chains.filter(matchesOriginal).length!==1))throw failure();
-    if(chains.some(row=>row.operation!==operation&&row.records.at(-1)?.payload.state!=='COMMITTED'&&!matchesOriginal(row)))throw failure();
+    const ownedSafetyReview=(row:Chain)=>safety&&permit?.ownedSafetyIdentities?.some(identity=>JSON.stringify(identity)===JSON.stringify(row.identity))&&row.records[0]?.payload.state==='INTENT'&&row.records.at(-1)?.payload.state==='REQUIRES_REVIEW';
+    if(chains.some(row=>row.operation!==operation&&row.records.at(-1)?.payload.state!=='COMMITTED'&&!matchesOriginal(row)&&!ownedSafetyReview(row)))throw failure();
   };
   const transport = async (path: string, method: 'GET' | 'POST', body?: string, upload = false, missing = false, management = false): Promise<{ status: number; bytes: Uint8Array }> => {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000); let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -111,6 +112,7 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
     writeJournal: async value => {
       if (writing) return { kind: 'UNCONFIRMED' }; writing = true;
       try {
+        if(permitPresent){const native=await import('./hosted-migration-database');if(own(value)&&typeof value==='object'&&value!==null&&Object.getOwnPropertyDescriptor(value,'state')?.value==='REQUIRES_REVIEW'&&publishedIntentSha256!==null)native.assertNativeReconciliationSafetyRecord(reconciliationPermit,input.identity);else native.assertNativeMigrationEffectPermit(reconciliationPermit,input.identity);}
         const raw = own(value), checked = payloadSchema.parse(raw); if (JSON.stringify(identity(checked.identity)) !== JSON.stringify(input.identity)) throw failure(); const payload = JSON.parse(JSON.stringify(raw)) as HostedExecutionJournal, payloadSha256 = hash(JSON.stringify(payload)),safety=permitPresent&&payload.state==='REQUIRES_REVIEW'&&publishedIntentSha256!==null;
         if(uncertain&&!safety)throw failure();await requirePermit(safety);const chains = await inspect(safety);
         await requirePriorOperations(chains,safety); const current = chains.find(row => row.operation === operation), previous = current?.records.at(-1);if(safety&&(!current||hash(JSON.stringify(current.records[0]?.payload))!==publishedIntentSha256||!previous||!['INTENT','COMMITTED','REQUIRES_REVIEW'].includes(previous.payload.state)))throw failure(); if (previous?.payload.state === 'INTENT' && hash(JSON.stringify(previous.payload)) !== publishedIntentSha256) throw failure(); if (current && !previous) throw failure(); if (previous && hash(JSON.stringify(previous.payload)) === payloadSha256) return { kind: 'SYNCED', sha256: payloadSha256 }; if (!transition(previous?.payload.state, payload.state)) throw failure();

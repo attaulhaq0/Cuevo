@@ -4,7 +4,8 @@ import { readCodeqlGateContext, runCodeqlAlertGate, type CodeqlGateInput } from 
 
 const sha = 'a'.repeat(40), headSha = 'b'.repeat(40), sarifId = '01234567-89ab-cdef-0123-456789abcdef';
 const input: CodeqlGateInput = { repository: 'example/cuevo', ref: 'refs/pull/1/merge', sha, checkoutSha: sha, sarifId, token: 'synthetic-test-token' };
-const key = '.github/workflows/ci.yml:codeql';
+const key = '.github/workflows/ci.yml:codeql',regeneratedSha='c'.repeat(40),mergeTree='d'.repeat(40),baseSha='e'.repeat(40);
+const mergeCommit=(commitSha:string)=>({sha:commitSha,tree:{sha:mergeTree},parents:[{sha:baseSha},{sha:headSha}]});
 
 test('retained processed receipt binds original same-job analysis and excludes private alert context', async () => {
   const subject = await import('./codeql-alerts');
@@ -40,6 +41,7 @@ function fixture(options: FixtureOptions = {}) {
     let value: unknown;
     if (url.pathname === '/repos/example/cuevo') value = { id: 1398726649, full_name: input.repository };
     else if (url.pathname.endsWith('/git/ref/pull/1/merge')) value = { ref: input.ref, object: { type: 'commit', sha } };
+    else if (url.pathname.includes('/git/commits/')) value=mergeCommit(url.pathname.split('/').at(-1)!);
     else if (url.pathname.endsWith('/sarifs/' + sarifId)) value = { processing_status: 'complete', errors: null,
       analyses_url: 'https://api.github.com/repos/example/cuevo/code-scanning/analyses?sarif_id=' + sarifId };
     else if (url.pathname.endsWith('/analyses')) value = [analysis()];
@@ -211,4 +213,37 @@ test('Actions context binds same-job SARIF output and exact workflow path, merge
     { CUEVO_CODEQL_SARIF_ID: '' }, { GITHUB_WORKFLOW_REF: 'example/cuevo/.github/workflows/other.yml@refs/pull/1/merge' }, { GITHUB_EVENT_NAME: 'pull_request_target' }]) {
     assert.throws(() => readCodeqlGateContext({ ...env, ...change }, sha));
   }
+});
+
+
+test('regenerated PR merge metadata with the same exact tree and two ordered parents keeps original analyzed evidence',async()=>{
+ const f=fixture({mutate:(url,value)=>url.pathname.includes('/git/ref/')?{ref:input.ref,object:{type:'commit',sha:regeneratedSha}}:value});
+ const result=await runCodeqlAlertGate(input,f.transport);assert.equal(result.status,'VERIFIED');assert.equal(result.analysis.id,20);assert.equal(result.analysis.sarifId,sarifId);assert.equal(result.snapshotPasses,2);
+ assert.equal(f.calls.filter(raw=>raw.endsWith('/git/commits/'+sha)).length,2);assert.equal(f.calls.filter(raw=>raw.endsWith('/git/commits/'+regeneratedSha)).length,2);
+ const subject=await import('./codeql-alerts'),receipt=subject.prepareCodeqlReceipt(input,result,{CI:'true',GITHUB_ACTIONS:'true',GITHUB_JOB:'codeql',GITHUB_REPOSITORY:input.repository,GITHUB_SHA:sha,GITHUB_WORKFLOW_SHA:sha,GITHUB_REF:input.ref,GITHUB_WORKFLOW_REF:input.repository+'/.github/workflows/ci.yml@'+input.ref,GITHUB_RUN_ID:'42',GITHUB_RUN_ATTEMPT:'1'},Date.parse('2026-10-06T10:01:00Z'));assert.equal(receipt.sourceSha,sha);assert.equal(receipt.analysis.createdAt,analysis().created_at);
+});
+
+test('regenerated PR merge refuses changed tree parent head base malformed or single-parent metadata',async()=>{
+ for(const mode of ['tree','head','base','order','duplicate','single','malformed','commit-sha','original-sha','ref-type','ref-sha']as const){
+  const f=fixture({mutate:(url,value)=>{if(url.pathname.includes('/git/ref/'))return{ref:input.ref,object:{type:mode==='ref-type'?'tag':'commit',sha:mode==='ref-sha'?'invalid':regeneratedSha}};if(!url.pathname.includes('/git/commits/'))return value;const next=mergeCommit(url.pathname.split('/').at(-1)!);if(url.pathname.endsWith('/'+regeneratedSha)){if(mode==='tree')next.tree.sha='f'.repeat(40);if(mode==='head')next.parents[1].sha='f'.repeat(40);if(mode==='base')next.parents[0].sha='f'.repeat(40);if(mode==='order')next.parents.reverse();if(mode==='duplicate')next.parents[1].sha=next.parents[0].sha;if(mode==='single')next.parents.pop();if(mode==='malformed')return{sha:regeneratedSha,tree:null,parents:[]};if(mode==='commit-sha')next.sha=sha;}else if(mode==='original-sha')next.sha=regeneratedSha;return next;}});
+  await assert.rejects(runCodeqlAlertGate(input,f.transport),mode);assert.equal(f.calls.some(raw=>raw.includes('/sarifs/')),false,mode+' refused before processed result');
+ }
+});
+
+test('changed branch refs cannot use PR merge equivalence and exact refs do not read alternate commits',async()=>{
+ const branch={...input,ref:'refs/heads/main'},f=fixture({mutate:(url,value)=>url.pathname.includes('/git/ref/')?{ref:branch.ref,object:{type:'commit',sha:regeneratedSha}}:value});await assert.rejects(runCodeqlAlertGate(branch,f.transport));assert.equal(f.calls.some(raw=>raw.includes('/git/commits/')),false);
+ const original=fixture();assert.equal((await runCodeqlAlertGate(input,original.transport)).status,'VERIFIED');assert.equal(original.calls.some(raw=>raw.includes('/git/commits/')),false);
+});
+
+test('regenerated merge equivalence is reread at completion and changed current tree or parents still refuse',async()=>{
+ for(const mode of ['tree','head','base','missing']as const){let refs=0;const f=fixture({mutate:(url,value)=>{if(url.pathname.includes('/git/ref/')){refs++;return{ref:input.ref,object:{type:'commit',sha:regeneratedSha}};}if(url.pathname.endsWith('/git/commits/'+regeneratedSha)&&refs===2){if(mode==='missing')return{};const row=mergeCommit(regeneratedSha);if(mode==='tree')row.tree.sha='f'.repeat(40);if(mode==='head')row.parents[1].sha='f'.repeat(40);if(mode==='base')row.parents[0].sha='f'.repeat(40);return row;}return value;}});await assert.rejects(runCodeqlAlertGate(input,f.transport),mode);assert.equal(refs,2);assert.equal(f.calls.filter(raw=>new URL(raw).pathname.endsWith('/alerts')).length,2);}
+});
+
+test('equivalent regenerated refs do not admit a substituted analysis commit or newer upload',async()=>{
+ for(const mode of ['commit','newer']as const){const f=fixture({mutate:(url,value)=>{if(url.pathname.includes('/git/ref/'))return{ref:input.ref,object:{type:'commit',sha:regeneratedSha}};if(url.pathname.endsWith('/analyses')&&(mode==='commit'||!url.searchParams.has('sarif_id')))return[{...analysis(),...(mode==='commit'?{commit_sha:regeneratedSha}:{id:21})}];return value;}});await assert.rejects(runCodeqlAlertGate(input,f.transport),mode);}
+});
+
+
+test('a current PR merge ref that changes identity during observation cannot retain the first equivalent binding',async()=>{
+ let reads=0;const f=fixture({mutate:(url,value)=>url.pathname.includes('/git/ref/')?{ref:input.ref,object:{type:'commit',sha:++reads===1?regeneratedSha:'f'.repeat(40)}}:value});await assert.rejects(runCodeqlAlertGate(input,f.transport));assert.equal(reads,2);
 });

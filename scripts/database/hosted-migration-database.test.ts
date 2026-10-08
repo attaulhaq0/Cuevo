@@ -20,6 +20,7 @@ test('supplied reconciliation booleans and receipt-shaped objects cannot grant n
  const module=await api();assert.equal(typeof module.assertNativeReconciliationPermit,'function');
  for(const value of[true,{nativeVerified:true},{receiptSha256:'a'.repeat(64)},{status:'CURRENT_STATE_VERIFIED_PARTIAL'}])assert.throws(()=>module.assertNativeReconciliationPermit(value,{} as never));
 });
+test('native prefix continuation refuses supplied completion flags before provider or database effects',async()=>{const module=await api();await fixture(async input=>{const db=await module.createHostedMigrationDatabase(input);assert.equal(typeof db.admitSchemaContinuation,'function');await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const before=state.queries.length;for(const value of[{},true,{completion:{cleanup:{kind:'RELEASED'}},nativeVerified:true}])await assert.rejects(db.admitSchemaContinuation(value));assert.equal(state.queries.length,before);});});});
 
 test('native reconciliation refuses supplied or missing template approval context before provider or Vault effects',async()=>{
  const module=await api();await fixture(async input=>{const db=await module.createHostedMigrationDatabase(input);assert.equal(typeof db.reconcileUnknownPrefix,'function');

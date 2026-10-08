@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { readCanonicalMigrationSources, planHostedMigrations, createCanonicalHostedMigrationPlan } from './hosted-migration-plan';
-import { createHostedMigrationWorkdirs } from './hosted-migration-workdirs';
+import { createHostedMigrationWorkdirs,createHostedMigrationBatchWorkdirs } from './hosted-migration-workdirs';
 
 const ref='mqxdjvsyckzocokuikmx';
 const git=(root:string,...args:string[])=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','ignore'],windowsHide:true}).trim();
@@ -29,6 +29,8 @@ test('physical stage admission independently verifies completed prior Git prefix
   const{plan}=createCanonicalHostedMigrationPlan({repoRoot:input.repoRoot,sourceSha,treeSha,target,priorReceipt,now});
   const built=await createHostedMigrationWorkdirs({repoRoot:input.repoRoot,sourceSha,treeSha,plan,outputRoot:join(input.repoRoot,'.local/hosted-release')});
   for(const stage of built.stages){const receipt=await admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage});assert.equal(receipt.sources.length,count+1);}
+  const batchWork=await createHostedMigrationBatchWorkdirs({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage:built.stages[3],outputRoot:join(input.repoRoot,'.local/hosted-release')});assert.equal(batchWork.batches.length,1);const batch=batchWork.batches[0];assert.deepEqual(batch.pending.map(row=>row.name),[name]);const batchReceipt=await(await api()).admitHostedMigrationBatchFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage:built.stages[3],batch});assert.equal(batchReceipt.evidence,'VERIFIED_GIT_AND_PHYSICAL_BATCH');assert.equal(batchReceipt.batchSha256,batch.batchSha256);
+  await assert.rejects((await api()).admitHostedMigrationBatchFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan:{...plan,priorCompletedRelease:{...plan.priorCompletedRelease!,treeSha:'0'.repeat(40)}},stage:built.stages[3],batch}));
   await assert.rejects(admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan:{...plan,priorCompletedRelease:{...plan.priorCompletedRelease!,sourceSha:'0'.repeat(40)}},stage:built.stages[0]}));
   const final=built.stages.at(-1)!,file=join(final.workdir,'supabase/migrations',name);await writeFile(file,'select 999;\n');await assert.rejects(admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha,treeSha,plan,stage:final}));
  });
@@ -53,4 +55,17 @@ test('physical stage admission accepts only exact original120 template recovery 
   await assert.rejects(admitHostedMigrationStageFiles({...input,plan:{...plan,reconciliationTemplate:undefined}}));
   await assert.rejects(admitHostedMigrationStageFiles({...input,stage:{...input.stage,pending:input.stage.pending.slice(1)}}));
  }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('batch admission rederives parent identity and exact cumulative files while rejecting drift and arbitrary cursors',async()=>{
+ const subject=await api();assert.equal(typeof subject.admitHostedMigrationBatchFiles,'function');
+ await fixture(async(input,built)=>{const stage=built.stages[3],batches=await createHostedMigrationBatchWorkdirs({...input,stage,outputRoot:join(input.repoRoot,'.local/hosted-release')});assert.deepEqual(batches.batches.map(batch=>batch.pending.length),[20,20,10]);
+  for(const batch of batches.batches){const result=await subject.admitHostedMigrationBatchFiles({...input,stage,batch});assert.equal(result.stageSha256,batches.stageSha256);assert.equal(result.batchSha256,batch.batchSha256);assert.equal(result.planSha256,batches.planSha256);}
+  const batch=batches.batches[0],file=join(batch.workdir,'supabase/migrations',batch.cumulativeIncluded[0].name),original=await readFile(file);await writeFile(file,'select 999;');await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch}));await writeFile(file,original);
+  await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch:{...batch,index:2}}));await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch:{...batch,expectedBeforeVersions:batch.expectedBeforeVersions.slice(1)}}));
+  const extra=join(batch.workdir,'supabase/migrations/extra.sql');await writeFile(extra,'select 1;');await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch}));await rm(extra);
+  const first=join(batch.workdir,'supabase/migrations',batch.cumulativeIncluded[0].name),saved=await readFile(first);await rm(first);await symlink(join(stage.workdir,'supabase/migrations'),first,process.platform==='win32'?'junction':'dir');await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch}));await rm(first);await writeFile(first,saved);
+  const originalManifest=await readFile(batch.manifestPath),forged=JSON.parse(originalManifest.toString());forged.index='1';const forgedBytes=(await import('../verification/release-review')).canonicalReleaseExecutionJson(forged)+'\n';await writeFile(batch.manifestPath,forgedBytes);await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch:{...batch,index:'1',manifestSha256:createHash('sha256').update(forgedBytes).digest('hex')}} as never));await writeFile(batch.manifestPath,originalManifest);
+  const bytes=await readFile(batch.manifestPath);await writeFile(batch.manifestPath,bytes.toString().replace('NOT_EXECUTED','VERIFIED'));await assert.rejects(subject.admitHostedMigrationBatchFiles({...input,stage,batch}));
+ });
 });

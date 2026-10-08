@@ -167,10 +167,27 @@ export async function runCodeqlAlertGate(input: CodeqlGateInput, transport: Tran
     if (row.full_name !== input.repository) throw unavailable();
     numericRepositoryBase = `https://api.github.com/repositories/${count(row.id, true)}`;
   };
+  let observedRefSha: string | undefined;
   const currentRef = async () => {
     const refPath = input.ref.slice('refs/'.length).split('/').map(encodeURIComponent).join('/');
     const row = object((await request(`${base}/git/ref/${refPath}`)).value), reference = object(row.object);
-    if (row.ref !== input.ref || reference.type !== 'commit' || reference.sha !== input.sha) throw unavailable();
+    if (row.ref !== input.ref || reference.type !== 'commit' || !digestSha.safeParse(reference.sha).success) throw unavailable();
+    if (observedRefSha !== undefined && reference.sha !== observedRefSha) throw unavailable();
+    observedRefSha = reference.sha as string;
+    if (reference.sha === input.sha) return;
+    // GitHub can regenerate a synthetic PR merge with different commit metadata
+    // while retaining exactly the analyzed tree and both ordered source parents.
+    // Keep the original checkout/SARIF SHA; no branch or changed-source alias is admitted.
+    if (!/^refs\/pull\/[1-9][0-9]*\/merge$/.test(input.ref)) throw unavailable();
+    const commit = async (sha: string) => {
+      const value = object((await request(`${base}/git/commits/${sha}`)).value), tree = object(value.tree);
+      if (value.sha !== sha || !digestSha.safeParse(tree.sha).success || !Array.isArray(value.parents) || value.parents.length !== 2) throw unavailable();
+      const parents = value.parents.map(parent => object(parent).sha);
+      if (parents.some(parent => !digestSha.safeParse(parent).success || parent === sha) || parents[0] === parents[1]) throw unavailable();
+      return { tree: tree.sha, parents };
+    };
+    const original = await commit(input.sha), current = await commit(reference.sha as string);
+    if (original.tree !== current.tree || JSON.stringify(original.parents) !== JSON.stringify(current.parents)) throw unavailable();
   };
   const processing = async () => {
     const row = object((await request(`${base}/code-scanning/sarifs/${input.sarifId}`)).value);

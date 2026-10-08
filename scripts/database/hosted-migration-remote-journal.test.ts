@@ -18,6 +18,7 @@ Object.assign(globalThis,{journalPermitTransportFixture:(value:unknown,current:H
  return{originalIdentity:fixture.original,originalOperationSha256:hash(JSON.stringify(fixture.original)),originalChainSha256:fixture.chainSha256,receiptSha256:'1'.repeat(64)};
 }});
 registerHooks({load(url,context,next){if(url.endsWith('/hosted-migration-database.ts'))return{format:'module',shortCircuit:true,source:`import * as actual from './hosted-migration-database.ts?actual-native-permit';
+export const assertNativeMigrationEffectPermit=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,false):actual.assertNativeMigrationEffectPermit(value,current);
 export const assertNativeReconciliationPermit=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,false):actual.assertNativeReconciliationPermit(value,current);
 export const assertNativeReconciliationSafetyRecord=(value,current)=>globalThis.journalPermitTransportFixtureActive?globalThis.journalPermitTransportFixture(value,current,true):actual.assertNativeReconciliationSafetyRecord(value,current);`};return next(url,context);}});
 const payload = (state: HostedExecutionJournal['state']): HostedExecutionJournal => ({ version: 1, identity, state, schemaHistoryAtomic: false, evidence: 'SUPPLIED_PORT_EXECUTION_ONLY' });

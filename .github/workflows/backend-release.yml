@@ -106,6 +106,22 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts reconcile-prefix
+      - name: Export confirmed original schema recovery completion
+        if: inputs.scope == 'reconcile-schema'
+        id: schema-completion
+        env:
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts export-schema-completion
+      - name: Retain confirmed schema recovery completion
+        if: inputs.scope == 'reconcile-schema'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cuevo-schema-recovery-completion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/hosted-release/schema-recovery-completion.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
       - name: Provision original synthetic reference population and Auth identities
         if: inputs.scope == 'schema-and-accounts' || inputs.scope == 'complete-backend'
         env:

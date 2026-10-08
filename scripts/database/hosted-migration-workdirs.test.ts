@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
+import {createRequire,syncBuiltinESMExports} from 'node:module';
 import { createHash } from 'node:crypto';
 import { planHostedMigrations, readCanonicalMigrationSources, canonicalHostedMigrationPlan, createCanonicalHostedMigrationPlan } from './hosted-migration-plan';
 
@@ -50,6 +51,8 @@ test('completed prior Git release keeps its populated prefix in all workdirs and
   assert.deepEqual(built.stages.map(stage=>stage.pending.map(row=>row.name)),[[],[],[],[name]]);
   for(const stage of built.stages)for(const row of prior.migrations)assert.equal(hash(readFileSync(join(stage.workdir,'supabase/migrations',row.name))),row.sha256);
   for(const stage of built.stages)assert.deepEqual(stage.expectedBeforeVersions,prior.migrations.map(row=>row.version).sort());
+  const batches=await(await api()).createHostedMigrationBatchWorkdirs({...input,sourceSha,treeSha,plan,stage:built.stages[3]});assert.equal(batches.batches.length,1);assert.deepEqual(batches.batches[0].pending.map(row=>row.name),[name]);assert.equal(batches.batches[0].expectedBeforeVersions.length,count);assert.equal(batches.batches[0].expectedAfterVersions.length,count+1);
+  for(const row of batches.batches[0].cumulativeIncluded)assert.equal(hash(readFileSync(join(batches.batches[0].workdir,'supabase/migrations',row.name))),row.sha256);
   await assert.rejects(createHostedMigrationWorkdirs({...input,sourceSha,treeSha,plan:{...plan,priorCompletedRelease:{...plan.priorCompletedRelease!,treeSha:'0'.repeat(40)}}}));
  });
 });
@@ -74,4 +77,29 @@ test('exact original120 recovery workdirs retain123 original bytes and only thre
   for(const row of stage.included)assert.equal(hash(readFileSync(join(stage.workdir,'supabase/migrations',row.name))),row.sha256);
   await assert.rejects(createHostedMigrationWorkdirs({...input,plan:{...plan,reconciliationTemplate:undefined}}));
  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('bounded batch workdirs retain exact cumulative original bytes with remaining50 split20/20/10',async()=>{
+ const subject=await api();assert.equal(typeof subject.createHostedMigrationBatchWorkdirs,'function');
+ await fixture(async input=>{const parent=(await subject.createHostedMigrationWorkdirs(input)).stages[3],built=await subject.createHostedMigrationBatchWorkdirs({...input,stage:parent});
+  assert.deepEqual(built.batches.map(batch=>batch.pending.length),[20,20,10]);assert.equal(built.execution,'NOT_EXECUTED');assert.equal(built.stageSha256,hash(JSON.stringify({included:parent.included,configSha256:parent.configSha256})));
+  assert.deepEqual(built.batches.map(batch=>batch.cumulativeIncluded.length),[200,220,230]);assert.deepEqual(built.batches.flatMap(batch=>batch.pending),parent.pending);assert.deepEqual(built.batches.at(-1)!.expectedAfterVersions,parent.expectedAfterVersions);
+  for(const batch of built.batches){const manifest=JSON.parse(readFileSync(batch.manifestPath,'utf8'));assert.equal(manifest.stageSha256,built.stageSha256);assert.equal(manifest.batchSha256,batch.batchSha256);assert.equal(hash(readFileSync(batch.manifestPath)),batch.manifestSha256);for(const row of batch.cumulativeIncluded)assert.equal(hash(readFileSync(join(batch.workdir,'supabase/migrations',row.name))),row.sha256);assert.equal(batch.commandArgs[8],batch.workdir);}
+  const changed=structuredClone(parent);changed.pending=changed.pending.slice(1);await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,stage:changed}));
+ });
+});
+
+test('batch workdirs refuse caller size overrides, accessor stage and forged pending ordering before output',async()=>{
+ const subject=await api();await fixture(async input=>{const parent=(await subject.createHostedMigrationWorkdirs(input)).stages[3],before=readdirSync(input.outputRoot).sort();let traps=0;
+  await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,stage:parent,maxPendingPerBatch:100} as never));await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,get stage(){traps++;return parent;}}));assert.equal(traps,0);
+  const changed=structuredClone(parent);changed.pending.reverse();await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,stage:changed}));assert.deepEqual(readdirSync(input.outputRoot).sort(),before);
+ });
+});
+
+test('batch builder refuses source drift during asynchronous emission before recording READY',async()=>{
+ const subject=await api();await fixture(async input=>{const parent=(await subject.createHostedMigrationWorkdirs(input)).stages[3],native=createRequire(import.meta.url)('node:fs/promises') as typeof import('node:fs/promises'),originalOpen=native.open;let changed=false;
+  native.open=(async(...args:Parameters<typeof originalOpen>)=>{if(!changed&&String(args[0]).includes('batch-001')&&String(args[0]).endsWith('config.toml')){changed=true;writeFileSync(join(input.repoRoot,'supabase/migrations',parent.pending[0].name),'select 999;\n');}return originalOpen(...args);}) as typeof originalOpen;syncBuiltinESMExports();
+  try{await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,stage:parent}));assert.equal(changed,true);const batchRoot=readdirSync(input.outputRoot).find(name=>name.startsWith('batches-'))!;assert.equal(JSON.parse(readFileSync(join(input.outputRoot,batchRoot,'builder-state.json'),'utf8')).state,'REQUIRES_REVIEW');}
+  finally{native.open=originalOpen;syncBuiltinESMExports();}
+ });
 });

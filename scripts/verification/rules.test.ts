@@ -1,5 +1,5 @@
 import{test}from'node:test';import assert from'node:assert/strict';import{validateRecoveryTarget,technicalResult,sameSourceManifest}from'./rules';
-import{commandArgs,verificationSteps}from'./steps';
+import{commandArgs,verificationSteps,statelessVerificationSteps}from'./steps';
 import productionConfig from'./playwright.production.config';import{resolve}from'node:path';
 import customerConfig from './playwright.customer.config';
 import accountConfig from './playwright.accounts.config';
@@ -25,6 +25,29 @@ test('required source inventory executes docs reference audit asset contracts an
  for (const file of ['scripts/docs/reference-inventory.test.ts','scripts/verification/dependency-security.test.ts','scripts/verification/web-test-assets.test.ts']) assert.ok(argumentsList.includes(file), file);
  const packageScripts = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../package.json'), 'utf8')).scripts as Record<string,string>;
  assert.equal(packageScripts.test.includes('scripts/local-runtime.test.ts'), false);
+});
+
+test('reviewed schema continuation fixtures run once in their required replay and CI owners', () => {
+ const packageScripts = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../package.json'), 'utf8')).scripts as Record<string,string>;
+ const stateless = statelessVerificationSteps.flatMap(step => [...step.args]);
+ const owners = [
+  { script:'test:hosted-plan', step:'migration-replay-rules', files:[
+   'scripts/database/hosted-active-runtime-state.test.ts',
+   'scripts/database/hosted-schema-recovery-completion.test.ts',
+   'scripts/database/hosted-schema-continuation-native.test.ts',
+   'scripts/database/hosted-schema-continuation-executor.test.ts',
+   'scripts/database/hosted-migration-batch-receipt.test.ts',
+  ] },
+  { script:'test:cicd', step:'cicd-fixtures', files:['scripts/verification/backend-schema-completion-admission.test.ts'] },
+ ];
+ for (const owner of owners) {
+  const direct = packageScripts[owner.script].split(/\s+/), required = [...verificationSteps.find(step => step.name === owner.step)!.args];
+  for (const file of owner.files) {
+   assert.equal(direct.filter(argument => argument === file).length, 1, `${owner.script}: ${file}`);
+   assert.equal(required.filter(argument => argument === file).length, 1, `${owner.step}: ${file}`);
+   assert.equal(stateless.filter(argument => argument === file).length, 1, `stateless discovery: ${file}`);
+  }
+ }
 });
 
 test('every bootstrapped verification failure restores only after confirmed owned runtime stop', async () => {

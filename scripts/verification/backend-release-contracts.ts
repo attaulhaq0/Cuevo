@@ -20,12 +20,13 @@ const fingerprints = z.object({ sourceManifestSha256: digest, diffSha256: digest
 const installedSource=z.object({sourceSha:sha,treeSha:sha,seedSha256:digest,manifestSha256:digest,migrationCount:positive}).strict();
 const installedSchema=z.object({sourceSha:sha,treeSha:sha,migrationCount:positive.max(1000)}).strict();
 const reconciledPrefix=z.object({templateSha256:digest,originalOperationSha256:digest,originalChainSha256:digest,prefixCount:z.literal(120),stageCount:z.literal(123),cataloguePolicySha256:digest,catalogueSha256:digest}).strict();
+const schemaRecovery=z.object({completionReceiptSha256:digest,completionExportSha256:digest}).strict();
 const installedRuntime=z.object({version:z.literal(1),purpose:z.literal('CUEVO_INSTALLED_ACTIVE_RUNTIME'),sourceSha:sha,treeSha:sha,originalRunId:identifier,originalRunAttempt:positive,originalPackageSha256:digest,runtimeSha256:digest,apiDeploymentId:z.string().regex(/^dpl_[A-Za-z0-9]+$/),apiUrl:origin,edgeId:z.string().min(1).max(200),edgeVersion:positive,activationId:z.string().min(1).max(200),vaultSecretName:z.string().min(1).max(200),jobId:positive,endpoint:z.string().url(),activationReceiptSha256:digest}).strict();
 const canonicalRuntimeVerification=z.object({runAttempt:positive,jobsSha256:digest}).strict();
 const assignment = z.object({ category, taskId, reportSha256: digest, evidenceSha256: digest }).strict();
 const review = assignment.extend({ releaseSha: sha, treeSha: sha, baseSha: sha, sourceManifestSha256: digest, diffSha256: digest, reviewedAt: timestamp }).strict();
 const identity = z.object({ repository, releaseSha: sha, treeSha: sha, baseSha: sha, ciRunId: identifier, releaseRunId: identifier, runAttempt: positive, environmentId: positive,
-  environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging'), executionScope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime','reconcile-schema']).optional(), installedSource:installedSource.optional(),installedSchema:installedSchema.optional(),installedRuntime:installedRuntime.optional(),reconciledPrefix:reconciledPrefix.optional() }).strict();
+  environmentName: z.literal('staging'), deploymentEnvironment: z.literal('synthetic-staging'), executionScope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime','reconcile-schema']).optional(), installedSource:installedSource.optional(),installedSchema:installedSchema.optional(),installedRuntime:installedRuntime.optional(),reconciledPrefix:reconciledPrefix.optional(),schemaRecovery:schemaRecovery.optional() }).strict();
 const stagingVerification = z.object({ scope: z.literal('SCHEMA_AND_SYNTHETIC_AUTH'), runAttempt: positive, jobsSha256: digest }).strict();
 const intentSchema = identity.extend({ version: z.literal(1), purpose: z.literal('BACKEND_SYNTHETIC_STAGING'), targets, fingerprints, stagingVerification: stagingVerification.optional(),canonicalRuntimeVerification:canonicalRuntimeVerification.optional(), preparedAt: timestamp, expiresAt: timestamp, reviews: z.array(review).length(2) }).strict();
 const backendRun = z.object({ id: positive, run_attempt: positive, head_sha: sha, head_branch: z.literal('main'), event: z.literal('workflow_dispatch'), status: z.enum(['waiting', 'in_progress']), conclusion: z.null(), path: z.literal('.github/workflows/backend-release.yml'), repository: z.object({ full_name: repository }).strict() }).strict();
@@ -40,6 +41,7 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   catch { return fail(); }
 }
 function checkIntent(input: BackendReleaseIntent, expected: BackendReleaseExpected) {
+  if(canonicalReleaseReviewJson(input.schemaRecovery??null)!==canonicalReleaseReviewJson(expected.schemaRecovery??null))fail();if(input.schemaRecovery&&(!['schema-and-accounts','complete-backend','installed-runtime'].includes(input.executionScope??'')||input.reconciledPrefix||input.executionScope==='installed-runtime'&&!input.installedRuntime))fail();
   if(canonicalReleaseReviewJson(input.reconciledPrefix??null)!==canonicalReleaseReviewJson(expected.reconciledPrefix??null))fail();
   if(input.executionScope==='reconcile-schema'){if(!input.reconciledPrefix||input.installedSource||input.installedRuntime)fail();}else if(input.reconciledPrefix)fail();
   for (const key of ['repository', 'releaseSha', 'treeSha', 'baseSha', 'ciRunId', 'releaseRunId', 'runAttempt', 'environmentId', 'environmentName', 'deploymentEnvironment', 'executionScope'] as const) if (input[key] !== expected[key]) fail();
