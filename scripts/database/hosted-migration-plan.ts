@@ -218,6 +218,11 @@ export function createCanonicalInstalledRuntimePlan(input:{repoRoot:string;sourc
  if(result.plan.pending.length||result.plan.stages.some(stage=>stage.names.length)||result.plan.migrations.length!==prior.migrations.length)throw failure();
  const plan:HostedMigrationPlanV1={...result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(plan);return{...result,plan};
 }
+/** Pending confirmation reuses exact complete-source no-op verification; this
+ * plan cannot establish activation or permit SQL execution. */
+export function createCanonicalPendingRuntimeConfirmationPlan(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'PENDING_RUNTIME_CONFIRMATION'}){
+ if(input.operation!=='PENDING_RUNTIME_CONFIRMATION')throw failure();return createCanonicalInstalledRuntimePlan({...input,operation:'INSTALLED_RUNTIME_READ_ONLY'});
+}
 const plannedRowSchema = rowSchema.extend({ name: z.string().regex(/^\d{14}_[a-z0-9_]+\.sql$/) }).strict();
 const planSchema = z.object({
   version: z.literal(1), mode: z.enum(['EMPTY_INITIAL', 'INCREMENTAL']), provenance: z.literal('CALLER_SUPPLIED_SOURCE'), source: identitySchema,

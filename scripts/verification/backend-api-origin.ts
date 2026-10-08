@@ -3,10 +3,11 @@ import { lstat,readFile,realpath,open } from 'node:fs/promises';
 import { isAbsolute,join,resolve } from 'node:path';
 import { z } from 'zod';
 import { canonicalReleaseExecutionJson } from './release-review';
-import { readBackendReleaseAdmission } from './backend-release-admission';
+import { readBackendReleaseAdmission,readBackendActivationExecutionAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent,type BackendReleaseExpected } from './backend-release-contracts';
 import { prepareHostedRuntimeRecipients } from './backend-provider-deploy';
 import {revalidateActiveRuntime} from './backend-runtime-resume';
+import {confirmHostedWorkerActivation} from './backend-hosted-activation-confirmation';
 
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex'),fail=()=>Error('Staging API origin binding requires review; private contents withheld.');
 const origin='https://cuevo-api.vercel.app',project='prj_QtcVui11hMayZcqBF3KAxZcLaocs',team='team_Gvw1Dz7IlxIG5evqwlsNkZHb';
@@ -35,6 +36,7 @@ export async function bindBackendApiOrigin(value:unknown):Promise<BackendApiOrig
   z.object({status:z.literal('PRIVATE_PROBES_CONFIRMED'),privateStorage:z.literal(true),privateRealtime:z.literal(true),restrictedDatabaseGrants:z.literal(true),sessionsClosed:z.literal(true)}).parse(await read('private-access-result.json'));
   const resumed=expected.installedRuntime?await revalidateActiveRuntime({repoRoot:root,expected,preparedApproval:prepared,runtimeConfig:input.runtimeConfig,githubToken:input.githubToken,vercelToken:input.vercelToken,...input.activeOperator}):null;
   if(resumed&&(resumed.status!=='INSTALLED_RUNTIME_REVALIDATED'||!resumed.nativeExecutionVerified||!resumed.lockReleased||!resumed.original))throw fail();
+  if(!resumed){await readBackendActivationExecutionAdmission({repoRoot:root,expected,prepared,githubToken:input.githubToken});if(!input.activeOperator)throw fail();const current=await confirmHostedWorkerActivation({repoRoot:root,expected,preparedApproval:prepared,runtimeConfig:input.runtimeConfig,githubToken:input.githubToken,vercelToken:input.vercelToken,...input.activeOperator,observationOnly:true});if(current.status!=='ORIGINAL_ACTIVATION_CONFIRMED'||!current.canonicalReceipt||!current.lockReleased||!current.sessionClosed||current.basis!=='EXACT_CONFIRMED_READBACK')throw fail();}
   const activationIdentity=resumed?.original?identity.extend({runId:z.literal(resumed.original.originalRunId),runAttempt:z.literal(resumed.original.originalRunAttempt),packageSha256:z.literal(resumed.original.originalPackageSha256)}):identity;
   const activation=activationIdentity.extend({purpose:z.literal('CUEVO_HOSTED_WORKER_ACTIVATION'),status:z.literal('ACTIVATED_SIGNED_SOURCE_VERIFIED'),observedAt:at,edgeVersion:z.literal(provider.edge.version),sourceProcessed:z.literal(true),scheduledRecoveryVerified:z.literal(true),duplicateWakeDenied:z.literal(true),sessionsClosed:z.literal(true)}).passthrough().parse(resumed?.activation??await read('worker-activation-result.json'));if(!resumed)current(activation.observedAt);
   activationIdentity.pick({sourceSha:true,projectRef:true,runId:true,runAttempt:true}).extend({purpose:z.literal('CUEVO_HOSTED_WORKER_ACTIVATION_CLEANUP'),status:z.literal(activation.status),resultSha256:z.literal(hash(canonicalReleaseExecutionJson(activation))),sessionsClosed:z.literal(true),lockReleased:z.literal(true)}).parse(resumed?.cleanup??await read('worker-activation-cleanup.json'));
