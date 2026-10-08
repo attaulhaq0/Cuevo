@@ -6,6 +6,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { parse as parseEnv } from 'dotenv';
 import { z } from 'zod';
 import { validateCiRun, validateReleaseManifest, vercelTarget, validateVercelDeployment, releaseContext, validateReleaseControls } from './cicd-contracts';
+import {validateOperatingStagingHandoff} from './operating-staging-handoff';
+import {readCanonicalMigrationSources} from '../database/hosted-migration-plan';
 import { runtimeEnvironment } from '../runtime/environment';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, prepareReleaseReviewPackage, readPreparedReleaseReviewPackage, validateFounderReleaseApproval, type ReleaseReviewExpected } from './release-review';
 import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, readWebBackendBridge, bindWebReviewToBackend, readCanonicalWebOutput } from './web-backend-bridge';
@@ -59,11 +61,18 @@ const artifactDigest = async () => {
   return hash.digest('hex');
 };
 const admitManifest = async (manifest: unknown, ciRunId: string) => {
+  if(manifest&&typeof manifest==='object'&&'purpose'in manifest&&manifest.purpose==='CUEVO_OPERATING_SYNTHETIC_STAGING_HANDOFF'){
+    if(required('RELEASE_ENVIRONMENT')!=='staging')throw Error('Operating staging cannot authorize customer production.');
+    const receipt=validateOperatingStagingHandoff(manifest,Date.now()),sources=readCanonicalMigrationSources({repoRoot:process.cwd(),sourceSha:required('RELEASE_SHA'),treeSha:receipt.treeSha}).sources;
+    const migrations=sources.map(row=>({version:row.name.slice(0,14),sha256:createHash('sha256').update(row.bytes).digest('hex')})).sort((a,b)=>a.version.localeCompare(b.version));
+    if(receipt.sourceSha!==required('RELEASE_SHA')||receipt.repository!==required('GITHUB_REPOSITORY')||receipt.database.migrationCount!==sources.length||receipt.database.migrationManifestSha256!==createHash('sha256').update(canonicalReleaseReviewJson(migrations)).digest('hex'))throw Error('Operating staging source or migration identity changed.');
+    return{...receipt.publicConfig,api:{kind:'vercel' as const,projectId:receipt.api.projectId,teamId:receipt.api.teamId,deploymentId:receipt.api.deploymentId,origin:receipt.api.origin,deploymentUrl:receipt.api.deploymentUrl,target:'preview' as const,artifactSha256:receipt.api.artifactSha256,commitSha:receipt.componentSource?.sourceSha??receipt.sourceSha},worker:{kind:'edge' as const,projectRef:receipt.database.projectRef,functionName:'cuevo-worker',edgeId:receipt.worker.edgeId,edgeVersion:receipt.worker.edgeVersion,artifactSha256:receipt.worker.artifactSha256,denoLockSha256:receipt.worker.denoLockSha256}};
+  }
   const migrations = await Promise.all((await readdir('supabase/migrations')).filter(name => /^\d{14}_.+\.sql$/.test(name)).map(async name => ({ version: name.slice(0, 14), sha256: createHash('sha256').update(await readFile(join('supabase/migrations', name))).digest('hex') })));
   return validateReleaseManifest(manifest, { sha: required('RELEASE_SHA'), environment: required('RELEASE_ENVIRONMENT'), ciRunId, now: Date.now(), migrations });
 };
 const inspectDeployment = async (identity: { teamId: string; projectId: string; url: string; deploymentId?: string }) => {
-  await readmitApproval();
+  const admitted=await readmitApproval();
   const selector = identity.deploymentId ?? new URL(identity.url).hostname;
   const url = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(selector)}`); url.searchParams.set('teamId', identity.teamId);
   let inspected: unknown;
@@ -71,7 +80,9 @@ const inspectDeployment = async (identity: { teamId: string; projectId: string; 
     const response = await fetch(url, { headers: { Authorization: `Bearer ${required('VERCEL_TOKEN')}` }, signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw Error('Unavailable'); inspected = await response.json();
   } catch { throw Error('Team-scoped Vercel deployment evidence is unavailable; response contents withheld.'); }
-  validateVercelDeployment(inspected, { sha: required('RELEASE_SHA'), ...identity, target: vercelTarget(required('RELEASE_ENVIRONMENT')) });
+  const operating=admitted.backend?.purpose==='OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION'?validateOperatingStagingHandoff(admitted.manifest,Date.parse(admitted.backend.backendIdentity.exportedAt)):null;
+  const sourceSha=operating&&identity.projectId===operating.api.projectId&&identity.teamId===operating.api.teamId&&identity.deploymentId===operating.api.deploymentId&&identity.url===operating.api.deploymentUrl?(operating.componentSource?.sourceSha??operating.sourceSha):required('RELEASE_SHA');
+  validateVercelDeployment(inspected, { sha:sourceSha, ...identity, target: vercelTarget(required('RELEASE_ENVIRONMENT')) });
   return z.object({ id: z.string().regex(/^dpl_[A-Za-z0-9]+$/), url: z.string(), projectId: z.string(), ownerId: z.string() }).parse(inspected);
 };
 const assertCurrentMain = async () => {

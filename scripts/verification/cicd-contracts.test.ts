@@ -12,6 +12,10 @@ import { validateWorkflows, safeEvidence, validateCiRun, validateReleaseManifest
 import {canonicalReleaseReviewJson,prepareReleaseReviewPackage} from './release-review';
 
 const sha = 'a'.repeat(40); const digest = 'b'.repeat(64); const now = Date.parse('2026-10-02T12:00:00Z');
+test('required aggregate cannot bypass executed producers with dead guard text environment overrides or omitted checks',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml'),ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ for(const mode of ['early-success','fast-omitted','technical-omitted','codeql-omitted','override','skip']){const flow=yaml.load(ci),job=flow.jobs.required,step=job.steps[0];if(mode==='early-success')step.run='exit 0\n'+step.run;else if(mode==='override')step.env.FAST='success';else if(mode==='skip')step.if='false';else{const name=mode.split('-')[0].toUpperCase();step.run=step.run.replace(new RegExp('\\[ "\\$'+name+'" != success \\] \\|\\| '),'');}assert.ok(validateWorkflows(yaml.dump(flow),release).includes('Required status must preserve the exact aggregate execution and original job results.'),mode);}
+});
 
 test('two isolated runtime jobs and exact same-attempt aggregate refuse skipped private or substituted lanes',async()=>{
  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
@@ -61,7 +65,7 @@ test('completed-backend staging frontend includes verified origin and browser ch
  const steps=yaml.load(await readFile('.github/workflows/release.yml','utf8')).jobs['web-release'].steps;
  const verified=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify'),bound=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts bind-staging-origin'),browser=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify-browser'),learning=steps.findIndex(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts verify-learning-loop');
  assert.ok(bound>verified&&browser>bound&&learning>browser);
- const condition="needs.release-admission.outputs.backend-selection-base64 != ''";assert.equal(steps[bound].if,condition);assert.equal(steps[browser].if,condition);assert.equal(steps[learning].if,condition);
+ const condition="needs.release-admission.outputs.backend-selection-base64 != ''";assert.equal(steps[bound].if,condition);assert.equal(steps[browser].if,condition);assert.equal(steps[learning].if,condition+" && inputs.backend_handoff != 'operating-staging'");
  const env=steps[browser].env as Record<string,string>;assert.equal(env.CUEVO_SYNTHETIC_PILOT_PASSWORD,'${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}');assert.equal(env.BACKEND_SELECTION_BASE64,'${{ needs.release-admission.outputs.backend-selection-base64 }}');
  assert.ok(steps.some(step=>step.run==='npx --no-install playwright install --with-deps chromium'&&step.if===condition));
  const evidence=steps.find(step=>(step.with as Record<string,unknown>|undefined)?.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}')!;assert.ok(evidence);assert.equal(evidence.if,"always() && needs.release-admission.outputs.backend-selection-base64 != ''");
@@ -217,14 +221,14 @@ test('actual required-status Bash rejects every failed, cancelled or skipped req
   const command = workflow.jobs.required.steps[0].run;
   const execute = (event: 'push' | 'pull_request', fields: Record<string, string> = {}) => {
     const result = spawnSync(bash!, ['--noprofile', '--norc', '-eo', 'pipefail', '-c', command], {
-      env: { ...process.env, BASH_ENV: '', FAST: 'success', SOURCE_CONTRACTS: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
+      env: { ...process.env, BASH_ENV: '', FAST: 'success', SOURCE_CONTRACTS: 'success', DATABASE: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
       encoding: 'utf8', timeout: 10000,
     });
     assert.equal(result.error, undefined); assert.equal(result.signal, null);
     return result.status;
   };
   assert.equal(execute('push'), 0); assert.equal(execute('pull_request'), 0);
-  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'SOURCE_CONTRACTS', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
+  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'SOURCE_CONTRACTS', 'DATABASE', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
     assert.notEqual(execute(event, { [job]: state }), 0, `${event} ${job} ${state} must fail the required status`);
   }
   assert.notEqual(execute('pull_request', { DEPENDENCY: 'skipped' }), 0);
@@ -526,7 +530,7 @@ test('required CI includes a secret-free full-history scanner with strict succes
   for (const changed of [
     yaml.dump(shallowSecret),
     ci.replace('node --import tsx scripts/verification/secret-scan.ts', 'echo scan-omitted'),
-    ci.replace('fast-checks, source-contracts, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, source-contracts, technical-mvp, dependency-review, codeql'),
+    ci.replace('fast-checks, source-contracts, database-checks, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, source-contracts, database-checks, technical-mvp, dependency-review, codeql'),
     ci.replace('SECRET_SCAN: ${{ needs.secret-scan.result }}', 'SECRET_SCAN: success'),
     ci.replace('|| [ "$SECRET_SCAN" != success ]', ''),
   ]) assert.ok(validateWorkflows(changed, release).some(issue => issue.includes('secret')));
@@ -535,7 +539,7 @@ test('required CI includes a secret-free full-history scanner with strict succes
 test('source contracts are mandatory in the required aggregate without a substitute success value',async()=>{
  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
  for(const changed of[
-  ci.replace('fast-checks, source-contracts, technical-mvp','fast-checks, technical-mvp'),
+  ci.replace('fast-checks, source-contracts, database-checks, technical-mvp','fast-checks, technical-mvp'),
   ci.replace('SOURCE_CONTRACTS: ${{ needs.source-contracts.result }}','SOURCE_CONTRACTS: success'),
   ci.replace(' || [ "$SOURCE_CONTRACTS" != success ]',''),
  ])assert.ok(validateWorkflows(changed,release).some(issue=>issue.includes('source contracts')));

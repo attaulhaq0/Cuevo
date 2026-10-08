@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { z } from 'zod';
-import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep} from './verification-workflows';
+import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep,runtimeDeliveryArtifactStep,ciDatabaseJob,ciRequiredJob} from './verification-workflows';
 import { canonicalReleaseReviewJson } from './release-review';
 import { verificationSteps } from './steps';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown };
@@ -135,10 +135,11 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
       if (uses.startsWith('actions/checkout@') && settings['persist-credentials'] !== false) issues.push('Checkout credentials must not persist.');
       const stagingEvidencePath=['web-deployment-result.json','web-origin-intent.json','web-origin-protection-intent.json','web-origin-result.json','protected-preview-web-intent.json','protected-preview-web-result.json','hosted-browser-intent.json','hosted-browser-result.json','hosted-browser-cleanup.json'].map(name=>'.local/cicd-release/'+name).join('\n')+'\n';
       const stagingEvidence=index===1&&settings.path===stagingEvidencePath&&settings.name==='cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != ''"&&step['continue-on-error']===undefined;
-      const learningEvidence=index===1&&settings.path==='.local/cicd-release/hosted-learning-loop/\n.local/cicd-release/hosted-learning-loop-ui/\n'&&settings.name==='cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != ''"&&step['continue-on-error']===undefined;
+      const learningEvidence=index===1&&settings.path==='.local/cicd-release/hosted-learning-loop/\n.local/cicd-release/hosted-learning-loop-ui/\n'&&settings.name==='cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='warn'&&settings['retention-days']===14&&step.if==="always() && needs.release-admission.outputs.backend-selection-base64 != '' && inputs.backend_handoff != 'operating-staging'"&&step['continue-on-error']===undefined;
       const codeqlReceipt=index===0&&jobName==='codeql'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(codeqlReceiptStep);
-      const runtimeLane=index===0&&(['backend','browser'] as const).some(lane=>jobName===`runtime-${lane}`&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(runtimeLaneArtifactStep(lane)));
-      if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !runtimeLane && !codeqlReceipt && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
+      const runtimeLane=index===0&&(['backend','browser','database'] as const).some(lane=>jobName===(lane==='database'?'database-checks':`runtime-${lane}`)&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(runtimeLaneArtifactStep(lane)));
+      const runtimeDelivery=index===0&&jobName==='runtime-backend'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(runtimeDeliveryArtifactStep);
+      if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !runtimeDelivery && !runtimeLane && !codeqlReceipt && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
         && settings.name === 'cuevo-web-deployment-${{ github.run_id }}-${{ github.run_attempt }}' && settings['include-hidden-files'] === true && settings['if-no-files-found'] === 'error'
         && settings['retention-days'] === 2 && step.if === undefined && step['continue-on-error'] === undefined)) issues.push('Unsafe artifact path.');
       if (index === 1 && uses.startsWith('actions/download-artifact@')) issues.push('Release must not consume upstream untrusted artifacts.');
@@ -153,6 +154,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   }
   issues.push(...validateCiRuntimeJobs(ciJobs));
   issues.push(...validateCiSourceJobs(ciJobs));
+  if(canonicalReleaseReviewJson(ciJobs['database-checks'])!==canonicalReleaseReviewJson(ciDatabaseJob))issues.push('Canonical database verification must retain its exact isolated replay, grants and advisor owner.');
   if (!steps.some(step => step.if === 'always()' && step.run === 'node --import tsx scripts/verification/cicd-evidence.ts')) issues.push('Safe evidence must export even on failure.');
   if (JSON.stringify(ci).includes('secrets.')) issues.push('PR verification must not receive external secrets.');
   const codeql = mapping(ciJobs.codeql), codeqlSteps = list(codeql.steps).map(mapping);
@@ -166,7 +168,8 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     || mapping(codeqlSteps[analyzerIndex]?.with)['wait-for-processing'] !== true || codeqlSteps[alertIndex]?.if !== undefined || codeqlSteps[alertIndex]?.['continue-on-error'] !== undefined
     || mapping(codeqlSteps[alertIndex]?.env).GH_TOKEN !== '${{ github.token }}' || mapping(codeqlSteps[alertIndex]?.env).CUEVO_CODEQL_SARIF_ID !== '${{ steps.codeql-analyze.outputs.sarif-id }}') issues.push('CodeQL must gate current processed same-job security findings without skips.');
   const required = mapping(ciJobs.required);
-  if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks','source-contracts','technical-mvp','dependency-review','codeql','secret-scan']) || required.if !== 'always()') issues.push('Required status must include all verification jobs, including source contracts and secret scan.');
+  if(canonicalReleaseReviewJson(required)!==canonicalReleaseReviewJson(ciRequiredJob))issues.push('Required status must preserve the exact aggregate execution and original job results.');
+  if (JSON.stringify(required.needs) !== JSON.stringify(['fast-checks','source-contracts','database-checks','technical-mvp','dependency-review','codeql','secret-scan']) || required.if !== 'always()') issues.push('Required status must include all verification jobs, including source contracts, database and secret scan.');
   const secretScan = mapping(ciJobs['secret-scan']); const secretSteps = list(secretScan.steps).map(mapping);
   const secretCheckout = secretSteps.filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
   if (secretScan.if !== undefined || secretScan['continue-on-error'] !== undefined || secretScan['runs-on'] !== 'ubuntu-latest'
@@ -175,6 +178,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     || secretSteps.some(step => step.if !== undefined || step['continue-on-error'] !== undefined)) issues.push('Required secret scan must run the pinned scanner on complete history without skip or waiver.');
   const aggregate = list(required.steps).map(mapping).find(step => step.name === 'Require every verification boundary');
   if (mapping(aggregate?.env).SOURCE_CONTRACTS !== '${{ needs.source-contracts.result }}' || !String(aggregate?.run).includes('[ "$SOURCE_CONTRACTS" != success ]')) issues.push('Required aggregate must fail unless source contracts succeed.');
+  if (mapping(aggregate?.env).DATABASE !== '${{ needs.database-checks.result }}' || !String(aggregate?.run).includes('[ "$DATABASE" != success ]')) issues.push('Required aggregate must fail unless database verification succeeds.');
   if (mapping(aggregate?.env).SECRET_SCAN !== '${{ needs.secret-scan.result }}' || !String(aggregate?.run).includes('[ "$SECRET_SCAN" != success ]')) issues.push('Required aggregate must fail unless secret scan succeeds.');
   if (mapping(release.concurrency)['cancel-in-progress'] !== false) issues.push('Unsafe release concurrency.');
   if (mapping(release.concurrency).group !== 'cuevo-release-${{ inputs.environment }}') issues.push('Manual releases must serialize by protected environment.');
@@ -204,6 +208,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   if(!preparation||mapping(preparation.env).CUEVO_RELEASE_REVIEW_INPUT_JSON!=='${{ vars.CUEVO_RELEASE_REVIEW_INPUT_JSON }}'||mapping(preparation.env).CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON!=='${{ vars.CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON }}'||!metadataOnly(preparation))issues.push('Release requires provider-credential-free review preparation before environment approval.');
   const dispatchInputs = mapping(mapping(mapping(release.on).workflow_dispatch).inputs);
   for (const field of ['backend_run_id','backend_run_attempt','backend_artifact_id','backend_transfer_sha256']) if (mapping(dispatchInputs[field]).type !== 'string' || mapping(dispatchInputs[field]).required !== false) issues.push('Backend bridge requires four optional typed manual inputs with runtime all-or-none staging admission.');
+  if(mapping(dispatchInputs.backend_handoff).type!=='string'||mapping(dispatchInputs.backend_handoff).required!==false||mapping(dispatchInputs.backend_handoff).default!==undefined)issues.push('Backend purpose must remain optional without an injected default; selected staging artifacts require explicit runtime purpose.');
   if (mapping(preparation?.env).BACKEND_SELECTION_BASE64 !== '${{ steps.context.outputs.backend-selection-base64 }}') issues.push('Backend selection must consume validated release context before preparation.');
   const webSteps = list(web.steps).map(mapping);
   const credentialCommands=new Set(['build','deploy','verify','bind-staging-origin','verify-browser','verify-learning-loop'].map(mode=>`node --import tsx scripts/verification/cicd-release.ts ${mode}`));
@@ -213,7 +218,8 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     if(Object.entries(env).some(([key,value])=>JSON.stringify(value).includes('secrets.')&&!(key==='GH_TOKEN'&&value===metadataSecret)&&!(credentialCommands.has(command)&&key==='VERCEL_TOKEN'&&value==='${{ secrets.VERCEL_TOKEN }}')&&!(['node --import tsx scripts/verification/cicd-release.ts verify-browser','node --import tsx scripts/verification/cicd-release.ts verify-learning-loop'].includes(command)&&key==='CUEVO_SYNTHETIC_PILOT_PASSWORD'&&value==='${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}')))issues.push('Deployment credentials may reach only the reviewed release owner after official approval.');
     if(command.startsWith('node --import tsx scripts/verification/cicd-release.ts ')&&env.GH_TOKEN!==metadataSecret)issues.push('Release controls require the scoped GitHub metadata token.');
     if(/\bvercel\s+(?:deploy|promote|alias|rollback|build|pull)\b/.test(command))issues.push('Provider actions must use the reviewed release owner.');
-    if(credentialCommands.has(command)&&step.if!==(stagingCommands.has(command)?stagingCondition:undefined)||command==='node --import tsx scripts/verification/cicd-release.ts approval'&&step.if!==undefined)issues.push('Required release consumers and approval cannot be conditionally skipped.');
+    const expectedCondition=command.endsWith('verify-learning-loop')?stagingCondition+" && inputs.backend_handoff != 'operating-staging'":stagingCommands.has(command)?stagingCondition:undefined;
+    if(credentialCommands.has(command)&&step.if!==expectedCondition||command==='node --import tsx scripts/verification/cicd-release.ts approval'&&step.if!==undefined)issues.push('Required release consumers and approval cannot be conditionally skipped.');
   }
   for(const step of [...admissionSteps.filter(step=>step.run==='node --import tsx scripts/verification/cicd-release.ts prepare'),...webSteps.filter(step=>['approval','build','deploy','verify','bind-staging-origin','verify-browser','verify-learning-loop'].some(mode=>step.run===`node --import tsx scripts/verification/cicd-release.ts ${mode}`))])for(const key of ['VERCEL_ORG_ID','VERCEL_PROJECT_ID'])if(mapping(step.env)[key]!==`\${{ vars.${key} }}`)issues.push('The public web sink must consume fixed reviewed variables at every boundary.');
   if (webSteps.filter(step => String(step.uses ?? '').startsWith('actions/checkout@')).length !== 1) issues.push('Deployment requires one admitted source checkout.');

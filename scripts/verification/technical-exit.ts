@@ -11,6 +11,7 @@ import { requireStoppedBrowserPorts, type BrowserPortState } from './browser-acc
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
 import { verificationProgress } from './verification-progress';
 import {readTechnicalRequest,runtimeLaneSteps,runtimeLaneEvidence} from './runtime-lanes';
+import {canonicalReleaseExecutionJson} from './release-review';
 
 const request=readTechnicalRequest(process.argv.slice(2)),requestedProfile=request.profile;
 const selection=requestedProfile==='ci'?await readCiRuntimeSelection():{profile:requestedProfile,browserFiles:[...criticalBrowserFiles]};
@@ -99,5 +100,5 @@ finally{
  const freezeDuration=Date.now()-freezeStarted;Object.assign(rows.find(row=>row.name==='source-freeze')!,{exitCode:unchanged?0:1,durationMs:freezeDuration});await persist();await progress({profile,phase:'source-freeze',event:'END',exitCode:unchanged?0:1,durationMs:freezeDuration});if(!unchanged)failed=true;
  process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);
 }
-if(request.lane){const laneFolder=resolve('.local/runtime-lanes',request.lane);await mkdir(laneFolder,{recursive:true});await writeFile(resolve(laneFolder,'lane.json'),JSON.stringify(evidence()));}
+if(request.lane){const laneFolder=resolve('.local/runtime-lanes',request.lane);await mkdir(laneFolder,{recursive:true});await writeFile(resolve(laneFolder,'lane.json'),canonicalReleaseExecutionJson(evidence()));}
 if(failed){console.error(profile+' verification failed; evidence retained in '+directory);process.exitCode=1;}else console.log('Technical evidence '+evidence().status+': '+directory);

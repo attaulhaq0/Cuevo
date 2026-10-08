@@ -15,9 +15,9 @@ const snapshot=async()=>{
 const manifest=await snapshot();
 const sourceDigest=createHash('sha256').update(JSON.stringify([...manifest].sort((a,b)=>a.path.localeCompare(b.path)))).digest('hex'),selection=await readCiRuntimeSelection();
 const inputFolder=resolve('.local/runtime-lane-inputs');
-if(JSON.stringify((await readdir(inputFolder)).sort())!==JSON.stringify(['backend','browser']))throw Error('Only both exact lane directories may be consumed.');
+if(JSON.stringify((await readdir(inputFolder)).sort())!==JSON.stringify(['backend','browser','database']))throw Error('Only the three exact lane directories may be consumed.');
 const values:unknown[]=[];
-for(const lane of ['backend','browser']){const folder=resolve(inputFolder,lane),path=resolve(folder,'lane.json'),stat=await lstat(path);if(stat.isSymbolicLink()||!stat.isFile()||stat.nlink!==1||stat.size>49152||await realpath(path)!==path||JSON.stringify(await readdir(folder))!==JSON.stringify(['lane.json']))throw Error('Runtime lane artifact requires bounded exact files.');values.push(JSON.parse(await readFile(path,'utf8')));}
+for(const lane of ['backend','browser','database']){const folder=resolve(inputFolder,lane),path=resolve(folder,'lane.json'),stat=await lstat(path);if(stat.isSymbolicLink()||!stat.isFile()||stat.nlink!==1||stat.size>49152||await realpath(path)!==path||JSON.stringify(await readdir(folder))!==JSON.stringify(['lane.json']))throw Error('Runtime lane artifact requires bounded exact files.');values.push(JSON.parse(await readFile(path,'utf8')));}
 const expected={repository:process.env.GITHUB_REPOSITORY,sourceSha,treeSha:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceDigest,githubRunId:process.env.GITHUB_RUN_ID,runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),profile:selection.profile,browserFiles:selection.browserFiles};
 const combined=combineRuntimeLanes(values,expected);
 for(const value of values){const raw=value as Record<string,unknown>;runtimeLaneEvidence(Object.fromEntries(Object.entries(raw).filter(([key])=>!['version','purpose','status'].includes(key))));}
@@ -26,4 +26,4 @@ if(finalDigest!==sourceDigest)throw Error('Runtime aggregate source changed afte
 execFileSync('git',['diff','--quiet','--no-ext-diff','--no-textconv','HEAD','--'],{stdio:'ignore'});
 if(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()!==sourceSha)throw Error('Runtime aggregate source changed before completion.');
 const output=resolve('.local/verification',new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(output,{recursive:true});await writeFile(resolve(output,'source.json'),JSON.stringify(manifest));await writeFile(resolve(output,'source-final.json'),JSON.stringify(finalManifest));await writeFile(resolve(output,'evidence.json'),JSON.stringify(combined));
-console.log(`Combined exact ${selection.profile} backend and browser lanes; hosted/customer acceptance remains separate.`);
+console.log(`Combined exact ${selection.profile} database, backend and browser lanes; hosted/customer acceptance remains separate.`);

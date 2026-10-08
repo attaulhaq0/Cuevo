@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import {ciRuntimeJobs,ciSourceJobs} from './verification-workflows';
+import {ciRuntimeJobs,ciSourceJobs,ciDatabaseJob} from './verification-workflows';
 import {canonicalReleaseExecutionJson,canonicalReleaseReviewJson} from './release-review';
 
 const positive=z.number().int().positive().max(Number.MAX_SAFE_INTEGER),sha=z.string().regex(/^[a-f0-9]{40}$/);
@@ -8,7 +8,7 @@ const runSchema=z.object({id:positive,run_attempt:positive,head_sha:sha,head_bra
 const stepSchema=z.object({name:z.string(),number:positive,status:z.literal('completed'),conclusion:z.enum(['success','skipped'])});
 const jobSchema=z.object({id:positive,name:z.string(),run_id:positive,run_attempt:positive,head_sha:sha,head_branch:z.literal('main'),status:z.literal('completed'),conclusion:z.enum(['success','skipped']),steps:z.array(stepSchema).max(100)});
 const fail=()=>Error('Canonical isolated runtime source and original job attempt require review.');
-const ciCanonicalJobs={...ciRuntimeJobs,...ciSourceJobs};
+const ciCanonicalJobs={...ciRuntimeJobs,...ciSourceJobs,'database-checks':ciDatabaseJob};
 /** Current official GET facade is supplied by the native admission owner.
  * Raw run_attempt must be retained; normalized legacy run metadata is refused. */
 export async function readCanonicalRuntimeJobs(value:unknown,github:(path:string)=>Promise<unknown>):Promise<{runAttempt:number;jobsSha256:string}>{
@@ -21,10 +21,10 @@ export async function readCanonicalRuntimeJobs(value:unknown,github:(path:string
    if(total!==undefined&&response.total_count!==total||!response.jobs.length)throw fail();total=response.total_count;jobs.push(...response.jobs);if(jobs.length>total)throw fail();if(jobs.length===total)break;if(response.jobs.length!==100||page===10)throw fail();
   }
   if(jobs.length!==total||new Set(jobs.map(job=>job.id)).size!==jobs.length||new Set(jobs.map(job=>job.name)).size!==jobs.length)throw fail();
-  const required=['fast-checks','source-contracts','runtime-backend','runtime-browser','technical-mvp','codeql','secret-scan','required'];
-  if(jobs.length<8||jobs.length>9||required.some(name=>!jobs.some(job=>job.name===name))||jobs.some(job=>!required.includes(job.name)&&job.name!=='dependency-review'))throw fail();
+  const required=['fast-checks','source-contracts','database-checks','runtime-backend','runtime-browser','technical-mvp','codeql','secret-scan','required'];
+  if(jobs.length<9||jobs.length>10||required.some(name=>!jobs.some(job=>job.name===name))||jobs.some(job=>!required.includes(job.name)&&job.name!=='dependency-review'))throw fail();
   for(const job of jobs){if(job.run_id!==run.id||job.run_attempt!==run.run_attempt||job.head_sha!==run.head_sha)throw fail();if(job.name==='dependency-review'){if(job.conclusion!=='skipped'||job.steps.length)throw fail();}else if(job.conclusion!=='success'||!job.steps.length||job.steps.some(step=>step.conclusion!=='success'&&!step.name.startsWith('Post ')))throw fail();}
-  const selected=jobs.filter(job=>Object.hasOwn(ciCanonicalJobs,job.name));if(selected.length!==5)throw fail();
+  const selected=jobs.filter(job=>Object.hasOwn(ciCanonicalJobs,job.name));if(selected.length!==6)throw fail();
   for(const job of selected){
    if(job.run_id!==run.id||job.run_attempt!==run.run_attempt||job.head_sha!==run.head_sha)throw fail();
    const contract=ciCanonicalJobs[job.name as keyof typeof ciCanonicalJobs],required=contract.steps.map(step=>'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`),actions=contract.steps.filter(step=>'uses' in step).map(step=>'name' in step?step.name:`Run ${'uses' in step?step.uses:''}`);

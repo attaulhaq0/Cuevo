@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { hostedSyntheticRuntime, requireHostedSyntheticDatabase, requireSyntheticAnalyticsSources } from './synthetic-runtime';
+import { hostedSyntheticRuntime, requireHostedSyntheticDatabase, requireSyntheticAnalyticsSources,workerReleaseGeneration } from './synthetic-runtime';
 import { parseAuthProvisioningConfig } from './auth-provisioning';
 const httpOrigin = z.url().refine(value => {
   const url = new URL(value);
@@ -110,7 +110,7 @@ export function parseServerConfig(input: Record<string, string | undefined>, con
   if (production && [e.API_ALLOWED_ORIGIN, e.SUPABASE_URL].some(value => value && new URL(value).protocol !== 'https:')) throw new Error('Production browser and authentication origins require HTTPS.');
   const databaseTls = production || Boolean(hosted);
   if (databaseTls && [e.DATABASE_URL, e.WORKER_DATABASE_URL].some(value => value && new URL(value).search)) throw new Error('Production TLS database connections forbid URL options.');
-  return { nodeEnv: e.NODE_ENV, localDemoMode, deploymentEnvironment: e.CUEVO_DEPLOYMENT_ENVIRONMENT ?? (e.NODE_ENV === 'production' ? 'production' : 'local'), syntheticProjectRef: hosted?.projectRef, databaseTls, databaseTlsCa: e.CUEVO_DATABASE_TLS_CA, apiPort: e.API_PORT, workerPort: e.WORKER_PORT, allowedOrigin: e.API_ALLOWED_ORIGIN ?? 'http://localhost:3000', databaseUrl: e.DATABASE_URL, workerDatabaseUrl: e.WORKER_DATABASE_URL, supabaseUrl: e.SUPABASE_URL, supabasePublishableKey: e.SUPABASE_PUBLISHABLE_KEY,
+  return { nodeEnv: e.NODE_ENV, localDemoMode, deploymentEnvironment: e.CUEVO_DEPLOYMENT_ENVIRONMENT ?? (e.NODE_ENV === 'production' ? 'production' : 'local'), syntheticProjectRef: hosted?.projectRef, databaseTls, databaseTlsCa: e.CUEVO_DATABASE_TLS_CA, apiPort: e.API_PORT, workerPort: e.WORKER_PORT, allowedOrigin: e.API_ALLOWED_ORIGIN ?? 'http://localhost:3000', databaseUrl: e.DATABASE_URL, workerDatabaseUrl: e.WORKER_DATABASE_URL,workerReleaseGeneration:consumer==='worker'?workerReleaseGeneration(input.CUEVO_WORKER_RELEASE_GENERATION):null, supabaseUrl: e.SUPABASE_URL, supabasePublishableKey: e.SUPABASE_PUBLISHABLE_KEY,
     aiEnabled: e.AI_GENERATION_MODE === 'FIXTURE' || (e.AI_GENERATION_MODE === 'LIVE' && liveApproved),
     intelligence: { mode: e.AI_GENERATION_MODE, provider: e.AI_GENERATION_MODE === 'FIXTURE' ? 'deterministic-fixture' : e.AI_PROVIDER,
       model: e.AI_GENERATION_MODE === 'FIXTURE' ? 'source-locked-v1' : e.AI_MODEL,

@@ -6,7 +6,8 @@ import { readBackendReleaseSourceEvidence } from './backend-release-admission';
 import { readCanonicalMigrationSources } from '../database/hosted-migration-plan';
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
 import { canonicalReleaseExecutionJson } from './release-review';
-import { readBackendWebTransferFile, validateBackendWebTransfer } from './backend-web-transfer';
+import { readBackendWebTransferFile, validateBackendWebTransfer,validateOperatingBackendWebTransfer } from './backend-web-transfer';
+import {validateOperatingStagingHandoff} from './operating-staging-handoff';
 import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 
 const fail = () => Error('Completed backend web handover consumption requires review; contents withheld.');
@@ -17,7 +18,7 @@ const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 // Official Actions timestamps may serialize only whole seconds. This comparison
 // admits precision loss in chronology, never extra proof/expiry validity.
 const officialBefore = (left: string, right: string) => Math.floor(Date.parse(left) / 1000) < Math.floor(Date.parse(right) / 1000);
-const inputSchema = z.object({ repoRoot: z.string(), githubToken: z.string().min(1).max(24576).regex(/^[\x21-\x7e]+$/),
+const inputSchema = z.object({ handoff:z.enum(['customer-candidate','operating-staging']).default('customer-candidate'),repoRoot: z.string(), githubToken: z.string().min(1).max(24576).regex(/^[\x21-\x7e]+$/),
   releaseSha: sha, ciRunId: identifier, backendRunId: identifier, backendRunAttempt: positive, artifactId: identifier, transferSha256: digest,
   web: z.object({ teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), projectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), target: z.literal('preview') }).strict(),
 }).strict();
@@ -32,9 +33,10 @@ const approvalSchema = z.object({ environments: z.array(z.object({ id: positive,
 
 /** Completed-run receipt consumption is distinct from live mutation admission.
  * This checks the real terminal run, never rewrites it as waiting/in_progress. */
-export function validateCompletedBackendWebApproval(rawRun: unknown, rawApprovals: unknown, transferRaw: unknown, now: number) {
+export function validateSelectedBackendWebTransfer(raw:unknown,now:number,handoff:'customer-candidate'|'operating-staging'='customer-candidate'){return handoff==='operating-staging'?validateOperatingBackendWebTransfer(raw,now):validateBackendWebTransfer(raw,now);}
+export function validateCompletedBackendWebApproval(rawRun: unknown, rawApprovals: unknown, transferRaw: unknown, now: number,handoff:'customer-candidate'|'operating-staging'='customer-candidate') {
   try {
-    const admitted = validateBackendWebTransfer(transferRaw, now), { body, prepared, transfer } = admitted;
+    const admitted = validateSelectedBackendWebTransfer(transferRaw, now,handoff), { body, prepared, transfer } = admitted;
     const run = runSchema.parse(rawRun);
     if (String(run.id) !== body.releaseRunId || run.run_attempt !== body.runAttempt || run.repository.full_name !== body.repository || run.head_sha !== body.releaseSha
       || officialBefore(body.preparedAt, run.created_at) || officialBefore(run.updated_at, transfer.exportedAt) || Date.parse(run.updated_at) > now) throw fail();
@@ -97,15 +99,14 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
       }
       const archive = await boundedBytes(response, archiveSignal, 2 * 1024 * 1024);
       if (archive.byteLength !== artifact.size_in_bytes) throw fail();
-      const raw = await readBackendWebTransferArchive(archive, artifact.digest.slice(7), input.transferSha256), initial = validateBackendWebTransfer(raw, now);
+      const raw = await readBackendWebTransferArchive(archive, artifact.digest.slice(7), input.transferSha256), initial = validateSelectedBackendWebTransfer(raw, now,input.handoff);
       if (initial.body.repository !== repository || initial.body.releaseSha !== input.releaseSha || initial.body.ciRunId !== input.ciRunId || initial.body.releaseRunId !== input.backendRunId || initial.body.runAttempt !== input.backendRunAttempt
       || initial.body.targets.web.teamId !== input.web.teamId || initial.body.targets.web.projectId !== input.web.projectId || initial.body.targets.web.target !== input.web.target || officialBefore(artifact.created_at, initial.transfer.exportedAt)) throw fail();
       await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected);
       for (const row of initial.transfer.producers) if (hash(await readBackendWebTransferFile(input.repoRoot, join(input.repoRoot, row.path))) !== row.sha256) throw fail();
       const migrations = readCanonicalMigrationSources({ repoRoot: input.repoRoot, sourceSha: input.releaseSha, treeSha: initial.body.treeSha }).sources
         .map(row => ({ version: row.name.slice(0, 14), sha256: hash(row.bytes) })).sort((a, b) => a.version.localeCompare(b.version));
-      const manifestMigrations = z.object({ database: z.object({ migrations: z.array(z.object({ version: z.string(), sha256: digest })) }) }).parse(initial.manifest).database.migrations;
-      if (canonicalReleaseExecutionJson([...manifestMigrations].sort((a, b) => a.version.localeCompare(b.version))) !== canonicalReleaseExecutionJson(migrations)) throw fail();
+      if(input.handoff==='operating-staging'){const operating=validateOperatingStagingHandoff(initial.manifest,Date.parse(initial.transfer.exportedAt));if(operating.database.migrationCount!==migrations.length||operating.database.migrationManifestSha256!==hash(canonicalReleaseExecutionJson(migrations)))throw fail();}else{const manifestMigrations = z.object({ database: z.object({ migrations: z.array(z.object({ version: z.string(), sha256: digest })) }) }).parse(initial.manifest).database.migrations;if (canonicalReleaseExecutionJson([...manifestMigrations].sort((a, b) => a.version.localeCompare(b.version))) !== canonicalReleaseExecutionJson(migrations)) throw fail();}
       const [repo, main, ci, environment, branches, protection, signatures, commit, approvals] = await Promise.all([
         get(''), get('git/ref/heads/main'), get('actions/runs/' + input.ciRunId), get('environments/staging'), get('environments/staging/deployment-branch-policies'),
         get('branches/main/protection'), get('branches/main/protection/required_signatures'), get('git/commits/' + input.releaseSha), get('actions/runs/' + input.backendRunId + '/approvals'),
@@ -117,14 +118,14 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
       z.object({ id: z.literal(initial.body.environmentId), name: z.literal('staging') }).parse(environment);
       z.object({ object: z.object({ type: z.literal('commit'), sha: z.literal(input.releaseSha) }) }).parse(main);
       z.object({ sha: z.literal(input.releaseSha), tree: z.object({ sha: z.literal(initial.body.treeSha) }), verification: z.object({ verified: z.literal(true), reason: z.literal('valid'), signature: z.string().min(1), payload: z.string().min(1) }) }).parse(commit);
-      const admitted = validateCompletedBackendWebApproval(run, approvals, raw, Date.now());
+      const admitted = validateCompletedBackendWebApproval(run, approvals, raw, Date.now(),input.handoff);
       const finalRun = runSchema.parse(await get('actions/runs/' + input.backendRunId)), finalArtifact = artifactSchema.parse(await get('actions/artifacts/' + input.artifactId));
       if (canonicalReleaseExecutionJson(finalRun) !== canonicalReleaseExecutionJson(run) || canonicalReleaseExecutionJson(finalArtifact) !== canonicalReleaseExecutionJson(artifact)) throw fail();
       const finalCi=await get('actions/runs/' + input.ciRunId);validateCiRun(finalCi, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });if(canonicalReleaseExecutionJson(await readCanonicalRuntimeJobs(finalCi,get))!==canonicalReleaseExecutionJson(canonical))throw fail();
       z.object({ object: z.object({ sha: z.literal(input.releaseSha) }) }).parse(await get('git/ref/heads/main'));
-      await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected); validateBackendWebTransfer(raw, Date.now());
+      await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected); validateSelectedBackendWebTransfer(raw, Date.now(),input.handoff);
       if (controller.signal.aborted) throw fail();
-      return { purpose: 'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
+      return { purpose: input.handoff==='operating-staging'?'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION' as const:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
         manifest: admitted.manifest, publicConfig: admitted.publicConfig, reviewFacts: admitted.reviewFacts, assignments: admitted.assignments,
         originalEvidence: admitted.transfer.evidence,
         backendIdentity: { repository, sourceSha: input.releaseSha, treeSha: admitted.body.treeSha, baseSha: admitted.body.baseSha, ciRunId: input.ciRunId, runId: input.backendRunId, runAttempt: input.backendRunAttempt, artifactId: input.artifactId,

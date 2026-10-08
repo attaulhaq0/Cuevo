@@ -35,6 +35,10 @@ on:
         description: Exact canonical public backend transfer file SHA-256
         required: false
         type: string
+      backend_handoff:
+        description: Purpose of the selected backend artifact; operating staging never permits production
+        required: false
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -242,7 +246,7 @@ jobs:
           BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
         run: node --import tsx scripts/verification/cicd-release.ts verify-browser
       - name: Verify the hosted synthetic learning-loop UI
-        if: needs.release-admission.outputs.backend-selection-base64 != ''
+        if: needs.release-admission.outputs.backend-selection-base64 != '' && inputs.backend_handoff != 'operating-staging'
         env:
           CUEVO_SYNTHETIC_PILOT_PASSWORD: ${{ secrets.CUEVO_SYNTHETIC_PILOT_PASSWORD }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -263,7 +267,7 @@ jobs:
           BACKEND_BRIDGE_BASE64: ${{ needs.release-admission.outputs.backend-bridge-base64 }}
         run: node --import tsx scripts/verification/cicd-release.ts verify-learning-loop
       - name: Preserve the scoped original learning-loop evidence
-        if: always() && needs.release-admission.outputs.backend-selection-base64 != ''
+        if: always() && needs.release-admission.outputs.backend-selection-base64 != '' && inputs.backend_handoff != 'operating-staging'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}

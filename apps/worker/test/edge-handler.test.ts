@@ -25,6 +25,7 @@ function connection(options: { admitted?: boolean; health?: boolean; processingF
 }
 
 describe('authenticated bounded Edge worker', () => {
+  it('passes the approved release generation to admission and claims while retaining the original signed wake and completion',async()=>{const worker=connection(),handler=createWorkerHandler({...config,generation:'9223372036854775807'},async()=>worker);const response=await handler(request());expect(response.status).toBe(200);expect(worker.query.mock.calls.find(([sql])=>sql.includes('begin_worker_wake'))).toEqual(['select internal.begin_worker_wake($1,$2)as wake',[wakeId,'9223372036854775807']]);expect(worker.query.mock.calls.find(([sql])=>sql.includes('claim_outbox'))).toEqual(['select id,lease_token from internal.claim_outbox($1,$2,$3)',[1,30,'9223372036854775807']]);});
   it.each([
     { name: 'missing row', rows: [] },
     { name: 'missing column', rows: [{}] },

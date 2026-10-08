@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hostedSyntheticRuntime, requireHostedSyntheticDatabase } from '../src/synthetic-runtime';
+import {workerReleaseGeneration} from '../src/synthetic-runtime';
+describe('private worker release generation',()=>{it('retains nullable legacy configuration and exact canonical PostgreSQL bigint generation',()=>{expect(workerReleaseGeneration(undefined)).toBeNull();expect(workerReleaseGeneration('1')).toBe('1');expect(workerReleaseGeneration('9223372036854775807')).toBe('9223372036854775807');});it.each(['','0','01','-1',' 1','1.0','9223372036854775808','NaN'])('refuses malformed or out of range generation %s',value=>expect(()=>workerReleaseGeneration(value)).toThrow());});
 
 const settings = { CUEVO_DEPLOYMENT_ENVIRONMENT: 'synthetic-staging', CUEVO_SYNTHETIC_PROJECT_REF: 'abcdefghijklmnopqrst', CUEVO_SYNTHETIC_WEB_ORIGIN: 'https://cuevo.example', SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co' };
 describe('portable hosted synthetic project authority', () => {

@@ -4,7 +4,7 @@ import { capturePosthogEvent, type CaptureOutcome } from '../../platform/posthog
 export type AnalyticsSummary = { accepted: number; attempted: number; reviewRequired: boolean; deadlineReached: boolean };
 export class PosthogDelivery {
   private running = false;
-  constructor(private readonly db: WorkerQueryPort, private readonly config: WorkerAnalyticsConfig, private readonly capture: (config: LiveAnalyticsConfig, event: PosthogEvent) => Promise<CaptureOutcome> = capturePosthogEvent) {}
+  constructor(private readonly db: WorkerQueryPort, private readonly config: WorkerAnalyticsConfig, private readonly capture: (config: LiveAnalyticsConfig, event: PosthogEvent) => Promise<CaptureOutcome> = capturePosthogEvent,private readonly generation:string|null=null) {}
   async process({ deadline, maxEvents, now = Date.now }: { deadline: number; maxEvents: number; now?: () => number }): Promise<AnalyticsSummary> {
     const summary: AnalyticsSummary = { accepted: 0, attempted: 0, reviewRequired: false, deadlineReached: false };
     if (this.config.mode === 'DISABLED') return summary;
@@ -15,7 +15,7 @@ export class PosthogDelivery {
       while (summary.attempted < maxEvents) {
         // Claim/revalidate/receipt retain five-second SQL budgets plus three-second POST.
         if (deadline - now() < 23000) { summary.deadlineReached = true; break; }
-        const rows = (await this.db.query('select *from internal.claim_posthog_delivery($1,$2,$3,$4)', [1, 30, this.config.keyVersion, this.config.environment])).rows;
+        const rows = (await this.db.query(this.generation===null?'select *from internal.claim_posthog_delivery($1,$2,$3,$4)':'select *from internal.claim_posthog_delivery($1,$2,$3,$4,$5)', this.generation===null?[1,30,this.config.keyVersion,this.config.environment]:[1,30,this.config.keyVersion,this.config.environment,this.generation])).rows;
         if (!rows.length) break;
         if (rows.length !== 1 || typeof rows[0].id !== 'string' || typeof rows[0].lease_token !== 'string') { summary.reviewRequired = true; break; }
         const row = rows[0]; summary.attempted++;

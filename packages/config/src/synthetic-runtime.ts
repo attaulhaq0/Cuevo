@@ -1,4 +1,9 @@
 export type HostedSyntheticRuntime = { projectRef: string; webOrigin: string; supabaseUrl: string };
+/** Exact private execution generation; an absent value retains guarded legacy
+ * local behavior and never implies a currently enabled hosted generation. */
+export function workerReleaseGeneration(value:string|undefined):string|null{
+ if(value===undefined)return null;if(!/^[1-9][0-9]{0,18}$/.test(value)||BigInt(value)>9223372036854775807n)throw Error('Canonical positive worker release generation required.');return value;
+}
 
 /** Portable server-only authority: a deployment label alone never admits a hosted source. */
 export function hostedSyntheticRuntime(input: Record<string, string | undefined>): HostedSyntheticRuntime | undefined {
