@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+Fixed native schema admission remains under `scripts/database`. The [cohort decision](decisions/2026-10-08-native-schema-admission-cohort.md) records serial held-Client PRE/catalogue/POST ownership, drained Storage-only comparison, original clocks and opaque fact publication. The lower `hosted-migration-storage-observation.ts` and `hosted-operator-storage-observation.ts` share one read-only transport/comparison implementation between native admission and the existing remote-journal/Management inventory wrappers without importing permit authority. Existing colocated tests and discovery retain their owners; source evidence does not establish hosted completion.
+
 The existing native database owner keeps [official authority before fresh native proof](decisions/2026-10-08-native-proof-after-authority.md). Reconciliation receipts/permit refresh use new complete observations after awaited official checks; historical clocks and original uncertainty remain immutable.
 
 Native permit authority pairing remains inside hosted-migration-database.ts's private registry. Executor revalidation consumes its bound original official admission through `readNativeMigrationPermitAuthority` with unchanged source/package checks; no duplicate authority read occurs after refresh. Ordinary nonpermit execution retains its official reader. Paired evidence is native-only, identity/freshness checked and never supplied by caller JSON.
