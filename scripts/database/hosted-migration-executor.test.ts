@@ -224,7 +224,7 @@ async function populatedContinuationInput(input:Record<string,unknown>,root:stri
  const initial=input.plan as HostedMigrationPlanV1,priorSha=initial.source.sha,priorTree=initial.source.tree;
  await mkdir(join(root,'supabase/seed'),{recursive:true});await writeFile(join(root,'supabase/seed/identities.json'),JSON.stringify(referenceManifest));
  state.installed={version:1,purpose:'CUEVO_INSTALLED_SYNTHETIC_POPULATION',projectRef:ref,sourceSha:priorSha,treeSha:priorTree,seedSha256:hostedSyntheticSeedSha256,manifestSha256:hash(JSON.stringify(referenceManifest))};
- state.sources=[...state.sources,...(delta?[{name:'20261007123000_native_completed_delta.sql',bytes:Buffer.from('begin; select 1; commit;\n')}]:[])];
+ state.sources=[...state.sources,...(delta?[{name:'20261009123000_native_completed_delta.sql',bytes:Buffer.from('begin; select 1; commit;\n')}]:[])];
  const target={projectRef:ref,boundProjectRef:ref,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(Date.now()).toISOString(),authUsers:133,storageObjects:0,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version),dispatchDisabled:true,population:'GUARDED_SYNTHETIC'};
  const priorReceipt={projectRef:ref,sourceSha:priorSha,treeSha:priorTree,migrations:initial.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:initial.migrations.length};
  const plan=planHostedMigrations({sources:state.sources,source:initial.source,target,priorReceipt,now:Date.now()});input.plan=plan;

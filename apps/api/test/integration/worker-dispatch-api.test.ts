@@ -26,7 +26,7 @@ describe.skipIf(!enabled)('restricted worker dispatch admission with isolated co
     if (!original || !controlOwned) return;
     await noApplications();
     const keys = Object.keys(original).filter(key => key !== 'singleton');
-    if (keys.some(key => !/^[a-z_]+$/.test(key))) throw new Error('Unexpected operational fixture column.');
+    if (keys.some(key => !/^[a-z_][a-z0-9_]{0,62}$/.test(key))) throw new Error('Unexpected operational fixture column.');
     await context.client.query('BEGIN');
     try {
       await context.client.query('select singleton from internal.worker_dispatch_control where singleton for update');

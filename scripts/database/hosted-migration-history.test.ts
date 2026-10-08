@@ -32,7 +32,7 @@ test('native internal CRLF quote escapes comments and SQL delimiters retain exac
 
 test('all canonical original migration bytes and staged expected prefixes produce bounded source coverage without executing SQL',async()=>{
  const{verifyHostedMigrationHistory}=await api();const root=resolve(import.meta.dirname,'../..'),sha=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),tree=execFileSync('git',['-C',root,'rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),loaded=readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree});
- const appended={name:'20261007000000_appended_history_fixture.sql',bytes:Buffer.from("BEGIN;\nselect 'Appended; العربية';\nCOMMIT;\n")};
+ const appended={name:'20261009000000_appended_history_fixture.sql',bytes:Buffer.from("BEGIN;\nselect 'Appended; العربية';\nCOMMIT;\n")};
  for(const sources of[loaded.sources,[...loaded.sources,appended]]){
   const replay=replayPlan(sources),order=[...replay.before,replay.prerequisite,...replay.remaining];assert.equal(order.length,sources.length);
   const ordered=order.map(name=>sources.find(row=>row.name===name)!),included=ordered.map(row=>({name:row.name,version:row.name.slice(0,14),sha256:hash(row.bytes)}));
