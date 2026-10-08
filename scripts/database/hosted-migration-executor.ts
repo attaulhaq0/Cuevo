@@ -1,4 +1,5 @@
 import {validateSchemaRecoveryCompletionExport} from '../verification/backend-schema-completion-admission';
+import {hostedMigrationNativeDiagnosticsSchema,type HostedMigrationNativeDiagnostics} from './hosted-migration-diagnostics';
 import {reconciliationTemplateFingerprint} from './hosted-schema-reconciliation';
 import {prepareHostedSchemaRecoveryCompletion,type HostedSchemaRecoveryCompletion} from './hosted-schema-recovery-completion';
 import type {ReconciliationReceipt} from './hosted-schema-reconciliation';
@@ -51,8 +52,11 @@ const inventorySchema = z.object({ evidence: z.literal('VERIFIED_INITIAL_OPERATO
 
 const admissionPhases=['STORAGE_CAPABILITY','PRIOR_JOURNALS','OFFICIAL_AUTHORITY','PROVIDER','TOOLCHAIN','SOURCE_FILES','TARGET','OPERATOR_INVENTORY','HISTORY_AND_SCOPE','POPULATION','POSTCONDITIONS','FINAL_SOURCE','FINAL_FRESHNESS'] as const;
 type AdmissionFailure={phase:typeof admissionPhases[number];durationMs:number;agesMs:{official:number|null;provider:number|null;target:number|null;postconditions:number|null;inventory:number|null}};
-export type NativeHostedMigrationStageResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; protocol: HostedExecutionResult | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null; admissionFailure?:AdmissionFailure;recoveryCompletion?:HostedSchemaRecoveryCompletion;installedVerification?: {version:1;purpose:'CUEVO_INSTALLED_MIGRATION_REVALIDATION';identity:HostedExecutionJournal['identity'];historySha256:string;remoteProjectSha256:string;installedPopulationSha256?:string;observedAt:string} };
-export type NativeHostedMigrationAggregateResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_AGGREGATE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; stages: NativeHostedMigrationStageResult[]; cleanupCode: 'LOCK_RELEASE_UNCONFIRMED' | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null;recoveryCompletion?:HostedSchemaRecoveryCompletion };
+const compositionPhases=['INPUT','PREPARED','RECOVERY_SCOPE','PRIOR_SOURCE','PLAN_BINDING','OFFICIAL_AUTHORITY','PROVIDER','TOOLCHAIN','STORAGE_POLICY','STAGE_FILES','CONNECTION_RECIPE','DATABASE_FACTORY','LEASE','RECONCILIATION','CONTINUATION','STAGE_CORE','COMPLETION'] as const;
+const compositionFailureSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_MIGRATION_COMPOSITION_FAILURE'),phase:z.enum(compositionPhases),durationMs:z.number().int().min(0).max(86400000),leaseCallbackEntered:z.boolean(),native:hostedMigrationNativeDiagnosticsSchema.nullable()}).strict();
+type CompositionFailure=z.infer<typeof compositionFailureSchema>;
+export type NativeHostedMigrationStageResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; protocol: HostedExecutionResult | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null;compositionFailure?:CompositionFailure; admissionFailure?:AdmissionFailure;recoveryCompletion?:HostedSchemaRecoveryCompletion;installedVerification?: {version:1;purpose:'CUEVO_INSTALLED_MIGRATION_REVALIDATION';identity:HostedExecutionJournal['identity'];historySha256:string;remoteProjectSha256:string;installedPopulationSha256?:string;observedAt:string} };
+export type NativeHostedMigrationAggregateResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_AGGREGATE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; stages: NativeHostedMigrationStageResult[]; cleanupCode: 'LOCK_RELEASE_UNCONFIRMED' | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null;compositionFailure?:CompositionFailure;recoveryCompletion?:HostedSchemaRecoveryCompletion };
 function own(value: unknown, depth = 0): unknown {
   if (depth > 15) throw failure();
   if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value)) return value;
@@ -79,23 +83,34 @@ function same(left: unknown, right: unknown) { return canonicalReleaseExecutionJ
  * proof ports; durable cross-run CI retention and hosted acceptance are separate. */
 async function executeNativeStages(value: unknown, aggregate: boolean): Promise<NativeHostedMigrationAggregateResult> {
   const output: NativeHostedMigrationAggregateResult = { status: 'REQUIRES_REVIEW', evidence: 'NATIVE_ADAPTER_AGGREGATE_EXECUTION', schemaHistoryAtomic: false, hostedAcceptance: false, stages: [], cleanupCode: null, compositionCode: 'PREFLIGHT_UNCONFIRMED' };
+  const began=performance.now();
+  let compositionPhase:typeof compositionPhases[number]='INPUT',leaseCallbackEntered=false,databaseDiagnostics:(()=>unknown)|undefined;
+  const retainFailure=()=>{
+    let native:HostedMigrationNativeDiagnostics|null=null;
+    try{const value=databaseDiagnostics?.();if(value!==undefined)native=hostedMigrationNativeDiagnosticsSchema.parse(own(value));}catch{/* Unavailable diagnostics remain unknown. */}
+    const elapsed=performance.now()-began;
+    // Preserve the first composition failure even if cleanup subsequently fails.
+    // A monotonic duration is diagnostic metadata, never a freshness clock.
+    output.compositionFailure??=compositionFailureSchema.parse({version:1,purpose:'CUEVO_MIGRATION_COMPOSITION_FAILURE',phase:compositionPhase,durationMs:Number.isFinite(elapsed)?Math.min(86400000,Math.max(0,Math.trunc(elapsed))):0,leaseCallbackEntered,native:null});
+    output.compositionFailure.native=native;
+  };
   try {
     const supplied = own(value) as Record<string, unknown>;
     const selected = aggregate ? inputSchema.omit({ stage: true }).extend({ stages: z.array(stageSchema).length(4) }).strict().parse(supplied) : inputSchema.parse(supplied);
     const stages = ('stages' in selected ? selected.stages : [stageSchema.parse((selected as z.infer<typeof inputSchema>).stage)]) as HostedMigrationWorkdirs['stages'];
     const input = selected, root = input.repoRoot, plan = JSON.parse(canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1).json) as HostedMigrationPlanV1;
     if(plan.runtimeOnly)throw failure();
-    const expected = own(input.expected) as BackendReleaseExpected&{installedSchema?:{sourceSha:string;treeSha:string;migrationCount:number}}, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }) as PreparedBackendReleaseIntent;
+    compositionPhase='PREPARED';const expected = own(input.expected) as BackendReleaseExpected&{installedSchema?:{sourceSha:string;treeSha:string;migrationCount:number}}, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }) as PreparedBackendReleaseIntent;
     const installedSchema=expected.installedSchema;
     const reconciliation=plan.reconciliationTemplate;
     const continuation=expected.schemaRecovery,originalTemplate=plan.reconciliationTemplate??(input.schemaRecoveryExport?validateSchemaRecoveryCompletionExport(input.schemaRecoveryExport,Date.now()).template:undefined);
-    if(continuation&&(reconciliation||!input.schemaRecoveryExport||continuation.completionExportSha256!==hash(canonicalReleaseExecutionJson(input.schemaRecoveryExport))))throw failure();
+    compositionPhase='RECOVERY_SCOPE';if(continuation&&(reconciliation||!input.schemaRecoveryExport||continuation.completionExportSha256!==hash(canonicalReleaseExecutionJson(input.schemaRecoveryExport))))throw failure();
     if(reconciliation){if(expected.executionScope!=='reconcile-schema'||!same(expected.reconciledPrefix,reconciliationTemplateFingerprint(reconciliation))||!installedSchema||installedSchema.migrationCount!==120||aggregate||stages.length!==1||stages[0].id!=='prefix'||stages[0].pending.length!==3)throw failure();}else if(expected.executionScope==='reconcile-schema')throw failure();
     if(installedSchema&&(expected.installedSource||!plan.priorSchemaRelease||!same(installedSchema,plan.priorSchemaRelease)))throw failure();
-    if(installedSchema)verifyPriorSchemaPrefix(root,plan);
+    compositionPhase='PRIOR_SOURCE';if(installedSchema)verifyPriorSchemaPrefix(root,plan);
     const originalSchemaBlobs=new Map<string,Uint8Array>();
     const originalSchemaSource=installedSchema?(()=>{for(const source of readHistoricalMigrationSources(root,installedSchema.sourceSha,installedSchema.treeSha))originalSchemaBlobs.set(source.name,source.bytes);return replayPlan([...originalSchemaBlobs].map(([name,bytes])=>({name,bytes})));})():undefined;
-    const body = own(JSON.parse(prepared.canonicalJson)) as { expiresAt: string }; const expiresAtMs = Date.parse(body.expiresAt);
+    compositionPhase='PLAN_BINDING';const body = own(JSON.parse(prepared.canonicalJson)) as { expiresAt: string }; const expiresAtMs = Date.parse(body.expiresAt);
     if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= Date.now() || plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== expected.targets.supabase.projectRef || canonicalHostedMigrationPlan(plan).sha256 !== expected.fingerprints.migrationPlanSha256 || plan.observedHistorySha256 !== expected.fingerprints.migrationHistorySha256) throw failure();
     const toolchain = async () => {
       const path = input.toolchainManifestPath, part = relative(join(root, '.local/hosted-release'), path); if (!part || isAbsolute(part) || part.split(/[\\/]/).some(piece => piece === '.' || piece === '..')) throw failure();
@@ -109,10 +124,10 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     const storagePolicy = async () => { const path = input.operatorStoragePolicyPath, part = relative(join(root, '.local/hosted-release'), path); if (!part || isAbsolute(part) || part.split(/[\\/]/).some(piece => !piece || piece === '.' || piece === '..')) throw failure(); const bytes = await boundedFile(root, path, 8192); if (hash(bytes) !== expected.fingerprints.operatorStoragePolicySha256) throw failure(); const relativePath = relative(root, path).replaceAll('\\', '/'); if (git(root, ['check-ignore', '--no-index', '--stdin'], relativePath + '\n').toString().trim() !== relativePath || git(root, ['ls-files', '--cached', '--', relativePath]).length) throw failure(); const policy = validateHostedOperatorStoragePolicy(new TextDecoder('utf8', { fatal: true }).decode(bytes), { sourceSha: expected.releaseSha, treeSha: expected.treeSha, projectRef: plan.projectRef }); if (policy.sha256 !== expected.fingerprints.operatorStoragePolicySha256) throw failure(); return policy; };
     const official = async () => { const result = await readBackendReleaseAdmission({effectScope:'SCHEMA_AND_SYNTHETIC_AUTH', repoRoot: root, prepared, expected, githubToken: input.githubToken }); if (result.provenance !== 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' || result.approval.packageSha256 !== prepared.sha256 || result.expected.releaseSha !== expected.releaseSha || result.expected.treeSha !== expected.treeSha || result.expected.ciRunId !== expected.ciRunId || !same(result.expected.fingerprints, expected.fingerprints)) throw failure(); return result; };
     const provider = async () => { const result = await readHostedMigrationProvider({ projectRef: plan.projectRef, boundProjectRef: expected.targets.supabase.projectRef, providerToken: input.providerToken }); fresh(result.observedAtMs); if (result.evidence !== 'OFFICIAL_SUPABASE_PROJECT_METADATA' || result.projectRef !== plan.projectRef || result.projectName.toLowerCase() !== 'cuevo' || result.projectStatus !== 'ACTIVE_HEALTHY' || result.directEndpoint.projectRef !== plan.projectRef || result.directEndpoint.host !== `db.${plan.projectRef}.supabase.co` || result.directEndpoint.kind !== 'direct' || result.directEndpoint.port !== 5432 || result.directEndpoint.database !== 'postgres') throw failure(); requireCurrentHostedMigrationEndpoint(input.endpoint,result,expected.fingerprints.migrationEndpointSha256); return result; };
-    await official(); const currentProvider = await provider(), manifest = await toolchain(); await storagePolicy();
+    compositionPhase='OFFICIAL_AUTHORITY';await official();compositionPhase='PROVIDER';const currentProvider = await provider();compositionPhase='TOOLCHAIN';const manifest = await toolchain();compositionPhase='STORAGE_POLICY';await storagePolicy();
     const artifacts: Awaited<ReturnType<typeof admitHostedMigrationStageFiles>>[] = [];
     for (const stage of stages) {
-      const artifact = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage });
+      compositionPhase='STAGE_FILES';const artifact = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage });
       if (artifact.planSha256 !== expected.fingerprints.migrationPlanSha256 || artifact.stageSha256 !== hash(JSON.stringify({ included: stage.included.map(row => ({ name: row.name, version: row.version, sha256: row.sha256 })), configSha256: stage.configSha256 }))) throw failure();
       artifacts.push(artifact);
     }
@@ -127,8 +142,10 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
         if (stage.id !== ids[index] || !same(stage.included, included) || !same(stage.pending, pending) || !same(stage.expectedBeforeVersions, before) || !same(stage.expectedAfterVersions, included.map(row => row.version).sort()) || plan.stages[index].id !== ids[index] || !same(plan.stages[index].names, pending.map(row => row.name))) throw failure();
       }
     }
-    const connection = prepareHostedMigrationConnection({ projectRef: plan.projectRef, repoRoot: root, endpoint: { ...requireCurrentHostedMigrationEndpoint(input.endpoint,currentProvider,expected.fingerprints.migrationEndpointSha256), provenance: 'CALLER_SUPPLIED_PROVIDER_METADATA' }, password: input.migrationPassword, certificate: { path: input.certificate.path, provenance: 'CALLER_SUPPLIED_OWNED_PATH' }, toolchain: input.toolchain });
-    const database = await createHostedMigrationDatabase({ repoRoot: root, projectRef: plan.projectRef, databaseUrl: connection.publicRecipe.databaseUrl, certificate: input.certificate, password: input.migrationPassword });
+    compositionPhase='CONNECTION_RECIPE';const connection = prepareHostedMigrationConnection({ projectRef: plan.projectRef, repoRoot: root, endpoint: { ...requireCurrentHostedMigrationEndpoint(input.endpoint,currentProvider,expected.fingerprints.migrationEndpointSha256), provenance: 'CALLER_SUPPLIED_PROVIDER_METADATA' }, password: input.migrationPassword, certificate: { path: input.certificate.path, provenance: 'CALLER_SUPPLIED_OWNED_PATH' }, toolchain: input.toolchain });
+    compositionPhase='DATABASE_FACTORY';const database = await createHostedMigrationDatabase({ repoRoot: root, projectRef: plan.projectRef, databaseUrl: connection.publicRecipe.databaseUrl, certificate: input.certificate, password: input.migrationPassword });
+    const diagnosticMethod=Object.getOwnPropertyDescriptor(database,'getDiagnostics');
+    if(diagnosticMethod&&'value'in diagnosticMethod&&typeof diagnosticMethod.value==='function')databaseDiagnostics=()=>diagnosticMethod.value.call(database);
     const consumed: HeldHostedMigrationStage[] = [];
     let held = false, entered = false, completed = false;
     let reconciliationPermit:NativeReconciliationPermit|undefined,reconciliationReceipt:ReconciliationReceipt|undefined;
@@ -244,12 +261,12 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     return core.result.status;
     };
     try {
-      const released = await database.withLock(`${plan.projectRef}:HOSTED_SCHEMA_MIGRATION`, async current => {
-        if (entered) throw failure(); entered = true; held = true;
-        if(reconciliation){const result=await database.reconcileUnknownPrefix({template:reconciliation,expectedApproval:{packageSha256:prepared.sha256,runId:expected.releaseRunId,runAttempt:expected.runAttempt,sourceSha:expected.releaseSha,treeSha:expected.treeSha,ciRunId:expected.ciRunId,templateSha256:expected.reconciledPrefix!.templateSha256,expiresAtMs},expected,prepared,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey});reconciliationPermit=result.permit;reconciliationReceipt=result.receipt;}
-        if(continuation)reconciliationPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});
+      compositionPhase='LEASE';const released = await database.withLock(`${plan.projectRef}:HOSTED_SCHEMA_MIGRATION`, async current => {
+        if (entered) throw failure(); entered = true; held = true;leaseCallbackEntered=true;
+        if(reconciliation){compositionPhase='RECONCILIATION';const result=await database.reconcileUnknownPrefix({template:reconciliation,expectedApproval:{packageSha256:prepared.sha256,runId:expected.releaseRunId,runAttempt:expected.runAttempt,sourceSha:expected.releaseSha,treeSha:expected.treeSha,ciRunId:expected.ciRunId,templateSha256:expected.reconciledPrefix!.templateSha256,expiresAtMs},expected,prepared,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey});reconciliationPermit=result.permit;reconciliationReceipt=result.receipt;}
+        if(continuation){compositionPhase='CONTINUATION';reconciliationPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});}
         try { for (const [index, stage] of stages.entries()) {
-          const outcome=await executeStage(stage,artifacts[index],current);if(outcome==='REQUIRES_REVIEW')break;
+          compositionPhase='STAGE_CORE';const outcome=await executeStage(stage,artifacts[index],current);if(outcome==='REQUIRES_REVIEW')break;
           if(outcome==='COMMITTED'){
             // Save only confirmed original stage progress under this same held
             // operator lease. Later approval still re-admits remote journals.
@@ -266,22 +283,24 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
         finally { held = false; }
       });
       if (!entered || !completed || released.kind !== 'RELEASED') throw failure();
-      if(reconciliation&&reconciliationReceipt&&output.stages.length===1&&output.stages[0].status==='COMMITTED'&&output.stages[0].protocol?.identity){const completedAtMs=Date.now(),recoveryIdentity=output.stages[0].protocol.identity,migrations=reconciliation.stageRows,body={version:1,purpose:'CUEVO_HOSTED_SCHEMA_RECOVERY_COMPLETION',status:'PREFIX123_CONFIRMED',repository:expected.repository,sourceSha:expected.releaseSha,treeSha:expected.treeSha,projectRef:plan.projectRef,ciRunId:expected.ciRunId,recoveryRunId:expected.releaseRunId,runAttempt:expected.runAttempt,packageSha256:prepared.sha256,originalOperationSha256:reconciliationReceipt.originalOperationSha256,originalChainSha256:reconciliationReceipt.originalChainSha256,partialReceiptSha256:reconciliationReceipt.receiptSha256,recoveryIdentity,migrationCount:123,migrations,migrationManifestSha256:hash(canonicalReleaseExecutionJson(migrations)),historySha256:hash(canonicalReleaseExecutionJson(migrations.map(row=>({version:row.version,sourceReceiptSha256:row.sha256})))),cataloguePolicySha256:unknownPrefixCataloguePolicySha256,catalogueSha256:cataloguePolicy.completedPrefix.expected.catalogueSha256,completedAt:new Date(completedAtMs).toISOString(),cleanup:{kind:'RELEASED'}};output.recoveryCompletion=prepareHostedSchemaRecoveryCompletion(body,{repository:expected.repository,template:reconciliation,partialReceiptSha256:reconciliationReceipt.receiptSha256,recoveryIdentity,packageSha256:prepared.sha256,now:completedAtMs});output.stages[0].recoveryCompletion=output.recoveryCompletion;}
+      compositionPhase='COMPLETION';if(reconciliation&&reconciliationReceipt&&output.stages.length===1&&output.stages[0].status==='COMMITTED'&&output.stages[0].protocol?.identity){const completedAtMs=Date.now(),recoveryIdentity=output.stages[0].protocol.identity,migrations=reconciliation.stageRows,body={version:1,purpose:'CUEVO_HOSTED_SCHEMA_RECOVERY_COMPLETION',status:'PREFIX123_CONFIRMED',repository:expected.repository,sourceSha:expected.releaseSha,treeSha:expected.treeSha,projectRef:plan.projectRef,ciRunId:expected.ciRunId,recoveryRunId:expected.releaseRunId,runAttempt:expected.runAttempt,packageSha256:prepared.sha256,originalOperationSha256:reconciliationReceipt.originalOperationSha256,originalChainSha256:reconciliationReceipt.originalChainSha256,partialReceiptSha256:reconciliationReceipt.receiptSha256,recoveryIdentity,migrationCount:123,migrations,migrationManifestSha256:hash(canonicalReleaseExecutionJson(migrations)),historySha256:hash(canonicalReleaseExecutionJson(migrations.map(row=>({version:row.version,sourceReceiptSha256:row.sha256})))),cataloguePolicySha256:unknownPrefixCataloguePolicySha256,catalogueSha256:cataloguePolicy.completedPrefix.expected.catalogueSha256,completedAt:new Date(completedAtMs).toISOString(),cleanup:{kind:'RELEASED'}};output.recoveryCompletion=prepareHostedSchemaRecoveryCompletion(body,{repository:expected.repository,template:reconciliation,partialReceiptSha256:reconciliationReceipt.receiptSha256,recoveryIdentity,packageSha256:prepared.sha256,now:completedAtMs});output.stages[0].recoveryCompletion=output.recoveryCompletion;}
     } catch {
-      held = false;
+      retainFailure();held = false;
       if (entered) { output.cleanupCode = 'LOCK_RELEASE_UNCONFIRMED'; for (const core of consumed) await core.releaseUnconfirmed(); }
+      retainFailure();
       return structuredClone({ ...output, stages: output.stages.map(stage => ({ ...stage, status: stage.protocol?.status ?? stage.status })) });
     }
     output.compositionCode = null;
     output.status = output.stages.length !== stages.length || output.stages.some(stage => stage.status === 'REQUIRES_REVIEW') ? 'REQUIRES_REVIEW' : output.stages.every(stage => stage.status === 'NOOP') ? 'NOOP' : 'COMMITTED';
     return structuredClone(output);
-  } catch { return output; }
+  } catch {retainFailure();return output; }
 }
 
 /** Native single-stage compatibility path, using the same actual session owner. */
 export async function executeNativeHostedMigrationStage(value: unknown): Promise<NativeHostedMigrationStageResult> {
   const result = await executeNativeStages(value, false);
-  return result.stages[0] ?? { status: 'REQUIRES_REVIEW', evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION', schemaHistoryAtomic: false, hostedAcceptance: false, protocol: null, compositionCode: 'PREFLIGHT_UNCONFIRMED' };
+  const stage=result.stages[0]??{status:'REQUIRES_REVIEW' as const,evidence:'NATIVE_ADAPTER_STAGE_EXECUTION' as const,schemaHistoryAtomic:false as const,hostedAcceptance:false as const,protocol:null,compositionCode:'PREFLIGHT_UNCONFIRMED' as const};
+  return {...stage,...(result.compositionFailure?{compositionFailure:result.compositionFailure}:{})};
 }
 
 /** Four verified replay stages under one actual PostgreSQL session lock. */

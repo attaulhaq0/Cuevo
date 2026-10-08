@@ -81,6 +81,7 @@ Object.assign(globalThis, { nativeCompositionFixture: {
   provider: async () => { state.events.push('provider'); fail('provider'); return { evidence: 'OFFICIAL_SUPABASE_PROJECT_METADATA', observedAtMs: Date.now(), projectRef: ref, projectName: 'Cuevo', projectStatus: 'ACTIVE_HEALTHY', directEndpoint: { projectRef: ref, kind: 'direct', host: `db.${ref}.supabase.co`, port: 5432, database: 'postgres' },sessionEndpoint:{projectRef:ref,kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'} }; },
   files: async (input: { stage: Record<string, unknown> }) => { state.events.push('files'); fail('files'); if (state.aggregate && state.stage?.id !== input.stage.id) { state.stage = clone(input.stage); state.after = false; } if (state.driftFiles) throw Error(secret); const rows = input.stage.included as { name: string; version: string; sha256: string }[]; return { evidence: 'VERIFIED_GIT_AND_PHYSICAL_STAGE', sources: state.sources, stageSha256: hash(JSON.stringify({ included: rows.map(row => ({ name: row.name, version: row.version, sha256: row.sha256 })), configSha256: input.stage.configSha256 })), planSha256: canonicalHostedMigrationPlan(state.input!.plan as Parameters<typeof canonicalHostedMigrationPlan>[0]).sha256 }; },
   database: async (input: Parameters<typeof import('./hosted-migration-database').createHostedMigrationDatabase>[0]) => {
+    fail('database-factory');
     const persistInstalledSchema=async(value:{migrationCount:number;migrations:{version:string;sha256:string}[];sourceSha:string;treeSha:string;stageId:string;stageSha256:string})=>{state.events.push('installed-schema:'+value.stageId);fail('installed-schema');const current=state.stage!;assert.equal(state.after,true);assert.equal(state.journal?.state,'COMMITTED');assert.equal(value.sourceSha,(state.input!.plan as HostedMigrationPlanV1).source.sha);assert.equal(value.stageId,current.id);assert.equal(value.migrationCount,(current.included as unknown[]).length);assert.deepEqual(value.migrations,(current.included as {version:string;sha256:string}[]).map(({version,sha256})=>({version,sha256})));};
     const persistInstalledMigrations=async(value:{migrationCount:number;migrations:{version:string;sha256:string}[];sourceSha:string;treeSha:string})=>{state.events.push('installed-migrations');fail('installed-migrations');const plan=state.input!.plan as HostedMigrationPlanV1;assert.equal(state.after,true);assert.equal(state.journals.size,4);assert.ok([...state.journals.values()].every(row=>row?.state==='COMMITTED'));assert.equal(value.sourceSha,plan.source.sha);assert.equal(value.treeSha,plan.source.tree);assert.equal(value.migrationCount,plan.migrations.length);assert.deepEqual(value.migrations,plan.migrations.map(({version,sha256})=>({version,sha256})));assert.deepEqual(versions(),plan.migrations.map(row=>row.version).sort());};
     if (state.nativeProducer) {
@@ -131,6 +132,12 @@ test('real native observer reaches the strict executor before original intent an
     if (!trustedPeer) {
       assert.equal(result.status, 'REQUIRES_REVIEW'); assert.equal(state.commands, 0);
       assert.equal(state.events.includes('journal:INTENT'), false); assert.equal(state.nativeTargetKeys!.length, 0);
+      assert.equal(result.compositionFailure?.phase,'LEASE');
+      assert.equal(result.compositionFailure?.leaseCallbackEntered,false);
+      assert.equal(result.compositionFailure?.native?.failurePhase,'TLS');
+      assert.equal(result.compositionFailure?.native?.session,'CLOSED_CONFIRMED');
+      assert.equal(result.compositionFailure?.native?.lease,'NOT_ATTEMPTED');
+      assert.equal(result.compositionFailure?.native?.partialReceipt,'NOT_ATTEMPTED');
       return;
     }
     assert.equal(result.status, 'COMMITTED', JSON.stringify({ result, events: state.events, nativeTargetKeys: state.nativeTargetKeys }));
@@ -144,6 +151,33 @@ test('real native observer reaches the strict executor before original intent an
     assert.equal(state.events.filter(event => event === 'lock').length, 1);
     assert.equal(state.events.filter(event => event === 'unlock').length, 1);
   });
+});
+
+test('single-stage composition refusals retain exact bounded phases and no supplied error contents',async()=>{
+ const subject=await api();
+ for(const[mode,phase]of [['official','OFFICIAL_AUTHORITY'],['provider','PROVIDER'],['files','STAGE_FILES'],['database-factory','DATABASE_FACTORY'],['lock','LEASE']]as const)await fixture(async input=>{
+  state.failures=[mode];const result=await subject.executeNativeHostedMigrationStage(input),diagnostic=result.compositionFailure;
+  assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol,null);assert.equal(result.compositionCode,'PREFLIGHT_UNCONFIRMED');
+  assert.equal(diagnostic?.phase,phase);assert.equal(diagnostic?.leaseCallbackEntered,false);assert.equal(diagnostic?.native,null);
+  assert.equal(diagnostic?.version,1);assert.equal(diagnostic?.purpose,'CUEVO_MIGRATION_COMPOSITION_FAILURE');
+  assert.ok(Number.isInteger(diagnostic?.durationMs));assert.ok(diagnostic!.durationMs>=0&&diagnostic!.durationMs<=86400000);
+  assert.deepEqual(Object.keys(diagnostic!).sort(),['durationMs','leaseCallbackEntered','native','phase','purpose','version']);
+  assert.equal(JSON.stringify(result).includes(secret),false);assert.equal(state.commands,0);assert.equal(state.seenIntent,false);
+ });
+ await fixture(async input=>{
+  let reads=0;const invalid={...input,get migrationPassword(){reads++;return secret;}};
+  const getterResult=await subject.executeNativeHostedMigrationStage(invalid);assert.equal(reads,0);assert.equal(getterResult.compositionFailure?.phase,'INPUT');
+  const proxyResult=await subject.executeNativeHostedMigrationStage(new Proxy(input,{get(){throw Error(secret);}}));assert.equal(proxyResult.compositionFailure?.phase,'INPUT');assert.equal(state.events.length,0);
+ });
+});
+
+test('single-stage cleanup failure keeps composition diagnostic beside consumed-stage uncertainty',async()=>{
+ const subject=await api();await fixture(async input=>{
+  state.failures=['timeout','unlock'];const result=await subject.executeNativeHostedMigrationStage(input);
+  assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.commitment,'UNKNOWN');assert.equal(result.protocol?.cleanupCode,'LOCK_RELEASE_UNCONFIRMED');
+  assert.equal(result.compositionFailure?.phase,'STAGE_CORE');assert.equal(result.compositionFailure?.leaseCallbackEntered,true);assert.equal(result.compositionFailure?.native,null);
+  assert.equal(state.commands,1);assert.equal(JSON.stringify(result.compositionFailure).includes(secret),false);
+ });
 });
 test('accessor, supplied readiness and unapproved toolchain fingerprints cannot reach native consumers', async () => { const { executeNativeHostedMigrationStage } = await api(); await fixture(async input => { let reads = 0; const getter = { ...input, get migrationPassword() { reads++; return secret; } }; assert.equal((await executeNativeHostedMigrationStage(getter)).status, 'REQUIRES_REVIEW'); assert.equal(reads, 0); assert.equal(state.commands, 0); const extra = { ...input, satisfied: true }; assert.equal((await executeNativeHostedMigrationStage(extra)).status, 'REQUIRES_REVIEW'); await writeFile(input.toolchainManifestPath as string, '{}'); assert.equal((await executeNativeHostedMigrationStage(input)).status, 'REQUIRES_REVIEW'); assert.equal(state.commands, 0); }); });
 test('unavailable provider, nonempty initial target and actual false postconditions refuse before intent or CLI', async () => { const { executeNativeHostedMigrationStage } = await api(); for (const failure of ['provider', 'population', 'postconditions']) await fixture(async input => { state.failures = [failure]; const result = await executeNativeHostedMigrationStage(input); assert.equal(result.status, 'REQUIRES_REVIEW'); assert.equal(state.commands, 0); assert.equal(state.events.includes('journal:INTENT'), false); }); });

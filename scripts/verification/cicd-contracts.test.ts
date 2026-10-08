@@ -217,14 +217,14 @@ test('actual required-status Bash rejects every failed, cancelled or skipped req
   const command = workflow.jobs.required.steps[0].run;
   const execute = (event: 'push' | 'pull_request', fields: Record<string, string> = {}) => {
     const result = spawnSync(bash!, ['--noprofile', '--norc', '-eo', 'pipefail', '-c', command], {
-      env: { ...process.env, BASH_ENV: '', FAST: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
+      env: { ...process.env, BASH_ENV: '', FAST: 'success', SOURCE_CONTRACTS: 'success', TECHNICAL: 'success', CODEQL: 'success', SECRET_SCAN: 'success', DEPENDENCY: event === 'push' ? 'skipped' : 'success', GITHUB_EVENT_NAME: event, ...fields },
       encoding: 'utf8', timeout: 10000,
     });
     assert.equal(result.error, undefined); assert.equal(result.signal, null);
     return result.status;
   };
   assert.equal(execute('push'), 0); assert.equal(execute('pull_request'), 0);
-  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
+  for (const event of ['push', 'pull_request'] as const) for (const job of ['FAST', 'SOURCE_CONTRACTS', 'TECHNICAL', 'CODEQL', 'SECRET_SCAN']) for (const state of ['failure', 'cancelled', 'skipped', '']) {
     assert.notEqual(execute(event, { [job]: state }), 0, `${event} ${job} ${state} must fail the required status`);
   }
   assert.notEqual(execute('pull_request', { DEPENDENCY: 'skipped' }), 0);
@@ -526,16 +526,25 @@ test('required CI includes a secret-free full-history scanner with strict succes
   for (const changed of [
     yaml.dump(shallowSecret),
     ci.replace('node --import tsx scripts/verification/secret-scan.ts', 'echo scan-omitted'),
-    ci.replace('fast-checks, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, technical-mvp, dependency-review, codeql'),
+    ci.replace('fast-checks, source-contracts, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, source-contracts, technical-mvp, dependency-review, codeql'),
     ci.replace('SECRET_SCAN: ${{ needs.secret-scan.result }}', 'SECRET_SCAN: success'),
     ci.replace('|| [ "$SECRET_SCAN" != success ]', ''),
   ]) assert.ok(validateWorkflows(changed, release).some(issue => issue.includes('secret')));
 });
 
-test('fast and technical verification require one unconditional complete-history checkout for canonical migration source checks', async () => {
+test('source contracts are mandatory in the required aggregate without a substitute success value',async()=>{
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ for(const changed of[
+  ci.replace('fast-checks, source-contracts, technical-mvp','fast-checks, technical-mvp'),
+  ci.replace('SOURCE_CONTRACTS: ${{ needs.source-contracts.result }}','SOURCE_CONTRACTS: success'),
+  ci.replace(' || [ "$SOURCE_CONTRACTS" != success ]',''),
+ ])assert.ok(validateWorkflows(changed,release).some(issue=>issue.includes('source contracts')));
+});
+
+test('fast source-contract and technical verification require one unconditional complete-history checkout for canonical migration source checks', async () => {
   const ci = await readFile('.github/workflows/ci.yml', 'utf8'), release = await readFile('.github/workflows/release.yml', 'utf8');
   const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): { jobs: Record<string, { steps: Record<string, unknown>[] }> }; dump(value: unknown): string };
-  for (const owner of ['fast-checks', 'technical-mvp']) {
+  for (const owner of ['fast-checks','source-contracts','technical-mvp']) {
     const current = yaml.load(ci), checkout = current.jobs[owner].steps.find(step => String(step.uses ?? '').startsWith('actions/checkout@'))!;
     assert.equal((checkout.with as Record<string, unknown>)['fetch-depth'], 0, `${owner} must acquire complete history before source guards run`);
     for (const mutate of [

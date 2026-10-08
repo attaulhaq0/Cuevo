@@ -8,6 +8,7 @@ const setup = [checkout, node,
   { name: 'Install pinned npm', run: 'npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund' },
   { name: 'Install locked dependencies', run: 'npm ci --ignore-scripts --no-audit --no-fund' },
   { name: 'Install local esbuild binary', run: 'node node_modules/esbuild/install.js' }];
+const frozenSourceStep={name:'Confirm frozen authored source',run:'git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"'};
 const ciSetup=[
  {uses:'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',with:{'persist-credentials':false,'fetch-depth':0}},
  {uses:'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',with:{'node-version':'24.16.0',cache:'npm'}},
@@ -15,6 +16,21 @@ const ciSetup=[
  {run:'npm ci --ignore-scripts --no-audit --no-fund'},
  {run:'node node_modules/esbuild/install.js'},
 ];
+/** Independent source runners share no mutable fixture directory or generated types. */
+export const ciSourceJobs={
+ 'fast-checks':{'runs-on':'ubuntu-latest','timeout-minutes':20,steps:[
+  ...ciSetup.slice(0,2),
+  {name:'Observe hosted database network reachability without credentials',run:'node --experimental-strip-types scripts/verification/hosted-connectivity.ts'},
+  ...ciSetup.slice(2),
+  {run:'npm run lint && npm run typecheck && npm test'},frozenSourceStep,
+ ]},
+ 'source-contracts':{'runs-on':'ubuntu-latest','timeout-minutes':30,steps:[
+  ...ciSetup,{run:'node --import tsx scripts/verification/stateless-checks.ts'},frozenSourceStep,
+ ]},
+};
+export function validateCiSourceJobs(value:unknown):string[]{
+ try{if(!value||typeof value!=='object'||Array.isArray(value))return['CI source jobs are unavailable.'];const source=value as Record<string,unknown>;return Object.entries(ciSourceJobs).every(([name,job])=>canonicalReleaseReviewJson(source[name])===canonicalReleaseReviewJson(job))?[]:['CI source contracts and fast checks must preserve their exact isolated complete owners.'];}catch{return['CI source job contract is malformed.'];}
+}
 export const runtimeLaneArtifactStep=(lane:'backend'|'browser')=>({name:`Retain exact safe ${lane} lane`,if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:`cuevo-runtime-${lane}-\${{ github.run_id }}-\${{ github.run_attempt }}`,path:`.local/runtime-lanes/${lane}/lane.json`,'include-hidden-files':true,'if-no-files-found':'error','retention-days':14}});
 export const ciRuntimeJobs={
  'runtime-backend':{'runs-on':'ubuntu-latest','timeout-minutes':120,steps:[...ciSetup,{name:'Verify isolated backend runtime',run:'node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=backend'},runtimeLaneArtifactStep('backend'),{name:'Stop owned local Supabase',if:'always()',run:'npx --no-install supabase stop --project-id cuevo'}]},

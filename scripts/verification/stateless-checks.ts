@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { statelessVerificationSteps } from './steps';
 
-/** Source-owned test discovery executes once in fast CI. Runtime jobs retain
+/** Source-owned test discovery executes once in isolated source-contract CI. Runtime jobs retain
  * their own isolated source and state proofs without repeating these cases. */
 for (const step of statelessVerificationSteps) {
   const code = await new Promise<number | null>(done => {
