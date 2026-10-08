@@ -1,5 +1,7 @@
 # Cuevo codebase map
 
+The existing native database owner keeps [official authority before fresh native proof](decisions/2026-10-08-native-proof-after-authority.md). Reconciliation receipts/permit refresh use new complete observations after awaited official checks; historical clocks and original uncertainty remain immutable.
+
 The [native Storage type boundary](decisions/2026-10-08-native-storage-bucket-types.md) keeps original bucket validation in scripts/database/hosted-migration-database.ts. Its reconciliation/continuation queries project bigint limits explicitly as text and require the unchanged exact value. Colocated native/executor cases use actual driver-shaped fields; no new owner or migration is introduced.
 
 The [8 October diagnostic/budget boundary](decisions/2026-10-08-safe-release-preflight-and-ci-budget.md) adds the pure `scripts/database/hosted-migration-diagnostics.ts` schema. Native database/executor owners retain fixed failure/session/lease/receipt observations without effect authority or private fields. `scripts/verification/verification-workflows.ts` owns `ciSourceJobs` beside runtime policy, and `canonical-runtime-jobs.ts` checks their exact current successful steps. Complete stateless inventory runs once in required `source-contracts`; lint/types/full units remain in `fast-checks`. Each producer freezes source; independent runtime databases and hosted gates remain separate.

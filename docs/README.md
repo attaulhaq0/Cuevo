@@ -1,5 +1,7 @@
 # Cuevo documentation
 
+Current native recovery sequencing: [authority before observation](decisions/2026-10-08-native-proof-after-authority.md) and [repair plan](superpowers/plans/2026-10-08-native-proof-after-authority.md) preserve source/approval checks and native freshness without restamping historical proof.
+
 Current recovery repair: [native Storage bucket types](decisions/2026-10-08-native-storage-bucket-types.md) and [bounded plan](superpowers/plans/2026-10-08-native-storage-bigint.md) document the reproduced native bigint boundary and preserved private/effect rules.
 
 Current release repair: [safe native diagnostics and measured CI budget](decisions/2026-10-08-safe-release-preflight-and-ci-budget.md) separates complete source contracts from lint/types/units and retains native recovery uncertainty. Its [plan](superpowers/plans/2026-10-08-safe-release-preflight-and-ci-budget.md) records remaining protected integration and hosted milestones.

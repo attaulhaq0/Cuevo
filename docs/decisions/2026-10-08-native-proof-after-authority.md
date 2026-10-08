@@ -1,0 +1,11 @@
+# Native evidence clocks begin after awaited authority admission
+
+Status: bounded repair in progress; actual hosted recovery remains unconfirmed.
+
+Approved recovery37741611892 on df6 passed the repaired native Storage bucket and all original-object GETs. It stopped later at OFFICIAL_AUTHORITY with no partial-receipt attempt or CLI stage. Hosted history stayed120. A slow full official admission occurs after an original native observation and before its30second freshness check. Controlled native execution reproduces refusal at34seconds with14seconds of observed work plus20seconds of authority latency; a24second control passes. Actual provider logs cannot distinguish that freshness throw from an official request timeout, so the historical failure retains its original scope.
+
+Official source/run/attempt/approval and protected controls remain required before effects. The native owner performs awaited authority admission first, then collects a new complete source/history/catalogue/private-object/TLS/lease observation for consumption. New partial receipts are prepared from that newly observed proof. Stored original receipts preserve exact bytes and clocks. Native permit refresh follows the same ordering: its observation clock describes actual work after authority, never a refreshed timestamp on historical data.
+
+The30second native limit and absolute approved-package expiry stay unchanged. Source, target, privacy or lease drift still refuses; slow native observations still expire. Failed/unknown persistence or migration operations never retry automatically. This reorders verification within existing owners and adds no migration, credentials, application domain logic or new proof ledger.
+
+See [plan](../superpowers/plans/2026-10-08-native-proof-after-authority.md), [bucket type fix](2026-10-08-native-storage-bucket-types.md), [recovery](2026-10-08-unknown-prefix-reconciliation.md) and [continuation](2026-10-08-reviewed-prefix-continuation.md).
