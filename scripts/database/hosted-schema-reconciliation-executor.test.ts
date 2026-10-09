@@ -3,13 +3,13 @@ import {before,after,test} from 'node:test';
 import {EventEmitter} from 'node:events';
 import {createHash} from 'node:crypto';
 import {createRequire,registerHooks,syncBuiltinESMExports} from 'node:module';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {transformSync} from 'esbuild';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 import {readHistoricalMigrationSources,createCanonicalHostedMigrationPlan,canonicalHostedMigrationPlan} from './hosted-migration-plan';
 import {createHostedMigrationWorkdirs} from './hosted-migration-workdirs';
 import {createOriginalPrefixReconciliationTemplate,reconciliationTemplateFingerprint} from './hosted-schema-reconciliation';
@@ -25,13 +25,13 @@ const sha='d87455114cac2d22d63d040ce5b13e6b2e74e743',tree='1e85393d46beb4f5356e0
 const files=readHistoricalMigrationSources(resolve(import.meta.dirname,'../..'),sha,tree),mini=[...['app','authorization','internal'].map(name=>({category:'schema',key:JSON.stringify([name]),facts:{name,owner:'postgres',acl:null}})),...['cuevo_api','cuevo_worker'].map(name=>({category:'role',key:JSON.stringify([name]),facts:{name,superuser:false,inherit:false,createRole:false,createDb:false,login:false,replication:false,bypassRls:false,connectionLimit:-1,validUntil:null,config:null}}))],miniHash=canonicalizeHostedSchemaCatalogue(mini).sha256,policySha='c'.repeat(64),absenceSha='d'.repeat(64);
 const baseClock=Date.parse('2026-10-08T03:00:00Z');let clock=baseClock;
 let root='',input:Record<string,unknown>,template:ReturnType<typeof createOriginalPrefixReconciliationTemplate>,rows:{name:string;version:string;sha256:string}[]=[];let executor:typeof import('./hosted-migration-executor');
-const state={objects:new Map<string,string>(),vault:new Map<string,string>(),pendingVault:null as [string,string]|null,historyCount:120,commands:0,cliKind:'EXITED',cleanupFail:false,events:[]as string[],policyCounts:[]as number[],catalogueFails:false,commitFails:false,readbackFails:false,officialDelayMs:0,nativeProofMs:0,officialCalls:0};
+const state={objects:new Map<string,string>(),vault:new Map<string,string>(),pendingVault:null as [string,string]|null,historyCount:120,commands:0,cliKind:'EXITED',cleanupFail:false,closeFail:false,markerFailure:null as 'before-write'|'after-commit'|null,events:[]as string[],policyCounts:[]as number[],catalogueFails:false,commitFails:false,readbackFails:false,officialDelayMs:0,nativeProofMs:0,officialCalls:0};
 const bucket={id:'cuevo-release-operator',name:'cuevo-release-operator',public:false,type:'STANDARD',file_size_limit:49152,allowed_mime_types:['application/json']};
 const id=(path:string)=>hash(path).slice(0,8)+'-'+hash(path).slice(8,12)+'-4'+hash(path).slice(13,16)+'-a'+hash(path).slice(17,20)+'-'+hash(path).slice(20,32);
 const info=(path:string)=>({id:id(path),name:path,bucket_id:bucket.id,size:Buffer.byteLength(state.objects.get(path)!),content_type:'application/json',version:'controlled-version'});
 const metadata=(path:string)=>({id:id(path),name:path,version:'controlled-version',size:String(Buffer.byteLength(state.objects.get(path)!)),mimetype:'application/json',createdAt:'2026-10-08T03:00:00.000000Z',updatedAt:'2026-10-08T03:00:00.000000Z'});
-type AdmissionTimingEvent = { kind: 'official' | 'catalogue' | 'target' | 'provider' | 'private' | 'metadata' | 'native-metadata' | 'source'; startedAt: number; completedAt: number };
-type AdmissionTiming = { events: AdmissionTimingEvent[]; pending: { deadline: number; done: () => void }[]; scheduled: boolean; activeCatalogue: number; activeStorage: number; managementDuringCatalogue: number; quiescenceDuringStorage: number; overlaps: number; postconditions: number; sourceCharged: number; sourceChecks: number; nativeMetadata: number; nativeSnapshots:number; forbiddenActivity: boolean; catalogueMs: number; finalSourceMs: number; holdStorage: boolean; heldStorage?: () => void; heldStoragePromise?: Promise<void>; failConcurrentCatalogue: boolean; nativeFailureIssued: boolean; catalogueEntered?:()=>void; catalogueGate?:Promise<void>; synchronizeStorageStart:boolean; introduceUnacknowledgedIntent:boolean; introducedIntent:boolean; heldReady:Promise<void>; heldReadyResolve:()=>void; nativeFailureReady:Promise<void>; nativeFailureResolve:()=>void; fastStorage:boolean };
+type AdmissionTimingEvent = { kind: 'official' | 'catalogue' | 'target' | 'provider' | 'private' | 'metadata' | 'native-metadata' | 'source' | 'source-initial' | 'source-final'; startedAt: number; completedAt: number };
+type AdmissionTiming = { events: AdmissionTimingEvent[]; pending: { deadline: number; done: () => void }[]; scheduled: boolean; activeCatalogue: number; activeStorage: number; managementDuringCatalogue: number; quiescenceDuringStorage: number; overlaps: number; postconditions: number; sourceCharged: number; sourceChecks: number; nativeMetadata: number; nativeSnapshots:number; forbiddenActivity: boolean; catalogueMs: number; finalSourceMs: number; stageReadCosts?:{initialMs:number;finalMs:number}; driftInitialStageFile:boolean; holdStorage: boolean; heldStorage?: () => void; heldStoragePromise?: Promise<void>; failConcurrentCatalogue: boolean; nativeFailureIssued: boolean; catalogueEntered?:()=>void; catalogueGate?:Promise<void>; synchronizeStorageStart:boolean; introduceUnacknowledgedIntent:boolean; introducedIntent:boolean; heldReady:Promise<void>; heldReadyResolve:()=>void; nativeFailureReady:Promise<void>; nativeFailureResolve:()=>void; fastStorage:boolean };
 let admissionTiming: AdmissionTiming | null = null;
 let hostReadsPending = 0;
 let schedulerPumpRuns=0;
@@ -64,9 +64,9 @@ function transportDelay(milliseconds: number, kind: AdmissionTimingEvent['kind']
     if (!timing.scheduled) { timing.scheduled = true; setImmediate(pump); }
   });
 }
-function beginAdmissionTiming(options: { catalogueMs?: number; finalSourceMs?: number; forbiddenActivity?: boolean; holdStorage?: boolean; failConcurrentCatalogue?: boolean; synchronizeStorageStart?:boolean; introduceUnacknowledgedIntent?:boolean; fastStorage?:boolean } = {}): AdmissionTiming {
+function beginAdmissionTiming(options: { catalogueMs?: number; finalSourceMs?: number; stageReadCosts?:{initialMs:number;finalMs:number}; driftInitialStageFile?:boolean; forbiddenActivity?: boolean; holdStorage?: boolean; failConcurrentCatalogue?: boolean; synchronizeStorageStart?:boolean; introduceUnacknowledgedIntent?:boolean; fastStorage?:boolean } = {}): AdmissionTiming {
   let heldReadyResolve!:()=>void,nativeFailureResolve!:()=>void;const heldReady=new Promise<void>(done=>{heldReadyResolve=done;}),nativeFailureReady=new Promise<void>(done=>{nativeFailureResolve=done;});
-  const timing: AdmissionTiming = { events: [], pending: [], scheduled: false, activeCatalogue: 0, activeStorage: 0, managementDuringCatalogue: 0, quiescenceDuringStorage: 0, overlaps: 0, postconditions: 0, sourceCharged: 0, sourceChecks: 0, nativeMetadata: 0,nativeSnapshots:0, forbiddenActivity: options.forbiddenActivity ?? false, catalogueMs: options.catalogueMs ?? 10000, finalSourceMs: options.finalSourceMs ?? 5226, holdStorage: options.holdStorage ?? false, failConcurrentCatalogue: options.failConcurrentCatalogue ?? false, nativeFailureIssued: false, synchronizeStorageStart:options.synchronizeStorageStart??false, introduceUnacknowledgedIntent:options.introduceUnacknowledgedIntent??false, introducedIntent:false,heldReady,heldReadyResolve,nativeFailureReady,nativeFailureResolve,fastStorage:options.fastStorage??false };
+  const timing: AdmissionTiming = { events: [], pending: [], scheduled: false, activeCatalogue: 0, activeStorage: 0, managementDuringCatalogue: 0, quiescenceDuringStorage: 0, overlaps: 0, postconditions: 0, sourceCharged: 0, sourceChecks: 0, nativeMetadata: 0,nativeSnapshots:0, forbiddenActivity: options.forbiddenActivity ?? false, catalogueMs: options.catalogueMs ?? 10000, finalSourceMs: options.finalSourceMs ?? 5226, ...(options.stageReadCosts?{stageReadCosts:options.stageReadCosts}:{}),driftInitialStageFile:options.driftInitialStageFile??false, holdStorage: options.holdStorage ?? false, failConcurrentCatalogue: options.failConcurrentCatalogue ?? false, nativeFailureIssued: false, synchronizeStorageStart:options.synchronizeStorageStart??false, introduceUnacknowledgedIntent:options.introduceUnacknowledgedIntent??false, introducedIntent:false,heldReady,heldReadyResolve,nativeFailureReady,nativeFailureResolve,fastStorage:options.fastStorage??false };
   admissionTiming = timing;
   state.officialDelayMs = 19177;
   return timing;
@@ -75,6 +75,20 @@ function observeActualStageSource() {
   const timing = admissionTiming;
   if (!timing) return;
   timing.sourceChecks++;
+  if(timing.stageReadCosts){
+   // The first successful read is executor preflight. Every subsequent pair is
+   // the real initial/final stage-file read for one single-stage revalidation.
+   // Assign latency only after native filesystem admission has actually passed.
+   if(timing.sourceChecks===1)return;
+   const initial=timing.sourceChecks%2===0,startedAt=clock;
+   clock+=initial?timing.stageReadCosts.initialMs:timing.stageReadCosts.finalMs;
+   timing.events.push({kind:initial?'source-initial':'source-final',startedAt,completedAt:clock});
+   if(timing.driftInitialStageFile&&timing.sourceChecks===2){
+    const stage=input.stage as {workdir:string;pending:{name:string}[]},path=join(stage.workdir,'supabase/migrations',stage.pending[0].name);
+    writeFileSync(path,Buffer.concat([readFileSync(path),Buffer.from('\n-- changed after initial admission\n')]));state.events.push('stage-file-drift');
+   }
+   return;
+  }
   // Charge the real, completed stage/Git read after a new native postcondition
   // observation. This changes elapsed cost only, never its values or checks.
   if (timing.postconditions <= timing.sourceCharged) return;
@@ -92,7 +106,7 @@ async function completeHostWork<T>(operation:()=>Promise<T>):Promise<T>{
 Object.assign(globalThis,{executorHostImport:completeHostWork});
 class PgTransport extends EventEmitter {
  connection={stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('controlled-peer'),subjectaltname:'DNS:'+host})}};
- async connect(){}async end(){this.emit('end');}
+ async connect(){}async end(){state.events.push('session-close');if(state.closeFail)throw Error('private-marker-close-canary');this.emit('end');}
  async query(raw:string|{text:string},values:unknown[]=[]){const sql=typeof raw==='string'?raw:raw.text;
   const timing = admissionTiming;
   if (timing && sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_STRUCTURAL')) {
@@ -127,17 +141,21 @@ class PgTransport extends EventEmitter {
     if (timing.forbiddenActivity) return { rows: [{ quiescent: false }] };
   }
   if (timing && sql.includes('CUEVO_RECOVERY_CRON_PRESENCE')) timing.postconditions++;
-  if(sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_')){if(state.catalogueFails)throw Error('private-executor-catalogue-canary');return{rows:sql.includes('STRUCTURAL')?mini:[]};}if(sql.includes('CUEVO_CATALOGUE_READ_ONLY'))return{rows:[{readOnly:true,isolation:'repeatable read'}]};if(sql.includes('CUEVO_NATIVE_QUIESCENCE'))return{rows:[{quiescent:true}]};
+  if(sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_')){if(state.catalogueFails)throw Error('private-executor-catalogue-canary');return{rows:sql.includes('STRUCTURAL')?mini:[]};}if(sql.includes('CUEVO_CATALOGUE_READ_ONLY'))return{rows:[{readOnly:true,isolation:'repeatable read'}]};if(sql.includes('CUEVO_NATIVE_QUIESCENCE')){state.events.push('quiescence');return{rows:[{quiescent:true}]};}
   if(sql.includes('CUEVO_RECONCILIATION_BUCKET'))return{rows:[{...bucket,file_size_limit:createRequire(import.meta.url)('pg').types.getTypeParser(20,'text')('49152')}]};if(sql.includes('CUEVO_RECONCILIATION_OBJECTS'))return{rows:[...state.objects].map(([name,bytes])=>({name,size:String(Buffer.byteLength(bytes)),mimetype:'application/json'})).sort((a,b)=>a.name.localeCompare(b.name))};
+  if(sql.includes('CUEVO_INSTALLED_SCHEMA_STAGE')&&!sql.includes('_LOCK')&&state.markerFailure==='after-commit'&&state.events.includes('marker-commit'))throw Error('private-marker-after-commit-readback-canary');
   if(sql.includes('CUEVO_CONTROLLED_ABSENCE'))return{rows:[Object.fromEntries(Array.from({length:17},(_,index)=>['marker'+index,false]))]};if(sql.includes('CUEVO_INSTALLED_SCHEMA_STORAGE'))return{rows:[{available:true}]};if(sql.includes('CUEVO_CURRENT_PARTIAL_RECONCILIATION')&&state.readbackFails&&state.vault.has(String(values[0])))throw Error('private-executor-readback-canary');if(sql.includes('CUEVO_CURRENT_PARTIAL_RECONCILIATION')||sql.includes('CUEVO_INSTALLED_SCHEMA_STAGE_LOCK')||sql.includes('CUEVO_INSTALLED_SCHEMA_STAGE'))return{rows:state.vault.has(String(values[0]))?[{...(sql.includes('_LOCK')?{id:'controlled-vault'}:{}),decrypted_secret:state.vault.get(String(values[0]))}]:[]};
-  if(sql.startsWith('select vault.create_secret')){state.pendingVault=[String(values[1]),String(values[0])];state.events.push('vault-create');return{rows:[{create_secret:'controlled'}]};}if(sql.startsWith('select vault.update_secret')){state.pendingVault=[String(values[2]),String(values[1])];return{rows:[]};}if(sql==='COMMIT'){if(state.commitFails&&state.pendingVault)throw Error('private-executor-commit-canary');if(state.pendingVault)state.vault.set(...state.pendingVault);state.pendingVault=null;return{rows:[]};}if(sql==='ROLLBACK'){state.pendingVault=null;return{rows:[]};}
+  if(sql.startsWith('select vault.create_secret')||sql.startsWith('select vault.update_secret')){
+   const markerName=String(values[sql.includes('create_secret')?1:2]);if(markerName==='cuevo_schema_stage_'+ref){state.events.push('marker-write');if(state.markerFailure==='before-write')throw Error('private-marker-before-write-canary');}
+   state.pendingVault=[markerName,String(values[sql.includes('create_secret')?0:1])];if(sql.includes('create_secret'))state.events.push('vault-create');return{rows:sql.includes('create_secret')?[{create_secret:'controlled'}]:[]};
+  }if(sql==='COMMIT'){if(state.commitFails&&state.pendingVault)throw Error('private-executor-commit-canary');const marker=state.pendingVault?.[0]==='cuevo_schema_stage_'+ref;if(state.pendingVault)state.vault.set(...state.pendingVault);state.pendingVault=null;if(marker)state.events.push('marker-commit');return{rows:[]};}if(sql==='ROLLBACK'){state.pendingVault=null;return{rows:[]};}
   if(sql.includes('CUEVO_TARGET_COUNTS'))return{rows:[{authUsers:0,storageObjects:state.objects.size,appSchemas:['app','authorization','internal'],runtimeRoles:['cuevo_api','cuevo_worker'],schoolsPresent:true}]};if(sql.includes('CUEVO_TARGET_SCHOOLS'))return{rows:[{schools:0}]};if(sql.includes('CUEVO_STAGE_BASE'))return{rows:[{foundation:true,rls:true,privateRelations:true,privateFunctions:true,runtimeRoles:true}]};if(sql.includes('CUEVO_RECOVERY_CRON_PRESENCE'))return{rows:[{present:false}]};
   if(sql.includes('pg_try_advisory_lock')){state.events.push('lock');return{rows:[{locked:true}]};}if(sql.includes('pg_advisory_unlock')){state.events.push('unlock');return{rows:[{released:!state.cleanupFail}]};}if(sql.includes('session_user'))return{rows:[{operator:'postgres',database:'postgres',ssl:true,serverVersion:170011}]};if(sql.includes("to_regclass('supabase_migrations"))return{rows:[{historyPresent:true}]};if(sql.includes('select version,coalesce'))return{rows:history()};if(sql==='BEGIN'||sql.startsWith('BEGIN ISOLATION')||sql.startsWith('SET LOCAL'))return{rows:[]};throw Error('Unmapped controlled PG query');
  }
 }
-const globals=globalThis as typeof globalThis&{executorPg?:typeof PgTransport;executorOfficial?:(value:Record<string,unknown>)=>Promise<unknown>;executorProvider?:()=>Promise<unknown>;executorPrepared?:(value:unknown)=>unknown;executorProcess?:()=>Promise<unknown>;executorPolicy?:(rows:unknown,version:number,count?:number)=>unknown;executorStageFilesObserved?:()=>void};
-globals.executorPg=PgTransport;globals.executorPrepared=value=>value;globals.executorOfficial=async()=>{state.officialCalls++;if(admissionTiming)await transportDelay(state.officialDelayMs,'official');else clock+=state.officialDelayMs;return({provenance:'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE',observedAt:new Date(clock).toISOString(),expected:input.expected,approval:{packageSha256:(input.preparedApproval as{sha256:string}).sha256}});};globals.executorProvider=async()=>{if(admissionTiming)await transportDelay(477,'provider');return({evidence:'OFFICIAL_SUPABASE_PROJECT_METADATA',projectRef:ref,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',observedAtMs:clock,directEndpoint:{projectRef:ref,kind:'direct',host:'db.'+ref+'.supabase.co',port:5432,database:'postgres'},sessionEndpoint:input.endpoint});};globals.executorPolicy=(_rows,version,count=120)=>{assert.equal(version,170011);state.policyCounts.push(count);clock+=state.nativeProofMs;};globals.executorProcess=async()=>({runCli:async(args:string[],env:Record<string,string>)=>{state.commands++;state.events.push('cli');assert.ok(args.includes('--skip-vault'));assert.equal(env.PGPASSWORD,'controlled-db-password');assert.equal(state.historyCount,120);const path=[...state.objects.keys()].find(path=>!path.includes(hash(JSON.stringify(template.originalIdentity)))&&path.endsWith('000001.record.json'));assert.ok(path);assert.equal(JSON.parse(state.objects.get(path)!).payload.state,'INTENT');if(state.cliKind==='UNKNOWN')return{kind:'UNKNOWN'};state.historyCount=123;return{kind:'EXITED',exitCode:0};}});
-const hooks=registerHooks({load(url,context,next){const path=url.replaceAll('\\','/'),name=path.split('/').at(-1);if(/\/node_modules\/pg\/(lib\/index\.js|esm\/index\.mjs)$/.test(path))return{format:'module',shortCircuit:true,source:'export const Client=globalThis.executorPg;export default{Client};'};const replace:Record<string,string>={'backend-release-admission.ts':'export const readBackendReleaseAdmission=globalThis.executorOfficial;','backend-release-contracts.ts':"export * from './backend-release-contracts.ts?fingerprint-owner';export const validatePreparedBackendReleaseIntent=globalThis.executorPrepared;",'hosted-migration-native-process.ts':'export const createHostedMigrationNativeProcess=globalThis.executorProcess;','hosted-schema-reconciliation-policy.ts':`export const unknownPrefixCataloguePolicySha256='${policySha}',unknownPrefixAbsencePolicySha256='${absenceSha}',unknownPrefixAbsentMarkersSql='/* CUEVO_CONTROLLED_ABSENCE */ select false';export const verifyUnknownPrefixCataloguePolicy=globalThis.executorPolicy;`};if(name==='hosted-migration-database.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace(/import\(([^)]+)\)/g,'globalThis.executorHostImport(()=>import($1))')};if(name==='hosted-migration-stage-files.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",','globalThis.executorStageFilesObserved?.();return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",')};if(name==='hosted-migration-provider.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('async function readHostedMigrationProvider(value) {','async function readHostedMigrationProvider(value) { return globalThis.executorProvider(value);')};if(name&&replace[name])return{format:'module',shortCircuit:true,source:replace[name]};return next(url,context);}});
+const globals=globalThis as typeof globalThis&{executorPg?:typeof PgTransport;executorOfficial?:(value:Record<string,unknown>)=>Promise<unknown>;executorProvider?:()=>Promise<unknown>;executorPrepared?:(value:unknown)=>unknown;executorProcess?:(value:{delivery:{included:{name:string;sha256:string}[];configSha256:string};certificate:{sha256:string};cli:unknown})=>Promise<unknown>;executorPolicy?:(rows:unknown,version:number,count?:number)=>unknown;executorStageFilesObserved?:()=>void};
+globals.executorPg=PgTransport;globals.executorPrepared=value=>value;globals.executorOfficial=async()=>{state.officialCalls++;if(admissionTiming)await transportDelay(state.officialDelayMs,'official');else clock+=state.officialDelayMs;return({provenance:'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE',observedAt:new Date(clock).toISOString(),expected:input.expected,approval:{packageSha256:(input.preparedApproval as{sha256:string}).sha256}});};globals.executorProvider=async()=>{if(admissionTiming)await transportDelay(477,'provider');return({evidence:'OFFICIAL_SUPABASE_PROJECT_METADATA',projectRef:ref,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',observedAtMs:clock,directEndpoint:{projectRef:ref,kind:'direct',host:'db.'+ref+'.supabase.co',port:5432,database:'postgres'},sessionEndpoint:input.endpoint});};globals.executorPolicy=(_rows,version,count=120)=>{assert.equal(version,170011);state.policyCounts.push(count);clock+=state.nativeProofMs;};globals.executorProcess=async(value)=>({prepared:{imageId:'sha256:'+'1'.repeat(64),deliverySha256:hash(JSON.stringify({included:value.delivery.included,configSha256:value.delivery.configSha256,certificateSha256:value.certificate.sha256,cli:value.cli}))},dispose:async()=>undefined,runCli:async(args:string[],env:Record<string,string>)=>{state.commands++;state.events.push('cli');assert.ok(args.includes('--skip-vault'));assert.equal(env.PGPASSWORD,'controlled-db-password');assert.equal(state.historyCount,120);const path=[...state.objects.keys()].find(path=>!path.includes(hash(JSON.stringify(template.originalIdentity)))&&path.endsWith('000001.record.json'));assert.ok(path);assert.equal(JSON.parse(state.objects.get(path)!).payload.state,'INTENT');if(state.cliKind==='UNKNOWN')return{kind:'UNKNOWN'};state.historyCount=123;return{kind:'EXITED',exitCode:0};}});
+const hooks=registerHooks({load(url,context,next){const path=url.replaceAll('\\','/'),name=path.split('/').at(-1);if(/\/node_modules\/pg\/(lib\/index\.js|esm\/index\.mjs)$/.test(path))return{format:'module',shortCircuit:true,source:'export const Client=globalThis.executorPg;export default{Client};'};const replace:Record<string,string>={'backend-release-admission.ts':'export const readBackendReleaseAdmission=globalThis.executorOfficial;','backend-release-contracts.ts':"export * from './backend-release-contracts.ts?fingerprint-owner';export const validatePreparedBackendReleaseIntent=globalThis.executorPrepared;",'hosted-migration-native-process.ts':'export class HostedMigrationNativePreparationError extends Error{};export const createHostedMigrationNativeProcess=globalThis.executorProcess;','hosted-schema-reconciliation-policy.ts':`export const unknownPrefixCataloguePolicySha256='${policySha}',unknownPrefixAbsencePolicySha256='${absenceSha}',unknownPrefixAbsentMarkersSql='/* CUEVO_CONTROLLED_ABSENCE */ select false';export const verifyUnknownPrefixCataloguePolicy=globalThis.executorPolicy;`};if(name==='hosted-migration-database.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace(/import\(([^)]+)\)/g,'globalThis.executorHostImport(()=>import($1))')};if(name==='hosted-migration-stage-files.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",','globalThis.executorStageFilesObserved?.();return { evidence: "VERIFIED_GIT_AND_PHYSICAL_STAGE",')};if(name==='hosted-migration-provider.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('async function readHostedMigrationProvider(value) {','async function readHostedMigrationProvider(value) { return globalThis.executorProvider(value);')};if(name&&replace[name])return{format:'module',shortCircuit:true,source:replace[name]};return next(url,context);}});
 const fetcher=globalThis.fetch;async function observedResponse(response:Response){const timing=admissionTiming;if(!timing||!response.body)return response;const body=response.body,getReader=body.getReader.bind(body);body.getReader=(()=>{const reader=getReader(),read=reader.read.bind(reader),cancel=reader.cancel.bind(reader);reader.read=()=>completeHostWork(async()=>{const result=await read();if(hostCompletionVariance)await new Promise<void>(done=>setImmediate(done));return result;});reader.cancel=reason=>completeHostWork(()=>cancel(reason));return reader;}) as typeof body.getReader;return response;}globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),body=options?.body?JSON.parse(String(options.body)):null;
  const timing = admissionTiming;
  const management = url.origin === 'https://api.supabase.com';
@@ -253,7 +271,7 @@ test('full captured admission profile reaches only the original three-file effec
  try{for(const variance of [false,true]){
  hostCompletionVariance=variance;heldCloseIssued=false;
  await fixture(async () => {
-  const original = [...state.objects], timing = beginAdmissionTiming({synchronizeStorageStart:false});
+   const original = [...state.objects], timing = beginAdmissionTiming({synchronizeStorageStart:false,stageReadCosts:{initialMs:10000,finalMs:5226}});
   try {
    const result = await executor.executeNativeHostedMigrationStage(input);
    const diagnostic = JSON.stringify({ result, finalEvents: timing.events.slice(-16), managementDuringCatalogue: timing.managementDuringCatalogue, quiescenceDuringStorage: timing.quiescenceDuringStorage, overlaps: timing.overlaps, sourceChecks: timing.sourceChecks, sourceCharged: timing.sourceCharged });
@@ -265,17 +283,22 @@ test('full captured admission profile reaches only the original three-file effec
    assert.equal(timing.quiescenceDuringStorage, 0, 'Quiescence follows complete Storage request settlement');
    assert.ok(timing.nativeSnapshots>=2&&timing.nativeSnapshots%2===0, 'Actual distinct PRE/POST snapshot requests retain native metadata and target facts');
    assert.equal(timing.nativeMetadata,timing.nativeSnapshots,'One fixed native query carries each complete snapshot');
-   assert.ok(timing.sourceChecks > 0 && timing.sourceCharged > 0, 'The captured synchronous cost follows an actual final source check');
+    const initialReads=timing.events.filter(event=>event.kind==='source-initial'),sourceEvents=timing.events.filter(event=>event.kind==='source-final');
+    assert.equal(timing.sourceChecks,9,'The single-stage protocol performs one preflight and four actual initial/final read pairs');
+    assert.equal(initialReads.length,4);assert.equal(sourceEvents.length,4);
    assert.equal(timing.pending.length, 0); assert.equal(timing.activeCatalogue, 0); assert.equal(timing.activeStorage, 0);
-   const sourceEvents=timing.events.filter(event=>event.kind==='source'),admissions=sourceEvents.map(source=>{
-    const authority=timing.events.filter(event=>event.kind==='official'&&event.completedAt<=source.completedAt).at(-1)!,provider=timing.events.filter(event=>event.kind==='provider'&&event.completedAt<=source.completedAt).at(-1)!;
+    const admissions=sourceEvents.map((source,index)=>{
+     const initial=initialReads[index];assert.equal(initial.completedAt-initial.startedAt,10000);assert.equal(source.completedAt-source.startedAt,5226);
+     const authorities=timing.events.filter(event=>event.kind==='official'&&event.startedAt>=initial.completedAt&&event.completedAt<=source.startedAt),providers=timing.events.filter(event=>event.kind==='provider'&&event.startedAt>=initial.completedAt&&event.completedAt<=source.startedAt);
+     assert.equal(authorities.length,1,'Each final read uses its own renewed official observation');assert.equal(providers.length,1,'Each final read uses its own renewed provider observation');
+     const authority=authorities[0],provider=providers[0];
     return{officialAgeMs:source.completedAt-authority.completedAt,providerAgeMs:source.completedAt-provider.completedAt,finalSourceMs:source.completedAt-source.startedAt};
    });
    assert.ok(admissions.length>0);for(const admission of admissions)assert.ok(admission.officialAgeMs<=30000&&admission.providerAgeMs<=30000);
    if(variance)assert.equal(heldCloseIssued,true,'The variance scenario must perturb an actual completed FileHandle.close');
    console.log(JSON.stringify({purpose:'CAPTURED_ADMISSION_CAPACITY_BEFORE_ASSERT',hostCompletionVariance:variance,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),sourceChecks:timing.sourceChecks,sourceCharges:sourceEvents.length,hostedAcceptance:false}));
    assert.ok(Math.min(...admissions.map(admission=>30000-admission.officialAgeMs))>=6000,'The captured profile must leave at least six seconds after actual final source verification');
-   console.log(JSON.stringify({purpose:'CONTROLLED_CAPTURED_ADMISSION_PROFILE',runtime:process.version,network:'none',forcedStorageStart:false,status:result.status,commands:state.commands,historyCount:state.historyCount,overlaps:timing.overlaps,managementDuringCatalogue:timing.managementDuringCatalogue,quiescenceDuringStorage:timing.quiescenceDuringStorage,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),hostFilesystemLatency:'Actual read outputs retained; no extra modeled latency beyond recorded final-source cost',hostedAcceptance:false}));
+    console.log(JSON.stringify({purpose:'CONTROLLED_CAPTURED_ADMISSION_PROFILE',runtime:process.version,network:'none',forcedStorageStart:false,status:result.status,commands:state.commands,historyCount:state.historyCount,overlaps:timing.overlaps,managementDuringCatalogue:timing.managementDuringCatalogue,quiescenceDuringStorage:timing.quiescenceDuringStorage,admissions,minimumRemainingFreshnessMs:Math.min(...admissions.map(admission=>30000-admission.officialAgeMs)),hostFilesystemLatency:'Actual read outputs retained; modeled preparatory 10000ms and final 5226ms costs follow completed byte admission',hostedAcceptance:false}));
    for (const [path, bytes] of original) assert.equal(state.objects.get(path), bytes);
    const records = [...state.objects].filter(([path]) => !original.some(([previous]) => previous === path) && path.endsWith('.record.json')).map(([, bytes]) => JSON.parse(bytes).payload.state);
    assert.deepEqual(records, ['INTENT', 'COMMITTED']);
@@ -283,6 +306,56 @@ test('full captured admission profile reaches only the original three-file effec
   } finally { admissionTiming = null; }
  });
  }}finally{hostCompletionVariance=false;}
+});
+
+test('initial immutable stage reads precede renewed observations while the final full read retains the thirty-second boundary',async()=>{
+ await fixture(async()=>{
+  const original=[...state.objects],timing=beginAdmissionTiming({stageReadCosts:{initialMs:10000,finalMs:5226}});
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(result.status,'COMMITTED',JSON.stringify({status:result.status,commitment:result.protocol?.commitment,primaryCode:result.protocol?.primaryCode,admissionFailure:result.admissionFailure,events:timing.events.slice(-12)}));
+   const initial=timing.events.filter(event=>event.kind==='source-initial'),final=timing.events.filter(event=>event.kind==='source-final');
+   assert.equal(initial.length,4);assert.equal(final.length,4);assert.equal(timing.sourceChecks,9);
+   for(const[index,read]of initial.entries()){
+    const authority=timing.events.find(event=>event.kind==='official'&&event.startedAt>=read.completedAt&&event.completedAt<=final[index].startedAt);
+    assert.ok(authority,'The initial actual file read must finish before the renewed official observation');
+    assert.equal(read.completedAt-read.startedAt,10000);assert.equal(final[index].completedAt-final[index].startedAt,5226);
+    assert.ok(final[index].completedAt-authority.completedAt<=30000,'Original official observation age remains bounded after the final actual file read');
+   }
+   assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.equal(result.protocol?.commitment,'CONFIRMED');
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.deepEqual([...state.objects].filter(([path])=>!original.some(([old])=>old===path)&&path.endsWith('.record.json')).map(([,bytes])=>JSON.parse(bytes).payload.state),['INTENT','COMMITTED']);
+   assert.equal(result.hostedAcceptance,false);assert.equal(timing.pending.length,0);
+  }finally{admissionTiming=null;}
+ },true);
+});
+
+test('a final full stage read still expires original observations or the absolute package after preparatory reads',async()=>{
+ for(const finalMs of [30001,600001])await fixture(async()=>{
+  const original=[...state.objects],timing=beginAdmissionTiming({stageReadCosts:{initialMs:10000,finalMs}});
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.commitment,'NOT_ATTEMPTED');
+   assert.equal(state.commands,0);assert.equal(state.historyCount,120);assert.equal(state.events.includes('journal-upload'),false);
+   const final=timing.events.find(event=>event.kind==='source-final');assert.ok(final);assert.equal(final.completedAt-final.startedAt,finalMs);
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.equal(timing.pending.length,0);assert.equal(timing.activeStorage,0);assert.equal(result.hostedAcceptance,false);
+  }finally{admissionTiming=null;}
+ },true);
+});
+
+test('the final full read refuses an actual staged SQL change after its initial admission',async()=>{
+ await fixture(async()=>{
+  const original=[...state.objects],timing=beginAdmissionTiming({stageReadCosts:{initialMs:10000,finalMs:5226},driftInitialStageFile:true});
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(state.events.includes('stage-file-drift'),true);assert.equal(result.status,'REQUIRES_REVIEW');
+   assert.equal(result.protocol?.commitment,'NOT_ATTEMPTED');assert.equal(result.admissionFailure?.phase,'FINAL_SOURCE');
+   assert.equal(state.commands,0);assert.equal(state.historyCount,120);assert.equal(state.events.includes('journal-upload'),false);
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.equal(timing.pending.length,0);assert.equal(timing.activeStorage,0);assert.equal(result.hostedAcceptance,false);
+  }finally{admissionTiming=null;}
+ },true);
 });
 
 test('forbidden postgres activity still refuses native admission before any current intent or migration', async () => {
@@ -383,3 +456,44 @@ test('an unacknowledged current INTENT introduced during native observation cann
 
 
 test('version two database-only null fingerprints reach actual native reconciliation pairing before the exact three-file CLI',async()=>{await fixture(async()=>{const original=[...state.objects],result=await executor.executeNativeHostedMigrationStage(input);assert.equal(result.status,'COMMITTED',JSON.stringify({result,events:state.events}));assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.equal(result.protocol?.commitment,'CONFIRMED');for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);assert.equal(result.hostedAcceptance,false);},true);});
+
+async function denyMarkerFailureExport(result:unknown){
+ // The exporter runs in its ordinary module context, without this native
+ // transport fixture's admission hooks. Its existing valid package fixture
+ // reaches the actual result parser with these exact executor failure bytes.
+ const path=join(root,'.local/hosted-release/schema-result.json');await writeFile(path,JSON.stringify(result)+'\n');
+ const child=spawnSync(process.execPath,['--import','tsx','--test','--test-name-pattern=actual completion export bytes survive','scripts/verification/backend-schema-completion-admission.test.ts'],{cwd:resolve(import.meta.dirname,'../..'),env:{...process.env,CUEVO_TEST_SCHEMA_FAILURE_PATH:path},encoding:'utf8',timeout:60000,windowsHide:true});
+ assert.equal(child.status,0,child.stdout+child.stderr);
+}
+
+test('installed marker failure preserves acknowledged SQL and actual confirmed native cleanup in the single-stage wrapper',async()=>{
+ for(const markerFailure of ['before-write','after-commit']as const)await fixture(async()=>{
+  const original=[...state.objects];state.markerFailure=markerFailure;
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.status,'COMMITTED',JSON.stringify(result));assert.equal(result.protocol?.commitment,'CONFIRMED');
+   assert.equal(result.protocol?.cleanupCode,null);assert.equal(result.recoveryCompletion,undefined);assert.equal(result.installedSchemaMarker?.status,'UNKNOWN');assert.equal(result.compositionFailure?.phase,'INSTALLED_SCHEMA_MARKER');
+   const committed=result.committedSchema;assert.ok(committed);assert.equal(committed.protocol.status,'COMMITTED');assert.equal(committed.protocol.commitment,'CONFIRMED');assert.deepEqual(committed.protocol.identity,result.protocol?.identity);assert.equal(committed.completedAt,null);
+   const records=[...state.objects].filter(([path])=>!original.some(([prior])=>prior===path)&&path.endsWith('.record.json')).map(([,bytes])=>JSON.parse(bytes));
+   assert.deepEqual(records.map(record=>record.payload.state),['INTENT','COMMITTED']);assert.deepEqual(committed.journalAcknowledgement,{kind:'SYNCED',sha256:records[1].payloadSha256});
+   assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.equal(state.events.filter(event=>event==='marker-write').length,1);assert.equal(state.vault.has('cuevo_schema_stage_'+ref),markerFailure==='after-commit');
+   assert.ok(state.events.lastIndexOf('quiescence')>state.events.indexOf('marker-write'));assert.ok(state.events.indexOf('unlock')>state.events.lastIndexOf('quiescence'));assert.ok(state.events.indexOf('session-close')>state.events.indexOf('unlock'));
+   assert.equal(result.compositionFailure?.native?.lease,'RELEASED');assert.equal(result.compositionFailure?.native?.session,'CLOSED_CONFIRMED');assert.equal(result.compositionFailure?.native?.partialReceipt,'CONFIRMED');
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.doesNotMatch(JSON.stringify(result),/private-marker|controlled-db-password|select vault/);await denyMarkerFailureExport(result);
+  }finally{state.markerFailure=null;}
+ });
+});
+
+test('installed marker failure retains immutable commit facts when actual unlock or session cleanup is unknown',async()=>{
+ for(const cleanup of ['unlock','close']as const)await fixture(async()=>{
+  const original=[...state.objects];state.markerFailure='after-commit';state.cleanupFail=cleanup==='unlock';state.closeFail=cleanup==='close';
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.cleanupCode,'LOCK_RELEASE_UNCONFIRMED');assert.equal(result.protocol?.status,'REQUIRES_REVIEW');assert.equal(result.recoveryCompletion,undefined);
+   assert.equal(result.installedSchemaMarker?.status,'UNKNOWN');assert.equal(result.compositionFailure?.phase,'INSTALLED_SCHEMA_MARKER');assert.equal(result.committedSchema?.protocol.status,'COMMITTED');assert.equal(result.committedSchema?.protocol.commitment,'CONFIRMED');assert.equal(result.committedSchema?.protocol.cleanupCode,null);assert.equal(result.committedSchema?.completedAt,null);
+   const records=[...state.objects].filter(([path])=>!original.some(([prior])=>prior===path)&&path.endsWith('.record.json')).map(([,bytes])=>JSON.parse(bytes));assert.deepEqual(records.map(record=>record.payload.state),['INTENT','COMMITTED','REQUIRES_REVIEW']);assert.equal(result.committedSchema?.journalAcknowledgement.sha256,records[1].payloadSha256);
+   assert.equal(result.compositionFailure?.native?.session,cleanup==='close'?'CLOSE_UNCONFIRMED':'CLOSED_CONFIRMED');assert.equal(result.compositionFailure?.native?.lease,cleanup==='unlock'?'RELEASE_UNCONFIRMED':'RELEASED');assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.ok(state.events.includes('session-close'));
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);await denyMarkerFailureExport(result);
+  }finally{state.markerFailure=null;state.cleanupFail=false;state.closeFail=false;}
+ });
+});

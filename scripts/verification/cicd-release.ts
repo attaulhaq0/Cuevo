@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { mkdir, readFile, readdir, writeFile,lstat,realpath } from 'node:fs/promises';
+import { resolve, join,relative,isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse as parseEnv } from 'dotenv';
 import { z } from 'zod';
@@ -33,15 +33,35 @@ const json = async <T,>(path: string): Promise<T> => parseJson<T>(await readFile
 const publicPath = join(directory, 'public.json');
 const reviewPath = join(directory, 'review.json');
 const webIdentity = () => z.object({ teamId: z.string().regex(/^team_[a-zA-Z0-9]+$/), projectId: z.string().regex(/^prj_[a-zA-Z0-9]+$/), target: z.enum(['preview', 'production']) }).strict().parse({ teamId: required('VERCEL_ORG_ID'), projectId: required('VERCEL_PROJECT_ID'), target: vercelTarget(required('RELEASE_ENVIRONMENT')) });
-const binary = process.platform === 'win32' ? 'vercel.cmd' : 'vercel';
-const cli = (args: string[]) => {
-  const token = required('VERCEL_TOKEN'); const team = required('VERCEL_ORG_ID'); const project = required('VERCEL_PROJECT_ID');
-  if (!/^team_[a-zA-Z0-9]+$/.test(team) || !/^prj_[a-zA-Z0-9]+$/.test(project)) throw Error('A verified Vercel team and project are required.');
-  // The pinned CLI accepts VERCEL_TOKEN directly; no credential enters argv or a shell.
+async function webCliFile(root:string,path:string,maximum:number){
+  const part=relative(root,path);if(!isAbsolute(root)||resolve(root)!==root||!isAbsolute(path)||resolve(path)!==path||isAbsolute(part)||part.split(/[\\/]/).some(piece=>piece==='..'))throw Error('Vercel executable identity requires review.');
+  let current=root;const pieces=part.split(/[\\/]/).filter(Boolean);for(const[index,piece]of[...pieces,''].entries()){const stat=await lstat(current);if(stat.isSymbolicLink()||await realpath(current)!==current||(index<pieces.length?!stat.isDirectory():!stat.isFile()||stat.nlink!==1))throw Error('Vercel executable identity requires review.');if(piece)current=join(current,piece);}
+  const before=await lstat(path);if(before.size>maximum)throw Error('Vercel executable identity requires review.');const bytes=await readFile(path),after=await lstat(path);if(before.ino!==after.ino||before.dev!==after.dev||before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ctimeMs!==after.ctimeMs||bytes.length>maximum)throw Error('Vercel executable identity requires review.');return bytes;
+}
+/** Keep discovery outside renewed approval. These final byte checks are retained
+ * for the mutable host CLI; they do not attest its complete import graph. */
+async function prepareWebCli(args:string[]){
+  const token=required('VERCEL_TOKEN'),identity=webIdentity(),environment={...runtimeEnvironment('web',process.env)},selectedArgs=[...args];
   if (process.platform === 'win32') throw Error('Reviewed release CLI execution requires the Linux GitHub runner.');
-  try { return execFileSync(binary, [...args, '--scope', team], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...runtimeEnvironment('web', process.env), VERCEL_TOKEN: token, VERCEL_ORG_ID: team, VERCEL_PROJECT_ID: project }, shell: false }); }
-  catch { throw Error('Vercel action failed; raw output and credentials withheld.'); }
-};
+  let global:string;try{global=execFileSync('npm',['root','--global'],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:environment,shell:false,timeout:15000,maxBuffer:65536});}catch{throw Error('Pinned Vercel CLI discovery failed; contents withheld.');}
+  const cliRoot=join(resolve(global.trim()),'vercel'),packagePath=join(cliRoot,'package.json'),packageBytes=await webCliFile(cliRoot,packagePath,1024*1024),manifest=JSON.parse(packageBytes.toString('utf8')) as {name?:string;version?:string;bin?:string|Record<string,string>};
+  const bin=typeof manifest.bin==='string'?manifest.bin:manifest.bin?.vercel;if(manifest.name!=='vercel'||manifest.version!=='62.1.0'||!bin||isAbsolute(bin)||bin.split(/[\\/]/).some(piece=>!piece||piece==='.'||piece==='..'))throw Error('Pinned Vercel CLI requires review.');
+  const executable=join(cliRoot,bin),digest=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex'),cliSha256=digest(await webCliFile(cliRoot,executable,32*1024*1024));let attempted=false;
+  return async(admit:()=>Promise<()=>Promise<()=>void>>)=>{
+    if(attempted)throw Error('Prepared Vercel execution has already been consumed.');attempted=true;
+    if(!isDeepStrictEqual(identity,webIdentity())||required('VERCEL_TOKEN')!==token||digest(await webCliFile(cliRoot,packagePath,1024*1024))!==digest(packageBytes)||digest(await webCliFile(cliRoot,executable,32*1024*1024))!==cliSha256)throw Error('Prepared Vercel execution changed before launch.');
+    const consume=await admit();
+    if(digest(await webCliFile(cliRoot,packagePath,1024*1024))!==digest(packageBytes)||digest(await webCliFile(cliRoot,executable,32*1024*1024))!==cliSha256)throw Error('Prepared Vercel executable changed during approval.');
+    const finalGuard=await consume();
+    if(digest(await webCliFile(cliRoot,packagePath,1024*1024))!==digest(packageBytes)||digest(await webCliFile(cliRoot,executable,32*1024*1024))!==cliSha256)throw Error('Prepared Vercel executable changed during final input checks.');
+    finalGuard();
+    if(!isDeepStrictEqual(identity,webIdentity())||required('VERCEL_TOKEN')!==token)throw Error('Prepared Vercel recipient changed before launch.');
+    try{return execFileSync(process.execPath,[executable,...selectedArgs,'--scope',identity.teamId],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:{...environment,VERCEL_TOKEN:token,VERCEL_ORG_ID:identity.teamId,VERCEL_PROJECT_ID:identity.projectId},shell:false});}catch{throw Error('Vercel action failed; raw output and credentials withheld.');}
+  };
+}
+function requireOriginalWebPackageClock(prepared:{canonicalJson:string}){
+  const timestamp=z.object({preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson(prepared.canonicalJson)).preparedAt,recorded=Date.parse(timestamp),now=Date.now();if(!Number.isFinite(recorded)||recorded>now||now-recorded>24*60*60*1000)throw Error('Original web approval package expired before launch.');
+}
 const files = async (root: string): Promise<string[]> => {
   const result: string[] = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
@@ -257,26 +277,23 @@ if (mode === 'context') {
   await writeFile(publicPath, JSON.stringify(publicConfig));
   console.log('Current API/worker, exact migrations, private security and human approval evidence admitted.');
 } else if (mode === 'build') {
-  const { publicConfig } = await readmitApproval();
-  required('VERCEL_ORG_ID'); required('VERCEL_PROJECT_ID');
   const environment = required('RELEASE_ENVIRONMENT'); const target = vercelTarget(environment);
-  cli(['pull', '--yes', `--environment=${target}`]);
+  const pull=await prepareWebCli(['pull', '--yes', `--environment=${target}`]),{publicConfig}=await readmitApproval();
+  await pull(async()=>{const admitted=await readmitApproval();return async()=>()=>{requireOriginalWebPackageClock(admitted.prepared);};});
   const downloaded = parseEnv(await readFile(resolve(`.vercel/.env.${target}.local`), 'utf8'));
   const allowed = new Set(['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'VERCEL_ENV', 'VERCEL_TARGET_ENV', 'VERCEL_URL']);
   if (Object.keys(downloaded).some(key => !allowed.has(key))) throw Error('Web project environment contains unreviewed settings; remove server credentials before build.');
   if (downloaded.NEXT_PUBLIC_API_URL !== publicConfig.apiUrl || downloaded.NEXT_PUBLIC_SUPABASE_URL !== publicConfig.supabaseUrl || downloaded.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY !== publicConfig.supabasePublishableKey) throw Error('Vercel public build settings do not match approved dependency endpoints.');
-  await readmitApproval();
-  cli(['build', ...(target === 'production' ? ['--prod'] : ['--target=preview'])]);
+  const build=await prepareWebCli(['build', ...(target === 'production' ? ['--prod'] : ['--target=preview'])]);await build(async()=>{const admitted=await readmitApproval();return async()=>()=>{requireOriginalWebPackageClock(admitted.prepared);};});
   await writeFile(join(directory, 'artifact.sha256'), await artifactDigest());
   console.log('Prebuilt web output verified against public-only environment and deployment credential exclusion.');
 } else if (mode === 'deploy') {
-  await readmitApproval();
-  if (await artifactDigest() !== await readFile(join(directory, 'artifact.sha256'), 'utf8')) throw Error('Prebuilt artifact changed after verification.');
-  await readmitApproval();
   const target = vercelTarget(required('RELEASE_ENVIRONMENT')); const sourceSha = required('RELEASE_SHA');
   if (!/^[a-f0-9]{40}$/.test(sourceSha)) throw Error('Invalid release source commit.');
   const args = ['deploy', '--prebuilt', '--yes', '--meta', `cuevoCommitSha=${sourceSha}`, ...(target === 'production' ? ['--prod', '--skip-domain'] : ['--target=preview'])];
-  const result = cli(args).trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/i.test(result)) throw Error('Deployment returned no verified Vercel URL.');
+  const deploy=await prepareWebCli(args);
+  if (await artifactDigest() !== await readFile(join(directory, 'artifact.sha256'), 'utf8')) throw Error('Prebuilt artifact changed after verification.');
+  const result = (await deploy(async()=>{if(await artifactDigest()!==await readFile(join(directory,'artifact.sha256'),'utf8'))throw Error('Prebuilt artifact changed after verification.');const admitted=await readmitApproval();return async()=>{if(await artifactDigest()!==await readFile(join(directory,'artifact.sha256'),'utf8'))throw Error('Prebuilt artifact changed during approval.');return()=>{requireOriginalWebPackageClock(admitted.prepared);if(required('RELEASE_SHA')!==sourceSha||vercelTarget(required('RELEASE_ENVIRONMENT'))!==target)throw Error('Prepared Vercel source or environment changed.');};};})).trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/i.test(result)) throw Error('Deployment returned no verified Vercel URL.');
   await writeFile(join(directory, 'deployment.json'), JSON.stringify({ url: result, commitSha: required('RELEASE_SHA') }));
   await writeFile(required('GITHUB_OUTPUT'), `url=${result}\n`, { flag: 'a' });
   console.log('Verified prebuilt artifact uploaded; production domains remain unpromoted.');

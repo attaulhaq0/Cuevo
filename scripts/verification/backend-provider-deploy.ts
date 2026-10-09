@@ -11,7 +11,7 @@ import { readBackendReleaseAdmission } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, readBackendRuntimeFingerprints, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
 import { createBackendPreviewTransport, backendPreviewHeaders } from './backend-preview-transport';
 import { createHostedMigrationDatabase } from '../database/hosted-migration-database';
-import {assertNativeSchemaRecoveryConsumption,type NativeReconciliationPermit} from '../database/hosted-migration-database';
+import {assertNativeSchemaRecoveryConsumption,readNativeSchemaStageAdmission,type NativeReconciliationPermit} from '../database/hosted-migration-database';
 import {canonicalHostedMigrationPlan,type HostedMigrationPlanV1} from '../database/hosted-migration-plan';
 import { readHostedMigrationProvider, requireCurrentHostedMigrationEndpoint } from '../database/hosted-migration-provider';
 import { providerDeploymentStateSchema, providerStateSha256, validateProviderDeploymentTransition, type ProviderDeploymentState, type ProviderDeploymentOperation, type ProviderDeploymentPhase } from '../database/hosted-provider-state';
@@ -114,17 +114,30 @@ async function providerRequest(url: string, token: string | null, method: 'GET' 
     if (expectedEmpty && !response.body) { const length = response.headers.get('content-length'); if (length !== null && length !== '0' || controller.signal.aborted) throw failure(); return { status: response.status, value: null }; }
     const bytes = await responseBytes(response, signal); if (!bytes.length && !expectedEmpty) throw failure(); return { status: response.status, value: bytes.length ? JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(bytes)) as unknown : null }; } finally { clearTimeout(timer); controller.abort(); }
 }
-async function apiCli(root: string, artifact: VerifiedArtifact, expected: BackendReleaseExpected, token: string, operationSha256: string, signal: AbortSignal, admitLaunch:()=>void) {
+type PreparedApiCli = (expected: BackendReleaseExpected, token: string, operationSha256: string, signal: AbortSignal, admitLaunch:()=>Promise<()=>void>)=>Promise<string>;
+/** Discovery and materialization are preparation, not live effect admission.
+ * The delivery remains a mutable host directory: repeat its exact checks before
+ * renewal until a separately verified read-only executable/input graph exists. */
+async function prepareApiCli(root: string, artifact: VerifiedArtifact, expected: BackendReleaseExpected):Promise<PreparedApiCli> {
   if (process.platform !== 'linux') throw failure();
   const scopedEnvironment = Object.fromEntries(['PATH', 'LANG', 'LC_ALL', 'TZ', 'TMP', 'TEMP'].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]])), global = await execute('npm', ['root', '--global'], { env: scopedEnvironment, windowsHide: true, timeout: 15000, maxBuffer: 65536, shell: false });
-  const globalRoot = resolve(global.stdout.trim()), cliRoot = join(globalRoot, 'vercel'), manifest = JSON.parse((await readFile(join(cliRoot, 'package.json'))).toString('utf8')) as { name?: string; version?: string; bin?: string | Record<string, string> }; if (manifest.name !== 'vercel' || manifest.version !== '62.1.0') throw failure();
-  const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.vercel; if (!bin || bin.split(/[\\/]/).some(piece => piece === '..')) throw failure(); const cli = join(cliRoot, bin); if (!(await lstat(cli)).isFile()) throw failure();
+  const globalRoot = resolve(global.stdout.trim()), cliRoot = join(globalRoot, 'vercel'), packagePath=join(cliRoot,'package.json'),packageBytes=await file(cliRoot,packagePath,1024*1024),manifest = JSON.parse(packageBytes.toString('utf8')) as { name?: string; version?: string; bin?: string | Record<string, string> }; if (manifest.name !== 'vercel' || manifest.version !== '62.1.0') throw failure();
+  const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.vercel; if (!bin || isAbsolute(bin)||bin.split(/[\\/]/).some(piece => !piece||piece==='.'||piece === '..')) throw failure(); const cli = join(cliRoot, bin),cliSha256=hash(await file(cliRoot,cli,32*1024*1024));
   const delivery = join(root, '.local/hosted-release', 'api-delivery-' + randomUUID()); await mkdir(delivery, { mode: 0o700 }); await physical(root, delivery, 'directory');
   for (const row of artifact.files.filter(row => row.path.startsWith('.vercel/output/'))) { const path = join(delivery, row.path); await mkdir(resolve(path, '..'), { recursive: true }); await writeFile(path, row.bytes, { mode: 0o600 }); }
-  await mkdir(join(delivery, '.vercel'), { recursive: true }); await writeFile(join(delivery, '.vercel/project.json'), JSON.stringify({ orgId: expected.targets.api.teamId, projectId: expected.targets.api.projectId }), { mode: 0o600 });
-  admitLaunch();if(signal.aborted)throw failure();const result = await execute(process.execPath, [cli, 'deploy', '--prebuilt', '--yes', '--target=preview', '--meta', 'cuevoCommitSha=' + expected.releaseSha, '--meta', 'cuevoArtifactSha256=' + artifact.sha256, '--meta', 'cuevoProviderOperation=' + operationSha256, '--scope', expected.targets.api.teamId], { cwd: delivery, env: { ...scopedEnvironment, VERCEL_TOKEN: token, VERCEL_ORG_ID: expected.targets.api.teamId, VERCEL_PROJECT_ID: expected.targets.api.projectId, VERCEL_TELEMETRY_DISABLED: '1' }, shell: false, windowsHide: true, timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024, signal });
-  const url = result.stdout.trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/.test(url) || url.includes(token)) throw failure(); return url.replace(/\/$/, '');
+  const identity={sourceSha:expected.releaseSha,teamId:expected.targets.api.teamId,projectId:expected.targets.api.projectId},projectBytes=JSON.stringify({ orgId: identity.teamId, projectId: identity.projectId });
+  await mkdir(join(delivery, '.vercel'), { recursive: true }); await writeFile(join(delivery, '.vercel/project.json'), projectBytes, { mode: 0o600 });
+  const inputs=artifact.files.filter(row=>row.path.startsWith('.vercel/output/')).map(row=>({path:row.path,sha256:hash(row.bytes)}));inputs.push({path:'.vercel/project.json',sha256:hash(projectBytes)});let consumed=false;
+  return async(selected,token,operationSha256,signal,admitLaunch)=>{
+    if(consumed)throw failure();consumed=true;
+    if(selected.releaseSha!==identity.sourceSha||selected.targets.api.teamId!==identity.teamId||selected.targets.api.projectId!==identity.projectId||signal.aborted)throw failure();
+    const collect=async(directory:string):Promise<string[]>=>{await physical(root,directory,'directory');const paths:string[]=[];for(const entry of await readdir(directory,{withFileTypes:true})){const path=join(directory,entry.name);if(entry.isDirectory())paths.push(...await collect(path));else{await physical(root,path,'file');paths.push(relative(delivery,path).replaceAll('\\','/'));}}return paths;};
+    const verify=async()=>{const paths=(await collect(delivery)).sort(),wanted=inputs.map(row=>row.path).sort();if(paths.length!==wanted.length||paths.some((path,index)=>path!==wanted[index]))throw failure();for(const row of inputs)if(hash(await file(root,join(delivery,row.path),32*1024*1024))!==row.sha256)throw failure();if(hash(await file(cliRoot,packagePath,1024*1024))!==hash(packageBytes)||hash(await file(cliRoot,cli,32*1024*1024))!==cliSha256)throw failure();};
+    await verify();const consume=await admitLaunch();await verify();consume();if(selected.releaseSha!==identity.sourceSha||selected.targets.api.teamId!==identity.teamId||selected.targets.api.projectId!==identity.projectId||signal.aborted)throw failure();const result = await execute(process.execPath, [cli, 'deploy', '--prebuilt', '--yes', '--target=preview', '--meta', 'cuevoCommitSha=' + identity.sourceSha, '--meta', 'cuevoArtifactSha256=' + artifact.sha256, '--meta', 'cuevoProviderOperation=' + operationSha256, '--scope', identity.teamId], { cwd: delivery, env: { ...scopedEnvironment, VERCEL_TOKEN: token, VERCEL_ORG_ID: identity.teamId, VERCEL_PROJECT_ID: identity.projectId, VERCEL_TELEMETRY_DISABLED: '1' }, shell: false, windowsHide: true, timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024, signal });
+    const url = result.stdout.trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/.test(url) || url.includes(token)) throw failure(); return url.replace(/\/$/, '');
+  };
 }
+async function apiCli(preparedCli:PreparedApiCli,expected:BackendReleaseExpected,token:string,operationSha256:string,signal:AbortSignal,admitLaunch:()=>Promise<()=>void>){return preparedCli(expected,token,operationSha256,signal,admitLaunch);}
 /** Provider phases retain original durable intent and confirmed receipts. A
  * current approval admits pending effects; it never recreates an unknown upload. */
 export async function deployBackendProviders(value: DeploymentInput): Promise<BackendProviderDeploymentResult> {
@@ -147,16 +160,23 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
     const migrationSources=readCanonicalMigrationSources({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha}).sources;
     const included=migrationSources.map(source=>({name:source.name,version:source.name.slice(0,14),sha256:hash(source.bytes)})),versions=included.map(row=>row.version).sort();
     const protocol=async () => {
-      let recoveryPermit:NativeReconciliationPermit|undefined;const recoveryPlan=input.plan as HostedMigrationPlanV1|undefined,recoveryIdentity=recoveryPlan?{projectRef,sourceSha:expected.releaseSha,treeSha:expected.treeSha,planSha256:canonicalHostedMigrationPlan(recoveryPlan).sha256,stageId:'remaining' as const,stageSha256:hash(JSON.stringify({included:recoveryPlan.migrations,configSha256:hash('project_id = "cuevo"\n\n[db]\nmajor_version = 17\n\n[db.migrations]\nenabled = true\n\n[db.seed]\nenabled = false\n')})),databaseUrl:input.operator.databaseUrl,approvalDigest:prepared.sha256,ciRunId:expected.ciRunId,certificateSha256:input.operator.certificate.sha256}:undefined;
-      const recoveryLive=()=>{if(expected.schemaRecovery){if(!recoveryPermit||!recoveryIdentity)throw failure();assertNativeSchemaRecoveryConsumption(recoveryPermit,recoveryIdentity,'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');}};
+      let recoveryPermit:NativeReconciliationPermit|undefined,postureObservedAt:number|undefined;const recoveryPlan=input.plan as HostedMigrationPlanV1|undefined,recoveryIdentity=recoveryPlan?{projectRef,sourceSha:expected.releaseSha,treeSha:expected.treeSha,planSha256:canonicalHostedMigrationPlan(recoveryPlan).sha256,stageId:'remaining' as const,stageSha256:hash(JSON.stringify({included:recoveryPlan.migrations.map(({name,version,sha256})=>({name,version,sha256})),configSha256:hash('project_id = "cuevo"\n\n[db]\nmajor_version = 17\n\n[db.migrations]\nenabled = true\n\n[db.seed]\nenabled = false\n')})),databaseUrl:input.operator.databaseUrl,approvalDigest:prepared.sha256,ciRunId:expected.ciRunId,certificateSha256:input.operator.certificate.sha256}:undefined;
+      const recoveryLive=()=>{if(expected.schemaRecovery){if(!recoveryPermit||!recoveryIdentity)throw failure();readNativeSchemaStageAdmission(recoveryPermit,recoveryIdentity,versions);assertNativeSchemaRecoveryConsumption(recoveryPermit,recoveryIdentity,'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');}};
       const live = () => { if (database.signal.aborted) throw failure(); };
       const inactive=async()=>{
        if(rollout){assertNativeRuntimeRolloutLease(rolloutLease!,expected);await rollout.requireDrained();const state=await rollout.readState();if(state.pending?.runtimeConfigurationSha256!==recipients.runtimeSha256||state.pending.identity.generation!==expected.runtimeRollout!.desired.generation)throw failure();return;}
        if(!('observe' in database))throw failure();
-       if(expected.schemaRecovery){if(!input.plan||!input.schemaRecoveryExport||!input.journalStorageKey)throw failure();recoveryPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan:input.plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});}
+       if(expected.schemaRecovery){
+        if(!input.plan||!input.schemaRecoveryExport||!input.journalStorageKey||!recoveryIdentity)throw failure();
+        if(!recoveryPermit)recoveryPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan:input.plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});else await database.refreshSchemaContinuation(recoveryPermit,recoveryIdentity,versions);
+        const facts=readNativeSchemaStageAdmission(recoveryPermit,recoveryIdentity,versions),observed=facts.target;
+        requireCurrentHostedMigrationEndpoint(endpoint,facts.provider,expected.fingerprints.migrationEndpointSha256);
+        if(facts.consumption!=='INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER'||!facts.population||facts.source.sha!==expected.releaseSha||facts.source.tree!==expected.treeSha||observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||Object.values(facts.post.checks).some(value=>value!==true))throw failure();
+        verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});postureObservedAt=Math.min(Date.parse(facts.authority.observedAt),facts.observedAtMs,facts.provider.observedAtMs,observed.observedAtMs,facts.post.observedAtMs,facts.population.observedAtMs);live();recoveryLive();return;
+       }
        live();const observed=await database.observe(),post=await database.observeStage({stageId:'remaining',expectedAfterVersions:versions});
        if(observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||post.observedAtMs>Date.now()||Date.now()-post.observedAtMs>30000||Object.values(post.checks).some(value=>value!==true))throw failure();
-       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});live();recoveryLive();
+       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});postureObservedAt=post.observedAtMs;live();recoveryLive();
       };
       await inactive();
       const vercel = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string) => { live();if(method==='POST')recoveryLive(); const response = await providerRequest('https://api.vercel.com' + path, input.vercelToken, method, body, false, {}, database.signal); live(); return response; };
@@ -213,19 +233,20 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
       // Admit the whole original target before changing the first setting.
       // Later phase guards repeat these checks immediately before their effects.
       if (!operation) { await guardEnvironment(); await guardSecrets(); await guardFunction(); }
-      const phase = async (name: ProviderDeploymentPhase['name'], observe: () => Promise<ProviderDeploymentPhase['receipt']>, effect: () => Promise<void>, guard: () => Promise<void>, reconcileIntent: boolean) => {
+      const phase = async (name: ProviderDeploymentPhase['name'], observe: () => Promise<ProviderDeploymentPhase['receipt']>, effect: () => Promise<void>, guard: () => Promise<void>, reconcileIntent: boolean,prepareEffect:()=>Promise<void>=async()=>undefined,admitsAtLaunch=false) => {
         await inactive();live(); const original = operation?.phases.find(row => row.name === name);
         if (original) {
           if (original.state === 'INTENT' && !reconcileIntent) throw failure();
+          if(original.state==='INTENT'){await admission();built=await artifacts();}
           const receipt = await observe(); if (!receipt || original.state === 'CONFIRMED' && !same(original.receipt, receipt)) throw failure();
-          if (original.state === 'INTENT') { original.state = 'CONFIRMED'; original.receipt = receipt; await persist(); }
+          if (original.state === 'INTENT') {if(name==='API_DEPLOYMENT'){const repeated=await observe();if(!same(receipt,repeated))throw failure();await admission();built=await artifacts();await inactive();live();recoveryLive();validatePreparedBackendReleaseIntent(prepared,{...expected,now:Date.now()});}original.state = 'CONFIRMED'; original.receipt = receipt; await persist(); }
           return receipt;
         }
-        await admission(); built = await artifacts(); await guard(); live();
+        await admission(); built = await artifacts(); await guard(); live();await prepareEffect();
         if (!state) state = { version: rollout?2:1, purpose: 'CUEVO_PRIVATE_PROVIDER_DEPLOYMENT_STATE', projectRef, operations: [] };
         if (!operation) { if(rollout)state.version=2;operation = { identity, phases: [] }; state.operations.push(operation); }
         const next: ProviderDeploymentPhase = { name, state: 'INTENT', receipt: null }; operation.phases.push(next); await persist();
-        result.mutation = 'ATTEMPTED'; await admission(); built = await artifacts();await inactive(); live();recoveryLive(); await effect(); live();
+        result.mutation = 'ATTEMPTED';if(!admitsAtLaunch){await admission();built=await artifacts();await inactive();recoveryLive();}live();await effect();live();
         const receipt = await observe(); if (!receipt) throw failure(); next.state = 'CONFIRMED'; next.receipt = receipt; await persist(); return receipt;
       };
       await phase('API_ENVIRONMENT', envReceipt, async () => {
@@ -233,14 +254,30 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
         const created = (await vercel(envPath + (previous ? '&upsert=true' : ''), 'POST', JSON.stringify(body))).value;
         z.object({ failed: z.array(z.unknown()).length(0) }).parse(created);
       }, guardEnvironment, true);
-      let apiUrl: string | null = null;
+      let apiUrl: string | null = null,preparedCli:PreparedApiCli|undefined;
       const operationSha256 = providerStateSha256(operation!.identity);
+      const discoverOriginalApi=async()=>{
+        const original=operation!.identity;if(!Number.isSafeInteger(Number(original.originalRunId)))throw failure();const runPath=`https://api.github.com/repos/${expected.repository}/actions/runs/${original.originalRunId}/attempts/${original.originalRunAttempt}`,readRun=async()=>{
+          const run=z.object({id:z.literal(Number(original.originalRunId)),run_attempt:z.literal(original.originalRunAttempt),head_sha:z.literal(original.executorSourceSha??original.sourceSha),head_branch:z.literal('main'),repository:z.object({full_name:z.literal(expected.repository)}),path:z.literal('.github/workflows/backend-release.yml'),event:z.literal('workflow_dispatch'),status:z.enum(['completed','in_progress']),conclusion:z.string().nullable(),created_at:z.iso.datetime({offset:true}),run_started_at:z.iso.datetime({offset:true}),updated_at:z.iso.datetime({offset:true})}).parse((await providerRequest(runPath,input.githubToken,'GET',undefined,false,{'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},database.signal)).value);
+          const started=Date.parse(run.run_started_at),created=Date.parse(run.created_at),updated=Date.parse(run.updated_at);if(created>started||started>updated||updated>Date.now()||run.status==='completed'&&!['success','failure','cancelled','timed_out'].includes(run.conclusion??'')||run.status==='in_progress'&&(run.conclusion!==null||original.originalRunId!==expected.releaseRunId||original.originalRunAttempt!==expected.runAttempt))throw failure();return{run,started,ended:run.status==='completed'?updated:Date.now()};
+        };
+        const window=await readRun(),number=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),rows:unknown[]=[],seen=new Set<string>();let until=window.ended+1,complete=false;
+        for(let page=0;page<10;page++){
+          const params=new URLSearchParams({teamId:team,projectId:project,limit:'100',since:String(Math.max(0,window.started-1)),until:String(until)}),value=z.object({deployments:z.array(z.object({uid:z.string().regex(/^dpl_[A-Za-z0-9]+$/),projectId:z.literal(project),url:z.string().regex(/^[a-z0-9-]+\.vercel\.app$/),created:number,createdAt:number,readyState:z.string(),state:z.string().optional(),source:z.string().optional(),target:z.string().nullable(),meta:z.record(z.string(),z.unknown()).optional()}).passthrough()).max(100),pagination:z.object({count:z.number().int().min(0).max(100),next:number.nullable(),prev:number.nullable()})}).parse((await vercel('/v6/deployments?'+params.toString())).value);
+          if(value.pagination.count!==value.deployments.length)throw failure();for(const row of value.deployments){if(seen.has(row.uid)||row.created!==row.createdAt||row.createdAt<window.started||row.createdAt>window.ended)throw failure();seen.add(row.uid);rows.push(row);}
+          if(value.pagination.next===null){complete=true;break;}if(!value.deployments.length||value.pagination.next>=until||value.pagination.next<window.started||value.deployments.some(row=>row.createdAt<value.pagination.next!))throw failure();until=value.pagination.next;
+        }
+        if(!complete)throw failure();const after=await readRun();if(!same(window.run,after.run))throw failure();
+        const candidate=z.array(z.object({uid:z.string(),url:z.string(),createdAt:number,readyState:z.literal('READY'),state:z.literal('READY').optional(),source:z.literal('cli'),target:z.null().or(z.literal('preview')),meta:z.object({cuevoCommitSha:z.literal(original.sourceSha),cuevoArtifactSha256:z.literal(original.apiArtifactSha256),cuevoProviderOperation:z.literal(operationSha256)})}).passthrough()).length(1).parse(rows.filter(row=>{const meta=(row as {meta?:Record<string,unknown>}).meta;return meta?.cuevoProviderOperation===operationSha256;}))[0];
+        return{deploymentId:candidate.uid,url:'https://'+candidate.url,createdAtMs:candidate.createdAt};
+      };
       const apiReceipt = await phase('API_DEPLOYMENT', async () => {
         const prior = operation?.phases.find(row => row.name === 'API_DEPLOYMENT')?.receipt;
-        const selectedUrl = apiUrl ?? (prior?.kind === 'API_DEPLOYMENT' ? prior.url : null); if (!selectedUrl) return null;
-        const deployment = z.object({ id: z.string().regex(/^dpl_[A-Za-z0-9]+$/), projectId: z.literal(project), ownerId: z.literal(team), url: z.literal(new URL(selectedUrl).hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), meta: z.object({ cuevoCommitSha: z.literal(identity.sourceSha), cuevoArtifactSha256: z.literal(built.api.sha256), cuevoProviderOperation: z.literal(operationSha256) }) }).parse((await vercel('/v13/deployments/' + (prior?.kind === 'API_DEPLOYMENT' ? prior.deploymentId : new URL(selectedUrl).hostname) + query)).value);
-        return { kind: 'API_DEPLOYMENT', deploymentId: deployment.id, url: selectedUrl };
-      }, async () => { apiUrl = await apiCli(root, built.api, {...expected,releaseSha:identity.sourceSha}, input.vercelToken, operationSha256, database.signal,()=>{live();recoveryLive();validatePreparedBackendReleaseIntent(prepared,{...expected,now:Date.now()});}); }, async () => undefined, false);
+        const discovered=!apiUrl&&prior===null?await discoverOriginalApi():undefined,selectedUrl = apiUrl ?? (prior?.kind === 'API_DEPLOYMENT' ? prior.url : discovered?.url??null); if (!selectedUrl) return null;
+        const createdAtMs=prior?.kind==='API_DEPLOYMENT'?prior.createdAtMs:discovered?.createdAtMs;
+        const deployment = z.object({ id: discovered?z.literal(discovered.deploymentId):z.string().regex(/^dpl_[A-Za-z0-9]+$/), projectId: z.literal(project), ownerId: z.literal(team), url: z.literal(new URL(selectedUrl).hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), ...(createdAtMs===undefined?{}:{createdAt:z.literal(createdAtMs),source:z.literal('cli')}),meta: z.object({ cuevoCommitSha: z.literal(identity.sourceSha), cuevoArtifactSha256: z.literal(built.api.sha256), cuevoProviderOperation: z.literal(operationSha256) }) }).parse((await vercel('/v13/deployments/' + (prior?.kind === 'API_DEPLOYMENT' ? prior.deploymentId : discovered?.deploymentId??new URL(selectedUrl).hostname) + query)).value);
+        return { kind: 'API_DEPLOYMENT', deploymentId: deployment.id, url: selectedUrl,...(createdAtMs===undefined?{}:{createdAtMs}) };
+      }, async () => { if(!preparedCli)throw failure();apiUrl = await apiCli(preparedCli, {...expected,releaseSha:identity.sourceSha}, input.vercelToken, operationSha256, database.signal,async()=>{await admission();built=await artifacts();await inactive();return()=>{live();recoveryLive();if(rollout)assertNativeRuntimeRolloutLease(rolloutLease!,expected);else if(postureObservedAt===undefined||postureObservedAt>Date.now()||Date.now()-postureObservedAt>30000)throw failure();validatePreparedBackendReleaseIntent(prepared,{...expected,now:Date.now()});};}); }, async () => undefined, true,async()=>{preparedCli=await prepareApiCli(root,built.api,{...expected,releaseSha:identity.sourceSha});},true);
       if (apiReceipt?.kind !== 'API_DEPLOYMENT') throw failure();
       const preview = { repoRoot: root, expected, prepared, apiDeployment: { id: apiReceipt.deploymentId, url: apiReceipt.url } };
       await createBackendPreviewTransport({ ...preview, vercelToken: input.vercelToken }, admission);
@@ -248,15 +285,14 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
       const healthy = z.object({ status: z.literal('ok'), service: z.literal('cuevo-api') }).safeParse(health.value).success;
       result.api = { deploymentId: apiReceipt.deploymentId, url: apiReceipt.url, artifactSha256: built.api.sha256, metadataVerified: true, healthVerified: healthy }; if (!healthy) throw failure();
       await phase('EDGE_SECRETS', secretReceipt, async () => { await supabase('secrets', 'POST', JSON.stringify(Object.entries(recipients.edge).map(([name, value]) => ({ name, value })))); }, guardSecrets, true);
-      let deployedEdge: { id: string; version: number } | null = null;
+      let deployedEdge: { id: string; version: number } | null = null,edgeBody:FormData|undefined;
       const edgeReceipt = await phase('EDGE_DEPLOYMENT', async () => {
         const prior = operation?.phases.find(row => row.name === 'EDGE_DEPLOYMENT')?.receipt, selected = deployedEdge ?? (prior?.kind === 'EDGE_DEPLOYMENT' ? prior : null); if (!selected) return null;
         z.object({ id: z.literal(selected.id), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.literal(selected.version), verify_jwt: z.literal(false) }).parse((await supabase('functions/cuevo-worker')).value);
         return { kind: 'EDGE_DEPLOYMENT', id: selected.id, version: selected.version };
       }, async () => {
-        const body = new FormData(); for (const row of built.edge.files) body.append('file', new Blob([Uint8Array.from(row.bytes).buffer]), row.path); body.append('metadata', JSON.stringify({ entrypoint_path: 'index.ts', import_map_path: 'deno.json', verify_jwt: false, name: 'cuevo-worker' }));
-        deployedEdge = z.object({ id: z.string().min(1), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.number().int().positive(), verify_jwt: z.literal(false) }).parse((await supabase('functions/deploy?slug=cuevo-worker', 'POST', body)).value);
-      }, guardFunction, false);
+        if(!edgeBody)throw failure();deployedEdge = z.object({ id: z.string().min(1), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.number().int().positive(), verify_jwt: z.literal(false) }).parse((await supabase('functions/deploy?slug=cuevo-worker', 'POST', edgeBody)).value);
+      }, guardFunction, false,async()=>{edgeBody=new FormData();for(const row of built.edge.files)edgeBody.append('file',new Blob([Uint8Array.from(row.bytes).buffer]),row.path);edgeBody.append('metadata',JSON.stringify({entrypoint_path:'index.ts',import_map_path:'deno.json',verify_jwt:false,name:'cuevo-worker'}));});
       if (edgeReceipt?.kind !== 'EDGE_DEPLOYMENT') throw failure();
       const denial = await providerRequest(`https://${projectRef}.supabase.co/functions/v1/cuevo-worker`, null, 'POST', JSON.stringify({ version: 1, wakeId: '00000000-0000-4000-8000-000000000000' }), true, {}, database.signal);
       const authenticated = denial.status === 401 && z.object({ code: z.literal('WORKER_AUTH_REQUIRED') }).strict().safeParse(denial.value).success;

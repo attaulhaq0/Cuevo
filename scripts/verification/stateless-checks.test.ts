@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createHash } from 'node:crypto';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { registerHooks } from 'node:module';
+import { transformSync } from 'esbuild';
+import type { runStatelessChecks } from './stateless-checks';
+
+const secret='stateless-failure-private-canary';
+let selectedSteps:{name:string;args:string[]}[]=[];
+Object.assign(globalThis,{statelessFixtureSteps:()=>selectedSteps});
+let refuseScratch=false,scratchAttempts=0;
+Object.assign(globalThis,{statelessFixtureMkdir:async(path:Parameters<typeof mkdir>[0],options:Parameters<typeof mkdir>[1])=>{if(refuseScratch&&String(path).includes('attempt-')&&/[/\\][a-f0-9-]{36}$/.test(String(path))&&++scratchAttempts===2){refuseScratch=false;throw Error(secret);}return mkdir(path,options);}});
+const hook=registerHooks({load(url,context,next){if(url.includes('/stateless-checks.ts?controlled-groups'))return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url.split('?')[0]),'utf8').replace("import { statelessVerificationSteps } from './steps';",'const statelessVerificationSteps=globalThis.statelessFixtureSteps();').replace("import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';","import { lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';const mkdir=globalThis.statelessFixtureMkdir;"),{loader:'ts',format:'esm'}).code};return next(url,context);}});
+async function api(){return{runStatelessChecks:async(input:Parameters<typeof runStatelessChecks>[0])=>{const current=await import(pathToFileURL(resolve(import.meta.dirname,'stateless-checks.ts')).href+'?controlled-groups-'+crypto.randomUUID()) as {runStatelessChecks:typeof runStatelessChecks};return current.runStatelessChecks(input);},validate:async(value:unknown)=>{const current=await import(pathToFileURL(resolve(import.meta.dirname,'stateless-checks.ts')).href+'?controlled-groups-'+crypto.randomUUID()) as typeof import('./stateless-checks');return current.statelessChecksEvidenceSchema.parse(value);}};}
+async function fixture(run:(root:string)=>Promise<void>,mode='success'){
+ const root=await mkdtemp(join(tmpdir(),'cuevo-stateless-'));try{await mkdir(join(root,'scripts','verification'),{recursive:true});await writeFile(join(root,'.gitignore'),'.local/\n*.proof\n');await writeFile(join(root,'package.json'),JSON.stringify({packageManager:'npm@11.17.0'}));await writeFile(join(root,'package-lock.json'),'{"lockfileVersion":3}\n');
+  selectedSteps=[];for(const name of ['repository','cicd-fixtures','migration-replay-rules','docs']){
+   const path='scripts/verification/'+name+'.test.ts',proof=join(root,name+'.proof');
+   // The executable is constant. Fixture values remain JSON data so no caller
+   // string becomes JavaScript syntax, even for deliberate failure payloads.
+   const content=`import {test}from'node:test';import{appendFileSync,readFileSync}from'node:fs';const data=JSON.parse(readFileSync(new URL('./'+import.meta.url.split('/').at(-1)+'.json',import.meta.url),'utf8'));if(data.mode==='two-failures'&&data.name==='cicd-fixtures'){test('first controlled failure',()=>{throw Error(data.secret);});test('second controlled failure',()=>{throw Error(data.secret);});}else if(!(data.mode==='zero'&&data.name==='cicd-fixtures')){test(data.name,{skip:data.mode==='skip'&&data.name==='cicd-fixtures'},async()=>{appendFileSync(data.proof,'attempt\\n');if(data.name==='cicd-fixtures'||data.name==='migration-replay-rules')await new Promise(done=>setTimeout(done,120));if(data.mode==='failed'&&data.name==='cicd-fixtures'){process.stderr.write(data.secret);throw Error(data.secret);}if(data.mode==='cancelled'&&data.name==='cicd-fixtures')await new Promise(()=>{});if(data.mode==='source-changed'&&data.name==='docs')appendFileSync('package-lock.json','changed');});}`;
+   await writeFile(join(root,path),content);await writeFile(join(root,path+'.json'),JSON.stringify({name,mode,proof,secret}));selectedSteps.push({name,args:['--test',path]});
+  }
+  execFileSync('git',['init','--quiet',root],{stdio:'ignore',windowsHide:true});execFileSync('git',['-C',root,'add','.'],{stdio:'ignore',windowsHide:true});execFileSync('git',['-C',root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Fixture'],{stdio:'ignore',windowsHide:true});
+  const prior={GITHUB_ACTIONS:process.env.GITHUB_ACTIONS,GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT:process.env.GITHUB_RUN_ATTEMPT,GITHUB_SHA:process.env.GITHUB_SHA};
+  const sourceSha=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore'],windowsHide:true}).trim();
+  // Each real temporary Git repository owns the official identity seen by its
+  // runner. Keep the production GitHub checks active, including denial cases.
+  Object.assign(process.env,{GITHUB_ACTIONS:'true',GITHUB_RUN_ID:'51',GITHUB_RUN_ATTEMPT:'2',GITHUB_SHA:sourceSha});
+  try{await run(root);}finally{for(const[key,value]of Object.entries(prior))if(value===undefined)delete process.env[key];else process.env[key]=value;}
+ }finally{assert.equal(resolve(root,'..'),resolve(tmpdir()));await rm(root,{recursive:true,force:true});}
+}
+
+test('unchanged groups execute once with only the independent pair overlapping and exact safe source evidence',async()=>{const{runStatelessChecks:run}=await api();await fixture(async root=>{
+ const result=await run({repoRoot:root});assert.equal(result.status,'PASSED');assert.deepEqual(result.groups.map(row=>row.name),selectedSteps.map(row=>row.name));assert.ok(result.groups.every(row=>row.status==='PASSED'));for(const step of selectedSteps)assert.equal((await readFile(join(root,step.name+'.proof'),'utf8')).trim(),'attempt');
+ const first=result.groups.find(row=>row.name==='cicd-fixtures')!,second=result.groups.find(row=>row.name==='migration-replay-rules')!;assert.ok(first.startedAtMs!<second.completedAtMs!&&second.startedAtMs!<first.completedAtMs!);assert.match(result.source.sourceSha!,/^[a-f0-9]{40}$/);assert.match(result.source.sourceLockSha256!,/^[a-f0-9]{64}$/);assert.match(result.discoverySha256,/^[a-f0-9]{64}$/);assert.equal(new Set(result.groups.map(row=>row.scratchId)).size,4);
+ const saved=JSON.parse(await readFile(join(root,'.local/verification/source-contracts/result.json'),'utf8'));assert.deepEqual(saved,result);await assert.rejects(readFile(join(root,'.local/verification/source-contracts/failure.json')));
+ });});
+test('failed child retains exact group failure and runs all remaining required groups without retry or private raw output',async()=>{const{runStatelessChecks:run}=await api();await fixture(async root=>{
+ const result=await run({repoRoot:root});assert.equal(result.status,'FAILED');assert.equal(result.groups.find(row=>row.name==='cicd-fixtures')!.status,'FAILED');assert.ok(result.groups.every(row=>row.status!=='NOT_STARTED'));for(const step of selectedSteps)assert.equal((await readFile(join(root,step.name+'.proof'),'utf8')).trim(),'attempt');const bytes=await readFile(join(root,'.local/verification/source-contracts/failure.json'),'utf8');assert.equal(bytes.includes(secret),false);assert.deepEqual(JSON.parse(bytes),result);
+ },'failed');});
+test('two failed cases retain their exact title hashes without the Node failure-summary heading',async()=>{const{runStatelessChecks:run}=await api();await fixture(async root=>{
+ const result=await run({repoRoot:root}),group=result.groups.find(row=>row.name==='cicd-fixtures')!,path='scripts/verification/cicd-fixtures.test.ts',hash=(title:string)=>createHash('sha256').update(title).digest('hex');
+ assert.equal(result.status,'FAILED');assert.equal(group.summary!.fail,2);assert.deepEqual(group.failedFiles,[path]);
+ assert.deepEqual(group.failedTests,[{path,titleSha256:hash('first controlled failure')},{path,titleSha256:hash('second controlled failure')}].sort((left,right)=>left.titleSha256.localeCompare(right.titleSha256)));
+ const bytes=await readFile(join(root,'.local/verification/source-contracts/failure.json'),'utf8');assert.equal(bytes.includes(secret),false);assert.equal(bytes.includes(hash('failing tests:')),false);
+ },'two-failures');});
+test('cancellation drains started children and records pending groups without inventing success',async()=>{const{runStatelessChecks:run}=await api();await fixture(async root=>{
+ const controller=new AbortController(),pending=run({repoRoot:root,signal:controller.signal});for(let count=0;count<200;count++){try{await readFile(join(root,'cicd-fixtures.proof'));break;}catch{await new Promise(done=>setTimeout(done,10));}}controller.abort();const result=await pending;assert.equal(result.status,'CANCELLED');assert.ok(result.groups.some(row=>row.status==='CANCELLED'));assert.equal(result.groups.find(row=>row.name==='docs')!.status,'NOT_STARTED');assert.equal((await readFile(join(root,'.local/verification/source-contracts/failure.json'),'utf8')).includes(secret),false);
+ },'cancelled');});
+test('changed source and missing discovery refuse completion with explicit retained evidence',async()=>{const{runStatelessChecks:run}=await api();await fixture(async root=>{const result=await run({repoRoot:root});assert.equal(result.status,'SOURCE_CHANGED');assert.equal(result.source.frozenAfter,false);},'source-changed');await fixture(async root=>{await rm(join(root,selectedSteps[1].args[1]));const result=await run({repoRoot:root});assert.equal(result.status,'INPUT_REQUIRES_REVIEW');assert.ok(result.groups.every(row=>row.status==='NOT_STARTED'));assert.equal((await readFile(join(root,'.local/verification/source-contracts/failure.json'),'utf8')).includes(secret),false);});});
+test('strict evidence refuses added secrets omitted groups forged commands and invented failed file labels',async()=>{const{runStatelessChecks:run,validate}=await api();await fixture(async root=>{const result=await run({repoRoot:root});for(const mode of ['secret','group','command','file','success','omitted-files','duplicate-files','clock','digest']){const changed=structuredClone(result);if(mode==='secret')Object.assign(changed,{privateOutput:secret});if(mode==='group')changed.groups.pop();if(mode==='command')changed.groups[0].commandSha256='a'.repeat(64);if(mode==='file')changed.groups[0].failedFiles=['scripts/verification/foreign.test.ts'];if(mode==='success')changed.groups[0].status='FAILED';if(mode==='omitted-files')changed.groups[0].files=[];if(mode==='duplicate-files')changed.groups[0].files.push(changed.groups[0].files[0]);if(mode==='clock')changed.groups[0].startedAtMs=null;if(mode==='digest')changed.discoverySha256='a'.repeat(64);await assert.rejects(validate(changed));}const saved=JSON.parse(await readFile(join(root,'.local/verification/source-contracts/result.json'),'utf8'));assert.deepEqual(saved,result);});});
+test('wrong or incomplete official source identity records review before any required child starts',async()=>{const{runStatelessChecks:run}=await api();for(const mode of ['wrong-source','missing-attempt'])await fixture(async root=>{const prior={GITHUB_ACTIONS:process.env.GITHUB_ACTIONS,GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT:process.env.GITHUB_RUN_ATTEMPT,GITHUB_SHA:process.env.GITHUB_SHA};Object.assign(process.env,{GITHUB_ACTIONS:'true',GITHUB_RUN_ID:'51',GITHUB_RUN_ATTEMPT:mode==='missing-attempt'?'invalid':'2',GITHUB_SHA:'a'.repeat(40)});try{const result=await run({repoRoot:root});assert.equal(result.status,'INPUT_REQUIRES_REVIEW');assert.equal(result.source.runId,mode==='missing-attempt'?null:'51');assert.equal(result.source.runAttempt,mode==='missing-attempt'?null:2);assert.ok(result.groups.every(row=>row.status==='NOT_STARTED'));}finally{for(const[key,value]of Object.entries(prior))if(value===undefined)delete process.env[key];else process.env[key]=value;}});});
+test('temporary repository owns its GitHub source identity and restores the enclosing runner environment',async()=>{
+ const prior={GITHUB_ACTIONS:process.env.GITHUB_ACTIONS,GITHUB_RUN_ID:process.env.GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT:process.env.GITHUB_RUN_ATTEMPT,GITHUB_SHA:process.env.GITHUB_SHA};
+ const enclosing={GITHUB_ACTIONS:'true',GITHUB_RUN_ID:'37861896808',GITHUB_RUN_ATTEMPT:'1',GITHUB_SHA:'aabd5df38e0355b0a17252e258a0e71754daa971'};
+ Object.assign(process.env,enclosing);
+ try{const{runStatelessChecks:run}=await api();await fixture(async root=>{const result=await run({repoRoot:root});assert.equal(result.status,'PASSED');assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(result.source.sourceSha,process.env.GITHUB_SHA);assert.equal(result.source.runId,'51');assert.equal(result.source.runAttempt,2);assert.notEqual(result.source.sourceSha,enclosing.GITHUB_SHA);});for(const[key,value]of Object.entries(enclosing))assert.equal(process.env[key],value);}
+ finally{for(const[key,value]of Object.entries(prior))if(value===undefined)delete process.env[key];else process.env[key]=value;}
+});
+test('successful process exit with empty file or skipped test cases cannot establish required coverage',async()=>{const{runStatelessChecks:run}=await api();for(const mode of ['zero','skip'])await fixture(async root=>{const result=await run({repoRoot:root});assert.equal(result.status,'FAILED');const group=result.groups.find(row=>row.name==='cicd-fixtures')!;assert.equal(group.status,'COVERAGE_UNCONFIRMED');assert.equal(group.exitCode,0);assert.ok(group.summary);assert.equal(mode==='zero'?group.summary.tests:group.summary.skipped,1);assert.equal(result.groups.find(row=>row.name==='docs')!.status,'PASSED');},mode);});
+test('failed group scratch preparation preserves failure evidence and drains its concurrent sibling',async()=>{const{runStatelessChecks:run}=await api();await fixture(async root=>{refuseScratch=true;scratchAttempts=0;const result=await run({repoRoot:root});assert.equal(result.status,'FAILED');assert.equal(result.groups[0].status,'PASSED');const pair=result.groups.filter(row=>['cicd-fixtures','migration-replay-rules'].includes(row.name));assert.equal(pair.filter(row=>row.status==='PROCESS_ERROR').length,1);assert.equal(pair.filter(row=>row.status==='PASSED').length,1);assert.equal(result.groups[3].status,'PASSED');const bytes=await readFile(join(root,'.local/verification/source-contracts/failure.json'),'utf8');assert.equal(bytes.includes(secret),false);});});
+test.after(()=>hook.deregister());
+
+test('fixture payload remains data when it contains JavaScript and HTML delimiters',async()=>{
+ const{runStatelessChecks:run}=await api();await fixture(async root=>{
+  const file=selectedSteps[1].args[1]+'.json',data=JSON.parse(await readFile(join(root,file),'utf8'));
+  data.mode='failed';data.secret="</script>\u2028');globalThis.fixtureCodeExecuted=true;//";await writeFile(join(root,file),JSON.stringify(data));
+  execFileSync('git',['-C',root,'add',file],{stdio:'ignore',windowsHide:true});execFileSync('git',['-C',root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Payload'],{stdio:'ignore',windowsHide:true});
+  process.env.GITHUB_SHA=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore'],windowsHide:true}).trim();
+  const result=await run({repoRoot:root});assert.equal(result.status,'FAILED');assert.equal(result.groups[1].summary?.fail,1);assert.equal(result.groups[1].status,'FAILED');const bytes=await readFile(join(root,'.local/verification/source-contracts/failure.json'),'utf8');assert.equal(bytes.includes(data.secret),false);assert.equal(bytes.includes('fixtureCodeExecuted'),false);
+ });
+});

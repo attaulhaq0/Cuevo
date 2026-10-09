@@ -42,6 +42,17 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - run: node --import tsx scripts/verification/stateless-checks.ts
+      - name: Retain exact safe source contracts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/verification/source-contracts/result.json
+            .local/verification/source-contracts/failure.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
   database-checks:
