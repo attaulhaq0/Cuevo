@@ -29,6 +29,11 @@ test('real stages123/124/180/230 retain exact full stage and children never exce
  }
 });
 
+test('explicit SQL file materialization preserves original batch hashes while metadata-only stages refuse',()=>{
+ const original=stage(2),legacy=deriveHostedMigrationBatches({sources,stage:original}),materialized=deriveHostedMigrationBatches({sources,stage:{...original,materialization:'SQL_FILES'}});assert.deepEqual(materialized,legacy);
+ assert.throws(()=>deriveHostedMigrationBatches({sources,stage:{...original,materialization:'METADATA_ONLY'} as never}));
+});
+
 test('arbitrary middle prefixes, changed hashes and reordered stage rows require review',()=>{
  const arbitrary=stage(0,120);assert.throws(()=>deriveHostedMigrationBatches({sources,stage:arbitrary}));
  for(const mutate of [(s:ReturnType<typeof stage>)=>{s.included[0].sha256='0'.repeat(64);},(s:ReturnType<typeof stage>)=>{s.pending.reverse();},(s:ReturnType<typeof stage>)=>{s.expectedAfterVersions.pop();},(s:ReturnType<typeof stage>)=>{s.configSha256='0'.repeat(64);},(s:ReturnType<typeof stage>)=>{s.commandArgs.push('--include-seed');}]){const changed=structuredClone(stage(2));mutate(changed);assert.throws(()=>deriveHostedMigrationBatches({sources,stage:changed}));}

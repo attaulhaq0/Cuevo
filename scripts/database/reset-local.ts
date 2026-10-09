@@ -1,10 +1,42 @@
-import{execFileSync}from'node:child_process';import{mkdir,readFile,writeFile}from'node:fs/promises';import{resolve}from'node:path';import{Pool}from'pg';import{createReplayWorkdirs}from'./replay-workdir';import{posthogEnvironmentMigration,posthogIntelligenceMigration}from'./replay-plan';import{assertCuevoLocalConfig,assertCuevoLocalTarget,type LocalStatus}from'../configure-local';
-assertCuevoLocalConfig(await readFile('supabase/config.toml','utf8'));const cli=resolve('node_modules/supabase/dist/supabase.js');const status=JSON.parse(execFileSync(process.execPath,[cli,'status','-o','json'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}))as LocalStatus;assertCuevoLocalTarget(status);const stage=await createReplayWorkdirs();
-console.log('Resetting only verified local Cuevo with reviewed immutable migration dependency order.');
-execFileSync(process.execPath,[cli,'db','reset','--local','--no-seed','--network-id','cuevo-local','--workdir',stage.prefix,'--yes'],{stdio:'inherit'});
-execFileSync(process.execPath,[cli,'migration','up','--include-all','--local','--network-id','cuevo-local','--workdir',stage.prerequisite],{stdio:'inherit'});
-const environmentStage=resolve(stage.root,'posthog-environment');await mkdir(resolve(environmentStage,'supabase/migrations'),{recursive:true});await writeFile(resolve(environmentStage,'supabase/config.toml'),(await readFile('supabase/config.toml','utf8')).replace(/(\[db\.seed\][\s\S]*?enabled\s*=\s*)true/,'$1false'));for(const file of stage.files.filter(file=>file.name.slice(0,14)<posthogIntelligenceMigration.slice(0,14)||file.name===posthogEnvironmentMigration))await writeFile(resolve(environmentStage,'supabase/migrations',file.name),file.bytes);
-execFileSync(process.execPath,[cli,'migration','up','--include-all','--local','--network-id','cuevo-local','--workdir',environmentStage],{stdio:'inherit'});
-execFileSync(process.execPath,[cli,'migration','up','--include-all','--local','--network-id','cuevo-local'],{stdio:'inherit'});
-const pool=new Pool({connectionString:status.DB_URL});try{const expected=stage.files.map(file=>file.name.slice(0,14)).sort();const applied=(await pool.query('select version from supabase_migrations.schema_migrations order by version')).rows.map(row=>row.version);if(JSON.stringify(expected)!==JSON.stringify(applied))throw Error('Complete migration history does not match reviewed sources');for(const file of stage.files){if(!(await readFile(resolve('supabase/migrations',file.name))).equals(file.bytes))throw Error('Migration source changed during replay');}const validation=await pool.query("select current_setting('check_function_bodies')='on'and to_regprocedure('internal.curriculum_open_work_count(uuid,uuid)')is not null and to_regclass('internal.academic_result_sources')is not null as ready");if(validation.rows[0]?.ready!==true)throw Error('Complete migration dependency validation failed');await pool.query(await readFile('supabase/seed/seed.sql','utf8'));}finally{await pool.end();}
-console.log('Complete original migrations and synthetic seed applied. Replay evidence: '+stage.root);
+import { execFileSync } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { Pool } from 'pg';
+import { assertReplayWorkdirs, createReplayWorkdirs, type ReplayWorkdirs } from './replay-workdir';
+import { posthogEnvironmentMigration, posthogIntelligenceMigration } from './replay-plan';
+import { assertCuevoLocalConfig, assertCuevoLocalTarget, type LocalStatus } from '../configure-local';
+
+export async function resetCuevoLocalDatabase(prepared?: ReplayWorkdirs) {
+  assertCuevoLocalConfig(await readFile('supabase/config.toml', 'utf8'));
+  const cli = resolve('node_modules/supabase/dist/supabase.js');
+  const status = JSON.parse(execFileSync(process.execPath, [cli, 'status', '-o', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })) as LocalStatus;
+  assertCuevoLocalTarget(status);
+  const stage = prepared ?? await createReplayWorkdirs();
+  console.log('Resetting only verified local Cuevo with reviewed immutable migration dependency order.');
+  assertReplayWorkdirs(stage, stage.prefix);
+  execFileSync(process.execPath, [cli, 'db', 'reset', '--local', '--no-seed', '--network-id', 'cuevo-local', '--workdir', stage.prefix, '--yes'], { stdio: 'inherit' });
+  assertReplayWorkdirs(stage, stage.prerequisite);
+  execFileSync(process.execPath, [cli, 'migration', 'up', '--include-all', '--local', '--network-id', 'cuevo-local', '--workdir', stage.prerequisite], { stdio: 'inherit' });
+  const environmentStage = resolve(stage.root, 'posthog-environment');
+  await mkdir(resolve(environmentStage, 'supabase/migrations'), { recursive: true });
+  await writeFile(resolve(environmentStage, 'supabase/config.toml'), (await readFile('supabase/config.toml', 'utf8')).replace(/(\[db\.seed\][\s\S]*?enabled\s*=\s*)true/, '$1false'));
+  for (const file of stage.files.filter(file => file.name.slice(0, 14) < posthogIntelligenceMigration.slice(0, 14) || file.name === posthogEnvironmentMigration)) await writeFile(resolve(environmentStage, 'supabase/migrations', file.name), file.bytes);
+  assertReplayWorkdirs(stage, environmentStage);
+  execFileSync(process.execPath, [cli, 'migration', 'up', '--include-all', '--local', '--network-id', 'cuevo-local', '--workdir', environmentStage], { stdio: 'inherit' });
+  assertReplayWorkdirs(stage);
+  execFileSync(process.execPath, [cli, 'migration', 'up', '--include-all', '--local', '--network-id', 'cuevo-local'], { stdio: 'inherit' });
+  const pool = new Pool({ connectionString: status.DB_URL });
+  try {
+    const expected = stage.files.map(file => file.name.slice(0, 14)).sort();
+    const applied = (await pool.query('select version from supabase_migrations.schema_migrations order by version')).rows.map(row => row.version);
+    if (JSON.stringify(expected) !== JSON.stringify(applied)) throw Error('Complete migration history does not match reviewed sources');
+    const validation = await pool.query("select current_setting('check_function_bodies')='on'and to_regprocedure('internal.curriculum_open_work_count(uuid,uuid)')is not null and to_regclass('internal.academic_result_sources')is not null as ready");
+    if (validation.rows[0]?.ready !== true) throw Error('Complete migration dependency validation failed');
+    const seed = await readFile('supabase/seed/seed.sql', 'utf8');
+    assertReplayWorkdirs(stage);
+    await pool.query(seed);
+  } finally { await pool.end(); }
+  console.log('Complete original migrations and synthetic seed applied. Replay evidence: ' + stage.root);
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await resetCuevoLocalDatabase();

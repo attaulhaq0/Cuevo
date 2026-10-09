@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { registerHooks } from 'node:module';
+import { registerHooks,createRequire,syncBuiltinESMExports } from 'node:module';
 import { transformSync } from 'esbuild';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -60,14 +60,14 @@ const replacements: Record<string, string> = {
   'backend-release-admission.ts': 'export const readBackendReleaseAdmission=globalThis.nativeCompositionFixture.admission;',
   'backend-release-contracts.ts': "export * from './backend-release-contracts.ts?actual-fingerprint-validator';export const validatePreparedBackendReleaseIntent=globalThis.nativeCompositionFixture.prepared;",
   'hosted-migration-provider.ts': 'export const readHostedMigrationProvider=globalThis.nativeCompositionFixture.provider;',
-  'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeCompositionFixture.files;export const admitHostedMigrationBatchFiles=()=>{throw Error("No batch in ordinary adapter fixture");};',
+  'hosted-migration-stage-files.ts': 'export const admitHostedMigrationStageFiles=globalThis.nativeCompositionFixture.files;export const admitInstalledMigrationStageMetadata=globalThis.nativeCompositionFixture.metadata;export const admitHostedMigrationBatchFiles=()=>{throw Error("No batch in ordinary adapter fixture");};',
   'hosted-migration-database.ts': 'export const createHostedMigrationDatabase=globalThis.nativeCompositionFixture.database;export const assertNativeReconciliationPermit=()=>{throw Error("Unregistered controlled permit");};export const readNativeMigrationPermitAuthority=()=>{throw Error("Unregistered controlled permit authority");};export const readNativeSchemaStageAdmission=()=>{throw Error("Ordinary fixture must not consume a native cohort");};',
   'hosted-migration-native-process.ts': 'export class HostedMigrationNativePreparationError extends Error{constructor(evidence){super("Private original failure");this.evidence=evidence;}};export const createHostedMigrationNativeProcess=globalThis.nativeCompositionFixture.process;',
   'hosted-migration-journal.ts': 'export const createHostedMigrationJournal=globalThis.nativeCompositionFixture.journal;',
   'hosted-migration-durable-journal.ts': 'export const createHostedMigrationDurableJournal=globalThis.nativeCompositionFixture.durable;',
   'hosted-operator-storage-inventory.ts': 'export const readHostedOperatorStorageInventory=globalThis.nativeCompositionFixture.inventory;',
 };
-registerHooks({ resolve(specifier, context, next) { if (specifier.endsWith('/hosted-migration-provider')) return { shortCircuit: true, url: new URL('./hosted-migration-provider.ts', context.parentURL).href }; return next(specifier, context); }, load(url, context, next) { if (/\/node_modules\/pg\/(?:lib\/index\.js|esm\/index\.mjs)$/.test(url.replaceAll('\\', '/'))) return { format: 'module', shortCircuit: true, source: 'export const Client=globalThis.nativeObserverTransportClient;export default{Client};' }; const name = url.split('/').at(-1)!; if(name==='hosted-migration-provider.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('async function readHostedMigrationProvider(value) {','async function readHostedMigrationProvider(value) { return globalThis.nativeCompositionFixture.provider(value);')};if (replacements[name]) return { format: 'module', shortCircuit: true, source: replacements[name] }; if (name === 'hosted-migration-executor.ts') return { format: 'module', shortCircuit: true, source: transformSync(readFileSync(new URL(url), 'utf8'), { loader: 'ts', format: 'esm' }).code }; return next(url, context); } });
+registerHooks({ resolve(specifier, context, next) { if (specifier.endsWith('/hosted-migration-provider')) return { shortCircuit: true, url: new URL('./hosted-migration-provider.ts', context.parentURL).href }; return next(specifier, context); }, load(url, context, next) { if (/\/node_modules\/pg\/(?:lib\/index\.js|esm\/index\.mjs)$/.test(url.replaceAll('\\', '/'))) return { format: 'module', shortCircuit: true, source: 'export const Client=globalThis.nativeObserverTransportClient;export default{Client};' }; const name = url.split('/').at(-1)!; if(name==='hosted-migration-provider.ts')return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(url),'utf8'),{loader:'ts',format:'esm'}).code.replace('async function readHostedMigrationProvider(value) {','async function readHostedMigrationProvider(value) { return globalThis.nativeCompositionFixture.provider(value);')};if (replacements[name]) return { format: 'module', shortCircuit: true, source: replacements[name] }; if (name === 'hosted-migration-executor.ts') return { format: 'module', shortCircuit: true, source: transformSync(process.env.CUEVO_HISTORICAL_ORDER_CONTROL==='before-change'?execFileSync('git',['show','HEAD:scripts/database/hosted-migration-executor.ts'],{cwd:resolve(import.meta.dirname,'../..'),encoding:'utf8',windowsHide:true}):readFileSync(new URL(url), 'utf8'), { loader: 'ts', format: 'esm' }).code }; return next(url, context); } });
 const clone = <T,>(value: T): T => structuredClone(value);
 const fail = (name: string) => { if (state.failures.includes(name)) throw Error(secret); };
 const versions = () => (state.stage![state.after ? 'expectedAfterVersions' : 'expectedBeforeVersions'] as string[]);
@@ -76,6 +76,7 @@ function storageCount() { return state.aggregate ? [...state.journals.values()].
 function target() { return { observedAtMs: state.failures.includes('older-target') ? Date.now() - 25000 : Date.now(), operator: 'postgres', database: 'postgres', serverVersion: 170011, tls: { kind: 'PEER_VERIFIED', host: (state.input!.endpoint as {host:string}).host, certificateSha256: 'a'.repeat(64), peerCertificateSha256: 'b'.repeat(64), protocol: 'TLSv1.3' }, historyPresent: versions().length > 0, history: rawHistory(), authUsers: state.failures.includes('population') ? 1 : state.installed?133:0, storageObjects: storageCount() + (state.failures.includes('inventory-foreign-intent') ? 2 : 0), appSchemas: versions().length ? ['app', 'authorization', 'internal'] : [], runtimeRoles: versions().length ? ['cuevo_api', 'cuevo_worker'] : [], schools: state.installed?2:versions().length ? 0 : null }; }
 function checks() { const current = versions(), has = (prefix: string) => current.includes(prefix); return { foundation: current.length ? true : null, rls: current.length ? true : null, privateRelations: current.length ? true : null, privateFunctions: current.length ? true : null, runtimeRoles: current.length ? true : null, nativeSourceBridge: has('20261002021737') ? true : null, curriculumLifecycle: has('20261002021206') ? true : null, dispatchInactive: has('20261002122236') ? true : null, analyticsInactive: has('20261002182213') ? true : null, recoveryCronInactive: true, transportPrivate: has('20261005132902') ? true : null }; }
 Object.assign(globalThis, { nativeCompositionFixture: {
+  metadata:async(input:{stage:Record<string,unknown>})=>{state.events.push('metadata');return (globalThis as unknown as {nativeCompositionFixture:{files:(input:unknown)=>Promise<unknown>}}).nativeCompositionFixture.files(input);},
   prepared: (value: unknown) => clone(value),
   admission: async () => { state.events.push('official'); if (state.failures.includes('slow-official')) (globalThis as unknown as { nativeCompositionAdvanceClock?: (milliseconds: number) => void }).nativeCompositionAdvanceClock?.(31000); fail('official'); if (state.seenIntent) fail('official-after-intent'); if (state.stage?.id === 'native') fail('native-approval-drift'); return { expected: clone(state.input!.expected), approval: { purpose: 'BACKEND_SYNTHETIC_STAGING', state: 'approved', packageSha256: (state.input!.preparedApproval as { sha256: string }).sha256 }, observedAt: new Date(Date.now()).toISOString(), provenance: 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' }; },
   provider: async () => { state.events.push('provider'); fail('provider'); return { evidence: 'OFFICIAL_SUPABASE_PROJECT_METADATA', observedAtMs: Date.now(), projectRef: ref, projectName: 'Cuevo', projectStatus: 'ACTIVE_HEALTHY', directEndpoint: { projectRef: ref, kind: 'direct', host: `db.${ref}.supabase.co`, port: 5432, database: 'postgres' },sessionEndpoint:{projectRef:ref,kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'} }; },
@@ -83,7 +84,7 @@ Object.assign(globalThis, { nativeCompositionFixture: {
   database: async (input: Parameters<typeof import('./hosted-migration-database').createHostedMigrationDatabase>[0]) => {
     fail('database-factory');
     const persistInstalledSchema=async(value:{migrationCount:number;migrations:{version:string;sha256:string}[];sourceSha:string;treeSha:string;stageId:string;stageSha256:string})=>{state.events.push('installed-schema:'+value.stageId);fail('installed-schema');const current=state.stage!;assert.equal(state.after,true);assert.equal(state.journal?.state,'COMMITTED');assert.equal(value.sourceSha,(state.input!.plan as HostedMigrationPlanV1).source.sha);assert.equal(value.stageId,current.id);assert.equal(value.migrationCount,(current.included as unknown[]).length);assert.deepEqual(value.migrations,(current.included as {version:string;sha256:string}[]).map(({version,sha256})=>({version,sha256})));};
-    const persistInstalledMigrations=async(value:{migrationCount:number;migrations:{version:string;sha256:string}[];sourceSha:string;treeSha:string})=>{state.events.push('installed-migrations');fail('installed-migrations');const plan=state.input!.plan as HostedMigrationPlanV1;assert.equal(state.after,true);assert.equal(state.journals.size,4);assert.ok([...state.journals.values()].every(row=>row?.state==='COMMITTED'));assert.equal(value.sourceSha,plan.source.sha);assert.equal(value.treeSha,plan.source.tree);assert.equal(value.migrationCount,plan.migrations.length);assert.deepEqual(value.migrations,plan.migrations.map(({version,sha256})=>({version,sha256})));assert.deepEqual(versions(),plan.migrations.map(row=>row.version).sort());};
+    const persistInstalledMigrations=async(value:{migrationCount:number;migrations:{version:string;sha256:string}[];sourceSha:string;treeSha:string})=>{state.events.push('installed-migrations');fail('installed-migrations');const plan=state.input!.plan as HostedMigrationPlanV1;if(!state.installed){assert.equal(state.after,true);assert.equal(state.journals.size,4);assert.ok([...state.journals.values()].every(row=>row?.state==='COMMITTED'));}else{assert.equal(plan.pending.length,0);assert.equal(state.commands,0);assert.equal(state.journals.size,0);}assert.equal(value.sourceSha,plan.source.sha);assert.equal(value.treeSha,plan.source.tree);assert.equal(value.migrationCount,plan.migrations.length);assert.deepEqual(value.migrations,plan.migrations.map(({version,sha256})=>({version,sha256})));assert.deepEqual(versions(),plan.migrations.map(row=>row.version).sort());};
     if (state.nativeProducer) {
       // A distinct module URL bypasses only this file's database-factory mock;
       // the production observer source is loaded without rewriting its body.
@@ -242,6 +243,25 @@ test('populated completed-source no-pending continuation observes original recei
  });
 });
 
+test('first activation installed metadata still executes complete native no-op admission without SQL processes or new intent',async()=>{
+ const subject=await api();for(const failure of [undefined,'installed-receipt','installed-source','target','postconditions','inventory-foreign-intent','old-inventory','late-file-drift','missing-installed-source','wrong-scope','pending-plan','mixed-stage']as const)await fixture(async(input,root)=>{
+  await populatedContinuationInput(input,root,failure==='pending-plan');
+  const expected=input.expected as {executionScope?:string;installedSource?:unknown};expected.executionScope=failure==='wrong-scope'?'schema-and-accounts':'complete-backend';
+  if(failure==='missing-installed-source')delete expected.installedSource;
+  if(failure&&['installed-receipt','installed-source','target','postconditions','inventory-foreign-intent','old-inventory','late-file-drift'].includes(failure))state.failures=[failure];
+  const value=aggregateInput(input),rows=(input.plan as HostedMigrationPlanV1).migrations;
+  if(expected.installedSource)(expected.installedSource as {migrationCount:number}).migrationCount=rows.length;
+  value.stages=value.stages.map(stage=>({...stage,materialization:'METADATA_ONLY',included:rows,pending:[],expectedBeforeVersions:rows.map(row=>row.version).sort(),expectedAfterVersions:rows.map(row=>row.version).sort()}));
+  if(failure==='mixed-stage')Object.assign(value.stages[0],{materialization:'SQL_FILES'});
+  state.stage=(value.stages as Record<string,unknown>[])[0];
+  const result=await subject.executeNativeHostedMigrations(value);
+  assert.equal(result.status,failure?'REQUIRES_REVIEW':'NOOP',JSON.stringify({failure,result,events:state.events}));
+  assert.equal(state.commands,0);assert.equal(state.seenIntent,false);assert.equal(state.events.includes('process-prepare'),false);
+  if(!failure){assert.equal(result.stages.length,4);assert.ok(result.stages.every(stage=>!!stage.installedVerification&&stage.protocol===null));assert.ok(state.events.includes('metadata'));assert.ok(state.events.includes('installed-receipt'));assert.ok(state.events.includes('population-read'));assert.ok(state.events.includes('inventory'));assert.ok(state.events.includes('unlock'));}
+  else if(['missing-installed-source','wrong-scope','pending-plan','mixed-stage'].includes(failure))assert.equal(state.events.includes('database'),false);
+ });
+});
+
 test('populated pending delta refuses foreign unresolved remote operator effects before allocating a new CLI',async()=>{
  const module=await api();await fixture(async(input,root)=>{
   await populatedContinuationInput(input,root,true);state.failures=['inventory-foreign-intent'];
@@ -263,7 +283,11 @@ test('fresh approval resumes a committed partial schema after expiry without pop
   input.plan=continued;const expected=input.expected as {ciRunId:string;fingerprints:Record<string,string>;installedSchema?:unknown};expected.ciRunId='32';expected.installedSchema={sourceSha:initial.source.sha,treeSha:initial.source.tree,migrationCount:applied.length};expected.fingerprints.migrationPlanSha256=canonicalHostedMigrationPlan(continued).sha256;expected.fingerprints.migrationHistorySha256=continued.observedHistorySha256;
   const body={...expected,purpose:'BACKEND_SYNTHETIC_STAGING',expiresAt:new Date(Date.now()+3600000).toISOString()};const canonicalJson=JSON.stringify(body);input.preparedApproval={status:'PREPARED_ONLY',canonicalJson,sha256:hash(canonicalJson),base64:Buffer.from(canonicalJson).toString('base64'),comment:'fresh approval after prior source expiry'};
   const stage={id:'prefix',workdir:join(root,'.local/hosted-release/migration-fixture/resumed-prefix'),included:applied,pending:[],expectedBeforeVersions:applied.map(row=>row.version).sort(),expectedAfterVersions:applied.map(row=>row.version).sort(),configSha256:'c'.repeat(64),commandArgs:[]};input.stage=stage;state.stage=stage;state.after=false;state.controller=new AbortController();state.seenIntent=false;state.events=[];
-  const result=await module.executeNativeHostedMigrationStage(input);assert.equal(result.status,'NOOP',JSON.stringify({result,events:state.events}));assert.equal(state.commands,oldCommands);assert.equal(state.journals.size,oldJournals);assert.deepEqual(state.journal,priorJournal);assert.equal(result.installedVerification?.installedPopulationSha256,undefined);assert.ok(result.installedVerification);assert.equal(state.events.includes('installed-receipt'),false);
+  const cp=createRequire(import.meta.url)('node:child_process')as typeof import('node:child_process'),nativeExec=cp.execFileSync,calls:string[][]=[];
+  cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);return nativeExec(file,args,options as Parameters<typeof execFileSync>[2]);})as typeof execFileSync;syncBuiltinESMExports();
+  let result:Awaited<ReturnType<typeof module.executeNativeHostedMigrationStage>>;
+  try{result=await module.executeNativeHostedMigrationStage(input);assert.equal(calls.filter(args=>args.includes('--batch')).length,1,'initial installed prefix verification supplies its actual original bytes without a second acquisition');}finally{cp.execFileSync=nativeExec;syncBuiltinESMExports();}
+  assert.equal(result.status,'NOOP',JSON.stringify({result,events:state.events}));assert.equal(state.commands,oldCommands);assert.equal(state.journals.size,oldJournals);assert.deepEqual(state.journal,priorJournal);assert.equal(result.installedVerification?.installedPopulationSha256,undefined);assert.ok(result.installedVerification);assert.equal(state.events.includes('installed-receipt'),false);
   assert.equal(state.events.some(event=>event.startsWith('installed-schema:')),false);
   for(const uncertainty of ['INTENT','wrong-stage']){
    state.controller=new AbortController();const changed=clone(priorJournal);if(uncertainty==='INTENT')changed.state='INTENT';else changed.identity.stageSha256='0'.repeat(64);state.journal=changed;state.events=[];
@@ -431,5 +455,12 @@ test('native preparation failure retains only original resource identity and exp
   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(state.commands,0);assert.equal(state.events.includes('journal:INTENT'),false);
   assert.deepEqual(result.compositionFailure?.process,{version:1,purpose:'CUEVO_NATIVE_MIGRATION_PREPARATION_FAILURE',phase:'CREATE',ownerId:'ffffffff-ffff-4fff-afff-ffffffffffff',cleanup:'UNCONFIRMED'});
   assert.equal(JSON.stringify(result).includes(secret),false);assert.equal(JSON.stringify(result).includes('Private original failure'),false);
+ });
+});
+
+test('metadata-only stage cannot allocate native consumers or migration execution',async()=>{
+ const subject=await api();await fixture(async input=>{
+  const result=await subject.executeNativeHostedMigrationStage({...input,stage:{...(input.stage as object),materialization:'METADATA_ONLY'}});
+  assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol,null);assert.equal(state.commands,0);assert.equal(state.seenIntent,false);assert.equal(state.events.length,0);
  });
 });

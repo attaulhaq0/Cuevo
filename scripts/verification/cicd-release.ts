@@ -18,6 +18,7 @@ import { verifyHostedLearningLoop, type HostedLearningLoopWebAdmission } from '.
 import { createProtectedPreview, protectedPreviewHeaders, type ProtectedPreviewBinding } from './protected-preview';
 import { readFullReleaseEvidence } from './full-release-evidence';
 import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
+import {createGithubCodeqlArtifactReader} from './staging-security';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -132,7 +133,7 @@ const currentCi = async () => {
   assertCheckout();
   const rawCi=await github(`actions/runs/${ciRunId}`);
   validateCiRun(rawCi, { sha, repository: required('GITHUB_REPOSITORY'), ciRunId });
-  const canonicalRuntimeVerification=await readCanonicalRuntimeJobs(rawCi,github),canonicalPath=join(directory,'canonical-runtime-proof.json');
+  const canonicalRuntimeVerification=await readCanonicalRuntimeJobs(rawCi,github,createGithubCodeqlArtifactReader(required('GITHUB_REPOSITORY'),required('GH_TOKEN'))),canonicalPath=join(directory,'canonical-runtime-proof.json');
   try{const saved=await json<unknown>(canonicalPath);if(canonicalReleaseReviewJson(saved)!==canonicalReleaseReviewJson(canonicalRuntimeVerification))throw Error('Canonical runtime job attempt changed before release consumption.');}
   catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;await mkdir(directory,{recursive:true});await writeFile(canonicalPath,canonicalReleaseReviewJson(canonicalRuntimeVerification),{flag:'wx',mode:0o600});}
   if (required('RELEASE_ENVIRONMENT') === 'production') {

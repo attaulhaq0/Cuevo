@@ -9,7 +9,7 @@ import { readBackendReleaseAdmission } from '../verification/backend-release-adm
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from '../verification/backend-release-contracts';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from '../verification/release-review';
 import { canonicalHostedMigrationPlan, type HostedMigrationPlanV1 } from './hosted-migration-plan';
-import { admitHostedMigrationStageFiles } from './hosted-migration-stage-files';
+import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata } from './hosted-migration-stage-files';
 import { verifyHostedMigrationHistory } from './hosted-migration-history';
 import { readHostedMigrationProvider, hostedMigrationEndpointSchema, requireCurrentHostedMigrationEndpoint } from './hosted-migration-provider';
 import { prepareHostedMigrationConnection } from './hosted-migration-connection';
@@ -72,7 +72,8 @@ export async function revalidateInstalledSyntheticAuth(value:unknown):Promise<Ho
   const released=await db.withLock(`${plan.projectRef}:HOSTED_SCHEMA_MIGRATION`,async()=>{
    let readRecoveryPermit:NativeReconciliationPermit|undefined;if(expected.schemaRecovery){if(!input.schemaRecoveryExport||!input.journalStorageKey)throw failure();readRecoveryPermit=await db.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:(expected.installedRuntime||expected.currentRuntime)?'INSTALLED_SYNTHETIC_RUNTIME_READ_ONLY':'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});}
    const observed=await db.observe();if(observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.certificate.sha256||observed.operator!=='postgres'||observed.database!=='postgres')throw failure();
-   const files=await admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage:input.finalStage as HostedMigrationWorkdirs['stages'][number]});verifyHostedMigrationHistory({sources:files.sources,included:plan.migrations,expectedVersions:plan.migrations.map(row=>row.version).sort(),history:observed.historyPresent?observed.history:null});
+   const finalStage=input.finalStage as HostedMigrationWorkdirs['stages'][number],admitFiles=finalStage.materialization==='METADATA_ONLY'&&expected.executionScope==='complete-backend'?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
+   const files=await admitFiles({repoRoot:input.repoRoot,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage:finalStage});verifyHostedMigrationHistory({sources:files.sources,included:plan.migrations,expectedVersions:plan.migrations.map(row=>row.version).sort(),history:observed.historyPresent?observed.history:null});
    const initial=await db.readAuthSeedAttempt(identity);if(!initial||initial.status!=='CONFIRMED'||initial.actors.length!==133||initial.originalKey!==identity.originalKey||initial.manifestSha256!==manifestSha256||initial.actors.some((row,index)=>row.state!=='CONFIRMED'||row.actorId!==source.value.actors[index].actorId||row.emailSha256!==hash(source.value.actors[index].email)))throw failure();
    if(population(populationSchema.parse(await db.observeSyntheticPopulation()),source.value)!==133)throw failure();
    await readBackendReleaseAdmission({repoRoot:input.repoRoot,expected,prepared,githubToken:input.githubToken});if(!same(await db.readAuthSeedAttempt(identity),initial))throw failure();
@@ -90,6 +91,11 @@ export async function provisionHostedSyntheticAuth(value: unknown): Promise<Host
     const input = inputSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value))), root = input.repoRoot, expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }) as PreparedBackendReleaseIntent;
     const plan = JSON.parse(canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1).json) as HostedMigrationPlanV1, finalStage = input.finalStage as HostedMigrationWorkdirs['stages'][number], projectRef = expected.targets.supabase.projectRef;
     if ((plan.mode !== 'EMPTY_INITIAL' && (plan.mode!=='INCREMENTAL'||!(expected.installedSource||expected.installedSchema))) || plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== projectRef || canonicalHostedMigrationPlan(plan).sha256 !== expected.fingerprints.migrationPlanSha256 || finalStage.id !== 'remaining' || finalStage.included.length !== plan.migrations.length || !same(finalStage.included, plan.migrations)) throw failure();
+    if(finalStage.materialization==='METADATA_ONLY'){
+      if(expected.executionScope!=='complete-backend'||!expected.installedSource||expected.installedSchema||plan.runtimeOnly||plan.pending.length||plan.applied.length!==plan.migrations.length||!plan.priorCompletedRelease||plan.stages.some(stage=>stage.names.length))throw failure();
+      const{authProvisioningKey:unusedKey,syntheticPassword:unusedPassword,...observation}=input;void unusedKey;void unusedPassword;
+      return revalidateInstalledSyntheticAuth(observation);
+    }
     await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage: finalStage });
     const originalSource=expected.installedSource??{sourceSha:expected.releaseSha,treeSha:expected.treeSha};
     if(expected.installedSource){if(input.originalKey!=='cuevo-initial-hosted-synthetic-auth')throw failure();git(root,['merge-base','--is-ancestor',originalSource.sourceSha,expected.releaseSha]);if(git(root,['rev-parse',originalSource.sourceSha+'^{tree}']).toString().trim()!==originalSource.treeSha)throw failure();}

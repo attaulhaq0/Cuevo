@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstat, mkdir, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, verifyCompletedMigrationPrefix, readHistoricalMigrationSources, verifyPriorSchemaPrefix, type HostedMigrationPlanV1 } from './hosted-migration-plan';
+import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, verifyCompletedMigrationPrefix, readVerifiedCompletedMigrationSources, verifyPriorSchemaPrefix, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { deriveHostedMigrationBatches } from './hosted-migration-batches';
 import { types } from 'node:util';
 import { canonicalReleaseExecutionJson } from '../verification/release-review';
@@ -16,7 +16,7 @@ type MigrationRow=HostedMigrationPlanV1['migrations'][number];
 export type HostedMigrationWorkdirs={
  root:string; projectRef:string; sourceSha:string; treeSha:string; planSha256:string;
  execution:'NOT_EXECUTED'; sourceProvenance:ReturnType<typeof readCanonicalMigrationSources>['provenance'];
- stages:{id:HostedMigrationPlanV1['stages'][number]['id'];workdir:string;included:MigrationRow[];pending:MigrationRow[];expectedBeforeVersions:string[];expectedAfterVersions:string[];configSha256:string;commandArgs:string[]}[];
+ stages:{id:HostedMigrationPlanV1['stages'][number]['id'];workdir:string;included:MigrationRow[];pending:MigrationRow[];expectedBeforeVersions:string[];expectedAfterVersions:string[];configSha256:string;commandArgs:string[];materialization?:'SQL_FILES'|'METADATA_ONLY'}[];
 };
 
 
@@ -30,8 +30,11 @@ async function createOwnedMigrationDelivery(input:{workdir:string;included:Migra
 function ownedMetadata(value:unknown,depth=0):unknown{if(depth>12)throw failure();if(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return value;if(!value||typeof value!=='object'||types.isProxy(value)||!Array.isArray(value)&&![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw failure();if(Array.isArray(value)&&(value.length>5000||Reflect.ownKeys(value).length!==value.length+1))throw failure();const output:Record<string,unknown>|unknown[]=Array.isArray(value)?[]:Object.create(null);for(const key of Reflect.ownKeys(value)){if(Array.isArray(value)&&key==='length')continue;const field=Object.getOwnPropertyDescriptor(value,key);if(typeof key!=='string'||!field||!('value'in field)||!field.enumerable)throw failure();Object.defineProperty(output,key,{value:ownedMetadata(field.value,depth+1),enumerable:true});}return output;}
 
 /** Builds ignored CLI input only. Hosted target, credentials, approval and execution remain separate. */
-export async function createHostedMigrationWorkdirs(input:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;outputRoot:string}):Promise<HostedMigrationWorkdirs>{
+export async function createHostedMigrationWorkdirs(input:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;outputRoot:string;preparation?:'ALL_SQL'|'PREFIX_SQL'|'RUNTIME_OBSERVATION'|'INSTALLED_NOOP'}):Promise<HostedMigrationWorkdirs>{
  const canonical=canonicalHostedMigrationPlan(input.plan),plan=JSON.parse(canonical.json) as HostedMigrationPlanV1;
+ const preparation=input.preparation??'ALL_SQL';
+ if(!['ALL_SQL','PREFIX_SQL','RUNTIME_OBSERVATION','INSTALLED_NOOP'].includes(preparation)||preparation==='RUNTIME_OBSERVATION'&&(!plan.runtimeOnly||plan.pending.length||plan.stages.some(stage=>stage.names.length))||preparation==='PREFIX_SQL'&&(!plan.reconciliationTemplate||plan.applied.length!==120||plan.runtimeOnly)||preparation==='INSTALLED_NOOP'&&(plan.runtimeOnly||plan.reconciliationTemplate||plan.priorSchemaRelease||!plan.priorCompletedRelease||plan.applied.length!==plan.migrations.length||plan.pending.length||plan.stages.some(stage=>stage.names.length)))throw failure();
+ if(preparation==='INSTALLED_NOOP'&&!verifyCompletedMigrationPrefix(input.repoRoot,plan))throw failure();
  const loaded=readCanonicalMigrationSources(input);
  if(plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();
  const replay=replayPlan(loaded.sources),order=[...replay.before,replay.prerequisite,...replay.remaining];
@@ -60,12 +63,13 @@ export async function createHostedMigrationWorkdirs(input:{repoRoot:string;sourc
   for(const [index,stage]of plan.stages.entries()){
    await directory(expected);await directory(root);
    const workdir=join(root,stage.id),included=rows.slice(0,Math.max(plan.applied.length,boundaries[index])),pending=included.filter(row=>pendingSet.has(row.name)&&stage.names.includes(row.name));
-   await createOwnedMigrationDelivery({workdir,included,sources:loaded.sources,verify:async()=>{await directory(expected);await directory(root);}});
+   const materialize=preparation==='ALL_SQL'||preparation==='PREFIX_SQL'&&stage.id==='prefix';
+   if(materialize)await createOwnedMigrationDelivery({workdir,included,sources:loaded.sources,verify:async()=>{await directory(expected);await directory(root);}});
    const commandArgs=['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',workdir,'--yes','--output-format','json'];
-   stages.push({id:stage.id,workdir,included,pending,expectedBeforeVersions:rows.slice(0,Math.max(plan.applied.length,index?boundaries[index-1]:0)).map(row=>row.version).sort(),expectedAfterVersions:rows.slice(0,Math.max(plan.applied.length,boundaries[index])).map(row=>row.version).sort(),configSha256:hash(config),commandArgs});
+   stages.push({id:stage.id,workdir,included,pending,expectedBeforeVersions:rows.slice(0,Math.max(plan.applied.length,index?boundaries[index-1]:0)).map(row=>row.version).sort(),expectedAfterVersions:rows.slice(0,Math.max(plan.applied.length,boundaries[index])).map(row=>row.version).sort(),configSha256:hash(config),commandArgs,...(preparation==='ALL_SQL'?{}:{materialization:materialize?'SQL_FILES' as const:'METADATA_ONLY' as const})});
   }
   await directory(expected);await directory(root);
-  if(JSON.stringify((await readdir(root)).sort())!==JSON.stringify(['builder-state.json',...plan.stages.map(stage=>stage.id)].sort()))throw failure();
+  if(JSON.stringify((await readdir(root)).sort())!==JSON.stringify(['builder-state.json',...stages.filter(stage=>stage.materialization!=='METADATA_ONLY').map(stage=>stage.id)].sort()))throw failure();
   await record('READY');
   return{root,projectRef:plan.projectRef,sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:canonical.sha256,execution:'NOT_EXECUTED',sourceProvenance:loaded.provenance,stages};
  }catch{await record('REQUIRES_REVIEW').catch(()=>undefined);throw failure();}finally{await state.close();}
@@ -77,10 +81,10 @@ export async function createHostedMigrationBatchWorkdirs(value:{repoRoot:string;
  try{
   const input=JSON.parse(canonicalReleaseExecutionJson(ownedMetadata(value))) as typeof value,canonical=canonicalHostedMigrationPlan(input.plan),plan=JSON.parse(canonical.json) as HostedMigrationPlanV1,loaded=readCanonicalMigrationSources(input);
   if(JSON.stringify(Object.keys(input).sort())!==JSON.stringify(['repoRoot','sourceSha','treeSha','plan','stage','outputRoot'].sort())||plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();
-  const completedSource=plan.priorCompletedRelease&&input.stage.expectedBeforeVersions.length===plan.priorCompletedRelease.migrationCount?(()=>{if(!verifyCompletedMigrationPrefix(input.repoRoot,plan))throw failure();return readHistoricalMigrationSources(input.repoRoot,plan.priorCompletedRelease!.sourceSha,plan.priorCompletedRelease!.treeSha);})():undefined;
+  const completedSource=plan.priorCompletedRelease&&input.stage.expectedBeforeVersions.length===plan.priorCompletedRelease.migrationCount?(readVerifiedCompletedMigrationSources(input.repoRoot,plan)??undefined):undefined;
   const derived=deriveHostedMigrationBatches({sources:loaded.sources,stage:input.stage,...(completedSource?{completedSource}:{}),...(plan.reconciliationTemplate?{reconciliationTemplate:plan.reconciliationTemplate}:{})});
   const replay=replayPlan(loaded.sources),boundary=replay.remaining.indexOf(posthogIntelligenceMigration),groups=[replay.before,[nativeSourceMigration],replay.remaining.slice(0,boundary),replay.remaining.slice(boundary)],ids=['prefix','native','pre-observability','remaining'],index=ids.indexOf(input.stage.id),boundaries=groups.map((_,index)=>groups.slice(0,index+1).flat().length);
-  if(index<0||boundary<0||plan.applied.length&&!boundaries.includes(plan.applied.length)&&!(plan.priorSchemaRelease?verifyPriorSchemaPrefix(input.repoRoot,plan):verifyCompletedMigrationPrefix(input.repoRoot,plan))||input.stage.expectedBeforeVersions.length!==Math.max(plan.applied.length,index?boundaries[index-1]:0)||canonicalReleaseExecutionJson(input.stage.pending.map(row=>row.name))!==canonicalReleaseExecutionJson(plan.stages[index].names)||plan.stages.some((stage,index)=>JSON.stringify(stage.names)!==JSON.stringify(groups[index].filter(name=>plan.pending.some(row=>row.name===name))))||derived.sourceSetSha256!==hash(JSON.stringify(plan.migrations.map(({name,version,sha256})=>({name,version,sha256})))))throw failure();
+  if(index<0||boundary<0||plan.applied.length&&!boundaries.includes(plan.applied.length)&&!(plan.priorSchemaRelease?verifyPriorSchemaPrefix(input.repoRoot,plan):completedSource!==undefined||verifyCompletedMigrationPrefix(input.repoRoot,plan))||input.stage.expectedBeforeVersions.length!==Math.max(plan.applied.length,index?boundaries[index-1]:0)||canonicalReleaseExecutionJson(input.stage.pending.map(row=>row.name))!==canonicalReleaseExecutionJson(plan.stages[index].names)||plan.stages.some((stage,index)=>JSON.stringify(stage.names)!==JSON.stringify(groups[index].filter(name=>plan.pending.some(row=>row.name===name))))||derived.sourceSetSha256!==hash(JSON.stringify(plan.migrations.map(({name,version,sha256})=>({name,version,sha256})))))throw failure();
   const repoRoot=await realpath(input.repoRoot),releaseRoot=join(repoRoot,'.local','hosted-release'),part=relative(releaseRoot,input.stage.workdir);if(repoRoot!==input.repoRoot||input.outputRoot!==releaseRoot||!part||isAbsolute(part)||part.split(/[\\/]/).some(piece=>!piece||piece==='.'||piece==='..'))throw failure();
   const git=(args:string[],stdin?:string)=>execFileSync('git',['-C',repoRoot,...args],{env:gitEnv(),encoding:'utf8',input:stdin,stdio:['pipe','pipe','ignore'],windowsHide:true,timeout:15000,maxBuffer:1024*1024});
   if(git(['check-ignore','--no-index','--stdin'],'.local/hosted-release/batch-probe/builder-state.json\n').trim()!=='.local/hosted-release/batch-probe/builder-state.json'||git(['ls-files','--cached','--','.local/hosted-release']).length)throw failure();

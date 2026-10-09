@@ -43,7 +43,7 @@ const snapshot = async () => {
   const paths = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
   const manifest: { path: string; sha256: string }[] = [];
   for (const path of new Set(paths)) { try { manifest.push({ path, sha256: createHash('sha256').update(await readFile(path)).digest('hex') }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; } }
-  return createHash('sha256').update(JSON.stringify(manifest.sort((a, b) => a.path.localeCompare(b.path)))).digest('hex');
+  return createHash('sha256').update(JSON.stringify(manifest.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0))).digest('hex');
 };
 const initialSource = await snapshot(), sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const suppliedIdentity = browserVerificationMetadata().cuevoBrowserVerification;

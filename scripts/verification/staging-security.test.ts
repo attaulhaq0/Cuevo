@@ -89,6 +89,21 @@ test('same-main completed canonical security admits focused staging while browse
   assert.equal(f.calls.filter(path => path === 'git/ref/heads/main').length, 2);
   assert.ok(f.calls.some(path => path.includes(`head_sha=${expected.sha}`)));
 });
+
+test('canonical security guard rechecks original metadata without a second receipt ZIP and ignores unrelated job progress',async()=>{
+ const subject=await api();assert.equal(typeof subject.readCanonicalStagingSecurityAndGuard,'function');
+ const f=await withReceipt(fixture());let state='stable',archives=0;const reader=async(path:string)=>{const value=await f.reader(path);if(path.includes('/jobs?')){const page=value as {jobs:Record<string,unknown>[]};if(state==='progress')return{...page,jobs:page.jobs.map(row=>row.name==='technical-mvp'?{...row,status:'completed',conclusion:'failure'}:row)};}return value;};
+ const guarded=await subject.readCanonicalStagingSecurityAndGuard(expected,reader,async id=>{archives++;assert.equal(id,72);return f.artifact();});assert.equal(guarded.proof.status,'VERIFIED');assert.equal(archives,1);state='progress';await guarded.refreshOriginalMetadata();await guarded.refreshOriginalMetadata();assert.equal(archives,1);assert.deepEqual(Object.keys(guarded.proof).sort(),['analysisId','jobId','jobsSha256','receiptSha256','runAttempt','runId','sarifId','status']);
+ for(const mode of ['job','artifact','expiry','run-attempt','source','duplicate-job']){const f=await withReceipt(fixture());let changed=false,zipReads=0;const reader=async(path:string)=>{const value=await f.reader(path);if(!changed)return value;if(path==='actions/runs/41'&&mode==='run-attempt')return{...(value as object),run_attempt:3};if(path==='git/ref/heads/main'&&mode==='source')return{object:{type:'commit',sha:'b'.repeat(40)}};if(path.includes('/jobs?')){const page=value as {jobs:Record<string,unknown>[]};if(mode==='job')return{...page,jobs:page.jobs.map(row=>row.name==='codeql'?{...row,steps:[]}:row)};if(mode==='duplicate-job')return{...page,total_count:page.jobs.length+1,jobs:[...page.jobs,page.jobs[0]]};}if(path.includes('/artifacts?')){const page=value as {artifacts:Record<string,unknown>[]};if(mode==='artifact'||mode==='expiry')return{...page,artifacts:page.artifacts.map(row=>({...row,...(mode==='artifact'?{digest:'sha256:'+'0'.repeat(64)}:{expires_at:'2026-10-01T00:00:00Z'})}))};}return value;};const guarded=await subject.readCanonicalStagingSecurityAndGuard(expected,reader,async()=>{zipReads++;return f.artifact();});changed=true;await assert.rejects(guarded.refreshOriginalMetadata(),mode);assert.equal(zipReads,1,mode);}
+});
+
+test('canonical security guard refuses selected job drift before its initial proof is returned',async()=>{
+ const subject=await api(),f=await withReceipt(fixture((path,value,count)=>path.includes('/jobs?')&&count>1?{total_count:1,jobs:[{...job(),conclusion:'failure'}]}:value));let archives=0;await assert.rejects(subject.readCanonicalStagingSecurityAndGuard(expected,f.reader,async()=>{archives++;return f.artifact();}));assert.equal(archives,1);assert.equal(f.calls.filter(path=>path.includes('/jobs?')).length,2);
+});
+
+test('canonical security original validity refuses expiry after the final source await without another ZIP',async()=>{
+ const subject=await api(),f=await withReceipt(fixture()),clock=Date.now,expires=Date.parse('2026-10-21T00:00:00Z');let now=expires-1,expireAtMain=false,zipReads=0;Date.now=()=>now;try{const reader=async(path:string)=>{const value=await f.reader(path);if(expireAtMain&&path==='git/ref/heads/main')now=expires;return value;};const guarded=await subject.readCanonicalStagingSecurityAndGuard(expected,reader,async()=>{zipReads++;return f.artifact();});assert.equal(typeof guarded.assertOriginalValidity,'function');guarded.assertOriginalValidity();now=expires;assert.throws(()=>guarded.assertOriginalValidity());now=expires-1;expireAtMain=true;await assert.rejects(guarded.refreshOriginalMetadata());assert.equal(zipReads,1);}finally{Date.now=clock;}
+});
 test('pending known canonical security returns NOT_READY without claiming zero findings or completed full CI', async () => {
   const { readCanonicalStagingSecurity } = await api();
   const pending = fixture((path, value) => path.includes('/jobs?') ? { total_count: 1, jobs: [{ ...job(), status: 'in_progress', conclusion: null, steps: [] }] } : value);

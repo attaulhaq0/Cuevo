@@ -45,12 +45,27 @@ test('only official exhaustive attempt jobs create deterministic narrow evidence
   const reader = async (path: string) => { calls.push(path); return canonical(path) ?? (path === 'actions/runs/31' ? run : { total_count: jobs.length, jobs }); };
   const proof = await readStagingVerificationJobs(run, reader,async()=>archive);
   assert.equal(proof?.runAttempt, 2); assert.match(proof?.jobsSha256 ?? '', /^[a-f0-9]{64}$/);
-  assert.deepEqual(calls.filter(path => path.startsWith('actions/runs/31')), ['actions/runs/31', 'actions/runs/31/attempts/2/jobs?per_page=100&page=1', 'actions/runs/31']);
+  assert.deepEqual(calls.filter(path => path.startsWith('actions/runs/31')), ['actions/runs/31', 'actions/runs/31/attempts/2/jobs?per_page=100&page=1', 'actions/runs/31/attempts/2/jobs?per_page=100&page=1', 'actions/runs/31']);
   assert.ok(calls.includes('actions/runs/41/attempts/2/jobs?per_page=100&page=1'));
   const withTimestamps = jobs.map(job => ({ ...job, started_at: '2026-10-07T00:00:00Z', completed_at: '2026-10-07T00:01:00Z' }));
   assert.deepEqual(await readStagingVerificationJobs(run, async path => canonical(path) ?? (path === 'actions/runs/31' ? run : { total_count: jobs.length, jobs: withTimestamps }),async()=>archive), proof);
   const legacy = { ...run, path: '.github/workflows/ci.yml' };
   assert.equal(await readStagingVerificationJobs(legacy, async () => { throw Error('canonical must not read jobs'); }), undefined);
+});
+
+test('focused staging guard refreshes exact original jobs and security metadata without repeating ZIP transport',async()=>{
+ const subject=await api();assert.equal(typeof subject.readStagingVerificationJobsAndGuard,'function');const jobs=await fixture();let mode='stable',archives=0;const reader=async(path:string)=>{const value=canonical(path)??(path==='actions/runs/31'?run:{total_count:jobs.length,jobs});if(mode==='job'&&path.includes('runs/31/attempts/'))return{total_count:jobs.length,jobs:jobs.map((row,index)=>index?row:{...row,steps:row.steps.slice(1)})};if(mode==='attempt'&&path==='actions/runs/31')return{...run,run_attempt:3};if(mode==='security-job'&&path.includes('runs/41/attempts/'))return{...(value as object),jobs:(value as {jobs:Record<string,unknown>[]}).jobs.map(row=>({...row,conclusion:'failure'}))};if((mode==='expiry'||mode==='artifact')&&path.includes('runs/41/artifacts'))return{...(value as object),artifacts:(value as {artifacts:Record<string,unknown>[]}).artifacts.map(row=>({...row,...(mode==='expiry'?{expires_at:'2026-10-01T00:00:00Z'}:{digest:'sha256:'+'0'.repeat(64)})}))};return value;};
+ const guarded=await subject.readStagingVerificationJobsAndGuard(run,reader,async()=>{archives++;return archive;});assert.equal(guarded.proof?.runAttempt,2);assert.deepEqual(Object.keys(guarded.proof!).sort(),['jobsSha256','runAttempt']);await guarded.refreshOriginalMetadata();assert.equal(archives,1);
+ for(const changed of ['job','attempt','expiry','artifact','security-job']){mode=changed;await assert.rejects(guarded.refreshOriginalMetadata(),changed);assert.equal(archives,1);}mode='stable';
+ const canonicalGuard=await subject.readStagingVerificationJobsAndGuard({...run,path:'.github/workflows/ci.yml'},async()=>{throw Error('Canonical path must not acquire focused metadata');});assert.equal(canonicalGuard.proof,undefined);await canonicalGuard.refreshOriginalMetadata();
+});
+
+test('focused staging refuses an unavailable original security producer instead of returning a guarded proof',async()=>{
+ const subject=await api(),jobs=await fixture(),reader=async(path:string)=>path.includes('runs/41/attempts/')?{total_count:1,jobs:[{id:51,name:'codeql',run_id:41,run_attempt:2,head_sha:run.head_sha,head_branch:'main',status:'in_progress',conclusion:null,started_at:null,completed_at:null,steps:[]}]}:canonical(path)??(path==='actions/runs/31'?run:{total_count:jobs.length,jobs});let archives=0;await assert.rejects(subject.readStagingVerificationJobsAndGuard(run,reader,async()=>{archives++;return archive;}));assert.equal(archives,0);
+});
+
+test('focused staging synchronous validity refuses security expiry during its final run read',async()=>{
+ const subject=await api(),jobs=await fixture(),clock=Date.now,expires=Date.parse('2026-10-21T00:00:00Z');let now=expires-1,expireAtRun=false,zipReads=0;Date.now=()=>now;try{const reader=async(path:string)=>{const value=canonical(path)??(path==='actions/runs/31'?run:{total_count:jobs.length,jobs});if(expireAtRun&&path==='actions/runs/31')now=expires;return value;};const guarded=await subject.readStagingVerificationJobsAndGuard(run,reader,async()=>{zipReads++;return archive;});assert.equal(typeof guarded.assertOriginalValidity,'function');guarded.assertOriginalValidity();expireAtRun=true;await assert.rejects(guarded.refreshOriginalMetadata());assert.throws(()=>guarded.assertOriginalValidity());assert.equal(zipReads,1);}finally{Date.now=clock;}
 });
 
 test('failed skipped missing unexpected jobs or required steps cannot be admitted by aggregate success', async () => {

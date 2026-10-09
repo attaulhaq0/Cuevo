@@ -111,7 +111,9 @@ export function readHistoricalMigrationSources(repoRoot:string,sourceSha:string,
 function readMigrationBlobBatches(git:ReturnType<typeof gitReader>,tree:Uint8Array):MigrationSource[]{
  const entries=new TextDecoder('utf8',{fatal:true}).decode(tree).split('\0').filter(Boolean).map(entry=>{const match=/^100644 blob ([a-f0-9]{40})\tsupabase\/migrations\/(\d{14}_[a-z0-9_]+\.sql)$/.exec(entry);if(!match)throw failure();return{blob:match[1],name:match[2]};});
  if(!entries.length||entries.length>1000||new Set(entries.map(row=>row.name.slice(0,14))).size!==entries.length)throw failure();const output:MigrationSource[]=[];let total=0;
- for(let start=0;start<entries.length;start+=16){const group=entries.slice(start,start+16),batch=git(['cat-file','--batch'],group.map(row=>row.blob).join('\n')+'\n');let offset=0;
+ // The admitted payload is at most 16 MiB plus bounded headers, below the
+ // existing 32 MiB transport cap. Keep every original per-blob/frame check.
+ {const group=entries,batch=git(['cat-file','--batch'],group.map(row=>row.blob).join('\n')+'\n');let offset=0;
   for(const row of group){const end=batch.indexOf(10,offset);if(end<0)throw failure();const match=/^([a-f0-9]{40}) blob ([0-9]+)$/.exec(batch.subarray(offset,end).toString('ascii'));if(!match||match[1]!==row.blob)throw failure();const size=Number(match[2]);if(!Number.isSafeInteger(size)||size>2*1024*1024)throw failure();total+=size;if(total>16*1024*1024)throw failure();offset=end+1;const bytes=batch.subarray(offset,offset+size);if(bytes.length!==size||batch[offset+size]!==10)throw failure();offset+=size+1;output.push({name:row.name,bytes:new Uint8Array(bytes)});}if(offset!==batch.length)throw failure();
  }
  return output;
@@ -156,8 +158,8 @@ export function readCanonicalMigrationSources(input: { repoRoot: string; sourceS
 
 /** Revalidate a completed historical inventory independently at every native
  * consumer. A caller count alone never widens an unknown partial stage. */
-export function verifyCompletedMigrationPrefix(repoRoot:string,plan:HostedMigrationPlanV1):boolean{
- if(!plan.priorCompletedRelease)return false;
+export function readVerifiedCompletedMigrationSources(repoRoot:string,plan:HostedMigrationPlanV1):MigrationSource[]|null{
+ if(!plan.priorCompletedRelease)return null;
  const {git}=checkedRoot(repoRoot),prior=plan.priorCompletedRelease;
  if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==plan.applied.length)throw failure();
  git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
@@ -166,21 +168,31 @@ export function verifyCompletedMigrationPrefix(repoRoot:string,plan:HostedMigrat
  const history=plan.migrations.slice(0,prior.migrationCount);
  const original=new Map(sources.map(source=>[source.name,source.bytes]));
  for(const row of history){const bytes=original.get(row.name);if(!bytes||hash(bytes)!==row.sha256)throw failure();}
- return true;
+ return sources;
+}
+export function verifyCompletedMigrationPrefix(repoRoot:string,plan:HostedMigrationPlanV1):boolean{
+ return readVerifiedCompletedMigrationSources(repoRoot,plan)!==null;
 }
 
-/** A verified historical stage prefix never becomes whole-source completion. */
-export function verifyPriorSchemaPrefix(repoRoot:string,plan:HostedMigrationPlanV1):boolean{
- if(!plan.priorSchemaRelease)return false;
- const{git}=checkedRoot(repoRoot),prior=plan.priorSchemaRelease;
- if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==plan.applied.length)throw failure();
- git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
- const sources=readHistoricalMigrationSources(repoRoot,prior.sourceSha,prior.treeSha),replay=replayPlan(sources);
+/** Internal rows come only from this owner's actual original Git acquisition. */
+function validatePriorSchemaRows(plan:HostedMigrationPlanV1,sources:MigrationSource[]):void{
+ const prior=plan.priorSchemaRelease;if(!prior||prior.migrationCount!==plan.applied.length)throw failure();const replay=replayPlan(sources);
  const order=[...replay.before,replay.prerequisite,...replay.remaining],boundaries=[replay.before.length,replay.before.length+1,replay.before.length+1+replay.remaining.indexOf(posthogIntelligenceMigration),order.length];
  if(!boundaries.includes(prior.migrationCount)){if(prior.migrationCount!==120||!plan.reconciliationTemplate)throw failure();const template=parseReconciliationTemplate(plan.reconciliationTemplate);verifyReconciledPrefix(template,plan.migrations);if(template.recoverySource.sourceSha!==plan.source.sha||template.recoverySource.treeSha!==plan.source.tree||template.originalIdentity.sourceSha!==prior.sourceSha||template.originalIdentity.treeSha!==prior.treeSha)throw failure();}
  else if(plan.reconciliationTemplate)throw failure();
  for(const[index,row]of plan.migrations.slice(0,prior.migrationCount).entries())if(row.name!==order[index]||hash(sources.find(source=>source.name===row.name)!.bytes)!==row.sha256)throw failure();
- return true;
+}
+/** Fresh historical bytes and exact prefix semantics only; no native authority. */
+export function readVerifiedPriorSchemaSources(repoRoot:string,plan:HostedMigrationPlanV1):MigrationSource[]|null{
+ if(!plan.priorSchemaRelease)return null;
+ const{git}=checkedRoot(repoRoot),prior=plan.priorSchemaRelease;
+ if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==plan.applied.length)throw failure();
+ git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
+ const sources=readHistoricalMigrationSources(repoRoot,prior.sourceSha,prior.treeSha);validatePriorSchemaRows(plan,sources);return sources;
+}
+/** A verified historical stage prefix never becomes whole-source completion. */
+export function verifyPriorSchemaPrefix(repoRoot:string,plan:HostedMigrationPlanV1):boolean{
+ return readVerifiedPriorSchemaSources(repoRoot,plan)!==null;
 }
 
 /** A release entry also requires all tracked and untracked authored source to match the admitted commit. */
@@ -204,8 +216,9 @@ export function createCanonicalHostedMigrationPlan(input: { repoRoot: string; so
       const bytes=current?priorByName.get(current.name):undefined;
       if (!bytes || hash(bytes) !== row.sha256) throw failure();
     }
+    if(plan.priorSchemaRelease)validatePriorSchemaRows(plan,priorSources);
   }
-  if(plan.priorSchemaRelease)verifyPriorSchemaPrefix(input.repoRoot,plan);
+  else if(plan.priorSchemaRelease)verifyPriorSchemaPrefix(input.repoRoot,plan);
   return { plan, sourceProvenance: loaded.provenance, priorReceiptProvenance: input.priorReceipt === undefined ? 'NOT_APPLICABLE' as const : 'VERIFIED_PRIOR_GIT_SOURCE_HASHES_ONLY' as const }; 
 }
 

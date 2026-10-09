@@ -1,9 +1,10 @@
 name: Cuevo verification
-on:
+'on':
   push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+    branches:
+      - main
+  pull_request: null
+  workflow_dispatch: null
 permissions:
   contents: read
 concurrency:
@@ -18,10 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: '24.16.0', cache: npm }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
       - name: Observe hosted database network reachability without credentials
         run: node --experimental-strip-types scripts/verification/hosted-connectivity.ts
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
@@ -30,29 +35,140 @@ jobs:
       - run: npm run lint && npm run typecheck && npm test
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
-  source-contracts:
+  source-fixtures-native:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { persist-credentials: false, fetch-depth: 0 }
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: '24.16.0', cache: npm }
+        with:
+          node-version: 24.16.0
+          cache: npm
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
-      - run: node --import tsx scripts/verification/stateless-checks.ts
+      - name: Verify exact source-native fixtures
+        run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-native
+      - name: Retain exact source-native fixture receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-partition-source-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-partitions/source-native/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-fixtures-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact source-contracts fixtures
+        run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-contracts
+      - name: Retain exact source-contracts fixture receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-partitions/source-contracts/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-fixtures-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact source-delivery fixtures
+        run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-delivery
+      - name: Retain exact source-delivery fixture receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-partition-source-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-partitions/source-delivery/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-contracts:
+    if: always()
+    needs:
+      - source-fixtures-native
+      - source-fixtures-contracts
+      - source-fixtures-delivery
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Read exact source-native fixtures from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-partition-source-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-partition-inputs/source-native
+      - name: Read exact source-contracts fixtures from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-partition-inputs/source-contracts
+      - name: Read exact source-delivery fixtures from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-partition-source-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-partition-inputs/source-delivery
+      - name: Combine exact source fixture and non-test boundaries
+        env:
+          NATIVE: ${{ needs.source-fixtures-native.result }}
+          CONTRACTS: ${{ needs.source-fixtures-contracts.result }}
+          DELIVERY: ${{ needs.source-fixtures-delivery.result }}
+        run: test "$NATIVE" = success && test "$CONTRACTS" = success && test "$DELIVERY" = success && node --import tsx scripts/verification/stateless-source-aggregate.ts
       - name: Retain exact safe source contracts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: cuevo-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            .local/verification/source-contracts/result.json
-            .local/verification/source-contracts/failure.json
+          path: .local/verification/source-contracts/result.json
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
   database-checks:
@@ -60,9 +176,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { persist-credentials: false, fetch-depth: 0 }
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: '24.16.0', cache: npm }
+        with:
+          node-version: 24.16.0
+          cache: npm
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
@@ -76,7 +196,7 @@ jobs:
           path: .local/runtime-lanes/database/lane.json
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
       - name: Stop owned local Supabase
         if: always()
         run: npx --no-install supabase stop --project-id cuevo
@@ -85,9 +205,13 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { persist-credentials: false, fetch-depth: 0 }
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: '24.16.0', cache: npm }
+        with:
+          node-version: 24.16.0
+          cache: npm
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
@@ -101,7 +225,7 @@ jobs:
           path: .local/runtime-lanes/backend/lane.json
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
       - name: Bind verified runtime delivery artifacts
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: node --import tsx scripts/verification/runtime-artifact-receipt.ts
@@ -126,9 +250,13 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { persist-credentials: false, fetch-depth: 0 }
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: '24.16.0', cache: npm }
+        with:
+          node-version: 24.16.0
+          cache: npm
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
@@ -143,19 +271,29 @@ jobs:
           path: .local/runtime-lanes/browser/lane.json
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
       - name: Stop owned local Supabase
         if: always()
         run: npx --no-install supabase stop --project-id cuevo
   technical-mvp:
-    needs: [database-checks, runtime-backend, runtime-browser]
+    if: always()
+    needs:
+      - database-checks
+      - runtime-backend
+      - runtime-browser
+      - integration-learning
+      - integration-state
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { persist-credentials: false, fetch-depth: 0 }
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: '24.16.0', cache: npm }
+        with:
+          node-version: 24.16.0
+          cache: npm
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
@@ -174,8 +312,33 @@ jobs:
         with:
           name: cuevo-runtime-database-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/database
+      - name: Read exact integration-learning partition from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-integration-integration-learning-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/integration-partition-inputs/integration-learning
+      - name: Read exact integration-state partition from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/integration-partition-inputs/integration-state
       - name: Combine exact source and required runtime lanes
-        run: node --import tsx scripts/verification/runtime-lane-aggregate.ts
+        env:
+          DATABASE: ${{ needs.database-checks.result }}
+          BACKEND: ${{ needs.runtime-backend.result }}
+          BROWSER: ${{ needs.runtime-browser.result }}
+          LEARNING: ${{ needs.integration-learning.result }}
+          STATE: ${{ needs.integration-state.result }}
+        run: test "$DATABASE" = success && test "$BACKEND" = success && test "$BROWSER" = success && test "$LEARNING" = success && test "$STATE" = success && node --import tsx scripts/verification/runtime-lane-aggregate.ts
+      - name: Retain original complete runtime aggregate
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-runtime-aggregate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/runtime-aggregate/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
       - name: Export sanitized status evidence
         if: always()
         run: node --import tsx scripts/verification/cicd-evidence.ts
@@ -192,10 +355,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with: { fail-on-severity: moderate, comment-summary-in-pr: never }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: never
   codeql:
     concurrency:
       group: cuevo-codeql-${{ github.ref }}
@@ -203,20 +369,27 @@ jobs:
       queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions: { contents: read, security-events: write }
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: '24.16.0' }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
-      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
-        with: { languages: javascript-typescript, build-mode: none }
-      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
         id: codeql-analyze
-        with: { wait-for-processing: true }
+        with:
+          wait-for-processing: true
       - name: Require current processed CodeQL security findings to be clear
         env:
           GH_TOKEN: ${{ github.token }}
@@ -234,10 +407,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: '24.16.0', cache: npm }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
@@ -247,7 +424,14 @@ jobs:
         run: node --import tsx scripts/verification/secret-scan.ts
   required:
     if: always()
-    needs: [fast-checks, source-contracts, database-checks, technical-mvp, dependency-review, codeql, secret-scan]
+    needs:
+      - fast-checks
+      - source-contracts
+      - database-checks
+      - technical-mvp
+      - dependency-review
+      - codeql
+      - secret-scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -263,3 +447,61 @@ jobs:
         run: |
           if [ "$FAST" != success ] || [ "$SOURCE_CONTRACTS" != success ] || [ "$DATABASE" != success ] || [ "$TECHNICAL" != success ] || [ "$CODEQL" != success ] || [ "$SECRET_SCAN" != success ]; then exit 1; fi
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then test "$DEPENDENCY" = success; else test "$DEPENDENCY" = skipped; fi
+  integration-learning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify isolated integration-learning partition
+        run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --ci-partition=integration-learning
+      - name: Retain exact integration-learning partition
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-integration-integration-learning-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/integration-partitions/integration-learning/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo
+  integration-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify isolated integration-state partition
+        run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --ci-partition=integration-state
+      - name: Retain exact integration-state partition
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/integration-partitions/integration-state/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Stop owned local Supabase
+        if: always()
+        run: npx --no-install supabase stop --project-id cuevo

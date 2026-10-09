@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './release-review';
 import { stagingVerificationJobPolicy, stagingVerificationWorkflowPath, validateBackendVerificationRun } from './staging-verification';
-import { readCanonicalStagingSecurity, type GithubArtifactReader } from './staging-security';
+import { readCanonicalStagingSecurityAndGuard, type GithubArtifactReader } from './staging-security';
 
 const unavailable = () => new Error('Focused staging job evidence is unavailable or requires review; contents withheld.');
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -12,15 +12,16 @@ const pageSchema = z.object({ total_count: positive.max(1000), jobs: z.array(job
 type GithubReader = (path: string) => Promise<unknown>;
 
 /** Official GET facade supplied by the native admission owner. Canonical CI keeps its original admission behavior. */
-export async function readStagingVerificationJobs(value: unknown, github: GithubReader, artifact?:GithubArtifactReader): Promise<{ runAttempt: number; jobsSha256: string } | undefined> {
+export async function readStagingVerificationJobsAndGuard(value: unknown, github: GithubReader, artifact?:GithubArtifactReader): Promise<{proof:{runAttempt:number;jobsSha256:string}|undefined;refreshOriginalMetadata:()=>Promise<void>;assertOriginalValidity:()=>void}> {
   try {
     const identity = z.object({ id: positive, head_sha: z.string().regex(/^[a-f0-9]{40}$/), repository: z.object({ full_name: z.string() }) }).parse(JSON.parse(canonicalReleaseReviewJson(value)));
     const expected = { sha: identity.head_sha, repository: identity.repository.full_name, ciRunId: String(identity.id) };
     const run = validateBackendVerificationRun(value, expected);
-    if (run.path !== stagingVerificationWorkflowPath) return undefined;
+    if (run.path !== stagingVerificationWorkflowPath) return{proof:undefined,refreshOriginalMetadata:async()=>undefined,assertOriginalValidity:()=>undefined};
     const runPath = `actions/runs/${run.id}`, initial = canonicalReleaseReviewJson(run);
     const current = async () => { if (canonicalReleaseReviewJson(validateBackendVerificationRun(await github(runPath), expected)) !== initial) throw unavailable(); };
     await current();
+    const readJobs=async()=>{
     const rows: z.infer<typeof jobSchema>[] = [], ids = new Set<number>(); let total: number | undefined;
     for (let page = 1; page <= 10; page++) {
       const response = pageSchema.parse(JSON.parse(canonicalReleaseExecutionJson(await github(`${runPath}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`))));
@@ -32,6 +33,8 @@ export async function readStagingVerificationJobs(value: unknown, github: Github
       if (response.jobs.length !== 100 || page === 10) throw unavailable();
     }
     if (rows.length !== total || rows.length !== Object.keys(stagingVerificationJobPolicy).length || new Set(rows.map(row => row.name)).size !== rows.length) throw unavailable();
+      return rows;
+    };const rows=await readJobs();
     const normalized = rows.map(row => {
       const policy = stagingVerificationJobPolicy[row.name];
       if (!policy || row.run_id !== run.id || row.run_attempt !== run.run_attempt || row.head_sha !== run.head_sha) throw unavailable();
@@ -46,10 +49,13 @@ export async function readStagingVerificationJobs(value: unknown, github: Github
       if (canonicalReleaseReviewJson(authored) !== canonicalReleaseReviewJson(policy.steps)) throw unavailable();
       return { id: row.id, name: row.name, status: row.status, conclusion: row.conclusion, steps: row.steps };
     }).sort((a, b) => a.name.localeCompare(b.name));
-    const canonicalSecurity = await readCanonicalStagingSecurity({ sha: run.head_sha, repository: run.repository.full_name }, github,artifact);
+    const security=await readCanonicalStagingSecurityAndGuard({sha:run.head_sha,repository:run.repository.full_name},github,artifact),canonicalSecurity=security.proof;
     if (canonicalSecurity.status !== 'VERIFIED') throw unavailable();
-    await current();
+    const refreshOriginalMetadata=async()=>{try{if(canonicalReleaseExecutionJson(await readJobs())!==canonicalReleaseExecutionJson(rows))throw unavailable();await security.refreshOriginalMetadata();await current();security.assertOriginalValidity();}catch{throw unavailable();}};await refreshOriginalMetadata();
     const jobsSha256 = createHash('sha256').update(canonicalReleaseReviewJson({ runId: run.id, runAttempt: run.run_attempt, commitSha: run.head_sha, repository: run.repository.full_name, canonicalSecurity, jobs: normalized })).digest('hex');
-    return { runAttempt: run.run_attempt, jobsSha256 };
+    return{proof:{runAttempt:run.run_attempt,jobsSha256},refreshOriginalMetadata,assertOriginalValidity:security.assertOriginalValidity};
   } catch { throw unavailable(); }
 }
+
+/** Preserve the original public focused evidence contract. */
+export async function readStagingVerificationJobs(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){return(await readStagingVerificationJobsAndGuard(value,github,artifact)).proof;}

@@ -179,7 +179,7 @@ test('actual release context writes only admitted outputs and rejects stale main
         throw Error('Unexpected command action');
       };
       (await import('node:module')).syncBuiltinESMExports();
-      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/canonical-runtime-jobs.ts'))return{format:'module',shortCircuit:true,source:'export async function readCanonicalRuntimeJobs(){return{runAttempt:2,jobsSha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"};}'};if(url.endsWith('/full-release-evidence.ts'))return{format:'module',shortCircuit:true,source:'export function validateProductionCiRun(value,expected){if(value.path!==".github/workflows/full-regression.yml"||value.event!=="workflow_dispatch"||value.head_sha!==expected.sha||value.conclusion!=="success"||value.run_attempt!==1)throw Error("Full source evidence refused");}export async function readFullReleaseEvidence(){return{profile:"CUSTOMER_CANDIDATE",sourceSha:${JSON.stringify(sha)},runId:"42",runAttempt:1};}'};return next(url,context);}});
+      (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/canonical-runtime-jobs.ts'))return{format:'module',shortCircuit:true,source:'export async function readCanonicalRuntimeJobs(){return{runAttempt:2,jobsSha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"};}export async function readCanonicalRuntimeJobsAndGuard(){throw Error("Native backend canonical guard is outside this controlled web fixture");}'};if(url.endsWith('/full-release-evidence.ts'))return{format:'module',shortCircuit:true,source:'export function validateProductionCiRun(value,expected){if(value.path!==".github/workflows/full-regression.yml"||value.event!=="workflow_dispatch"||value.head_sha!==expected.sha||value.conclusion!=="success"||value.run_attempt!==1)throw Error("Full source evidence refused");}export async function readFullReleaseEvidence(){return{profile:"CUSTOMER_CANDIDATE",sourceSha:${JSON.stringify(sha)},runId:"42",runAttempt:1};}'};return next(url,context);}});
       process.argv[2] = ${JSON.stringify(mode)};
       globalThis.fetch = async input => {
         const url = String(input); console.log('FETCH ' + url);
@@ -380,7 +380,7 @@ const verifyRelease = async (value: ReturnType<typeof manifest> | ReturnType<typ
     const protectedControls={...releaseControls(),environment:{...releaseControls().environment,name:'staging'}};
     const script = (mode: 'manifest' | 'approval' | 'verify') => `
       const cp=(await import('node:module')).createRequire(import.meta.url)('node:child_process');cp.execFileSync=(command,args)=>{if(command!=='git')throw Error('Unexpected executable before verified approval');if(args[0]==='rev-parse')return args[1]==='HEAD'?'${sha}':'${assignments.baseSha}';if(args[0]==='merge-base'||args[0]==='diff'&&args[1]==='--quiet'||args[0]==='ls-files')return '';if(args[0]==='ls-tree')return '${treeBytes}';if(args[0]==='diff')return '${diffBytes}';throw Error('Unexpected source read')};(await import('node:module')).syncBuiltinESMExports();
-            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/canonical-runtime-jobs.ts'))return{format:'module',shortCircuit:true,source:'export async function readCanonicalRuntimeJobs(){return{runAttempt:2,jobsSha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"};}'};if(url.endsWith('/protected-preview.ts'))return{format:'module',shortCircuit:true,source:'export async function createProtectedPreview(input,ports){await ports.admit();return{status:"CONFIRMED"};}export async function protectedPreviewHeaders(input){if(new URL(input.url).origin!==input.binding.origin)throw Error("Foreign web origin");return{"x-vercel-protection-bypass":"private-web-contract-canary"};}'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
+            (await import('node:module')).registerHooks({load(url,context,next){if(url.endsWith('/canonical-runtime-jobs.ts'))return{format:'module',shortCircuit:true,source:'export async function readCanonicalRuntimeJobs(){return{runAttempt:2,jobsSha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"};}export async function readCanonicalRuntimeJobsAndGuard(){throw Error("Native backend canonical guard is outside this controlled web fixture");}'};if(url.endsWith('/protected-preview.ts'))return{format:'module',shortCircuit:true,source:'export async function createProtectedPreview(input,ports){await ports.admit();return{status:"CONFIRMED"};}export async function protectedPreviewHeaders(input){if(new URL(input.url).origin!==input.binding.origin)throw Error("Foreign web origin");return{"x-vercel-protection-bypass":"private-web-contract-canary"};}'};if(url.endsWith('/git-source-digest.ts'))return{format:'module',shortCircuit:true,source:'export async function readGitBinaryDiffDigest(){return{sha256:"${diffSha256}",bytes:20}}'};return next(url,context);}});
       process.argv[2] = '${mode}';
       Date.now = () => ${mode !== 'verify' ? now : options.verifyAt ?? now};
       globalThis.fetch = async (input,options={}) => {
@@ -553,25 +553,27 @@ test('required CI includes a secret-free full-history scanner with strict succes
   const ci = await readFile('.github/workflows/ci.yml', 'utf8'); const release = await readFile('.github/workflows/release.yml', 'utf8');
   const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): { jobs: Record<string, { steps: Record<string, unknown>[] }> }; dump(value: unknown): string };
   const shallowSecret = yaml.load(ci); const secretCheckout = shallowSecret.jobs['secret-scan'].steps.find(step => String(step.uses ?? '').startsWith('actions/checkout@'))!; (secretCheckout.with as Record<string, unknown>)['fetch-depth'] = 1;
+  const missingSecret = yaml.load(ci); (missingSecret.jobs.required as { needs?: string[] }).needs = ((missingSecret.jobs.required as { needs?: string[] }).needs ?? []).filter(name => name !== 'secret-scan');
   assert.match(ci, /secret-scan:/);
   assert.match(ci, /fetch-depth: 0/);
   assert.match(ci, /node --import tsx scripts\/verification\/secret-scan.ts/);
   for (const changed of [
     yaml.dump(shallowSecret),
     ci.replace('node --import tsx scripts/verification/secret-scan.ts', 'echo scan-omitted'),
-    ci.replace('fast-checks, source-contracts, database-checks, technical-mvp, dependency-review, codeql, secret-scan', 'fast-checks, source-contracts, database-checks, technical-mvp, dependency-review, codeql'),
+    yaml.dump(missingSecret),
     ci.replace('SECRET_SCAN: ${{ needs.secret-scan.result }}', 'SECRET_SCAN: success'),
     ci.replace('|| [ "$SECRET_SCAN" != success ]', ''),
-  ]) assert.ok(validateWorkflows(changed, release).some(issue => issue.includes('secret')));
+  ]) { assert.notEqual(changed, ci, 'Each negative fixture must actually mutate the workflow.'); assert.ok(validateWorkflows(changed, release).some(issue => issue.includes('secret'))); }
 });
 
 test('source contracts are mandatory in the required aggregate without a substitute success value',async()=>{
  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ const yaml=createRequire(import.meta.url)('js-yaml')as{load(text:string):{jobs:Record<string,{needs:string[]}>};dump(value:unknown):string},missing=yaml.load(ci);missing.jobs.required.needs=missing.jobs.required.needs.filter(name=>name!=='source-contracts');
  for(const changed of[
-  ci.replace('fast-checks, source-contracts, database-checks, technical-mvp','fast-checks, technical-mvp'),
+  yaml.dump(missing),
   ci.replace('SOURCE_CONTRACTS: ${{ needs.source-contracts.result }}','SOURCE_CONTRACTS: success'),
   ci.replace(' || [ "$SOURCE_CONTRACTS" != success ]',''),
- ])assert.ok(validateWorkflows(changed,release).some(issue=>issue.includes('source contracts')));
+ ]){assert.notEqual(changed,ci,'Each negative fixture must actually mutate the workflow.');assert.ok(validateWorkflows(changed,release).some(issue=>issue.includes('source contracts')));}
 });
 
 test('fast source-contract and technical verification require one unconditional complete-history checkout for canonical migration source checks', async () => {
@@ -597,3 +599,11 @@ test('fast source-contract and technical verification require one unconditional 
 });
 
 test('provider Data API posture remains distinct from endpoint denials and rejects missing or relabeled evidence',async()=>{const owner=await import('./data-api-configuration'),at=new Date().toISOString(),source='a'.repeat(40),tree='b'.repeat(40),project='abcdefghijklmnopqrst',evidence={version:1,purpose:'CUEVO_DATA_API_CONFIGURATION_OBSERVATION',source:'SUPABASE_MANAGEMENT_POSTGREST_CONFIG',projectRef:project,sourceSha:source,treeSha:tree,url:`https://api.supabase.com/v1/projects/${project}/postgrest`,configurationState:'DISABLED',configurationValueSha256:(await import('node:crypto')).createHash('sha256').update(JSON.stringify('')).digest('hex'),metadataBasis:'SUPPLIED_CURRENT_METADATA_PORT',metadataObservedAt:at,observedAt:at,verifiedAt:at,expiresAt:new Date(Date.parse(at)+3600000).toISOString(),effectAuthority:false,hostedAcceptance:false};assert.equal(owner.validateDisabledDataApiConfigurationEvidence(evidence,{projectRef:project,sourceSha:source,treeSha:tree,now:Date.parse(at)}).basis,'SUPABASE_MANAGEMENT_POSTGREST_CONFIG');assert.throws(()=>owner.validateDisabledDataApiConfigurationEvidence({anonymousRestDenied:true,authenticatedRestDenied:true,serviceRestDenied:true},{projectRef:project,sourceSha:source,treeSha:tree,now:Date.parse(at)}));});
+
+test('integration partition artifacts and complete aggregate retain exact release evidence and reject broad paths',async()=>{
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ assert.deepEqual(validateWorkflows(ci,release),[]);
+ for(const path of ['.local/integration-partitions/integration-learning/result.json','.local/integration-partitions/integration-state/result.json','.local/runtime-aggregate/result.json'])assert.ok(validateWorkflows(ci.replace('path: '+path,'path: .local/'),release).some(issue=>issue.includes('artifact')));
+ const parse=createRequire(import.meta.url)('js-yaml') as{load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
+ const changed=parse.load(ci);const aggregate=changed.jobs['technical-mvp'];aggregate.needs=['database-checks','runtime-backend','runtime-browser'];assert.ok(validateWorkflows(parse.dump(changed),release).some(issue=>issue.includes('isolated')));
+});

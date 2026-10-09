@@ -6,7 +6,6 @@ import { createRequire, registerHooks } from 'node:module';
 import { canonicalReleaseExecutionJson } from './release-review';
 import {prepareBackendReleaseIntent} from './backend-release-contracts';
 import {ciRuntimeJobs,ciSourceJobs,ciDatabaseJob} from './verification-workflows';
-import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 import { backendWebTransferFixture, transferFixtureHash } from './backend-web-transfer-fixtures';
 import { readBackendWebTransferArchive, validateCompletedBackendWebApproval,validateSelectedBackendWebTransfer } from './backend-web-transfer-admission';
 import type { Readable } from 'node:stream';
@@ -92,9 +91,10 @@ test('extra entries paths symlinks encryption oversize and malformed JSON/UTF8 a
 
 async function nativeReader() {
   const hooks = registerHooks({ load(url, context, next) {
+    if(url.endsWith('/canonical-runtime-jobs.ts?handover-consumer-fixture'))return{format:'module',shortCircuit:true,source:`import{createHash}from'node:crypto';export const consumerCanonicalCalls=[];export async function readCanonicalRuntimeJobs(run,github,artifact,purpose='CURRENT_SOURCE'){if(typeof artifact!=='function'||purpose!=='CURRENT_SOURCE')throw Error('Canonical source consumer contract refused');consumerCanonicalCalls.push({sourceSha:run.head_sha,runAttempt:run.run_attempt,purpose,artifactCallable:typeof artifact==='function'});const current=await github('actions/runs/'+run.id),jobs=await github('actions/runs/'+run.id+'/attempts/'+run.run_attempt+'/jobs?per_page=100&page=1');if(current.head_sha!==run.head_sha||current.run_attempt!==run.run_attempt||current.conclusion!=='success'||jobs.jobs.some(row=>row.head_sha!==run.head_sha||row.run_attempt!==run.run_attempt||row.conclusion!=='success'))throw Error('Canonical source consumer metadata changed');return{runAttempt:run.run_attempt,jobsSha256:createHash('sha256').update(JSON.stringify({run,current,jobs})).digest('hex')};}export async function readCanonicalRuntimeJobsAndGuard(run,github,artifact,purpose){const proof=await readCanonicalRuntimeJobs(run,github,artifact,purpose),original=await github('actions/runs/'+run.id+'/attempts/'+run.run_attempt+'/jobs?per_page=100&page=1');return{proof,assertOriginalValidity:()=>{},refreshOriginalMetadata:async()=>{if(JSON.stringify(await github('actions/runs/'+run.id+'/attempts/'+run.run_attempt+'/jobs?per_page=100&page=1'))!==JSON.stringify(original))throw Error('Original job metadata changed');}};}`};
     if (url.includes('/backend-web-transfer-admission.ts?controlled')) {
       const source = readFileSync(new URL(url.split('?')[0]), 'utf8').replace("process.platform !== 'linux'", 'false')
-        .replace("!input.repoRoot.startsWith('/home/runner/work/')", 'false');
+        .replace("!input.repoRoot.startsWith('/home/runner/work/')", 'false').replace("from './canonical-runtime-jobs'", "from './canonical-runtime-jobs.ts?handover-consumer-fixture'");
       return { format: 'module', shortCircuit: true, source: transformSync(source, { loader: 'ts', format: 'esm' }).code };
     }
     return next(url, context);
@@ -121,7 +121,9 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
     const rawCi={...fixture.expected.ciRun,run_attempt:2};
     const runtimeJobs=Object.entries({...ciRuntimeJobs,...ciSourceJobs,'database-checks':ciDatabaseJob}).map(([name,contract],index)=>({id:100+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:contract.steps.map((step,number)=>({name:'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`,number:number+1,status:'completed',conclusion:'success'}))}));
     const otherJobs=['codeql','secret-scan','required'].map((name,index)=>({id:200+index,name,run_id:31,run_attempt:2,head_sha:sourceSha,head_branch:'main',status:'completed',conclusion:'success',steps:[{name:'Required original work',number:1,status:'completed',conclusion:'success'}]}));
-    const jobsResponse={total_count:runtimeJobs.length+otherJobs.length,jobs:[...runtimeJobs,...otherJobs]},canonical=await readCanonicalRuntimeJobs(rawCi,async path=>path==='actions/runs/31'?rawCi:jobsResponse),body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson);
+    // This fixture isolates completed handover consumption. Genuine original
+    // partition archive/source proof is exercised by canonical-source-jobs tests.
+    const jobsResponse={total_count:runtimeJobs.length+otherJobs.length,jobs:[...runtimeJobs,...otherJobs]},canonical={runAttempt:rawCi.run_attempt,jobsSha256:transferFixtureHash(JSON.stringify({run:rawCi,current:rawCi,jobs:jobsResponse}))},body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson);
     fixture.transfer.preparedApproval=prepareBackendReleaseIntent({...body,canonicalRuntimeVerification:canonical},{...fixture.expected,canonicalRuntimeVerification:canonical});fixture.approvals[0].comment=fixture.transfer.preparedApproval.comment;
     let selected:unknown=fixture.transfer;
     if(operating){const full=fixture.transfer.manifest as {api:{deploymentUrl:string};database:{migrations:{version:string;sha256:string}[]};publicConfig:unknown},body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson),digest='b'.repeat(64),receipt={version:1,purpose:'CUEVO_OPERATING_SYNTHETIC_STAGING_HANDOFF',repository:body.repository,sourceSha:sourceSha,treeSha,runId:'51',runAttempt:1,packageSha256:fixture.transfer.preparedApproval.sha256,observedAt:fixture.transfer.earliestProofAt,generation:'2',database:{projectRef:body.targets.supabase.projectRef,migrationCount:full.database.migrations.length,migrationManifestSha256:transferFixtureHash(canonicalReleaseExecutionJson([...full.database.migrations].sort((a,b)=>a.version.localeCompare(b.version)))),historySha256:digest,authIdentities:133,schools:2,permissionsVerified:true},api:{projectId:'prj_Api',teamId:'team_Cuevo',deploymentId:'dpl_Api',deploymentUrl:full.api.deploymentUrl,origin:body.targets.api.origin,artifactSha256:body.fingerprints.apiArtifactSha256,healthVerified:true,currentActorVerified:true,corsVerified:true},worker:{edgeId:'edge',edgeVersion:2,artifactSha256:body.fingerprints.edgeArtifactSha256,denoLockSha256:body.fingerprints.denoLockSha256,runtimeSha256:digest,generation:'2',operatingVerified:true,privateTransportVerified:true,admissionPaused:false},privateAccess:{dataApiDisabled:true,anonymousDenied:true,authenticatedDenied:true,serviceDenied:true,storageVerified:true,realtimeVerified:true},cleanup:{lockReleased:true,sessionsClosed:true,receiptSha256:digest},publicConfig:full.publicConfig,customerAcceptance:false,remainingAcceptance:['FULL_HOSTED_CUSTOMER_ACCEPTANCE','RESTORE_AND_OPERATIONAL_APPROVAL','CURRICULUM_RIGHTS_AND_SCHOOL_APPROVAL']};const producers=[];for(const path of operatingBackendWebTransferProducerPaths){const bytes=readFileSync(join(root,path));producers.push({path,sha256:transferFixtureHash(bytes)});}selected={...fixture.transfer,version:2,purpose:'CUEVO_OPERATING_BACKEND_WEB_HANDOVER',status:'EXPORTED_OPERATING_BACKEND_HANDOVER',manifest:receipt,manifestSha256:transferFixtureHash(canonicalReleaseExecutionJson(receipt)),receiptScope:'ORIGINAL_NATIVE_OPERATING_BACKEND_AND_CLEANUP',producers,evidence:operatingBackendWebTransferEvidenceNames.map(name=>({name,sha256:digest}))};}
@@ -157,9 +159,28 @@ test('controlled official completed artifact source and review reader sends no t
     const result = await api.readCompletedBackendWebTransferAdmission(fixture.input);
     assert.equal(result.provenance, 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE'); assert.equal(result.backendMutationAllowed, false); assert.equal(result.privateProofReexecuted, false);
     assert.equal(result.backendIdentity.artifactId, '71'); assert(!JSON.stringify(result).includes('private-github-canary'));
+    const observer=await import(pathToFileURL(resolve(import.meta.dirname,'canonical-runtime-jobs.ts')).href+'?handover-consumer-fixture');assert.equal(observer.consumerCanonicalCalls.length,1,'One full canonical acquisition is sufficient within the read-only handover admission.');assert.ok(observer.consumerCanonicalCalls.every((row:{purpose:string;artifactCallable:boolean})=>row.purpose==='CURRENT_SOURCE'&&row.artifactCallable));
     assert.equal(result.originalEvidence.filter((row: { name: string }) => row.name === 'population-result.json').length, 1);
     assert(fixture.calls.includes('productionresultssafixture.blob.core.windows.net/artifacts/archive'));
   });
+});
+
+test('one canonical handover acquisition still refuses final approval controls artifacts and checkout drift',async()=>{
+ const api=await nativeReader();
+ for(const mode of ['approval','controls','artifact','source','hidden-source','own-expiry'])await officialFixture(async fixture=>{
+  const originalClock=Date.now,artifactExpiry=originalClock()+60000;if(mode==='own-expiry')(fixture.responses.get('actions/artifacts/71')as{expires_at:string}).expires_at=new Date(artifactExpiry).toISOString();
+  const original=globalThis.fetch,counts=new Map<string,number>();
+  globalThis.fetch=async(raw,options)=>{const url=new URL(String(raw)),key=url.pathname+url.search,count=(counts.get(key)??0)+1;counts.set(key,count);
+   if(mode==='approval'&&key.endsWith('/actions/runs/51/approvals')&&count===2)return Response.json([]);
+   if(mode==='controls'&&key.endsWith('/branches/main/protection/required_signatures')&&count===2)return Response.json({enabled:false});
+   if(mode==='artifact'&&key.endsWith('/actions/artifacts/71')&&count===2)return Response.json({...fixture.responses.get('actions/artifacts/71')as object,digest:'sha256:'+'0'.repeat(64)});
+   if(mode==='source'&&key.endsWith('/actions/runs/51/approvals')&&count===2)await writeFile(join(fixture.root,'README.md'),'changed after final source scan\n');
+   if(mode==='hidden-source'&&key.endsWith('/actions/runs/51/approvals')&&count===2){execFileSync('git',['-C',fixture.root,'update-index','--assume-unchanged','README.md'],{windowsHide:true,stdio:'ignore'});await writeFile(join(fixture.root,'README.md'),'hidden changed after final source scan\n');}
+   if(mode==='own-expiry'&&key.endsWith('/actions/runs/51/approvals')&&count===3)Date.now=()=>artifactExpiry;
+   return original(raw,options);
+  };
+  try{await assert.rejects(api.readCompletedBackendWebTransferAdmission(fixture.input),/contents withheld/,mode);}finally{Date.now=originalClock;}
+ });
 });
 test('actual operating artifact admission preserves distinct purpose and refuses default full consumption',async()=>{const api=await nativeReader();await officialFixture(async fixture=>{const result=await api.readCompletedBackendWebTransferAdmission(fixture.input);assert.equal(result.purpose,'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION');assert.equal(result.customerReady,false);assert.equal(result.privateProofReexecuted,false);assert.equal(result.backendIdentity.runId,'51');await assert.rejects(api.readCompletedBackendWebTransferAdmission({...fixture.input,handoff:'customer-candidate'}));},'ordinary',true);});
 test('completed handover consumption rejects changed canonical runtime attempts or missing runtime jobs',async()=>{

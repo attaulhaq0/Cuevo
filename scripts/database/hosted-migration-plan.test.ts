@@ -115,14 +115,31 @@ test('source loader refuses wrong SHA/tree, working migration changes and additi
 });
 
 test('actual repository canonical migration loader retains the current complete source while unrelated edits remain separate', async () => {
-  const { readCanonicalMigrationSources } = await api();
+  const { readCanonicalMigrationSources,readHistoricalMigrationSources } = await api();
   const root = resolve(import.meta.dirname, '../..');
   const sha = git(root, 'rev-parse', 'HEAD'), tree = git(root, 'rev-parse', 'HEAD^{tree}');
-  const loaded = readCanonicalMigrationSources({ repoRoot: root, sourceSha: sha, treeSha: tree });
+  const childProcess=createRequire(import.meta.url)('node:child_process')as typeof import('node:child_process'),original=childProcess.execFileSync,calls:string[][]=[];
+  childProcess.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);return original(file,args,options as Parameters<typeof execFileSync>[2]);})as typeof execFileSync;syncBuiltinESMExports();
+  let loaded:ReturnType<typeof readCanonicalMigrationSources>,historical:ReturnType<typeof readHistoricalMigrationSources>;
+  const began=performance.now();
+  try{loaded=readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree});assert.equal(calls.filter(args=>args.includes('--batch')).length,1);assert.equal(calls.length,11);calls.length=0;historical=readHistoricalMigrationSources(root,sha,tree);assert.equal(calls.filter(args=>args.includes('--batch')).length,1);}
+  finally{childProcess.execFileSync=original;syncBuiltinESMExports();}
   assert.equal(loaded.sources.length, sources().length);
+  assert.deepEqual(historical.map(row=>({name:row.name,sha256:digest(row.bytes)})),loaded.sources.map(row=>({name:row.name,sha256:digest(row.bytes)})));
+  console.log(JSON.stringify({purpose:'CURRENT_MIGRATION_BLOB_TRANSPORT_PARITY',sourceSha:sha,treeSha:tree,migrationCount:loaded.sources.length,canonicalGitCalls:11,canonicalBlobProcesses:1,historicalBlobProcesses:1,canonicalAndHistoricalDurationMs:Math.trunc(performance.now()-began),sourceSetSha256:digest(JSON.stringify(loaded.sources.map(row=>({name:row.name,sha256:digest(row.bytes)})))),providerEffects:false,hostedTiming:false}));
   assert.equal(loaded.provenance.sourceSha, sha); assert.equal(loaded.provenance.treeSha, tree);
   const native = loaded.sources.find(row => row.name === '20261002021737_native_academic_source_identity.sql');
   assert.ok(native); assert.equal(digest(native.bytes), '52066e47c55d0529d9a5bd3e2295fdceaffad64ecd40a71366c426d087872bac');
+});
+
+test('real committed oversized migration bytes retain per-blob and total limits within the existing transport cap',async()=>{
+ const subject=await api();await fixture(async(root)=>{
+  const large=Buffer.alloc(2*1024*1024,65),path=join(root,'supabase/migrations/20260101000000_example.sql');
+  writeFileSync(path,Buffer.concat([large,Buffer.from('A')]));git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Oversized original blob');
+  let sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}');assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}));assert.throws(()=>subject.readHistoricalMigrationSources(root,sourceSha,treeSha));
+  writeFileSync(path,large);for(let index=1;index<=8;index++)writeFileSync(join(root,'supabase/migrations',`2026010100000${index}_oversized_total.sql`),large);git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Oversized total original bytes');
+  sourceSha=git(root,'rev-parse','HEAD');treeSha=git(root,'rev-parse','HEAD^{tree}');assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}));assert.throws(()=>subject.readHistoricalMigrationSources(root,sourceSha,treeSha));
+ });
 });
 
 
@@ -254,17 +271,32 @@ test('bounded historical Git batches retain each exact original migration byte a
 test('canonical source acquisition batches real Git blobs and refuses incomplete or wrong transport bytes without dropping physical checks',async()=>{
  const subject=await api();await fixture(async(root)=>{
   for(let index=2;index<=33;index++)writeFileSync(join(root,'supabase/migrations',`20260101${String(index).padStart(6,'0')}_source_fixture.sql`),`select ${index};\n`);
+  writeFileSync(join(root,'supabase/migrations/20260101000002_source_fixture.sql'),Buffer.from([0,255,10,254,128]));
   git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Many immutable sources');const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}');
-  const childProcess=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),original=childProcess.execFileSync,calls:string[][]=[];let corruption:'none'|'truncated'|'wrong-id'='none';
+  const modes=['truncated','wrong-id','wrong-type','wrong-size','missing-header-newline','missing-body-newline','trailing','missing-entry','oversized-blob','oversized-total']as const;
+  const childProcess=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),original=childProcess.execFileSync,calls:string[][]=[];let corruption:'none'|typeof modes[number]='none';
   childProcess.execFileSync=((file:string,args:string[],options:unknown)=>{
    if(file==='git')calls.push([...args]);const output=original(file,args,options as Parameters<typeof execFileSync>[2]);
-   if(file==='git'&&args.includes('--batch')&&Buffer.isBuffer(output)){if(corruption==='truncated')return output.subarray(0,output.length-1);if(corruption==='wrong-id')return Buffer.concat([Buffer.from('0'.repeat(40)),output.subarray(40)]);}
+   if(file==='git'&&args.includes('--batch')&&Buffer.isBuffer(output)){
+    const newline=output.indexOf(10),header=output.subarray(0,newline).toString('ascii'),size=Number(header.split(' ')[2]),bodyEnd=newline+1+size;
+    if(corruption==='truncated')return output.subarray(0,output.length-2);
+    if(corruption==='wrong-id')return Buffer.concat([Buffer.from('0'.repeat(40)),output.subarray(40)]);
+    if(corruption==='wrong-type')return Buffer.concat([Buffer.from(header.replace(' blob ',' tree ')+'\n'),output.subarray(newline+1)]);
+    if(corruption==='wrong-size')return Buffer.concat([Buffer.from(header.slice(0,header.lastIndexOf(' ')+1)+(size+1)+'\n'),output.subarray(newline+1)]);
+    if(corruption==='missing-header-newline')return Buffer.concat([output.subarray(0,newline),output.subarray(newline+1)]);
+    if(corruption==='missing-body-newline'){const changed=Buffer.from(output);changed[bodyEnd]=0;return changed;}
+    if(corruption==='trailing')return Buffer.concat([output,Buffer.from('unexpected')]);
+    if(corruption==='missing-entry')return output.subarray(0,bodyEnd+1);
+    if(corruption==='oversized-blob')return Buffer.concat([Buffer.from(header.slice(0,header.lastIndexOf(' ')+1)+(2*1024*1024+1)+'\n'),output.subarray(newline+1)]);
+    if(corruption==='oversized-total'){const ids=String((options as {input:string}).input).trim().split('\n'),large=Buffer.alloc(2*1024*1024,65);return Buffer.concat(ids.slice(0,9).flatMap(id=>[Buffer.from(id+' blob '+large.length+'\n'),large,Buffer.from('\n')]));}
+   }
    return output;
   }) as typeof execFileSync;syncBuiltinESMExports();
   try{
-   const loaded=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha});assert.equal(loaded.sources.length,33);assert.equal(calls.some(args=>args.includes('cat-file')&&args.includes('blob')),false,'one process per migration cannot consume the freshness window');assert.ok(calls.filter(args=>args.includes('--batch')).length<=3);
+   const loaded=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha});assert.equal(loaded.sources.length,33);assert.equal(calls.some(args=>args.includes('cat-file')&&args.includes('blob')),false,'one process per migration cannot consume the freshness window');assert.equal(calls.filter(args=>args.includes('--batch')).length,1,'one bounded transport reads the complete admitted immutable source set');
    for(const row of loaded.sources)assert.deepEqual(Buffer.from(row.bytes),readFileSync(join(root,'supabase/migrations',row.name)));
-   for(const value of ['truncated','wrong-id'] as const){corruption=value;assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}));}
+   assert.deepEqual(Buffer.from(loaded.sources.find(row=>row.name==='20260101000002_source_fixture.sql')!.bytes),Buffer.from([0,255,10,254,128]));
+   for(const value of modes){corruption=value;assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}),value+' must refuse exact transport');}
    corruption='none';git(root,'update-index','--assume-unchanged','supabase/migrations/20260101000000_example.sql');writeFileSync(join(root,'supabase/migrations/20260101000000_example.sql'),'select 999;\n');assert.throws(()=>subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}));
   }finally{childProcess.execFileSync=original;syncBuiltinESMExports();}
  });
@@ -279,8 +311,9 @@ test('completed-prefix and canonical prior receipts share exact historical batch
   childProcess.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);const output=original(file,args,options as Parameters<typeof execFileSync>[2]);return file==='git'&&args.includes('--batch')&&corrupt&&Buffer.isBuffer(output)?output.subarray(0,output.length-1):output;}) as typeof execFileSync;syncBuiltinESMExports();
   try{
    const result=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:current,priorReceipt,now});assert.equal(subject.verifyCompletedMigrationPrefix(root,result.plan),true);assert.deepEqual(result.plan.pending.map(row=>row.name),['20261009150000_completed_batch_delta.sql']);assert.equal(calls.some(args=>args.includes('show')&&args.some(value=>value.startsWith(priorSha+':supabase/migrations/'))),false,'verified prior bytes must not spawn one Git process per migration');
+   assert.equal(typeof subject.readVerifiedCompletedMigrationSources,'function');calls.length=0;const completed=subject.readVerifiedCompletedMigrationSources(root,result.plan);assert.ok(completed);assert.equal(completed.length,initial.migrations.length);assert.equal(calls.filter(args=>args.includes('--batch')).length,1,'one verified acquisition returns its original bytes');for(const row of completed)assert.equal(createHash('sha256').update(row.bytes).digest('hex'),initial.migrations.find(item=>item.name===row.name)!.sha256);assert.equal(subject.readVerifiedCompletedMigrationSources(root,{...result.plan,priorCompletedRelease:undefined}),null);
    for(const priorCompletedRelease of [{...result.plan.priorCompletedRelease!,treeSha:'0'.repeat(40)},{...result.plan.priorCompletedRelease!,migrationCount:initial.migrations.length-1},{...result.plan.priorCompletedRelease!,sourceSha:'0'.repeat(40)}])assert.throws(()=>subject.verifyCompletedMigrationPrefix(root,{...result.plan,priorCompletedRelease}));
-   corrupt=true;assert.throws(()=>subject.verifyCompletedMigrationPrefix(root,result.plan));corrupt=false;
+   corrupt=true;assert.throws(()=>subject.verifyCompletedMigrationPrefix(root,result.plan));assert.throws(()=>subject.readVerifiedCompletedMigrationSources(root,result.plan));corrupt=false;
    assert.throws(()=>subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:current,priorReceipt:{...priorReceipt,migrations:priorReceipt.migrations.map((row,index)=>index?row:{...row,sha256:'0'.repeat(64)})},now}));
   }finally{childProcess.execFileSync=original;syncBuiltinESMExports();}
  },true);
@@ -349,7 +382,31 @@ test('native original-prefix verifier rejects120 without template and re-admits 
   const sha=git(root,'rev-parse','HEAD'),tree=git(root,'rev-parse','HEAD^{tree}'),loaded=subject.readCanonicalMigrationSources({repoRoot:root,sourceSha:sha,treeSha:tree}),initial=subject.planHostedMigrations({sources:loaded.sources,source:{sha,tree},target:target(),now}),prefix=initial.migrations.slice(0,120),priorReceipt={projectRef,sourceSha:sha,treeSha:tree,migrations:prefix.map(({version,sha256})=>({version,sha256}))};
   const current={...target(),population:'SCHEMA_ONLY',appSchemas:['app','authorization','internal'],migrationVersions:prefix.map(row=>row.version)},template=reconciliationTemplateFor(initial.migrations,{sha,tree}),input={repoRoot:root,sourceSha:sha,treeSha:tree,target:current,priorReceipt,now,reconciliationTemplate:template};
   assert.throws(()=>subject.createCanonicalHostedMigrationPlan({...input,reconciliationTemplate:undefined}));
-  const admitted=subject.createCanonicalHostedMigrationPlan(input).plan;assert.equal(subject.verifyPriorSchemaPrefix(root,admitted),true);assert.throws(()=>subject.verifyPriorSchemaPrefix(root,{...admitted,reconciliationTemplate:undefined}));
+  const cp=createRequire(import.meta.url)('node:child_process')as typeof import('node:child_process'),nativeExec=cp.execFileSync,calls:string[][]=[];
+  cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);return nativeExec(file,args,options as Parameters<typeof execFileSync>[2]);})as typeof execFileSync;syncBuiltinESMExports();
+  let admitted:ReturnType<typeof subject.createCanonicalHostedMigrationPlan>['plan'];
+  try{admitted=subject.createCanonicalHostedMigrationPlan(input).plan;assert.equal(calls.filter(args=>args.includes('--batch')).length,2,'current and prior source each require one immutable acquisition');}finally{cp.execFileSync=nativeExec;syncBuiltinESMExports();}
+  assert.equal(subject.verifyPriorSchemaPrefix(root,admitted),true);assert.throws(()=>subject.verifyPriorSchemaPrefix(root,{...admitted,reconciliationTemplate:undefined}));
+  assert.equal(subject.readVerifiedPriorSchemaSources(root,initial),null);assert.equal(subject.verifyPriorSchemaPrefix(root,initial),false);
+  calls.length=0;cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);return nativeExec(file,args,options as Parameters<typeof execFileSync>[2]);})as typeof execFileSync;syncBuiltinESMExports();
+  let originalRows:ReturnType<typeof subject.readVerifiedPriorSchemaSources>;
+  try{originalRows=subject.readVerifiedPriorSchemaSources(root,admitted);assert.equal(calls.filter(args=>args.includes('--batch')).length,1,'verified prefix reader returns its one actual original source acquisition');}finally{cp.execFileSync=nativeExec;syncBuiltinESMExports();}
+  assert.ok(originalRows);assert.deepEqual(originalRows.map(row=>({name:row.name,sha256:digest(row.bytes)})),loaded.sources.map(row=>({name:row.name,sha256:digest(row.bytes)})));
+  originalRows[0].bytes[0]^=1;assert.equal(digest(subject.readVerifiedPriorSchemaSources(root,admitted)![0].bytes),digest(loaded.sources[0].bytes),'returned data cannot replace the next actual source verification');
+  for(const mode of ['tree','source','count','order','hash','template','template-source','template-original']as const){
+   const changed=structuredClone(admitted);
+   if(mode==='tree')changed.priorSchemaRelease!.treeSha='0'.repeat(40);
+   if(mode==='source')changed.priorSchemaRelease!.sourceSha='0'.repeat(40);
+   if(mode==='count')changed.priorSchemaRelease!.migrationCount=119;
+   if(mode==='order')[changed.migrations[0],changed.migrations[1]]=[changed.migrations[1],changed.migrations[0]];
+   if(mode==='hash')changed.migrations[0].sha256='0'.repeat(64);
+   if(mode==='template')changed.reconciliationTemplate=undefined;
+   if(mode==='template-source')(changed.reconciliationTemplate as typeof template).recoverySource.sourceSha='0'.repeat(40);
+   if(mode==='template-original')(changed.reconciliationTemplate as typeof template).originalIdentity.treeSha='0'.repeat(40);
+   assert.throws(()=>subject.readVerifiedPriorSchemaSources(root,changed),mode+' cannot supply verified historical rows');
+  }
   assert.throws(()=>subject.verifyPriorSchemaPrefix(root,{...admitted,priorSchemaRelease:{...admitted.priorSchemaRelease!,migrationCount:119}}));
+  git(root,'checkout','--orphan','foreign-identical-count');writeFileSync(join(root,'README.md'),'Independent same-count original fixture\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Foreign original with identical migration count');
+  const foreignSha=git(root,'rev-parse','HEAD'),foreignTree=git(root,'rev-parse','HEAD^{tree}');assert.throws(()=>subject.readVerifiedPriorSchemaSources(root,{...admitted,source:{sha:foreignSha,tree:foreignTree}}),'exact migration count and bytes cannot bypass original ancestry');
  }finally{rmSync(root,{recursive:true,force:true});}
 });

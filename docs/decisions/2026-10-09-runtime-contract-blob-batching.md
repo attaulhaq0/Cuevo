@@ -1,0 +1,13 @@
+# Bounded runtime contract Git blob acquisition
+
+Status: bounded source optimization; actual managed/Linux timing and hosted release remain unverified.
+
+`readRuntimeContractManifest` previously executed one `git show` process per selected source-owned path. Two independent local current-source profiles found 357 Git calls including 331 show calls, roughly 24–25 seconds per manifest. This is immutable blob acquisition overhead inside one read, separate from native provider/source/approval freshness.
+
+The existing manifest owner now selects the same API/worker/SQL paths plus the source lock from a NUL-delimited immutable tree and reads exact blob IDs through size-preflighted `cat-file --batch-check` and bounded `cat-file --batch`. Its private parser requires regular 100644/100755 blobs, safe unique paths, exact IDs/type/declared size/newline framing and no trailing/truncated output. Current root/HEAD/tree and replacement/graft guards use isolated Git configuration and repeat before return. The new finite acquisition bounds are 16 MiB per blob, 64 MiB total and 16 MiB payload per batch; they cover the accepted current corpus and are not product file-upload limits or claims about previous limits.
+
+There is no cache, new generic reader or authority object. `readCanonicalMigrationSources` retains its own complete canonical SQL/physical-byte/directory/source checks and is unchanged. Manifest selection and canonical output hashes are unchanged for current integrated752 source. The current checkout requirement already existed through the canonical migration reader; this change does not establish reading two historical source versions from one mutable current checkout for updates or rollback.
+
+Actual current752 manifest JSON before/after matched exactly. One local Node24.19/Windows observation fell from 25.488 seconds/357 Git calls to 3.059 seconds/37 calls/zero show calls. Current98API/234worker entries and231migrations remained identical. Cache state and hosted Linux performance are unknown. These measurements establish a local acquisition improvement, not a 15–20-minute whole-CI result.
+
+Colocated tests execute the actual acquisition owner against a small Git repository with controlled command responses for malformed mode/path/duplicate inventory, oversize totals, wrong ID/type/size, missing newline, truncation and trailing bytes. Current identity, executable mode, Git environment override and replacement-ref cases retain refusal. Separate no-stub current-source parity and downstream artifact/compatibility tests are required. Existing native freshness, original journals, deployment provenance and final mutable source/file checks remain unchanged.

@@ -28,6 +28,7 @@ const requiredSteps = [
 const listQuery = (source: string, page: number, diagnostic:boolean) => `actions/workflows/ci.yml/runs?branch=main&${diagnostic?'':'event=push&'}head_sha=${source}&per_page=100&page=${page}`;
 export type CanonicalStagingSecurity = { status: 'VERIFIED'; runId: number; runAttempt: number; jobId: number; jobsSha256: string; receiptSha256: string; analysisId: number; sarifId: string } | { status: 'NOT_READY'; runId?: number; runAttempt?: number };
 type GithubReader = (path: string) => Promise<unknown>;
+export type GuardedCanonicalStagingSecurity={proof:CanonicalStagingSecurity;refreshOriginalMetadata:()=>Promise<void>;assertOriginalValidity:()=>void};
 export type GithubArtifactReader = (artifactId: number) => Promise<Uint8Array>;
 
 const artifactSchema=z.object({id:positive,name:z.string().max(200),size_in_bytes:positive.max(2*1024*1024),expired:z.literal(false),digest:z.string().regex(/^sha256:[a-f0-9]{64}$/),
@@ -44,11 +45,11 @@ async function originalReceipt(expected:z.infer<typeof expectedSchema>,run:z.inf
   const original=await read(),bytes=await artifact(original.id);if(bytes.byteLength!==original.size_in_bytes)throw unavailable();
   const receipt=await readSingleJsonArchive(bytes,{archiveSha256:original.digest.slice(7),fileName:'receipt.json',maximumJsonBytes:16*1024});
   const proof=validateCodeqlReceipt(receipt.value,{repository:expected.repository,sourceSha:expected.sha,ref:'refs/heads/main',runId:String(run.id),runAttempt:run.run_attempt,startedAt:job.started_at,completedAt:job.completed_at,now:Date.now()});
-  if(canonicalReleaseReviewJson(await read())!==canonicalReleaseReviewJson(original))throw unavailable();return{receiptSha256:receipt.jsonSha256,analysisId:proof.analysis.id,sarifId:proof.analysis.sarifId};
+  const expiresAtMs=Date.parse(original.expires_at),assertOriginalValidity=()=>{if(!Number.isSafeInteger(expiresAtMs)||Date.now()>=expiresAtMs)throw unavailable();},refreshOriginalMetadata=async()=>{if(canonicalReleaseReviewJson(await read())!==canonicalReleaseReviewJson(original))throw unavailable();assertOriginalValidity();};await refreshOriginalMetadata();return{proof:{receiptSha256:receipt.jsonSha256,analysisId:proof.analysis.id,sarifId:proof.analysis.sarifId},refreshOriginalMetadata,assertOriginalValidity};
 }
 
 /** Read only the canonical security job. Overall CI may remain running or fail unrelated acceptance checks. */
-async function readOriginalSecurity(value: unknown, github: GithubReader, artifact: GithubArtifactReader|undefined, admitSource: (expected:z.infer<typeof expectedSchema>)=>Promise<void>,diagnostic=false): Promise<CanonicalStagingSecurity> {
+async function readOriginalSecurity(value: unknown, github: GithubReader, artifact: GithubArtifactReader|undefined, admitSource: (expected:z.infer<typeof expectedSchema>)=>Promise<void>,diagnostic=false): Promise<GuardedCanonicalStagingSecurity> {
   try {
     const expected = expectedSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));
     await admitSource(expected);
@@ -60,7 +61,7 @@ async function readOriginalSecurity(value: unknown, github: GithubReader, artifa
       if (runs.length > total) throw unavailable(); if (runs.length === total) break;
       if (response.workflow_runs.length !== 100 || page === 10) throw unavailable();
     }
-    if (runs.length !== total) throw unavailable(); if (!runs.length) return { status: 'NOT_READY' };
+    if (runs.length !== total) throw unavailable(); if (!runs.length) return {proof:{status:'NOT_READY'},refreshOriginalMetadata:async()=>{throw unavailable();},assertOriginalValidity:()=>{throw unavailable();}};
     const selected = [...runs].sort((a, b) => b.id - a.id)[0], runPath = `actions/runs/${selected.id}`;
     const currentRun = async () => {
       const row = runSchema.parse(JSON.parse(canonicalReleaseReviewJson(await github(runPath))));
@@ -69,7 +70,8 @@ async function readOriginalSecurity(value: unknown, github: GithubReader, artifa
       return row;
     };
     const initial = await currentRun();
-    const rows: z.infer<typeof jobSchema>[] = [], ids = new Set<number>(); let jobsTotal: number | undefined;
+    const readJobs=async()=>{
+      const rows: z.infer<typeof jobSchema>[] = [], ids = new Set<number>(); let jobsTotal: number | undefined;
     for (let page = 1; page <= 10; page++) {
       const response = z.object({ total_count: z.number().int().nonnegative().max(1000), jobs: z.array(jobSchema).max(100) }).parse(JSON.parse(canonicalReleaseExecutionJson(await github(`${runPath}/attempts/${selected.run_attempt}/jobs?per_page=100&page=${page}`))));
       if (jobsTotal !== undefined && jobsTotal !== response.total_count) throw unavailable(); jobsTotal = response.total_count;
@@ -78,10 +80,12 @@ async function readOriginalSecurity(value: unknown, github: GithubReader, artifa
       if (response.jobs.length !== 100 || page === 10) throw unavailable();
     }
     if (rows.length !== jobsTotal) throw unavailable();
+      return rows;
+    };const rows=await readJobs();
     const codeql = rows.filter(row => row.name === 'codeql');
-    if (codeql.length === 0 && ['queued', 'in_progress'].includes(initial.status)) return { status: 'NOT_READY', runId: selected.id, runAttempt: selected.run_attempt };
+    if (codeql.length === 0 && ['queued', 'in_progress'].includes(initial.status)) return{proof:{status:'NOT_READY',runId:selected.id,runAttempt:selected.run_attempt},refreshOriginalMetadata:async()=>{throw unavailable();},assertOriginalValidity:()=>{throw unavailable();}};
     if (codeql.length !== 1) throw unavailable(); const exact = codeql[0];
-    if (['queued', 'in_progress'].includes(exact.status) && exact.conclusion === null) return { status: 'NOT_READY', runId: selected.id, runAttempt: selected.run_attempt };
+    if (['queued', 'in_progress'].includes(exact.status) && exact.conclusion === null) return{proof:{status:'NOT_READY',runId:selected.id,runAttempt:selected.run_attempt},refreshOriginalMetadata:async()=>{throw unavailable();},assertOriginalValidity:()=>{throw unavailable();}};
     if (exact.status !== 'completed' || exact.conclusion !== 'success' || !exact.steps||!exact.started_at||!exact.completed_at) throw unavailable();
     const names = new Set<string>(), numbers = new Set<number>(), authored: string[] = [];
     for (const [index, step] of exact.steps.entries()) {
@@ -92,18 +96,21 @@ async function readOriginalSecurity(value: unknown, github: GithubReader, artifa
         || step.status !== 'completed' || !['success', 'skipped'].includes(step.conclusion ?? '')) throw unavailable();
     }
     if (canonicalReleaseReviewJson(authored) !== canonicalReleaseReviewJson(requiredSteps)) throw unavailable();
-    const proof=await originalReceipt(expected,selected,exact,github,artifact);
-    await currentRun(); await admitSource(expected);
+    const receipt=await originalReceipt(expected,selected,exact,github,artifact),proof=receipt.proof;
+    const refreshOriginalMetadata=async()=>{try{await currentRun();const current=(await readJobs()).filter(row=>row.name==='codeql');if(current.length!==1||canonicalReleaseExecutionJson(current[0])!==canonicalReleaseExecutionJson(exact))throw unavailable();await receipt.refreshOriginalMetadata();await admitSource(expected);receipt.assertOriginalValidity();}catch{throw unavailable();}};
+    await refreshOriginalMetadata();
     const jobsSha256 = createHash('sha256').update(canonicalReleaseReviewJson({ repository: expected.repository, sha: expected.sha, runId: selected.id, runAttempt: selected.run_attempt, jobId: exact.id, steps: exact.steps,...proof })).digest('hex');
-    return { status: 'VERIFIED', runId: selected.id, runAttempt: selected.run_attempt, jobId: exact.id, jobsSha256,...proof };
+    return {proof:{status:'VERIFIED',runId:selected.id,runAttempt:selected.run_attempt,jobId:exact.id,jobsSha256,...proof},refreshOriginalMetadata,assertOriginalValidity:receipt.assertOriginalValidity};
   } catch { throw unavailable(); }
 }
 
 /** Release/focused admission keeps current main; an immutable receipt cannot relax source freshness. */
-export function readCanonicalStagingSecurity(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){
+export function readCanonicalStagingSecurityAndGuard(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){
   return readOriginalSecurity(value,github,artifact,async expected=>{const main=z.object({object:z.object({type:z.literal('commit'),sha})}).parse(await github('git/ref/heads/main'));if(main.object.sha!==expected.sha)throw unavailable();});
 }
 
+/** Existing callers retain exactly the original public proof shape. */
+export async function readCanonicalStagingSecurity(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){return(await readCanonicalStagingSecurityAndGuard(value,github,artifact)).proof;}
 /** Diagnostic authority comes from the original official full run, never an operator skip/current-main flag. */
 export async function readFullRegressionSecurity(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){
   const input=expectedSchema.extend({runId:positive,runAttempt:positive}).strict().parse(JSON.parse(canonicalReleaseReviewJson(value)));
@@ -113,7 +120,7 @@ export async function readFullRegressionSecurity(value:unknown,github:GithubRead
     if(run.status==='completed'?!['success','failure'].includes(run.conclusion??''):run.conclusion!==null)throw unavailable();
     const normalized=canonicalReleaseReviewJson({id:run.id,run_attempt:run.run_attempt,head_sha:run.head_sha,event:run.event,path:run.path,repository:run.repository});if(original&&original!==normalized)throw unavailable();original=normalized;
   };
-  return readOriginalSecurity({sha:input.sha,repository:input.repository},github,artifact,admit,true);
+  return(await readOriginalSecurity({sha:input.sha,repository:input.repository},github,artifact,admit,true)).proof;
 }
 
 export function readStagingSecurityContext(env: Record<string, string | undefined>, checkoutSha: string) {
