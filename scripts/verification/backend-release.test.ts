@@ -17,6 +17,12 @@ import {createOriginalWorkerActivationExecutionExport} from './backend-hosted-ac
 const secret = 'private-backend-phase-canary';
 const state = { events: [] as string[], failApproval: false, status: 'COMMITTED',privateStatus:'PRIVATE_PROBES_CONFIRMED',privatePurpose:undefined as string|undefined, activationStatus:'ACTIVATED_SIGNED_SOURCE_VERIFIED',recoveryStatus:'FAULT_RECOVERY_VERIFIED',restoreStatus:'VERIFIED',originStatus:'API_ORIGIN_BOUND',handoverStatus:'PREPARED_STAGING_MANIFEST',webStatus:'WEB_PUBLIC_SETTINGS_CONFIRMED',transferFailure:false, bundle: {} as Record<string, unknown> };
 
+test('first complete-backend refuses direct web handover phases before provider or approval consumers',async()=>{
+ const api=await subject();await fixture(async(repoRoot,env)=>{const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='complete-backend';expected.handoff='operating-staging';await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));env.VERCEL_TOKEN=secret;
+ for(const mode of ['bind-api','handover','configure-web','export-web-handover'] as const){state.events=[];await assert.rejects(api.runBackendReleasePhase({mode,repoRoot,env}));assert.deepEqual(state.events,[],mode);}
+ });
+});
+
 test('approved reconciliation scope reaches only the original prefix consumer and cannot provision or deploy',async()=>{const api=await subject();await fixture(async(repoRoot,env)=>{
  const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='reconcile-schema';expected.installedSchema={migrationCount:120};
  await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));
@@ -112,6 +118,10 @@ async function fixture(run: (root: string, env: Record<string, string>) => Promi
     await run(root, env);
   } finally { assert.equal(resolve(root, '..'), resolve(tmpdir())); await rm(root, { recursive: true, force: true }); }
 }
+async function installedHandoverFixture(env:Record<string,string>){
+ const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='installed-runtime';expected.installedRuntime={sourceSha:env.GITHUB_SHA};
+ await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));
+}
 test('failed official approval cannot reach bucket or schema even with configured private credentials', async () => {
   const api = await subject(); await fixture(async (repoRoot, env) => { state.failApproval = true; await assert.rejects(api.runBackendReleasePhase({ mode: 'bootstrap-schema', repoRoot, env }), error => error instanceof Error && !error.message.includes(secret)); assert.deepEqual(state.events, ['approval']); });
 });
@@ -143,6 +153,7 @@ test('canonical CI schema-only approval also cannot reach provider or frontend c
 
 test('backend handover export consumes current approval and writes only fixed public handover identity',async()=>{
  const api=await subject();for(const kind of ['confirmed','missing','approval'])await fixture(async(repoRoot,env)=>{
+  await installedHandoverFixture(env);
   env.VERCEL_TOKEN=secret;env.GITHUB_OUTPUT=join(repoRoot,'transfer-output');state.transferFailure=kind==='missing';state.failApproval=kind==='approval';
   try{
    if(kind==='confirmed'){
@@ -215,6 +226,7 @@ test('native recovery phase preserves unknown outcome and validates source befor
 
 test('frontend handover preserves missing backend gates as failure with a retained safe result',async()=>{
   const api=await subject();for(const kind of ['confirmed','missing','approval'])await fixture(async(repoRoot,env)=>{
+    await installedHandoverFixture(env);
     env.VERCEL_TOKEN=secret;state.handoverStatus=kind==='missing'?'REQUIRES_REVIEW':'PREPARED_STAGING_MANIFEST';state.failApproval=kind==='approval';
     if(kind==='confirmed'){const result=await api.runBackendReleasePhase({mode:'handover',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','handover']);}
     else await assert.rejects(api.runBackendReleasePhase({mode:'handover',repoRoot,env}));
@@ -232,6 +244,7 @@ test('database restore consumer is bound to the admitted API and cannot promote 
 
 test('fixed staging origin binding consumes only current runtime and preserves failed verification',async()=>{
   const api=await subject();for(const kind of ['verified','review','approval'])await fixture(async(repoRoot,env)=>{
+    await installedHandoverFixture(env);
     env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');state.originStatus=kind==='review'?'REQUIRES_REVIEW':'API_ORIGIN_BOUND';state.failApproval=kind==='approval';
     if(kind==='verified'){const result=await api.runBackendReleasePhase({mode:'bind-api',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','origin']);}
     else{await assert.rejects(api.runBackendReleasePhase({mode:'bind-api',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','origin']);}
@@ -239,7 +252,7 @@ test('fixed staging origin binding consumes only current runtime and preserves f
 });
 
 test('public frontend settings cannot bypass current backend approval or missing handover evidence',async()=>{
-  const api=await subject();for(const kind of ['confirmed','review','approval'])await fixture(async(repoRoot,env)=>{env.VERCEL_TOKEN=secret;state.webStatus=kind==='review'?'REQUIRES_REVIEW':'WEB_PUBLIC_SETTINGS_CONFIRMED';state.failApproval=kind==='approval';
+  const api=await subject();for(const kind of ['confirmed','review','approval'])await fixture(async(repoRoot,env)=>{await installedHandoverFixture(env);env.VERCEL_TOKEN=secret;state.webStatus=kind==='review'?'REQUIRES_REVIEW':'WEB_PUBLIC_SETTINGS_CONFIRMED';state.failApproval=kind==='approval';
     if(kind==='confirmed'){const result=await api.runBackendReleasePhase({mode:'configure-web',repoRoot,env});assert.equal(result.hostedAcceptance,false);assert.deepEqual(state.events,['approval','web-settings']);}
     else{await assert.rejects(api.runBackendReleasePhase({mode:'configure-web',repoRoot,env}));assert.deepEqual(state.events,kind==='approval'?['approval']:['approval','web-settings']);}
   });

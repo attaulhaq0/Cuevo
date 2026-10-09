@@ -75,6 +75,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     // A focused database/account gate is never a provider deployment certificate.
     const scope = z.object({ stagingVerification: z.unknown().optional(), installedRuntime:z.unknown().optional(),currentRuntime:z.unknown().optional(), executionScope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime','reconcile-schema','pending-runtime-confirmation','runtime-rollout']).optional() }).parse(bundle.expected);
     const operating=z.object({handoff:z.enum(['operating-staging','customer-candidate']).optional()}).parse(bundle.expected).handoff==='operating-staging';
+    if(['bind-api','handover','configure-web','export-web-handover'].includes(mode)&&(bundle.version===2||scope.executionScope!==undefined)&&scope.executionScope!=='installed-runtime')throw failure();
     if(bundle.version===2){
       const initial=z.object({installedSource:z.unknown().optional(),installedSchema:z.unknown().optional()}).parse(bundle.expected);
       if(scope.executionScope==='complete-backend'&&(!operating||!initial.installedSource||initial.installedSchema)||scope.executionScope==='runtime-rollout'&&!operating||scope.executionScope==='installed-runtime'&&!operating&&!scope.currentRuntime)throw failure();
