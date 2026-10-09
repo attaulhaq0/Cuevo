@@ -3,7 +3,7 @@ import {before,after,test} from 'node:test';
 import {EventEmitter} from 'node:events';
 import {createHash} from 'node:crypto';
 import {createRequire,registerHooks,syncBuiltinESMExports} from 'node:module';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -25,7 +25,7 @@ const sha='d87455114cac2d22d63d040ce5b13e6b2e74e743',tree='1e85393d46beb4f5356e0
 const files=readHistoricalMigrationSources(resolve(import.meta.dirname,'../..'),sha,tree),mini=[...['app','authorization','internal'].map(name=>({category:'schema',key:JSON.stringify([name]),facts:{name,owner:'postgres',acl:null}})),...['cuevo_api','cuevo_worker'].map(name=>({category:'role',key:JSON.stringify([name]),facts:{name,superuser:false,inherit:false,createRole:false,createDb:false,login:false,replication:false,bypassRls:false,connectionLimit:-1,validUntil:null,config:null}}))],miniHash=canonicalizeHostedSchemaCatalogue(mini).sha256,policySha='c'.repeat(64),absenceSha='d'.repeat(64);
 const baseClock=Date.parse('2026-10-08T03:00:00Z');let clock=baseClock;
 let root='',input:Record<string,unknown>,template:ReturnType<typeof createOriginalPrefixReconciliationTemplate>,rows:{name:string;version:string;sha256:string}[]=[];let executor:typeof import('./hosted-migration-executor');
-const state={objects:new Map<string,string>(),vault:new Map<string,string>(),pendingVault:null as [string,string]|null,historyCount:120,commands:0,cliKind:'EXITED',cleanupFail:false,events:[]as string[],policyCounts:[]as number[],catalogueFails:false,commitFails:false,readbackFails:false,officialDelayMs:0,nativeProofMs:0,officialCalls:0};
+const state={objects:new Map<string,string>(),vault:new Map<string,string>(),pendingVault:null as [string,string]|null,historyCount:120,commands:0,cliKind:'EXITED',cleanupFail:false,closeFail:false,markerFailure:null as 'before-write'|'after-commit'|null,events:[]as string[],policyCounts:[]as number[],catalogueFails:false,commitFails:false,readbackFails:false,officialDelayMs:0,nativeProofMs:0,officialCalls:0};
 const bucket={id:'cuevo-release-operator',name:'cuevo-release-operator',public:false,type:'STANDARD',file_size_limit:49152,allowed_mime_types:['application/json']};
 const id=(path:string)=>hash(path).slice(0,8)+'-'+hash(path).slice(8,12)+'-4'+hash(path).slice(13,16)+'-a'+hash(path).slice(17,20)+'-'+hash(path).slice(20,32);
 const info=(path:string)=>({id:id(path),name:path,bucket_id:bucket.id,size:Buffer.byteLength(state.objects.get(path)!),content_type:'application/json',version:'controlled-version'});
@@ -106,7 +106,7 @@ async function completeHostWork<T>(operation:()=>Promise<T>):Promise<T>{
 Object.assign(globalThis,{executorHostImport:completeHostWork});
 class PgTransport extends EventEmitter {
  connection={stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('controlled-peer'),subjectaltname:'DNS:'+host})}};
- async connect(){}async end(){this.emit('end');}
+ async connect(){}async end(){state.events.push('session-close');if(state.closeFail)throw Error('private-marker-close-canary');this.emit('end');}
  async query(raw:string|{text:string},values:unknown[]=[]){const sql=typeof raw==='string'?raw:raw.text;
   const timing = admissionTiming;
   if (timing && sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_STRUCTURAL')) {
@@ -141,10 +141,14 @@ class PgTransport extends EventEmitter {
     if (timing.forbiddenActivity) return { rows: [{ quiescent: false }] };
   }
   if (timing && sql.includes('CUEVO_RECOVERY_CRON_PRESENCE')) timing.postconditions++;
-  if(sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_')){if(state.catalogueFails)throw Error('private-executor-catalogue-canary');return{rows:sql.includes('STRUCTURAL')?mini:[]};}if(sql.includes('CUEVO_CATALOGUE_READ_ONLY'))return{rows:[{readOnly:true,isolation:'repeatable read'}]};if(sql.includes('CUEVO_NATIVE_QUIESCENCE'))return{rows:[{quiescent:true}]};
+  if(sql.includes('CUEVO_SCHEMA_CATALOGUE_V1_')){if(state.catalogueFails)throw Error('private-executor-catalogue-canary');return{rows:sql.includes('STRUCTURAL')?mini:[]};}if(sql.includes('CUEVO_CATALOGUE_READ_ONLY'))return{rows:[{readOnly:true,isolation:'repeatable read'}]};if(sql.includes('CUEVO_NATIVE_QUIESCENCE')){state.events.push('quiescence');return{rows:[{quiescent:true}]};}
   if(sql.includes('CUEVO_RECONCILIATION_BUCKET'))return{rows:[{...bucket,file_size_limit:createRequire(import.meta.url)('pg').types.getTypeParser(20,'text')('49152')}]};if(sql.includes('CUEVO_RECONCILIATION_OBJECTS'))return{rows:[...state.objects].map(([name,bytes])=>({name,size:String(Buffer.byteLength(bytes)),mimetype:'application/json'})).sort((a,b)=>a.name.localeCompare(b.name))};
+  if(sql.includes('CUEVO_INSTALLED_SCHEMA_STAGE')&&!sql.includes('_LOCK')&&state.markerFailure==='after-commit'&&state.events.includes('marker-commit'))throw Error('private-marker-after-commit-readback-canary');
   if(sql.includes('CUEVO_CONTROLLED_ABSENCE'))return{rows:[Object.fromEntries(Array.from({length:17},(_,index)=>['marker'+index,false]))]};if(sql.includes('CUEVO_INSTALLED_SCHEMA_STORAGE'))return{rows:[{available:true}]};if(sql.includes('CUEVO_CURRENT_PARTIAL_RECONCILIATION')&&state.readbackFails&&state.vault.has(String(values[0])))throw Error('private-executor-readback-canary');if(sql.includes('CUEVO_CURRENT_PARTIAL_RECONCILIATION')||sql.includes('CUEVO_INSTALLED_SCHEMA_STAGE_LOCK')||sql.includes('CUEVO_INSTALLED_SCHEMA_STAGE'))return{rows:state.vault.has(String(values[0]))?[{...(sql.includes('_LOCK')?{id:'controlled-vault'}:{}),decrypted_secret:state.vault.get(String(values[0]))}]:[]};
-  if(sql.startsWith('select vault.create_secret')){state.pendingVault=[String(values[1]),String(values[0])];state.events.push('vault-create');return{rows:[{create_secret:'controlled'}]};}if(sql.startsWith('select vault.update_secret')){state.pendingVault=[String(values[2]),String(values[1])];return{rows:[]};}if(sql==='COMMIT'){if(state.commitFails&&state.pendingVault)throw Error('private-executor-commit-canary');if(state.pendingVault)state.vault.set(...state.pendingVault);state.pendingVault=null;return{rows:[]};}if(sql==='ROLLBACK'){state.pendingVault=null;return{rows:[]};}
+  if(sql.startsWith('select vault.create_secret')||sql.startsWith('select vault.update_secret')){
+   const markerName=String(values[sql.includes('create_secret')?1:2]);if(markerName==='cuevo_schema_stage_'+ref){state.events.push('marker-write');if(state.markerFailure==='before-write')throw Error('private-marker-before-write-canary');}
+   state.pendingVault=[markerName,String(values[sql.includes('create_secret')?0:1])];if(sql.includes('create_secret'))state.events.push('vault-create');return{rows:sql.includes('create_secret')?[{create_secret:'controlled'}]:[]};
+  }if(sql==='COMMIT'){if(state.commitFails&&state.pendingVault)throw Error('private-executor-commit-canary');const marker=state.pendingVault?.[0]==='cuevo_schema_stage_'+ref;if(state.pendingVault)state.vault.set(...state.pendingVault);state.pendingVault=null;if(marker)state.events.push('marker-commit');return{rows:[]};}if(sql==='ROLLBACK'){state.pendingVault=null;return{rows:[]};}
   if(sql.includes('CUEVO_TARGET_COUNTS'))return{rows:[{authUsers:0,storageObjects:state.objects.size,appSchemas:['app','authorization','internal'],runtimeRoles:['cuevo_api','cuevo_worker'],schoolsPresent:true}]};if(sql.includes('CUEVO_TARGET_SCHOOLS'))return{rows:[{schools:0}]};if(sql.includes('CUEVO_STAGE_BASE'))return{rows:[{foundation:true,rls:true,privateRelations:true,privateFunctions:true,runtimeRoles:true}]};if(sql.includes('CUEVO_RECOVERY_CRON_PRESENCE'))return{rows:[{present:false}]};
   if(sql.includes('pg_try_advisory_lock')){state.events.push('lock');return{rows:[{locked:true}]};}if(sql.includes('pg_advisory_unlock')){state.events.push('unlock');return{rows:[{released:!state.cleanupFail}]};}if(sql.includes('session_user'))return{rows:[{operator:'postgres',database:'postgres',ssl:true,serverVersion:170011}]};if(sql.includes("to_regclass('supabase_migrations"))return{rows:[{historyPresent:true}]};if(sql.includes('select version,coalesce'))return{rows:history()};if(sql==='BEGIN'||sql.startsWith('BEGIN ISOLATION')||sql.startsWith('SET LOCAL'))return{rows:[]};throw Error('Unmapped controlled PG query');
  }
@@ -452,3 +456,44 @@ test('an unacknowledged current INTENT introduced during native observation cann
 
 
 test('version two database-only null fingerprints reach actual native reconciliation pairing before the exact three-file CLI',async()=>{await fixture(async()=>{const original=[...state.objects],result=await executor.executeNativeHostedMigrationStage(input);assert.equal(result.status,'COMMITTED',JSON.stringify({result,events:state.events}));assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.equal(result.protocol?.commitment,'CONFIRMED');for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);assert.equal(result.hostedAcceptance,false);},true);});
+
+async function denyMarkerFailureExport(result:unknown){
+ // The exporter runs in its ordinary module context, without this native
+ // transport fixture's admission hooks. Its existing valid package fixture
+ // reaches the actual result parser with these exact executor failure bytes.
+ const path=join(root,'.local/hosted-release/schema-result.json');await writeFile(path,JSON.stringify(result)+'\n');
+ const child=spawnSync(process.execPath,['--import','tsx','--test','--test-name-pattern=actual completion export bytes survive','scripts/verification/backend-schema-completion-admission.test.ts'],{cwd:resolve(import.meta.dirname,'../..'),env:{...process.env,CUEVO_TEST_SCHEMA_FAILURE_PATH:path},encoding:'utf8',timeout:60000,windowsHide:true});
+ assert.equal(child.status,0,child.stdout+child.stderr);
+}
+
+test('installed marker failure preserves acknowledged SQL and actual confirmed native cleanup in the single-stage wrapper',async()=>{
+ for(const markerFailure of ['before-write','after-commit']as const)await fixture(async()=>{
+  const original=[...state.objects];state.markerFailure=markerFailure;
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);
+   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.status,'COMMITTED',JSON.stringify(result));assert.equal(result.protocol?.commitment,'CONFIRMED');
+   assert.equal(result.protocol?.cleanupCode,null);assert.equal(result.recoveryCompletion,undefined);assert.equal(result.installedSchemaMarker?.status,'UNKNOWN');assert.equal(result.compositionFailure?.phase,'INSTALLED_SCHEMA_MARKER');
+   const committed=result.committedSchema;assert.ok(committed);assert.equal(committed.protocol.status,'COMMITTED');assert.equal(committed.protocol.commitment,'CONFIRMED');assert.deepEqual(committed.protocol.identity,result.protocol?.identity);assert.equal(committed.completedAt,null);
+   const records=[...state.objects].filter(([path])=>!original.some(([prior])=>prior===path)&&path.endsWith('.record.json')).map(([,bytes])=>JSON.parse(bytes));
+   assert.deepEqual(records.map(record=>record.payload.state),['INTENT','COMMITTED']);assert.deepEqual(committed.journalAcknowledgement,{kind:'SYNCED',sha256:records[1].payloadSha256});
+   assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.equal(state.events.filter(event=>event==='marker-write').length,1);assert.equal(state.vault.has('cuevo_schema_stage_'+ref),markerFailure==='after-commit');
+   assert.ok(state.events.lastIndexOf('quiescence')>state.events.indexOf('marker-write'));assert.ok(state.events.indexOf('unlock')>state.events.lastIndexOf('quiescence'));assert.ok(state.events.indexOf('session-close')>state.events.indexOf('unlock'));
+   assert.equal(result.compositionFailure?.native?.lease,'RELEASED');assert.equal(result.compositionFailure?.native?.session,'CLOSED_CONFIRMED');assert.equal(result.compositionFailure?.native?.partialReceipt,'CONFIRMED');
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+   assert.doesNotMatch(JSON.stringify(result),/private-marker|controlled-db-password|select vault/);await denyMarkerFailureExport(result);
+  }finally{state.markerFailure=null;}
+ });
+});
+
+test('installed marker failure retains immutable commit facts when actual unlock or session cleanup is unknown',async()=>{
+ for(const cleanup of ['unlock','close']as const)await fixture(async()=>{
+  const original=[...state.objects];state.markerFailure='after-commit';state.cleanupFail=cleanup==='unlock';state.closeFail=cleanup==='close';
+  try{
+   const result=await executor.executeNativeHostedMigrationStage(input);assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol?.cleanupCode,'LOCK_RELEASE_UNCONFIRMED');assert.equal(result.protocol?.status,'REQUIRES_REVIEW');assert.equal(result.recoveryCompletion,undefined);
+   assert.equal(result.installedSchemaMarker?.status,'UNKNOWN');assert.equal(result.compositionFailure?.phase,'INSTALLED_SCHEMA_MARKER');assert.equal(result.committedSchema?.protocol.status,'COMMITTED');assert.equal(result.committedSchema?.protocol.commitment,'CONFIRMED');assert.equal(result.committedSchema?.protocol.cleanupCode,null);assert.equal(result.committedSchema?.completedAt,null);
+   const records=[...state.objects].filter(([path])=>!original.some(([prior])=>prior===path)&&path.endsWith('.record.json')).map(([,bytes])=>JSON.parse(bytes));assert.deepEqual(records.map(record=>record.payload.state),['INTENT','COMMITTED','REQUIRES_REVIEW']);assert.equal(result.committedSchema?.journalAcknowledgement.sha256,records[1].payloadSha256);
+   assert.equal(result.compositionFailure?.native?.session,cleanup==='close'?'CLOSE_UNCONFIRMED':'CLOSED_CONFIRMED');assert.equal(result.compositionFailure?.native?.lease,cleanup==='unlock'?'RELEASE_UNCONFIRMED':'RELEASED');assert.equal(state.commands,1);assert.equal(state.historyCount,123);assert.ok(state.events.includes('session-close'));
+   for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);await denyMarkerFailureExport(result);
+  }finally{state.markerFailure=null;state.cleanupFail=false;state.closeFail=false;}
+ });
+});

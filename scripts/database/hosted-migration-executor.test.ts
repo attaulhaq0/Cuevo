@@ -282,6 +282,15 @@ test('partial pre-observability continuation uses original nonlexical stage180 r
  const result=await module.executeNativeHostedMigrationStage(input);assert.equal(result.status,'NOOP',JSON.stringify({result,events:state.events}));assert.equal(state.commands,0);assert.equal(state.events.some(event=>event.startsWith('installed-schema:')),false);
 });});
 
+test('aggregate installed marker failure stops later SQL stages and aggregate marker without false cleanup review',async()=>{
+ const module=await api();await fixture(async input=>{
+  state.failures=['installed-schema'];const result=await module.executeNativeHostedMigrations(aggregateInput(input));
+  assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.stages.length,1);assert.equal(result.stages[0].status,'REQUIRES_REVIEW');assert.equal(result.stages[0].protocol?.status,'COMMITTED');assert.equal(result.stages[0].protocol?.commitment,'CONFIRMED');assert.equal(result.stages[0].committedSchema?.completedAt,null);
+  assert.equal(result.stages[0].installedSchemaMarker?.status,'UNKNOWN');assert.equal(result.compositionFailure?.phase,'INSTALLED_SCHEMA_MARKER');assert.equal(result.cleanupCode,null);assert.equal(result.recoveryCompletion,undefined);assert.equal(result.stages[0].recoveryCompletion,undefined);
+  assert.equal(state.commands,1);assert.deepEqual(state.events.filter(event=>event.startsWith('installed-schema:')),['installed-schema:prefix']);assert.equal(state.events.includes('installed-migrations'),false);assert.deepEqual(state.events.filter(event=>event.startsWith('journal:')),['journal:INTENT','journal:COMMITTED']);assert.equal(state.events.filter(event=>event==='unlock').length,1);
+ });
+});
+
 test('aggregate advances four canonical cumulative stages within one actual native lock callback', async () => {
  const module = await api(); assert.equal(typeof module.executeNativeHostedMigrations, 'function');
  await fixture(async input => {
@@ -413,6 +422,7 @@ test('unknown prepared cleanup refuses confirmed release while retaining the ori
  const subject=await api();await fixture(async input=>{
   state.failures=['process-dispose'];const result=await subject.executeNativeHostedMigrationStage(input);
   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(state.commands,1);assert.ok(state.events.includes('process-dispose'));assert.equal(result.compositionFailure?.processCleanup,'UNCONFIRMED');assert.equal(JSON.stringify(result).includes(secret),false);
+  assert.equal(result.committedSchema?.protocol.status,'COMMITTED');assert.equal(result.committedSchema?.protocol.commitment,'CONFIRMED');assert.equal(result.committedSchema?.protocol.cleanupCode,null);assert.equal(result.committedSchema?.completedAt,null);assert.equal(result.installedSchemaMarker,undefined);assert.equal(result.recoveryCompletion,undefined);
  });
 });
 test('native preparation failure retains only original resource identity and explicit unknown cleanup',async()=>{
