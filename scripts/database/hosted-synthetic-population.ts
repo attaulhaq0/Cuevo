@@ -7,7 +7,7 @@ import { readBackendReleaseAdmission } from '../verification/backend-release-adm
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from '../verification/backend-release-contracts';
 import { readHostedMigrationProvider, hostedMigrationEndpointSchema, requireCurrentHostedMigrationEndpoint } from './hosted-migration-provider';
 import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, type HostedMigrationPlanV1 } from './hosted-migration-plan';
-import { admitHostedMigrationStageFiles } from './hosted-migration-stage-files';
+import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata } from './hosted-migration-stage-files';
 import { verifyHostedMigrationHistory } from './hosted-migration-history';
 import { assertNativeSchemaRecoveryConsumption, readNativeSchemaStageAdmission, requireCommittedSchemaRecoveryInventory, type NativeReconciliationPermit, type SchemaRecoveryConsumption } from './hosted-migration-database';
 import { createHostedMigrationDatabase, hostedSyntheticSeedSha256, readOriginalSyntheticSeed } from './hosted-migration-database';
@@ -60,7 +60,9 @@ export async function seedHostedSyntheticPopulation(value:unknown):Promise<Hoste
  const persist=async(path:string,record:unknown)=>{const handle=await open(path,'wx',0o600);try{await handle.writeFile(canonicalReleaseExecutionJson(record));await handle.sync();}finally{await handle.close();}const dir=await open(receiptRoot,'r');try{await dir.sync();}finally{await dir.close();}};
  const revalidate=async(consumption:SchemaRecoveryConsumption)=>{
   // Immutable seed/source preparation precedes the owner’s renewed current facts.
-  await readOriginalSyntheticSeed(root);await admitHostedMigrationStageFiles({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage});
+  await readOriginalSyntheticSeed(root);
+  const admitFiles=stage.materialization==='METADATA_ONLY'&&expected.installedSource&&expected.executionScope==='complete-backend'?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
+  await admitFiles({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage});
   if(expected.schemaRecovery){
    if(!input.schemaRecoveryExport)throw failure();
    if(!currentRecoveryPermit)currentRecoveryPermit=await db.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption,...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});

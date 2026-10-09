@@ -1,0 +1,1355 @@
+{
+  "version": 1,
+  "purpose": "CUEVO_FIXED_CI_PARTITIONS",
+  "source": [
+    {
+      "id": "source-native",
+      "files": [
+        "scripts/database/hosted-migration-database-tls.test.ts",
+        "scripts/database/hosted-migration-database.test.ts",
+        "scripts/database/hosted-migration-execution.test.ts",
+        "scripts/database/hosted-migration-executor.test.ts",
+        "scripts/database/hosted-migration-native-process.test.ts",
+        "scripts/database/hosted-migration-quiescence.test.ts",
+        "scripts/database/hosted-runtime-role-membership.test.ts",
+        "scripts/database/hosted-schema-reconciliation-executor.test.ts",
+        "scripts/database/hosted-schema-reconciliation-native.test.ts",
+        "scripts/database/hosted-schema-reconciliation-policy.test.ts",
+        "scripts/database/hosted-schema-reconciliation.test.ts"
+      ]
+    },
+    {
+      "id": "source-contracts",
+      "files": [
+        "scripts/database/hosted-schema-continuation-executor.test.ts",
+        "scripts/database/hosted-schema-continuation-native.test.ts",
+        "scripts/verification/account-capture-cleanup.test.ts",
+        "scripts/verification/backend-api-origin.test.ts",
+        "scripts/verification/backend-ci-artifact-admission.test.ts",
+        "scripts/verification/backend-preview-transport.test.ts",
+        "scripts/verification/backend-release-admission.test.ts",
+        "scripts/verification/backend-release-contracts.test.ts",
+        "scripts/verification/backend-release-delivery.test.ts",
+        "scripts/verification/backend-release.test.ts",
+        "scripts/verification/backend-runtime-artifact-archive.test.ts",
+        "scripts/verification/backend-runtime-initialize.test.ts",
+        "scripts/verification/backend-runtime-recovery-export.test.ts",
+        "scripts/verification/backend-runtime-resume.test.ts",
+        "scripts/verification/backend-schema-completion-admission.test.ts",
+        "scripts/verification/backend-workflow.test.ts",
+        "scripts/verification/browser-account-phase.test.ts",
+        "scripts/verification/browser-runtime-scope.test.ts",
+        "scripts/verification/build-workspaces.test.ts",
+        "scripts/verification/canonical-runtime-jobs.test.ts",
+        "scripts/verification/canonical-schema-jobs.test.ts",
+        "scripts/verification/canonical-source-jobs.test.ts",
+        "scripts/verification/canonical-source-legacy.test.ts",
+        "scripts/verification/ci-partition-coverage.test.ts",
+        "scripts/verification/ci-test-timings.test.ts",
+        "scripts/verification/cicd-contracts.test.ts",
+        "scripts/verification/codeql-alerts.test.ts",
+        "scripts/verification/daily-watchdog.test.ts",
+        "scripts/verification/data-api-configuration.test.ts",
+        "scripts/verification/dependency-security.test.ts",
+        "scripts/verification/edge-worker.test.ts",
+        "scripts/verification/full-release-evidence.test.ts",
+        "scripts/verification/full-verification-evidence.test.ts",
+        "scripts/verification/git-source-digest.test.ts",
+        "scripts/verification/integration-partitions.test.ts",
+        "scripts/verification/operating-staging-handoff.test.ts",
+        "scripts/verification/operations-phase-summary.test.ts",
+        "scripts/verification/playwright.critical.config.test.ts",
+        "scripts/verification/posthog-evidence.test.ts",
+        "scripts/verification/recovery-dump.test.ts",
+        "scripts/verification/release-controls.test.ts",
+        "scripts/verification/release-process.test.ts",
+        "scripts/verification/release-review.test.ts",
+        "scripts/verification/rules.test.ts",
+        "scripts/verification/runtime-artifact-receipt.test.ts",
+        "scripts/verification/runtime-contract-manifest.test.ts",
+        "scripts/verification/runtime-lanes.test.ts",
+        "scripts/verification/runtime-outage-rules.test.ts",
+        "scripts/verification/staging-security.test.ts",
+        "scripts/verification/staging-verification-jobs.test.ts",
+        "scripts/verification/staging-verification.test.ts",
+        "scripts/verification/stateless-checks.test.ts",
+        "scripts/verification/stateless-source-partitions.test.ts",
+        "scripts/verification/typecheck-workspaces.test.ts",
+        "scripts/verification/verification-profiles.test.ts",
+        "scripts/verification/verification-progress.test.ts",
+        "scripts/verification/verification-workflows.test.ts"
+      ]
+    },
+    {
+      "id": "source-delivery",
+      "files": [
+        "scripts/architecture/rules.test.ts",
+        "scripts/architecture/synthetic-runtime.test.ts",
+        "scripts/database/browser-pilot-volume-rules.test.ts",
+        "scripts/database/hosted-active-runtime-state.test.ts",
+        "scripts/database/hosted-installed-state.test.ts",
+        "scripts/database/hosted-migration-batch-receipt.test.ts",
+        "scripts/database/hosted-migration-batches.test.ts",
+        "scripts/database/hosted-migration-connection.test.ts",
+        "scripts/database/hosted-migration-durable-journal.test.ts",
+        "scripts/database/hosted-migration-history.test.ts",
+        "scripts/database/hosted-migration-journal.test.ts",
+        "scripts/database/hosted-migration-plan.test.ts",
+        "scripts/database/hosted-migration-provider.test.ts",
+        "scripts/database/hosted-migration-remote-journal.test.ts",
+        "scripts/database/hosted-migration-stage-files.test.ts",
+        "scripts/database/hosted-migration-stage-observation.test.ts",
+        "scripts/database/hosted-migration-workdirs.test.ts",
+        "scripts/database/hosted-operator-storage-bootstrap.test.ts",
+        "scripts/database/hosted-operator-storage-inventory.test.ts",
+        "scripts/database/hosted-operator-storage-policy.test.ts",
+        "scripts/database/hosted-provider-state.test.ts",
+        "scripts/database/hosted-runtime-rollout-session.test.ts",
+        "scripts/database/hosted-schema-catalogue.test.ts",
+        "scripts/database/hosted-schema-recovery-completion.test.ts",
+        "scripts/database/hosted-synthetic-auth.test.ts",
+        "scripts/database/hosted-synthetic-plan.test.ts",
+        "scripts/database/hosted-synthetic-population.test.ts",
+        "scripts/database/replay-plan.test.ts",
+        "scripts/database/worker-transport-fixture-policy.test.ts",
+        "scripts/database/worker-transport-trust.test.ts",
+        "scripts/docs/reference-inventory.test.ts",
+        "scripts/docs/rules.test.ts",
+        "scripts/local-runtime.test.ts",
+        "scripts/repository/rules.test.ts",
+        "scripts/runtime/build-artifacts.test.ts",
+        "scripts/runtime/build-edge-artifact.test.ts",
+        "scripts/runtime/environment.test.ts",
+        "scripts/runtime/foundry-environment.test.ts",
+        "scripts/runtime/initial-school.test.ts",
+        "scripts/runtime/local-school-accounts.test.ts",
+        "scripts/runtime/posthog-local.test.ts",
+        "scripts/runtime/process.test.ts",
+        "scripts/runtime/reference-drain-rules.test.ts",
+        "scripts/runtime/source-paths.test.ts",
+        "scripts/seed-auth.test.ts",
+        "scripts/seed-reference-core.test.ts",
+        "scripts/verification/backend-hosted-activation-confirmation.test.ts",
+        "scripts/verification/backend-hosted-activation-export-admission.test.ts",
+        "scripts/verification/backend-hosted-activation-export-contracts.test.ts",
+        "scripts/verification/backend-hosted-activation-export.test.ts",
+        "scripts/verification/backend-hosted-activation-pending-native.test.ts",
+        "scripts/verification/backend-hosted-activation.test.ts",
+        "scripts/verification/backend-hosted-browser.test.ts",
+        "scripts/verification/backend-hosted-database-restore.test.ts",
+        "scripts/verification/backend-hosted-fault-recovery-native.test.ts",
+        "scripts/verification/backend-hosted-learning-loop-admission.test.ts",
+        "scripts/verification/backend-hosted-learning-loop-artifact.test.ts",
+        "scripts/verification/backend-hosted-learning-loop-native.test.ts",
+        "scripts/verification/backend-hosted-learning-loop.test.ts",
+        "scripts/verification/backend-hosted-private.test.ts",
+        "scripts/verification/backend-hosted-recovery-faults.test.ts",
+        "scripts/verification/backend-hosted-recovery.test.ts",
+        "scripts/verification/backend-hosted-verification.test.ts",
+        "scripts/verification/backend-provider-cli-launch.test.ts",
+        "scripts/verification/backend-provider-deploy.test.ts",
+        "scripts/verification/backend-release-prepare.test.ts",
+        "scripts/verification/backend-runtime-rollout.test.ts",
+        "scripts/verification/backend-web-handover.test.ts",
+        "scripts/verification/backend-web-settings.test.ts",
+        "scripts/verification/backend-web-transfer-admission.test.ts",
+        "scripts/verification/backend-web-transfer.test.ts",
+        "scripts/verification/hosted-learning-loop-journal.test.ts",
+        "scripts/verification/hosted-learning-qa-workflow.test.ts",
+        "scripts/verification/hosted-learning-qa.test.ts",
+        "scripts/verification/protected-preview.test.ts",
+        "scripts/verification/runtime-rollout-compatibility.test.ts",
+        "scripts/verification/web-backend-bridge.test.ts",
+        "scripts/verification/web-staging-origin.test.ts",
+        "scripts/verification/web-test-assets.test.ts"
+      ]
+    }
+  ],
+  "integration": [
+    {
+      "id": "integration-learning",
+      "files": [
+        "apps/api/test/integration/academic-period-report-api.test.ts",
+        "apps/api/test/integration/academic-release-scope-plan-api.test.ts",
+        "apps/api/test/integration/academic-report-api.test.ts",
+        "apps/api/test/integration/analytics-fixture-api.test.ts",
+        "apps/api/test/integration/assessment-preparation-api.test.ts",
+        "apps/api/test/integration/auth-provisioning-local-api.test.ts",
+        "apps/api/test/integration/browser-diagnostics-api.test.ts",
+        "apps/api/test/integration/campus-learning-support-api.test.ts",
+        "apps/api/test/integration/class-summary-api.test.ts",
+        "apps/api/test/integration/community-maintenance-api.test.ts",
+        "apps/api/test/integration/community-mentions-api.test.ts",
+        "apps/api/test/integration/community-notification-page-api.test.ts",
+        "apps/api/test/integration/community-notification-source-api.test.ts",
+        "apps/api/test/integration/course-objective-api.test.ts",
+        "apps/api/test/integration/curriculum-lifecycle-api.test.ts",
+        "apps/api/test/integration/customer-curriculum-race.test.ts",
+        "apps/api/test/integration/customer-learning-page-api.test.ts",
+        "apps/api/test/integration/customer-policy-read-api.test.ts",
+        "apps/api/test/integration/customer-portfolio-identity-api.test.ts",
+        "apps/api/test/integration/customer-portfolio-source-work-api.test.ts",
+        "apps/api/test/integration/customer-source-authority-api.test.ts",
+        "apps/api/test/integration/customer-support-history-api.test.ts",
+        "apps/api/test/integration/exact-home-source-api.test.ts",
+        "apps/api/test/integration/gradebook-api.test.ts",
+        "apps/api/test/integration/human-intervention-context-api.test.ts",
+        "apps/api/test/integration/intelligence-api.test.ts",
+        "apps/api/test/integration/intelligence-content-revision-api.test.ts",
+        "apps/api/test/integration/intelligence-context-parity-api.test.ts",
+        "apps/api/test/integration/intelligence-execution-registry-api.test.ts",
+        "apps/api/test/integration/intelligence-native-rubric-api.test.ts",
+        "apps/api/test/integration/intelligence-quality-api.test.ts",
+        "apps/api/test/integration/intelligence-school-policy-api.test.ts",
+        "apps/api/test/integration/learner-observation-policy-api.test.ts",
+        "apps/api/test/integration/learner-observation-worker-api.test.ts",
+        "apps/api/test/integration/learner-state-api.test.ts",
+        "apps/api/test/integration/parent-assessment-metadata-api.test.ts",
+        "apps/api/test/integration/portfolio-recognition-api.test.ts",
+        "apps/api/test/integration/posthog-intelligence-api.test.ts",
+        "apps/api/test/integration/realtime-authorization-api.test.ts",
+        "apps/api/test/integration/recommendation-page-distinct-source-api.test.ts",
+        "apps/api/test/integration/recommendation-page-mixed-source-api.test.ts",
+        "apps/api/test/integration/recommendation-page-parity-api.test.ts",
+        "apps/api/test/integration/recorded-streak-api.test.ts",
+        "apps/api/test/integration/rubric-api.test.ts",
+        "apps/api/test/integration/runtime-telemetry-api.test.ts",
+        "apps/api/test/integration/school-access-concurrency-api.test.ts",
+        "apps/api/test/integration/school-audit-api.test.ts",
+        "apps/api/test/integration/school-learning-api.test.ts",
+        "apps/api/test/integration/school-maintenance-api.test.ts",
+        "apps/api/test/integration/school-selection-api.test.ts",
+        "apps/api/test/integration/synthetic-staging-runtime-api.test.ts",
+        "apps/api/test/integration/thinking-focus-api.test.ts"
+      ]
+    },
+    {
+      "id": "integration-state",
+      "files": [
+        "apps/api/test/integration/academic-api.test.ts",
+        "apps/api/test/integration/assets-api.test.ts",
+        "apps/api/test/integration/attention-api.test.ts",
+        "apps/api/test/integration/closed-academic-correction-api.test.ts",
+        "apps/api/test/integration/community-api.test.ts",
+        "apps/api/test/integration/curriculum-directory-api.test.ts",
+        "apps/api/test/integration/curriculum-runtime-api.test.ts",
+        "apps/api/test/integration/customer-adversarial-api.test.ts",
+        "apps/api/test/integration/customer-assessment-submission-page-api.test.ts",
+        "apps/api/test/integration/customer-concurrency-api.test.ts",
+        "apps/api/test/integration/customer-intelligence-recovery-gap-api.test.ts",
+        "apps/api/test/integration/customer-journeys-api.test.ts",
+        "apps/api/test/integration/customer-learning-resources-api.test.ts",
+        "apps/api/test/integration/customer-observation-performance-api.test.ts",
+        "apps/api/test/integration/customer-parent-labels-api.test.ts",
+        "apps/api/test/integration/customer-scale-api.test.ts",
+        "apps/api/test/integration/customer-school-context-api.test.ts",
+        "apps/api/test/integration/customer-submission-artifacts-api.test.ts",
+        "apps/api/test/integration/human-academic-evidence-api.test.ts",
+        "apps/api/test/integration/human-outcome-context-api.test.ts",
+        "apps/api/test/integration/improvement-api.test.ts",
+        "apps/api/test/integration/initial-school-admission-api.test.ts",
+        "apps/api/test/integration/intelligence-budget-api.test.ts",
+        "apps/api/test/integration/intelligence-policy-context-api.test.ts",
+        "apps/api/test/integration/intelligence-source-authority-parity-api.test.ts",
+        "apps/api/test/integration/intervention-choice-api.test.ts",
+        "apps/api/test/integration/intervention-help-api.test.ts",
+        "apps/api/test/integration/intervention-history-authority-parity-api.test.ts",
+        "apps/api/test/integration/learner-goals-api.test.ts",
+        "apps/api/test/integration/learner-observation-policy-concurrency-api.test.ts",
+        "apps/api/test/integration/learner-profile-api.test.ts",
+        "apps/api/test/integration/learning-content-api.test.ts",
+        "apps/api/test/integration/learning-lifecycle-api.test.ts",
+        "apps/api/test/integration/local-account-mail-api.test.ts",
+        "apps/api/test/integration/native-academic-source-api.test.ts",
+        "apps/api/test/integration/parent-conversations-api.test.ts",
+        "apps/api/test/integration/period-objective-coverage-api.test.ts",
+        "apps/api/test/integration/portfolio-organization-api.test.ts",
+        "apps/api/test/integration/portfolio-page-parity-api.test.ts",
+        "apps/api/test/integration/posthog-delivery-api.test.ts",
+        "apps/api/test/integration/posthog-policy-concurrency-api.test.ts",
+        "apps/api/test/integration/recommendation-page-api.test.ts",
+        "apps/api/test/integration/restricted-records-api.test.ts",
+        "apps/api/test/integration/result-parent-publication-api.test.ts",
+        "apps/api/test/integration/result-publication-held-bytes-api.test.ts",
+        "apps/api/test/integration/school-account-admission-api.test.ts",
+        "apps/api/test/integration/school-account-source-api.test.ts",
+        "apps/api/test/integration/school-automation-api.test.ts",
+        "apps/api/test/integration/school-entitlements-read-api.test.ts",
+        "apps/api/test/integration/school-operations-api.test.ts",
+        "apps/api/test/integration/worker-dispatch-api.test.ts"
+      ]
+    }
+  ],
+  "separateSource": [
+    {
+      "file": "scripts/verification/pilot-evidence.test.ts",
+      "reason": "SEPARATE_PILOT_ACCEPTANCE"
+    },
+    {
+      "file": "scripts/verification/pilot-private-cleanup.test.ts",
+      "reason": "SEPARATE_PILOT_ACCEPTANCE"
+    },
+    {
+      "file": "scripts/verification/pilot-window-rules.test.ts",
+      "reason": "SEPARATE_PILOT_ACCEPTANCE"
+    },
+    {
+      "file": "scripts/verification/pilot-window.test.ts",
+      "reason": "SEPARATE_PILOT_ACCEPTANCE"
+    },
+    {
+      "file": "scripts/verification/pilot-workflow-contracts.test.ts",
+      "reason": "SEPARATE_PILOT_ACCEPTANCE"
+    },
+    {
+      "file": "scripts/verification/secret-scan-policy.test.ts",
+      "reason": "SEPARATE_SECRET_SCANNER_OWNER"
+    },
+    {
+      "file": "scripts/verification/secret-scan.test.ts",
+      "reason": "SEPARATE_SECRET_SCANNER_OWNER"
+    }
+  ],
+  "separateIntegration": [
+    {
+      "file": "apps/api/test/integration/customer-foundry-live-api.test.ts",
+      "reason": "LIVE_PROVIDER_APPROVAL_AND_BUDGET_REQUIRED"
+    }
+  ],
+  "measurements": {
+    "source": [
+      {
+        "path": "scripts/architecture/rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/architecture/synthetic-runtime.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/browser-pilot-volume-rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-active-runtime-state.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-installed-state.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-batch-receipt.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-batches.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-connection.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-database-tls.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-database.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-durable-journal.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-execution.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-executor.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-history.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-journal.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-native-process.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-plan.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-provider.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-quiescence.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-remote-journal.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-stage-files.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-stage-observation.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-migration-workdirs.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-operator-storage-bootstrap.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-operator-storage-inventory.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-operator-storage-policy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-provider-state.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-runtime-role-membership.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-runtime-rollout-session.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-catalogue.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-continuation-executor.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-continuation-native.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-reconciliation-executor.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-reconciliation-native.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-reconciliation-policy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-reconciliation.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-schema-recovery-completion.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-synthetic-auth.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-synthetic-plan.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-synthetic-population.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/replay-plan.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/worker-transport-fixture-policy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/worker-transport-trust.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/docs/reference-inventory.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/docs/rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/local-runtime.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/repository/rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/build-artifacts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/build-edge-artifact.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/environment.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/foundry-environment.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/initial-school.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/local-school-accounts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/posthog-local.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/process.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/reference-drain-rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/runtime/source-paths.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/seed-auth.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/seed-reference-core.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/account-capture-cleanup.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-api-origin.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-ci-artifact-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-activation-confirmation.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-activation-export-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-activation-export-contracts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-activation-export.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-activation-pending-native.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-activation.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-browser.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-database-restore.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-fault-recovery-native.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-learning-loop-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-learning-loop-artifact.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-learning-loop-native.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-learning-loop.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-private.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-recovery-faults.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-recovery.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-verification.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-preview-transport.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-provider-cli-launch.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-provider-deploy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-release-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-release-contracts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-release-delivery.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-release-prepare.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-release.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-runtime-artifact-archive.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-runtime-initialize.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-runtime-recovery-export.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-runtime-resume.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-runtime-rollout.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-schema-completion-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-web-handover.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-web-settings.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-web-transfer-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-web-transfer.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-workflow.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/browser-account-phase.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/browser-runtime-scope.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/build-workspaces.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/canonical-runtime-jobs.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/canonical-schema-jobs.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/ci-partition-coverage.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/ci-test-timings.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/cicd-contracts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/codeql-alerts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/daily-watchdog.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/data-api-configuration.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/dependency-security.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/edge-worker.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/full-release-evidence.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/full-verification-evidence.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/git-source-digest.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-learning-loop-journal.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-learning-qa-workflow.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-learning-qa.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/operating-staging-handoff.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/operations-phase-summary.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/playwright.critical.config.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/posthog-evidence.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/protected-preview.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/recovery-dump.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/release-controls.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/release-process.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/release-review.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/runtime-artifact-receipt.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/runtime-contract-manifest.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/runtime-lanes.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/runtime-outage-rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/runtime-rollout-compatibility.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/staging-security.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/staging-verification-jobs.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/staging-verification.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/stateless-checks.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/typecheck-workspaces.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/verification-profiles.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/verification-progress.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/verification-workflows.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/web-backend-bridge.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/web-staging-origin.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/web-test-assets.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/stateless-source-partitions.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/canonical-source-jobs.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/canonical-source-legacy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/integration-partitions.test.ts",
+        "durationMs": null
+      }
+    ],
+    "integration": [
+      {
+        "path": "apps/api/test/integration/academic-api.test.ts",
+        "durationMs": 3042
+      },
+      {
+        "path": "apps/api/test/integration/academic-period-report-api.test.ts",
+        "durationMs": 3642
+      },
+      {
+        "path": "apps/api/test/integration/academic-release-scope-plan-api.test.ts",
+        "durationMs": 4718
+      },
+      {
+        "path": "apps/api/test/integration/academic-report-api.test.ts",
+        "durationMs": 2918
+      },
+      {
+        "path": "apps/api/test/integration/analytics-fixture-api.test.ts",
+        "durationMs": 1544
+      },
+      {
+        "path": "apps/api/test/integration/assessment-preparation-api.test.ts",
+        "durationMs": 4754
+      },
+      {
+        "path": "apps/api/test/integration/assets-api.test.ts",
+        "durationMs": 1154
+      },
+      {
+        "path": "apps/api/test/integration/attention-api.test.ts",
+        "durationMs": 1847
+      },
+      {
+        "path": "apps/api/test/integration/auth-provisioning-local-api.test.ts",
+        "durationMs": 1419
+      },
+      {
+        "path": "apps/api/test/integration/browser-diagnostics-api.test.ts",
+        "durationMs": 2760
+      },
+      {
+        "path": "apps/api/test/integration/campus-learning-support-api.test.ts",
+        "durationMs": 3948
+      },
+      {
+        "path": "apps/api/test/integration/class-summary-api.test.ts",
+        "durationMs": 2155
+      },
+      {
+        "path": "apps/api/test/integration/closed-academic-correction-api.test.ts",
+        "durationMs": 5126
+      },
+      {
+        "path": "apps/api/test/integration/community-api.test.ts",
+        "durationMs": 1509
+      },
+      {
+        "path": "apps/api/test/integration/community-maintenance-api.test.ts",
+        "durationMs": 3673
+      },
+      {
+        "path": "apps/api/test/integration/community-mentions-api.test.ts",
+        "durationMs": 3305
+      },
+      {
+        "path": "apps/api/test/integration/community-notification-page-api.test.ts",
+        "durationMs": 5635
+      },
+      {
+        "path": "apps/api/test/integration/community-notification-source-api.test.ts",
+        "durationMs": 2522
+      },
+      {
+        "path": "apps/api/test/integration/course-objective-api.test.ts",
+        "durationMs": 5997
+      },
+      {
+        "path": "apps/api/test/integration/curriculum-directory-api.test.ts",
+        "durationMs": 3729
+      },
+      {
+        "path": "apps/api/test/integration/curriculum-lifecycle-api.test.ts",
+        "durationMs": 4752
+      },
+      {
+        "path": "apps/api/test/integration/curriculum-runtime-api.test.ts",
+        "durationMs": 3846
+      },
+      {
+        "path": "apps/api/test/integration/customer-adversarial-api.test.ts",
+        "durationMs": 4494
+      },
+      {
+        "path": "apps/api/test/integration/customer-assessment-submission-page-api.test.ts",
+        "durationMs": 37063
+      },
+      {
+        "path": "apps/api/test/integration/customer-concurrency-api.test.ts",
+        "durationMs": 6682
+      },
+      {
+        "path": "apps/api/test/integration/customer-curriculum-race.test.ts",
+        "durationMs": 257
+      },
+      {
+        "path": "apps/api/test/integration/customer-intelligence-recovery-gap-api.test.ts",
+        "durationMs": 8510
+      },
+      {
+        "path": "apps/api/test/integration/customer-journeys-api.test.ts",
+        "durationMs": 29672
+      },
+      {
+        "path": "apps/api/test/integration/customer-learning-page-api.test.ts",
+        "durationMs": 23473
+      },
+      {
+        "path": "apps/api/test/integration/customer-learning-resources-api.test.ts",
+        "durationMs": 3379
+      },
+      {
+        "path": "apps/api/test/integration/customer-observation-performance-api.test.ts",
+        "durationMs": 17267
+      },
+      {
+        "path": "apps/api/test/integration/customer-parent-labels-api.test.ts",
+        "durationMs": 2583
+      },
+      {
+        "path": "apps/api/test/integration/customer-policy-read-api.test.ts",
+        "durationMs": 2466
+      },
+      {
+        "path": "apps/api/test/integration/customer-portfolio-identity-api.test.ts",
+        "durationMs": 5499
+      },
+      {
+        "path": "apps/api/test/integration/customer-portfolio-source-work-api.test.ts",
+        "durationMs": 7565
+      },
+      {
+        "path": "apps/api/test/integration/customer-scale-api.test.ts",
+        "durationMs": 100654
+      },
+      {
+        "path": "apps/api/test/integration/customer-school-context-api.test.ts",
+        "durationMs": 2880
+      },
+      {
+        "path": "apps/api/test/integration/customer-source-authority-api.test.ts",
+        "durationMs": 2113
+      },
+      {
+        "path": "apps/api/test/integration/customer-submission-artifacts-api.test.ts",
+        "durationMs": 9025
+      },
+      {
+        "path": "apps/api/test/integration/customer-support-history-api.test.ts",
+        "durationMs": 3829
+      },
+      {
+        "path": "apps/api/test/integration/exact-home-source-api.test.ts",
+        "durationMs": 3227
+      },
+      {
+        "path": "apps/api/test/integration/gradebook-api.test.ts",
+        "durationMs": 4909
+      },
+      {
+        "path": "apps/api/test/integration/human-academic-evidence-api.test.ts",
+        "durationMs": 5366
+      },
+      {
+        "path": "apps/api/test/integration/human-intervention-context-api.test.ts",
+        "durationMs": 13130
+      },
+      {
+        "path": "apps/api/test/integration/human-outcome-context-api.test.ts",
+        "durationMs": 90133
+      },
+      {
+        "path": "apps/api/test/integration/improvement-api.test.ts",
+        "durationMs": 7919
+      },
+      {
+        "path": "apps/api/test/integration/initial-school-admission-api.test.ts",
+        "durationMs": 2140
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-api.test.ts",
+        "durationMs": 6653
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-budget-api.test.ts",
+        "durationMs": 14451
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-content-revision-api.test.ts",
+        "durationMs": 5444
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-context-parity-api.test.ts",
+        "durationMs": 17493
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-execution-registry-api.test.ts",
+        "durationMs": 4961
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-native-rubric-api.test.ts",
+        "durationMs": 6881
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-policy-context-api.test.ts",
+        "durationMs": 9407
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-quality-api.test.ts",
+        "durationMs": 8316
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-school-policy-api.test.ts",
+        "durationMs": 5107
+      },
+      {
+        "path": "apps/api/test/integration/intelligence-source-authority-parity-api.test.ts",
+        "durationMs": 17830
+      },
+      {
+        "path": "apps/api/test/integration/intervention-choice-api.test.ts",
+        "durationMs": 9195
+      },
+      {
+        "path": "apps/api/test/integration/intervention-help-api.test.ts",
+        "durationMs": 6996
+      },
+      {
+        "path": "apps/api/test/integration/intervention-history-authority-parity-api.test.ts",
+        "durationMs": 4830
+      },
+      {
+        "path": "apps/api/test/integration/learner-goals-api.test.ts",
+        "durationMs": 3662
+      },
+      {
+        "path": "apps/api/test/integration/learner-observation-policy-api.test.ts",
+        "durationMs": 8889
+      },
+      {
+        "path": "apps/api/test/integration/learner-observation-policy-concurrency-api.test.ts",
+        "durationMs": 2680
+      },
+      {
+        "path": "apps/api/test/integration/learner-observation-worker-api.test.ts",
+        "durationMs": 11727
+      },
+      {
+        "path": "apps/api/test/integration/learner-profile-api.test.ts",
+        "durationMs": 3074
+      },
+      {
+        "path": "apps/api/test/integration/learner-state-api.test.ts",
+        "durationMs": 3458
+      },
+      {
+        "path": "apps/api/test/integration/learning-content-api.test.ts",
+        "durationMs": 4751
+      },
+      {
+        "path": "apps/api/test/integration/learning-lifecycle-api.test.ts",
+        "durationMs": 3413
+      },
+      {
+        "path": "apps/api/test/integration/local-account-mail-api.test.ts",
+        "durationMs": 915
+      },
+      {
+        "path": "apps/api/test/integration/native-academic-source-api.test.ts",
+        "durationMs": 5638
+      },
+      {
+        "path": "apps/api/test/integration/parent-assessment-metadata-api.test.ts",
+        "durationMs": 1692
+      },
+      {
+        "path": "apps/api/test/integration/parent-conversations-api.test.ts",
+        "durationMs": 4045
+      },
+      {
+        "path": "apps/api/test/integration/period-objective-coverage-api.test.ts",
+        "durationMs": 5594
+      },
+      {
+        "path": "apps/api/test/integration/portfolio-organization-api.test.ts",
+        "durationMs": 4825
+      },
+      {
+        "path": "apps/api/test/integration/portfolio-page-parity-api.test.ts",
+        "durationMs": 19435
+      },
+      {
+        "path": "apps/api/test/integration/portfolio-recognition-api.test.ts",
+        "durationMs": 2350
+      },
+      {
+        "path": "apps/api/test/integration/posthog-delivery-api.test.ts",
+        "durationMs": 5021
+      },
+      {
+        "path": "apps/api/test/integration/posthog-intelligence-api.test.ts",
+        "durationMs": 46621
+      },
+      {
+        "path": "apps/api/test/integration/posthog-policy-concurrency-api.test.ts",
+        "durationMs": 2771
+      },
+      {
+        "path": "apps/api/test/integration/realtime-authorization-api.test.ts",
+        "durationMs": 31540
+      },
+      {
+        "path": "apps/api/test/integration/recommendation-page-api.test.ts",
+        "durationMs": 22084
+      },
+      {
+        "path": "apps/api/test/integration/recommendation-page-distinct-source-api.test.ts",
+        "durationMs": 117276
+      },
+      {
+        "path": "apps/api/test/integration/recommendation-page-mixed-source-api.test.ts",
+        "durationMs": 21125
+      },
+      {
+        "path": "apps/api/test/integration/recommendation-page-parity-api.test.ts",
+        "durationMs": 16899
+      },
+      {
+        "path": "apps/api/test/integration/recorded-streak-api.test.ts",
+        "durationMs": 59975
+      },
+      {
+        "path": "apps/api/test/integration/restricted-records-api.test.ts",
+        "durationMs": 3566
+      },
+      {
+        "path": "apps/api/test/integration/result-parent-publication-api.test.ts",
+        "durationMs": 6222
+      },
+      {
+        "path": "apps/api/test/integration/result-publication-held-bytes-api.test.ts",
+        "durationMs": 3952
+      },
+      {
+        "path": "apps/api/test/integration/rubric-api.test.ts",
+        "durationMs": 3427
+      },
+      {
+        "path": "apps/api/test/integration/runtime-telemetry-api.test.ts",
+        "durationMs": 440
+      },
+      {
+        "path": "apps/api/test/integration/school-access-concurrency-api.test.ts",
+        "durationMs": 3468
+      },
+      {
+        "path": "apps/api/test/integration/school-account-admission-api.test.ts",
+        "durationMs": 3456
+      },
+      {
+        "path": "apps/api/test/integration/school-account-source-api.test.ts",
+        "durationMs": 2061
+      },
+      {
+        "path": "apps/api/test/integration/school-audit-api.test.ts",
+        "durationMs": 2776
+      },
+      {
+        "path": "apps/api/test/integration/school-automation-api.test.ts",
+        "durationMs": 3206
+      },
+      {
+        "path": "apps/api/test/integration/school-entitlements-read-api.test.ts",
+        "durationMs": 2400
+      },
+      {
+        "path": "apps/api/test/integration/school-learning-api.test.ts",
+        "durationMs": 2895
+      },
+      {
+        "path": "apps/api/test/integration/school-maintenance-api.test.ts",
+        "durationMs": 4029
+      },
+      {
+        "path": "apps/api/test/integration/school-operations-api.test.ts",
+        "durationMs": 2419
+      },
+      {
+        "path": "apps/api/test/integration/school-selection-api.test.ts",
+        "durationMs": 3163
+      },
+      {
+        "path": "apps/api/test/integration/synthetic-staging-runtime-api.test.ts",
+        "durationMs": 3308
+      },
+      {
+        "path": "apps/api/test/integration/thinking-focus-api.test.ts",
+        "durationMs": 9054
+      },
+      {
+        "path": "apps/api/test/integration/worker-dispatch-api.test.ts",
+        "durationMs": 3288
+      }
+    ],
+    "provenance": {
+      "sourceSha": "226efc4263d3b761faee3815192a66b2adfdac7e",
+      "runId": "37918597029",
+      "runAttempt": 1,
+      "basis": "ORIGINAL_CASE_FILE_DURATION",
+      "treeSha": "d5fa6f6a8a2d069f7cdd3856dd2e73aa43247186",
+      "releaseSha": "02920e0bc6fbdb7689e0614621cbbbd6d4f9d1f7"
+    }
+  },
+  "nonTestChecks": [
+    {
+      "name": "repository",
+      "commandSha256": "f5ab4851b6b364693e036df8b4f9a7c41ac58447e81cd400909fb7840feca402"
+    },
+    {
+      "name": "architecture",
+      "commandSha256": "fa0410d9f6fa8c1683cb8fd4888570de47a99bb36c01e585effafa4b135d8d6e"
+    },
+    {
+      "name": "docs",
+      "commandSha256": "640ec551bc9a79aef1105872b12b1bd994bae436a7ed719b7dffaf00e5ee840c"
+    },
+    {
+      "name": "cicd",
+      "commandSha256": "e6efa8b193b643b056ac1caa829b04287a3c58d1fd7b88e4f17b320cc0d2a427"
+    },
+    {
+      "name": "dependency-security",
+      "commandSha256": "ce30758cf6cf245372294b9837e72457742d279f405c02dc44a9fb137e50e60f"
+    }
+  ]
+}

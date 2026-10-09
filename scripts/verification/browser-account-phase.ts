@@ -1,3 +1,5 @@
+import { createConnection } from 'node:net';
+
 export async function verifyBrowserAccountPhases(ports: { account(): Promise<number>; restore(): Promise<number>; ordinary(): Promise<number>; record(value: { account: number | null; restore: number | null; ordinary: number | null }): Promise<void> }) {
   const result = { account: null as number | null, restore: null as number | null, ordinary: null as number | null };
   try { result.account = await ports.account(); } catch { result.account = 1; }
@@ -43,6 +45,18 @@ export function validateAccountBrowserReport(input: unknown, startedAt: number, 
 export type BrowserPortState = 'REFUSED' | 'OPEN' | 'UNKNOWN';
 export async function requireStoppedBrowserPorts(probe: (port: number) => Promise<BrowserPortState>): Promise<void> {
   for (const port of [3000, 4000, 4001]) if (await probe(port) !== 'REFUSED') throw Error('Browser application stopped state is not confirmed.');
+}
+function probeStoppedBrowserPort(port:number):Promise<BrowserPortState>{return new Promise(done=>{
+  const socket=createConnection({host:'127.0.0.1',port});let settled=false;
+  const finish=(state:BrowserPortState)=>{if(settled)return;settled=true;socket.destroy();done(state);};
+  socket.setTimeout(1000);socket.once('connect',()=>finish('OPEN'));socket.once('timeout',()=>finish('UNKNOWN'));
+  socket.once('error',error=>finish((error as NodeJS.ErrnoException).code==='ECONNREFUSED'?'REFUSED':'UNKNOWN'));
+});}
+/** Fresh fixed application-port checks; stopped state is never cached between
+ * resets, account phases or owned process launches. */
+export async function waitForStoppedBrowserPorts():Promise<void>{
+  const deadline=Date.now()+10000;
+  for(;;){try{await requireStoppedBrowserPorts(probeStoppedBrowserPort);return;}catch{if(Date.now()>=deadline)throw Error('Browser application stopped state is not confirmed.');}await new Promise(done=>setTimeout(done,100));}
 }
 
 export type AccountRestoreEvidence = { stopped: number | null; journal: number | null; cleanup: number | null; bootstrap: number | null; verify: number | null };

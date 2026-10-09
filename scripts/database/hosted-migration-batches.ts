@@ -8,8 +8,9 @@ import type { MigrationSource } from './hosted-migration-plan';
 const failure=()=>Error('Hosted migration batch source or stage requires review; contents withheld.');
 const digest=z.string().regex(/^[a-f0-9]{64}$/),version=z.string().regex(/^[0-9]{14}$/);
 const row=z.object({name:z.string().regex(/^[0-9]{14}_[a-z0-9_]+[.]sql$/),version,sha256:digest}).strict();
-const stageSchema=z.object({id:z.enum(['prefix','native','pre-observability','remaining']),workdir:z.string().min(1).max(4096),included:z.array(row).min(1).max(1000),pending:z.array(row).max(1000),expectedBeforeVersions:z.array(version).max(1000),expectedAfterVersions:z.array(version).max(1000),configSha256:digest,commandArgs:z.array(z.string().max(4096)).max(20)}).strict();
+const stageSchema=z.object({id:z.enum(['prefix','native','pre-observability','remaining']),workdir:z.string().min(1).max(4096),included:z.array(row).min(1).max(1000),pending:z.array(row).max(1000),expectedBeforeVersions:z.array(version).max(1000),expectedAfterVersions:z.array(version).max(1000),configSha256:digest,commandArgs:z.array(z.string().max(4096)).max(20),materialization:z.literal('SQL_FILES').optional()}).strict();
 export type HostedMigrationBatchStage=z.infer<typeof stageSchema>;
+type SuppliedBatchStage=Omit<HostedMigrationBatchStage,'materialization'>&{materialization?:'SQL_FILES'|'METADATA_ONLY'};
 const hash=(value:Uint8Array|string)=>createHash('sha256').update(value).digest('hex');
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const sortedVersions=(rows:{version:string}[])=>rows.map(row=>row.version).sort();
@@ -24,7 +25,7 @@ function snapshot(value:unknown,depth=0):unknown{
 }
 export type HostedMigrationBatch={index:number;pending:z.infer<typeof row>[];cumulativeIncluded:z.infer<typeof row>[];expectedBeforeVersions:string[];expectedAfterVersions:string[];sha256:string};
 /** Pure bounded metadata. Supplied SQL bytes, history and template are never native source, receipt or execution authority. */
-export function deriveHostedMigrationBatches(value:{sources:MigrationSource[];stage:z.infer<typeof stageSchema>;reconciliationTemplate?:unknown;completedSource?:MigrationSource[]}){
+export function deriveHostedMigrationBatches(value:{sources:MigrationSource[];stage:SuppliedBatchStage;reconciliationTemplate?:unknown;completedSource?:MigrationSource[]}){
  try{
   const sourceSchema=z.array(z.object({name:z.string(),bytes:z.instanceof(Uint8Array)}).strict()).min(1).max(1000);
   const input=z.object({sources:sourceSchema,stage:stageSchema,reconciliationTemplate:z.unknown().optional(),completedSource:sourceSchema.optional()}).strict().parse(snapshot(value)),stage=input.stage;

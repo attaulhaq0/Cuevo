@@ -1,7 +1,7 @@
 import {dataApiConfigurationObservationSchema,validateDisabledDataApiConfigurationEvidence} from './data-api-configuration';
 import { createRequire } from 'node:module';
 import { z } from 'zod';
-import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep,runtimeDeliveryArtifactStep,ciDatabaseJob,ciRequiredJob} from './verification-workflows';
+import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep,runtimeDeliveryArtifactStep,ciDatabaseJob,ciRequiredJob,ciSourceJobs,ciRuntimeJobs} from './verification-workflows';
 import { canonicalReleaseReviewJson } from './release-review';
 import { verificationSteps } from './steps';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown };
@@ -141,8 +141,9 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
       const codeqlReceipt=index===0&&jobName==='codeql'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(codeqlReceiptStep);
       const runtimeLane=index===0&&(['backend','browser','database'] as const).some(lane=>jobName===(lane==='database'?'database-checks':`runtime-${lane}`)&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(runtimeLaneArtifactStep(lane)));
       const runtimeDelivery=index===0&&jobName==='runtime-backend'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(runtimeDeliveryArtifactStep);
-      const sourceContracts=index===0&&jobName==='source-contracts'&&step.name==='Retain exact safe source contracts'&&step.if==='always()'&&step['continue-on-error']===undefined&&settings.name==='cuevo-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}'&&settings.path==='.local/verification/source-contracts/result.json\n.local/verification/source-contracts/failure.json\n'&&settings['include-hidden-files']===true&&settings['if-no-files-found']==='error'&&settings['retention-days']===14;
-      if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !sourceContracts && !runtimeDelivery && !runtimeLane && !codeqlReceipt && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
+      const sourceContracts=index===0&&Object.hasOwn(ciSourceJobs,jobName)&&list(mapping(ciSourceJobs[jobName as keyof typeof ciSourceJobs]).steps).some(required=>mapping(required).uses==='actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(required));
+      const partitionRuntime=index===0&&Object.hasOwn(ciRuntimeJobs,jobName)&&list(mapping(ciRuntimeJobs[jobName as keyof typeof ciRuntimeJobs]).steps).some(required=>mapping(required).uses==='actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'&&canonicalReleaseReviewJson(step)===canonicalReleaseReviewJson(required));
+      if (uses.startsWith('actions/upload-artifact@') && settings.path !== '.local/cicd-safe/' && !partitionRuntime && !sourceContracts && !runtimeDelivery && !runtimeLane && !codeqlReceipt && !stagingEvidence && !learningEvidence && !(index === 1 && settings.path === '.local/cicd-release/web-deployment-result.json'
         && settings.name === 'cuevo-web-deployment-${{ github.run_id }}-${{ github.run_attempt }}' && settings['include-hidden-files'] === true && settings['if-no-files-found'] === 'error'
         && settings['retention-days'] === 2 && step.if === undefined && step['continue-on-error'] === undefined)) issues.push('Unsafe artifact path.');
       if (index === 1 && uses.startsWith('actions/download-artifact@')) issues.push('Release must not consume upstream untrusted artifacts.');
@@ -151,7 +152,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
     }
   }
   const ciJobs = mapping(ci.jobs); const technical = mapping(ciJobs['technical-mvp']); const steps = list(technical.steps).map(mapping);
-  for (const owner of ['fast-checks','source-contracts','technical-mvp','runtime-backend','runtime-browser']) {
+  for (const owner of ['fast-checks','source-contracts','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery','technical-mvp','runtime-backend','runtime-browser']) {
     const checkouts = list(mapping(ciJobs[owner]).steps).map(mapping).filter(step => String(step.uses ?? '').startsWith('actions/checkout@'));
     if (checkouts.length !== 1 || mapping(checkouts[0]?.with)['fetch-depth'] !== 0 || checkouts[0]?.if !== undefined || checkouts[0]?.['continue-on-error'] !== undefined) issues.push(`${owner} verification requires one unconditional complete-history checkout for canonical source checks.`);
   }

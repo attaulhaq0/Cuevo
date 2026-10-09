@@ -52,9 +52,10 @@ test('reviewed schema continuation fixtures run once in their required replay an
 
 test('isolated source-contract placement preserves complete stateless inventory without a runtime operation',()=>{
  const repo=resolve(import.meta.dirname,'../..'),ci=readFileSync(resolve(repo,'.github/workflows/ci.yml'),'utf8');
- const source=ci.slice(ci.indexOf('\n  source-contracts:'),ci.indexOf('\n  runtime-backend:'));
- const fast=ci.slice(ci.indexOf('\n  fast-checks:'),ci.indexOf('\n  source-contracts:'));
- assert.equal(source.split('node --import tsx scripts/verification/stateless-checks.ts').length-1,1);
+ const source=ci.slice(ci.indexOf('\n  source-fixtures-native:'),ci.indexOf('\n  runtime-backend:'));
+ const fast=ci.slice(ci.indexOf('\n  fast-checks:'),ci.indexOf('\n  source-fixtures-native:'));
+ assert.equal(source.split('node --import tsx scripts/verification/stateless-checks.ts --partition=').length-1,3);
+ assert.equal(source.split('node --import tsx scripts/verification/stateless-source-aggregate.ts').length-1,1);
  assert.equal(fast.includes('stateless-checks.ts'),false);
  assert.equal(fast.split('npm run lint && npm run typecheck && npm test').length-1,1);
  const files=statelessVerificationSteps.flatMap(step=>[...step.args]).filter(argument=>argument.endsWith('.test.ts'));

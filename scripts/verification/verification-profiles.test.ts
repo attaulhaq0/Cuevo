@@ -194,3 +194,34 @@ test('integration validator consumes actual Vitest discovery and fresh pure doma
     assert.ok(count>1);
   } finally {await rm(directory,{recursive:true,force:true});}
 });
+test('integration validator retains actual dynamic two-file Vitest cases and refuses incomplete execution',async()=>{
+ const subject=await api(),directory=await mkdtemp(join(tmpdir(),'cuevo-vitest-partition-oracles-'));
+ try{
+  const runner=resolve('node_modules/vitest/vitest.mjs'),vitest=pathToFileURL(resolve('node_modules/vitest/dist/index.js')).href;
+  const config=join(directory,'vitest.config.mjs'),first=join(directory,'first.test.mjs'),second=join(directory,'second.test.mjs');
+  await writeFile(config,"export default {test:{include:['*.test.mjs'],fileParallelism:false,testTimeout:5000}};");
+  await writeFile(first,`import{describe,it,expect}from${JSON.stringify(vitest)};describe('dynamic owner',()=>{for(const value of[0,2])it('source '+value,()=>expect(value).toBeGreaterThanOrEqual(0));});`);
+  await writeFile(second,`import{it,expect}from${JSON.stringify(vitest)};it('second owner',()=>expect(true).toBe(true));`);
+  const files=[first,second],inventoryPath=join(directory,'inventory.json'),reportPath=join(directory,'report.json');
+  const invoke=(args:string[])=>spawnSync(process.execPath,[runner,...args,'--root',directory,'--config',config],{encoding:'utf8',timeout:30000,env:{...process.env,CUEVO_REQUIRE_INTEGRATION:'1',CUEVO_REQUIRE_LIVE_INTELLIGENCE:'0'}});
+  const listed=invoke(['list','--staticParse=false','--allowOnly=false',`--json=${inventoryPath}`,...files]);assert.equal(listed.status,0,listed.stderr);
+  const inventory:unknown=JSON.parse(await readFile(inventoryPath,'utf8'));
+  const startedAt=Date.now(),executed=invoke(['run','--allowOnly=false','--fileParallelism=false','--reporter=json',`--outputFile=${reportPath}`,...files]),finishedAt=Date.now();assert.equal(executed.status,0,executed.stderr);
+  const report:unknown=JSON.parse(await readFile(reportPath,'utf8'));
+  assert.equal(subject.validateIntegrationRunReport(report,inventory,{expectedFiles:files,startedAt,finishedAt}),3);
+  assert.throws(()=>subject.validateIntegrationRunReport(report,inventory,{expectedFiles:[first],startedAt,finishedAt}),'a second actual file cannot disappear from coverage');
+  const subsetStarted=Date.now(),subset=invoke(['run','--allowOnly=false','--fileParallelism=false','--reporter=json',`--outputFile=${reportPath}`,first]),subsetFinished=Date.now();assert.equal(subset.status,0,subset.stderr);
+  const subsetReport:unknown=JSON.parse(await readFile(reportPath,'utf8'));
+  assert.throws(()=>subject.validateIntegrationRunReport(subsetReport,inventory,{expectedFiles:files,startedAt:subsetStarted,finishedAt:subsetFinished}),'an actual fragment cannot certify the original two-file inventory');
+  for(const declaration of ['it.skip','it.todo','it.only']){
+   await writeFile(second,`import{it,expect}from${JSON.stringify(vitest)};${declaration}('second owner',()=>expect(true).toBe(true));`);
+   const list=invoke(['list','--staticParse=false','--allowOnly=false',`--json=${inventoryPath}`,...files]);
+   if(list.status!==0){assert.equal(declaration,'it.only');continue;}
+   const freshInventory:unknown=JSON.parse(await readFile(inventoryPath,'utf8')),begin=Date.now(),run=invoke(['run','--allowOnly=false','--fileParallelism=false','--reporter=json',`--outputFile=${reportPath}`,...files]),end=Date.now();
+   if(run.status===0){const incompleteReport:unknown=JSON.parse(await readFile(reportPath,'utf8'));assert.throws(()=>subject.validateIntegrationRunReport(incompleteReport,freshInventory,{expectedFiles:files,startedAt:begin,finishedAt:end}),declaration);}else assert.equal(declaration,'it.only');
+  }
+  await writeFile(second,`import{describe}from${JSON.stringify(vitest)};describe('empty owner',()=>{});`);
+  const emptyListed=invoke(['list','--staticParse=false','--allowOnly=false',`--json=${inventoryPath}`,...files]);
+  if(emptyListed.status===0){const emptyInventory:unknown=JSON.parse(await readFile(inventoryPath,'utf8')),begin=Date.now(),run=invoke(['run','--allowOnly=false','--fileParallelism=false','--reporter=json',`--outputFile=${reportPath}`,...files]);if(run.status===0){const emptyReport:unknown=JSON.parse(await readFile(reportPath,'utf8'));assert.throws(()=>subject.validateIntegrationRunReport(emptyReport,emptyInventory,{expectedFiles:files,startedAt:begin,finishedAt:Date.now()}));}else assert.notEqual(run.status,0);}
+ }finally{await rm(directory,{recursive:true,force:true});}
+});

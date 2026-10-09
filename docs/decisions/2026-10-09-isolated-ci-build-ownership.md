@@ -1,0 +1,11 @@
+# Isolated CI application build ownership
+
+Status: bounded source change to remove duplicated compilation; managed runtime and whole-CI timing remain unverified.
+
+The backend and browser lanes previously both invoked the complete configured build: API TypeScript, worker TypeScript and Next. The browser launcher runs API/worker source through tsx; runtime outage and selected Node/Edge artifact bundlers also consume source. No runtime consumer of the emitted compiler output was found. However, root no-emit type checking does not cover the separate API/worker build configurations, so those emit checks remain required once.
+
+`build-workspaces.ts` keeps its complete default sequence and adds only closed `--scope=backend` and `--scope=web` invocations. Backend performs the two existing TypeScript builds; browser performs the existing configured Next build with the same browser-safe environment. Unsupported/duplicate scopes refuse before any command; command failure prevents later commands.
+
+`runtime-lanes.ts` records `backend-build` and `web-build` separately. The browser lane runs browser-secret exclusion after its own Next output exists and before browser journeys. The backend lane retains API/worker artifact packaging, signed Edge checks and applicable outage/recovery. Exact ordered lane receipts prevent misplaced/missing/failed/substituted components from passing. The aggregate produces the original complete profile `build` row only after both same-source/run/attempt/scope components pass; its duration is summed execution work, not wall-clock pipeline elapsed. Database bootstrap/restoration, source freezes, security checks and full scheduled/customer acceptance are unchanged.
+
+Colocated configured-build tests invoke the actual CLI using controlled compiler transport, verify default/scoped command and environment behavior and refuse unsupported scope/failure. Lane tests verify current component union, single browser-secret owner and failure propagation. These stateless tests do not prove actual Linux builds or deployed behavior. Prior build rows took roughly 26–33 seconds, so this cleanup has limited possible savings; source/integration partitioning and actual timings remain necessary for the requested 15–20-minute whole-CI target.

@@ -165,6 +165,17 @@ function installedPlan(sourceSha:string,sourceTree:string,runtimeOnly=false){
  plan=runtimeOnly?{...next,runtimeOnly:true}:next;Object.assign(current,{releaseSha:sourceSha,treeSha:sourceTree,currentMainSha:sourceSha,executionScope:runtimeOnly?'installed-runtime':'complete-backend',fingerprints:{...(current.fingerprints as Record<string,string>),migrationPlanSha256:canonicalHostedMigrationPlan(plan).sha256}});
 }
 
+test('completed native continuation derives four metadata stages from one actual historical SQL acquisition',async()=>{
+ await reset();fullSchemaFixture();referencePopulationFixture();exactInstalledAuthFixture();installedPlan(sha,tree);
+ const original=[...state.objects],recorded=canonicalReleaseExecutionJson(completionExport),native=createRequire(import.meta.url)('node:child_process')as typeof import('node:child_process'),originalExec=native.execFileSync;let historicalReads=0;
+ native.execFileSync=((file:string,args:readonly string[],...rest:unknown[])=>{if(file==='git'&&args[0]==='-C'&&args[1]===root&&args[2]==='cat-file'&&args[3]==='--batch'&&new Error().stack?.includes('readHistoricalMigrationSources')&&new Error().stack?.includes('Array.map'))historicalReads++;return Reflect.apply(originalExec,native,[file,args,...rest]);})as typeof originalExec;syncBuiltinESMExports();
+ try{await locked(async database=>{
+  const permit=await database.admitSchemaContinuation({...request(),consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER'}),identity=stageIdentity(3),versions=rows.map(row=>row.version).sort(),facts=owner.readNativeSchemaStageAdmission(permit,identity,versions);
+  assert.equal(facts.population!.authUsers.length,133);assert.equal(facts.target.schools,2);assert.equal(facts.consumption,'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');assert.equal(plan.pending.length,0);assert.ok(plan.stages.every(stage=>stage.names.length===0));assert.throws(()=>owner.readNativeSchemaStageAdmission(structuredClone(permit),identity,versions));
+  assert.equal(state.creates,0);assert.equal(state.seedWrites,0);assert.equal(state.authPosts,0);assert.equal(canonicalReleaseExecutionJson(completionExport),recorded);for(const[path,bytes]of original)assert.equal(state.objects.get(path),bytes);
+ });assert.equal(historicalReads,1,'All four zero-pending metadata stages share one owner-acquired original SQL inventory');}finally{native.execFileSync=originalExec;syncBuiltinESMExports();}
+});
+
 test('native runtime consumption refuses absent actual activation metadata after exact full schema population and133 Auth',async()=>{
  await reset();fullSchemaFixture();referencePopulationFixture();exactInstalledAuthFixture();installedPlan(sha,tree,true);current.installedRuntime={};state.dispatchPresent=true;state.cronPresent=true;
  await assert.rejects(locked(database=>database.admitSchemaContinuation({...request(),consumption:'INSTALLED_SYNTHETIC_RUNTIME_READ_ONLY'}).then(()=>undefined)));

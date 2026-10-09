@@ -2,13 +2,15 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { readSingleJsonArchive } from './single-json-archive';
-import { readBackendReleaseSourceEvidence } from './backend-release-admission';
+import { readBackendReleaseSourceEvidence,readBackendReleaseSourceEvidenceAndGuard } from './backend-release-admission';
 import { readCanonicalMigrationSources } from '../database/hosted-migration-plan';
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
 import { canonicalReleaseExecutionJson } from './release-review';
 import { readBackendWebTransferFile, validateBackendWebTransfer,validateOperatingBackendWebTransfer } from './backend-web-transfer';
 import {validateOperatingStagingHandoff} from './operating-staging-handoff';
-import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
+import {readCanonicalRuntimeJobsAndGuard} from './canonical-runtime-jobs';
+import {createGithubCodeqlArtifactReader} from './staging-security';
+import {captureCanonicalSourceContext} from './canonical-source-jobs';
 
 const fail = () => Error('Completed backend web handover consumption requires review; contents withheld.');
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -68,15 +70,27 @@ async function boundedBytes(response: Response, signal: AbortSignal, maximum: nu
   } return Buffer.concat(parts); } finally { void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* Pending cancelled reads own cleanup. */ } }
 }
 
-export async function readCompletedBackendWebTransferAdmission(value: unknown) {
+declare const completedCanonicalTokenBrand:unique symbol;
+export type CompletedBackendCanonicalToken={readonly[completedCanonicalTokenBrand]:never};
+const completedCanonicalTokens=new WeakMap<object,{ci:string;proof:{runAttempt:number;jobsSha256:string};refresh:()=>Promise<void>;dispose:()=>void}>();
+/** One invocation owns the original bounded native reader. No caller-supplied
+ * proof or callback can enter this process-local handoff. */
+export function disposeCompletedBackendCanonical(token:CompletedBackendCanonicalToken){const held=completedCanonicalTokens.get(token);if(held){completedCanonicalTokens.delete(token);held.dispose();}}
+export async function consumeCompletedBackendCanonical(token:CompletedBackendCanonicalToken,rawCi:unknown){
+ const held=completedCanonicalTokens.get(token);if(!held)throw fail();completedCanonicalTokens.delete(token);
+ try{if(held.ci!==canonicalReleaseExecutionJson(rawCi))throw fail();await held.refresh();return held.proof;}catch{throw fail();}finally{held.dispose();}
+}
+export async function readCompletedBackendWebTransferAdmissionAndGuard(value: unknown) {
   try {
     const input: Input = inputSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value)));
     // Trusted manual main runner only. The caller's web-purpose/approval
     // admission remains a separate obligation of the existing release owner.
     if (process.platform !== 'linux' || process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_ENVIRONMENT !== 'github-hosted' || process.env.GITHUB_WORKSPACE !== input.repoRoot
       || !input.repoRoot.startsWith('/home/runner/work/') || process.env.GITHUB_SHA !== input.releaseSha || process.env.GITHUB_REF !== 'refs/heads/main' || process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || process.env.NODE_OPTIONS) throw fail();
+    const context=captureCanonicalSourceContext(input.repoRoot,input.releaseSha,undefined);
     const repository = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).parse(process.env.GITHUB_REPOSITORY);
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 180000);
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 180000);let retained=false;
+    const sourceArtifactReader=createGithubCodeqlArtifactReader(repository,input.githubToken,controller.signal);
     const urlFor = (path: string) => `https://api.github.com/repos/${repository}${path ? '/' + path : ''}`;
     const get = async (path: string) => {
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]), response = await fetch(urlFor(path), { method: 'GET', headers: { Authorization: 'Bearer ' + input.githubToken, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, redirect: 'error', cache: 'no-store', credentials: 'omit', signal });
@@ -112,26 +126,46 @@ export async function readCompletedBackendWebTransferAdmission(value: unknown) {
         get('branches/main/protection'), get('branches/main/protection/required_signatures'), get('git/commits/' + input.releaseSha), get('actions/runs/' + input.backendRunId + '/approvals'),
       ]);
       validateCiRun(ci, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });
-      const canonical=await readCanonicalRuntimeJobs(ci,get);if(canonicalReleaseExecutionJson(canonical)!==canonicalReleaseExecutionJson(initial.body.canonicalRuntimeVerification))throw fail();
       validateReleaseControls({ repository: repo, environment, branches, main: protection, signatures }, { repository, environment: 'staging' });
       z.object({ total_count: z.literal(1) }).parse(branches);
       z.object({ id: z.literal(initial.body.environmentId), name: z.literal('staging') }).parse(environment);
       z.object({ object: z.object({ type: z.literal('commit'), sha: z.literal(input.releaseSha) }) }).parse(main);
       z.object({ sha: z.literal(input.releaseSha), tree: z.object({ sha: z.literal(initial.body.treeSha) }), verification: z.object({ verified: z.literal(true), reason: z.literal('valid'), signature: z.string().min(1), payload: z.string().min(1) }) }).parse(commit);
-      const admitted = validateCompletedBackendWebApproval(run, approvals, raw, Date.now(),input.handoff);
+      validateCompletedBackendWebApproval(run, approvals, raw, Date.now(),input.handoff);
+      const canonical=await readCanonicalRuntimeJobsAndGuard(ci,get,sourceArtifactReader);if(canonicalReleaseExecutionJson(canonical.proof)!==canonicalReleaseExecutionJson(initial.body.canonicalRuntimeVerification))throw fail();
+      const finalSource=await readBackendReleaseSourceEvidenceAndGuard(input.repoRoot, initial.expected); validateSelectedBackendWebTransfer(raw, Date.now(),input.handoff);
       const finalRun = runSchema.parse(await get('actions/runs/' + input.backendRunId)), finalArtifact = artifactSchema.parse(await get('actions/artifacts/' + input.artifactId));
       if (canonicalReleaseExecutionJson(finalRun) !== canonicalReleaseExecutionJson(run) || canonicalReleaseExecutionJson(finalArtifact) !== canonicalReleaseExecutionJson(artifact)) throw fail();
-      const finalCi=await get('actions/runs/' + input.ciRunId);validateCiRun(finalCi, { sha: input.releaseSha, repository, ciRunId: input.ciRunId });if(canonicalReleaseExecutionJson(await readCanonicalRuntimeJobs(finalCi,get))!==canonicalReleaseExecutionJson(canonical))throw fail();
-      z.object({ object: z.object({ sha: z.literal(input.releaseSha) }) }).parse(await get('git/ref/heads/main'));
-      await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected); validateSelectedBackendWebTransfer(raw, Date.now(),input.handoff);
-      if (controller.signal.aborted) throw fail();
-      return { purpose: input.handoff==='operating-staging'?'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION' as const:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
+      const [finalRepo,finalMain,finalCi,finalEnvironment,finalBranches,finalProtection,finalSignatures,finalCommit,finalApprovals]=await Promise.all([get(''),get('git/ref/heads/main'),get('actions/runs/'+input.ciRunId),get('environments/staging'),get('environments/staging/deployment-branch-policies'),get('branches/main/protection'),get('branches/main/protection/required_signatures'),get('git/commits/'+input.releaseSha),get('actions/runs/'+input.backendRunId+'/approvals')]);
+      validateCiRun(finalCi,{sha:input.releaseSha,repository,ciRunId:input.ciRunId});if(canonicalReleaseExecutionJson(finalCi)!==canonicalReleaseExecutionJson(ci)||canonicalReleaseExecutionJson(finalCommit)!==canonicalReleaseExecutionJson(commit))throw fail();
+      validateReleaseControls({repository:finalRepo,environment:finalEnvironment,branches:finalBranches,main:finalProtection,signatures:finalSignatures},{repository,environment:'staging'});z.object({total_count:z.literal(1)}).parse(finalBranches);z.object({id:z.literal(initial.body.environmentId),name:z.literal('staging')}).parse(finalEnvironment);z.object({object:z.object({sha:z.literal(input.releaseSha)})}).parse(finalMain);
+      const admitted=validateCompletedBackendWebApproval(finalRun,finalApprovals,raw,Date.now(),input.handoff);
+      await canonical.refreshOriginalMetadata();validateCompletedBackendWebApproval(finalRun,await get('actions/runs/'+input.backendRunId+'/approvals'),raw,Date.now(),input.handoff);
+      validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);finalSource.finalPhysical();context.finalMetadata();canonical.assertOriginalValidity();
+      if (controller.signal.aborted||Date.now()>=Date.parse(artifact.expires_at)) throw fail();
+      const admission={ purpose: input.handoff==='operating-staging'?'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION' as const:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
         manifest: admitted.manifest, publicConfig: admitted.publicConfig, reviewFacts: admitted.reviewFacts, assignments: admitted.assignments,
         originalEvidence: admitted.transfer.evidence,
         backendIdentity: { repository, sourceSha: input.releaseSha, treeSha: admitted.body.treeSha, baseSha: admitted.body.baseSha, ciRunId: input.ciRunId, runId: input.backendRunId, runAttempt: input.backendRunAttempt, artifactId: input.artifactId,
           artifactSha256: artifact.digest.slice(7), transferSha256: input.transferSha256, manifestSha256: admitted.transfer.manifestSha256, packageSha256: admitted.prepared.sha256, web: admitted.body.targets.web, settingsSha256: admitted.transfer.settings.settingsSha256,
           earliestProofAt: admitted.transfer.earliestProofAt, exportedAt: admitted.transfer.exportedAt, consumptionExpiresAt: admitted.transfer.consumptionExpiresAt },
         observedAt: new Date().toISOString(), privateProofReexecuted: false as const, backendMutationAllowed: false as const, customerReady: false as const, hostedAcceptance: false as const };
-    } finally { clearTimeout(timer); controller.abort(); }
+      const token=Object.freeze(Object.create(null))as CompletedBackendCanonicalToken,dispose=()=>{clearTimeout(timer);controller.abort();};
+      completedCanonicalTokens.set(token,{ci:canonicalReleaseExecutionJson(ci),proof:canonical.proof,dispose,refresh:async()=>{
+       if(controller.signal.aborted)throw fail();await canonical.refreshOriginalMetadata();
+       const currentRun=runSchema.parse(await get('actions/runs/'+input.backendRunId)),currentArtifact=artifactSchema.parse(await get('actions/artifacts/'+input.artifactId));
+       if(canonicalReleaseExecutionJson(currentRun)!==canonicalReleaseExecutionJson(finalRun)||canonicalReleaseExecutionJson(currentArtifact)!==canonicalReleaseExecutionJson(finalArtifact))throw fail();
+       const[currentRepo,currentMain,currentEnvironment,currentBranches,currentProtection,currentSignatures,currentCommit]=await Promise.all([get(''),get('git/ref/heads/main'),get('environments/staging'),get('environments/staging/deployment-branch-policies'),get('branches/main/protection'),get('branches/main/protection/required_signatures'),get('git/commits/'+input.releaseSha)]);
+       validateReleaseControls({repository:currentRepo,environment:currentEnvironment,branches:currentBranches,main:currentProtection,signatures:currentSignatures},{repository,environment:'staging'});
+       z.object({total_count:z.literal(1)}).parse(currentBranches);z.object({id:z.literal(initial.body.environmentId),name:z.literal('staging')}).parse(currentEnvironment);z.object({object:z.object({type:z.literal('commit'),sha:z.literal(input.releaseSha)})}).parse(currentMain);
+       if(canonicalReleaseExecutionJson(currentCommit)!==canonicalReleaseExecutionJson(commit))throw fail();
+       validateCompletedBackendWebApproval(currentRun,await get('actions/runs/'+input.backendRunId+'/approvals'),raw,Date.now(),input.handoff);
+       validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);finalSource.finalPhysical();context.finalMetadata();canonical.assertOriginalValidity();
+       if(controller.signal.aborted||Date.now()>=Date.parse(artifact.expires_at))throw fail();
+      }});retained=true;return{admission,token};
+    } finally { if(!retained){clearTimeout(timer); controller.abort();} }
   } catch { throw fail(); }
 }
+/** The original public facade retains its serializable evidence shape and
+ * closes its reader immediately. Only a guarded same-invocation consumer owns it. */
+export async function readCompletedBackendWebTransferAdmission(value:unknown){const result=await readCompletedBackendWebTransferAdmissionAndGuard(value);try{return result.admission;}finally{disposeCompletedBackendCanonical(result.token);}}

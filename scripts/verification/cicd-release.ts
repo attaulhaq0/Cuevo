@@ -10,7 +10,8 @@ import {validateOperatingStagingHandoff} from './operating-staging-handoff';
 import {readCanonicalMigrationSources} from '../database/hosted-migration-plan';
 import { runtimeEnvironment } from '../runtime/environment';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, prepareReleaseReviewPackage, readPreparedReleaseReviewPackage, validateFounderReleaseApproval, type ReleaseReviewExpected } from './release-review';
-import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, readWebBackendBridge, bindWebReviewToBackend, readCanonicalWebOutput } from './web-backend-bridge';
+import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, readWebBackendBridgeAndGuard, bindWebReviewToBackend, readCanonicalWebOutput } from './web-backend-bridge';
+import {consumeCompletedBackendCanonical,disposeCompletedBackendCanonical,type CompletedBackendCanonicalToken}from'./backend-web-transfer-admission';
 import { bindVerifiedStagingWebOrigin } from './web-staging-origin';
 import { verifyHostedBrowserAccess } from './backend-hosted-browser';
 import { readGitBinaryDiffDigest } from './git-source-digest';
@@ -18,6 +19,7 @@ import { verifyHostedLearningLoop, type HostedLearningLoopWebAdmission } from '.
 import { createProtectedPreview, protectedPreviewHeaders, type ProtectedPreviewBinding } from './protected-preview';
 import { readFullReleaseEvidence } from './full-release-evidence';
 import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
+import {createGithubCodeqlArtifactReader} from './staging-security';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -126,13 +128,13 @@ const controlEvidence = async () => {
   const identity = z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), name: z.literal(environment) }).parse(environmentControl);
   return identity;
 };
-const currentCi = async () => {
+const currentCi = async (token?:CompletedBackendCanonicalToken) => {
   const sha = required('RELEASE_SHA'), ciRunId = required('CI_RUN_ID');
   if (!/^[a-f0-9]{40}$/.test(sha) || !/^[1-9][0-9]*$/.test(ciRunId) || sha !== required('GITHUB_SHA') || process.env.GITHUB_REF !== 'refs/heads/main') throw Error('Release must use the exact verified main commit.');
   assertCheckout();
   const rawCi=await github(`actions/runs/${ciRunId}`);
   validateCiRun(rawCi, { sha, repository: required('GITHUB_REPOSITORY'), ciRunId });
-  const canonicalRuntimeVerification=await readCanonicalRuntimeJobs(rawCi,github),canonicalPath=join(directory,'canonical-runtime-proof.json');
+  const canonicalRuntimeVerification=token?await consumeCompletedBackendCanonical(token,rawCi):await readCanonicalRuntimeJobs(rawCi,github,createGithubCodeqlArtifactReader(required('GITHUB_REPOSITORY'),required('GH_TOKEN'))),canonicalPath=join(directory,'canonical-runtime-proof.json');
   try{const saved=await json<unknown>(canonicalPath);if(canonicalReleaseReviewJson(saved)!==canonicalReleaseReviewJson(canonicalRuntimeVerification))throw Error('Canonical runtime job attempt changed before release consumption.');}
   catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;await mkdir(directory,{recursive:true});await writeFile(canonicalPath,canonicalReleaseReviewJson(canonicalRuntimeVerification),{flag:'wx',mode:0o600});}
   if (required('RELEASE_ENVIRONMENT') === 'production') {
@@ -193,12 +195,13 @@ const backendBridge = async () => {
     if (encodeWebBackendSelection(actual) !== encoded) throw Error('Backend selection changed after release context admission.');
   }
   if (!selection) return null;
-  return readWebBackendBridge({ selection, repoRoot: process.cwd(), githubToken: required('GH_TOKEN'), releaseSha: required('RELEASE_SHA'), ciRunId: required('CI_RUN_ID'), environment: required('RELEASE_ENVIRONMENT'), web: webIdentity() });
+  return readWebBackendBridgeAndGuard({ selection, repoRoot: process.cwd(), githubToken: required('GH_TOKEN'), releaseSha: required('RELEASE_SHA'), ciRunId: required('CI_RUN_ID'), environment: required('RELEASE_ENVIRONMENT'), web: webIdentity() });
 };
 const approvalEvidence = async (credentialFree: boolean) => {
   if (credentialFree && process.env.VERCEL_TOKEN) throw Error('Credential-free release approval must receive no deployment token.');
-  await currentCi();
-  const bridge = await backendBridge();
+  const guarded=await backendBridge();try{
+  await currentCi(guarded?.token);
+  const bridge = guarded?.bridge;
   const protectedManifest = bridge ? readCanonicalWebOutput(required('BACKEND_MANIFEST_BASE64')) : parseCanonicalReleaseReviewJson(required('RELEASE_MANIFEST'));
   if (bridge && (canonicalReleaseReviewJson(protectedManifest) !== canonicalReleaseReviewJson(bridge.manifest)
     || canonicalReleaseReviewJson(readCanonicalWebOutput(required('BACKEND_BRIDGE_BASE64'))) !== canonicalReleaseReviewJson(bridge))) throw Error('Completed backend evidence changed after web package preparation.');
@@ -211,6 +214,7 @@ const approvalEvidence = async (credentialFree: boolean) => {
   if (prepared.sha256 !== required('REVIEW_DIGEST')) throw Error('Release review package digest changed.');
   const receipt = validateFounderReleaseApproval(prepared, run, await github(`actions/runs/${expected.releaseRunId}/approvals`), expected);
   return { manifest: protectedManifest, publicConfig, prepared, receipt, ciRunId: required('CI_RUN_ID'), ...(bridge ? { backend: bridge } : {}) };
+  }finally{if(guarded)disposeCompletedBackendCanonical(guarded.token);}
 };
 const readmitApproval = async () => {
   const savedText = await readFile(reviewPath, 'utf8');
@@ -245,9 +249,10 @@ if (mode === 'context') {
   console.log('Existing release environment and main review/signature/status protections verified.');
 } else if (mode === 'prepare') {
   if (process.env.VERCEL_TOKEN) throw Error('Release package preparation must receive no deployment token.');
-  await currentCi();
+  const guarded=await backendBridge();try{
+  await currentCi(guarded?.token);
   const input = z.object({ manifest: z.unknown(), review: z.unknown() }).strict().parse(parseCanonicalReleaseReviewJson(required('CUEVO_RELEASE_REVIEW_INPUT_JSON')));
-  const bridge = await backendBridge();
+  const bridge = guarded?.bridge;
   if (bridge) { input.review = bindWebReviewToBackend(input.review, parseCanonicalReleaseReviewJson(required('CUEVO_RELEASE_REVIEW_ASSIGNMENTS_JSON')), bridge); input.manifest = bridge.manifest; }
   const admitted = await admitManifest(input.manifest, required('CI_RUN_ID'));
   if(admitted.api.kind==='vercel'&&admitted.api.projectId===webIdentity().projectId)throw Error('API and web must use separate Vercel projects before release preparation.');
@@ -258,6 +263,7 @@ if (mode === 'context') {
   await writeFile(required('GITHUB_OUTPUT'), `review-base64=${prepared.base64}\nreview-digest=${prepared.sha256}\nenvironment-id=${expected.environmentId}\n`, { flag: 'a' });
   if (bridge) await writeFile(required('GITHUB_OUTPUT'), `backend-manifest-base64=${Buffer.from(canonicalReleaseReviewJson(bridge.manifest)).toString('base64')}\nbackend-bridge-base64=${Buffer.from(canonicalReleaseReviewJson(bridge)).toString('base64')}\n`, { flag: 'a' });
   await writeFile(required('GITHUB_STEP_SUMMARY'), `## Cuevo pre-build release admission\n\nThis package contains operator-attested independent review digests. It does not approve a future web artifact or domain promotion.\n\n\`\`\`json\n${JSON.stringify(parseCanonicalReleaseReviewJson(prepared.canonicalJson), null, 2)}\n\`\`\`\n\nThe following dependency manifest is bound by the package's manifest SHA-256:\n\n\`\`\`json\n${JSON.stringify(input.manifest, null, 2)}\n\`\`\`\n\nCopy this exact approval comment:\n\n\`${prepared.comment}\`\n`, { flag: 'a' });
+  }finally{if(guarded)disposeCompletedBackendCanonical(guarded.token);}
   console.log('Exact secret-free release review package prepared before founder approval.');
 } else if (mode === 'approval') {
   const evidence = await approvalEvidence(true);

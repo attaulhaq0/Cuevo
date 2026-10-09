@@ -26,7 +26,7 @@ test('isolated source job admission refuses changed commands budgets setup secre
  const text=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(text);
  assert.deepEqual(validateCiSourceJobs(flow.jobs),[]);
  type Row=Record<string,unknown>;
- for(const owner of ['fast-checks','source-contracts']){
+ for(const owner of ['fast-checks','source-contracts','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery']){
   const mutations=[
    (job:Row)=>{job['continue-on-error']=true;},
    (job:Row)=>{job.if='false';},
@@ -52,15 +52,16 @@ test('isolated source contracts execute each stateless owner once while fast che
   const jobs = (yaml.load(ci).jobs as Record<string, Job>);
   const source = jobs['source-contracts'], fast = jobs['fast-checks'];
   assert.ok(source, 'Stateless source contracts need their own isolated required runner.');
-  assert.equal(source['timeout-minutes'], 30);
+  assert.equal(source['timeout-minutes'], 10);
   assert.equal(fast['timeout-minutes'], 20);
-  assert.equal(source.needs, undefined); assert.equal(fast.needs, undefined);
-  assert.equal(source.steps.filter(step => step.run === 'node --import tsx scripts/verification/stateless-checks.ts').length, 1);
+  assert.deepEqual(source.needs,['source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery']); assert.equal(fast.needs, undefined);
+  assert.equal(source.steps.filter(step => step.run?.includes('node --import tsx scripts/verification/stateless-source-aggregate.ts')).length, 1);
   assert.equal(fast.steps.some(step => step.run?.includes('stateless-checks.ts')), false);
   assert.equal(fast.steps.filter(step => step.run === 'npm run lint && npm run typecheck && npm test').length, 1);
   assert.equal(source.steps.some(step => step.run?.includes('npm run lint')), false);
   assert.ok(jobs.required.needs?.includes('source-contracts'));
-  assert.equal(ci.split('node --import tsx scripts/verification/stateless-checks.ts').length-1,1);
+  assert.equal(ci.split('node --import tsx scripts/verification/stateless-checks.ts --partition=').length-1,3);
+  for(const partition of ['native','contracts','delivery'])assert.equal(jobs['source-fixtures-'+partition].steps.filter(step=>step.run==='node --import tsx scripts/verification/stateless-checks.ts --partition=source-'+partition).length,1);
   assert.ok(runner.includes('statelessVerificationSteps'));
   const stateless=statelessVerificationSteps;
   for(const name of ['verification-rules','local-runtime','migration-replay-rules','cicd-fixtures']) assert.ok(stateless.some(step=>step.name===name));
@@ -73,7 +74,7 @@ test('source-contract evidence is retained only by its exact required producer w
  const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,Record<string,unknown>>};
  assert.deepEqual(validateCiSourceJobs(workflow.jobs),[]);
  const source=workflow.jobs['source-contracts'] as {steps:{name?:string;run?:string;uses?:string;with?:Record<string,unknown>;if?:string}[]},step=source.steps.find(item=>item.name==='Retain exact safe source contracts')!;
- assert.ok(step);assert.equal(step.if,'always()');assert.equal(step.with?.path,'.local/verification/source-contracts/result.json\n.local/verification/source-contracts/failure.json\n');
+ assert.ok(step);assert.equal(step.if,'always()');assert.equal(step.with?.path,'.local/verification/source-contracts/result.json');
  for(const mode of ['missing','extra-path','optional','clock','budget']){const jobs=structuredClone(workflow.jobs),steps=(jobs['source-contracts'] as {steps:typeof source.steps}).steps,artifact=steps.find(item=>item.name===step.name)!;
   if(mode==='missing')steps.splice(steps.indexOf(artifact),1);if(mode==='extra-path')artifact.with!.path='.local/';if(mode==='optional')artifact.if='success()';if(mode==='clock')artifact.with!.name='cuevo-source-contracts-latest';if(mode==='budget')jobs['source-contracts']['timeout-minutes']=60;
   assert.ok(validateCiSourceJobs(jobs).length,mode);

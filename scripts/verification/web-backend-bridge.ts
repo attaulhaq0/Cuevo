@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { readCompletedBackendWebTransferAdmission } from './backend-web-transfer-admission';
+import { readCompletedBackendWebTransferAdmission,readCompletedBackendWebTransferAdmissionAndGuard,disposeCompletedBackendCanonical,type CompletedBackendCanonicalToken } from './backend-web-transfer-admission';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, type ReleaseReviewInput } from './release-review';
 
 const fail = () => Error('Web release backend bridge requires exact completed evidence and review; contents withheld.');
@@ -35,14 +35,23 @@ export function readWebBackendSelection(encoded: string): WebBackendSelection | 
 }
 export function encodeWebBackendSelection(selection: WebBackendSelection | null) { return selection ? Buffer.from(canonicalReleaseReviewJson(selection)).toString('base64') : ''; }
 
-export async function readWebBackendBridge(input: { selection: WebBackendSelection; repoRoot: string; githubToken: string; releaseSha: string; ciRunId: string; environment: string; web: { teamId: string; projectId: string; target: 'preview' | 'production' } }): Promise<WebBackendBridge> {
+type WebBackendBridgeInput={ selection: WebBackendSelection; repoRoot: string; githubToken: string; releaseSha: string; ciRunId: string; environment: string; web: { teamId: string; projectId: string; target: 'preview' | 'production' } };
+const bridgeFromAdmission=(result:Admission):WebBackendBridge=>({ purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,
+ backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false });
+export async function readWebBackendBridge(input:WebBackendBridgeInput):Promise<WebBackendBridge>{
   try {
     if (input.environment !== 'staging' || input.web.target !== 'preview') throw fail();
     const result = await readCompletedBackendWebTransferAdmission({ ...selectionSchema.parse(input.selection), repoRoot: input.repoRoot, githubToken: input.githubToken, releaseSha: input.releaseSha, ciRunId: input.ciRunId, web: input.web });
     // Consumer read times change. Every original proof and identity stays bound.
-    return { purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,
-      backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
+    return bridgeFromAdmission(result);
   } catch { throw fail(); }
+}
+/** The token is separate from the unchanged public bridge; it never enters
+ * outputs, review JSON or serialized receipts. */
+export async function readWebBackendBridgeAndGuard(input:WebBackendBridgeInput):Promise<{bridge:WebBackendBridge;token:CompletedBackendCanonicalToken}>{
+ if(input.environment!=='staging'||input.web.target!=='preview')throw fail();
+ const result=await readCompletedBackendWebTransferAdmissionAndGuard({...selectionSchema.parse(input.selection),repoRoot:input.repoRoot,githubToken:input.githubToken,releaseSha:input.releaseSha,ciRunId:input.ciRunId,web:input.web});
+ try{return{bridge:bridgeFromAdmission(result.admission),token:result.token};}catch{disposeCompletedBackendCanonical(result.token);throw fail();}
 }
 
 /** Only actual operator web review supplies independent-attestation flags.

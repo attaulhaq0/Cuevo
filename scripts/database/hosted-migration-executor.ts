@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { canonicalReleaseExecutionJson } from '../verification/release-review';
 import { readBackendReleaseAdmission } from '../verification/backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from '../verification/backend-release-contracts';
-import { canonicalHostedMigrationPlan, verifyCompletedMigrationPrefix, verifyPriorSchemaPrefix, readHistoricalMigrationSources, type HostedMigrationPlanV1 } from './hosted-migration-plan';
+import { canonicalHostedMigrationPlan, verifyCompletedMigrationPrefix, verifyPriorSchemaPrefix, readVerifiedPriorSchemaSources, readHistoricalMigrationSources, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { prepareHostedMigrationConnection } from './hosted-migration-connection';
 import { prepareHeldHostedMigrationStage, type HeldHostedMigrationStage, type HostedExecutionJournal, type HostedExecutionPorts, type HostedExecutionResult } from './hosted-migration-execution';
 import { createHostedMigrationDatabase,assertNativeReconciliationPermit,readNativeMigrationPermitAuthority,readNativeSchemaStageAdmission,type NativeReconciliationPermit } from './hosted-migration-database';
@@ -25,7 +25,7 @@ import { createHostedMigrationJournal } from './hosted-migration-journal';
 import { createHostedMigrationDurableJournal } from './hosted-migration-durable-journal';
 import { readHostedOperatorStorageInventory } from './hosted-operator-storage-inventory';
 import { validateHostedOperatorStoragePolicy } from './hosted-operator-storage-policy';
-import { admitHostedMigrationStageFiles } from './hosted-migration-stage-files';
+import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata } from './hosted-migration-stage-files';
 import { verifyHostedMigrationHistory } from './hosted-migration-history';
 import { readHostedMigrationProvider, hostedMigrationEndpointSchema, requireCurrentHostedMigrationEndpoint } from './hosted-migration-provider';
 import type { HostedMigrationWorkdirs } from './hosted-migration-workdirs';
@@ -42,7 +42,7 @@ const manifestSchema = z.object({ version: z.literal(1), purpose: z.literal('CUE
 const identitySchema = z.object({ projectRef: z.string().regex(/^[a-z]{20}$/), sourceSha: sha, treeSha: sha, planSha256: digest, stageId, stageSha256: digest, databaseUrl: z.string(), approvalDigest: digest, ciRunId: z.string().regex(/^[1-9][0-9]*$/), certificateSha256: digest }).strict();
 const ownerSchema = z.object({ version: z.literal(1), purpose: z.literal('CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL'), identity: identitySchema }).strict();
 const row = z.object({ name: z.string().regex(/^\d{14}_[a-z0-9_]+\.sql$/), version: z.string().regex(/^\d{14}$/), sha256: digest }).strict();
-const stageSchema = z.object({ id: stageId, workdir: z.string(), included: z.array(row).min(1).max(1000), pending: z.array(row).max(1000), expectedBeforeVersions: z.array(z.string().regex(/^\d{14}$/)).max(1000), expectedAfterVersions: z.array(z.string().regex(/^\d{14}$/)).max(1000), configSha256: digest, commandArgs: z.array(z.string()).max(30) }).strict();
+const stageSchema = z.object({ id: stageId, workdir: z.string(), included: z.array(row).min(1).max(1000), pending: z.array(row).max(1000), expectedBeforeVersions: z.array(z.string().regex(/^\d{14}$/)).max(1000), expectedAfterVersions: z.array(z.string().regex(/^\d{14}$/)).max(1000), configSha256: digest, commandArgs: z.array(z.string()).max(30),materialization:z.enum(['SQL_FILES','METADATA_ONLY']).optional() }).strict();
 const checkNames = ['foundation', 'rls', 'privateRelations', 'privateFunctions', 'runtimeRoles', 'nativeSourceBridge', 'curriculumLifecycle', 'dispatchInactive', 'analyticsInactive', 'recoveryCronInactive', 'transportPrivate'] as const;
 const checksSchema = z.object(Object.fromEntries(checkNames.map(name => [name, z.boolean().nullable()])) as Record<typeof checkNames[number], z.ZodNullable<z.ZodBoolean>>).strict();
 const postSchema = z.object({ observedAtMs: z.number().int().nonnegative(), stageId, checks: checksSchema }).strict();
@@ -52,6 +52,8 @@ const inventorySchema = z.object({ evidence: z.literal('VERIFIED_INITIAL_OPERATO
 
 const admissionPhases=['STORAGE_CAPABILITY','PRIOR_JOURNALS','OFFICIAL_AUTHORITY','PROVIDER','TOOLCHAIN','SOURCE_FILES','TARGET','OPERATOR_INVENTORY','HISTORY_AND_SCOPE','POPULATION','POSTCONDITIONS','FINAL_SOURCE','FINAL_FRESHNESS'] as const;
 type AdmissionFailure={phase:typeof admissionPhases[number];durationMs:number;agesMs:{official:number|null;provider:number|null;target:number|null;postconditions:number|null;inventory:number|null}};
+const initialJournalReadFailureSchema=z.object({boundary:z.enum(['BEFORE_JOURNAL_CONSTRUCTION','FIRST_JOURNAL_READ']),phase:z.enum(['NATIVE_ADMISSION_RENEWAL','ORIGINAL_JOURNAL_CONSTRUCTION','ORIGINAL_JOURNAL_READ']),durationMs:z.number().int().min(0).max(86400000),startedAtMs:observedTime.optional(),completedAtMs:observedTime.optional()}).strict();
+type InitialJournalReadFailure=z.infer<typeof initialJournalReadFailureSchema>;
 const compositionPhases=['INPUT','PREPARED','RECOVERY_SCOPE','PRIOR_SOURCE','PLAN_BINDING','OFFICIAL_AUTHORITY','PROVIDER','TOOLCHAIN','STORAGE_POLICY','STAGE_FILES','CONNECTION_RECIPE','DATABASE_FACTORY','LEASE','RECONCILIATION','CONTINUATION','STAGE_CORE','INSTALLED_SCHEMA_MARKER','COMPLETION'] as const;
 const processFailureSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_NATIVE_MIGRATION_PREPARATION_FAILURE'),phase:z.enum(['SUPERVISOR','BASE','BUILD','IMAGE','CREATE','INSPECT']),ownerId:z.uuid(),cleanup:z.enum(['UNCONFIRMED','CONFIRMED_STOPPED'])}).strict();
 const compositionFailureSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_MIGRATION_COMPOSITION_FAILURE'),phase:z.enum(compositionPhases),durationMs:z.number().int().min(0).max(86400000),leaseCallbackEntered:z.boolean(),native:hostedMigrationNativeDiagnosticsSchema.nullable(),process:processFailureSchema.optional(),processCleanup:z.literal('UNCONFIRMED').optional()}).strict();
@@ -59,7 +61,7 @@ type CompositionFailure=z.infer<typeof compositionFailureSchema>;
 const committedSchemaSnapshotSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_ACKNOWLEDGED_SCHEMA_COMMIT'),protocol:z.object({status:z.literal('COMMITTED'),commitment:z.literal('CONFIRMED'),schemaHistoryAtomic:z.literal(false),evidence:z.literal('SUPPLIED_PORT_EXECUTION_ONLY'),execution:z.literal('INJECTED_PORTS'),primaryCode:z.null(),journalCode:z.null(),cleanupCode:z.null(),identity:identitySchema}).strict(),journalAcknowledgement:z.object({kind:z.literal('SYNCED'),sha256:digest}).strict(),completedAt:z.null()}).strict();
 type CommittedSchemaSnapshot=z.infer<typeof committedSchemaSnapshotSchema>;
 type InstalledSchemaMarkerFailure={version:1;purpose:'CUEVO_INSTALLED_SCHEMA_MARKER_OUTCOME';status:'UNKNOWN'};
-export type NativeHostedMigrationStageResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; protocol: HostedExecutionResult | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null;compositionFailure?:CompositionFailure; admissionFailure?:AdmissionFailure;committedSchema?:CommittedSchemaSnapshot;installedSchemaMarker?:InstalledSchemaMarkerFailure;recoveryCompletion?:HostedSchemaRecoveryCompletion;installedVerification?: {version:1;purpose:'CUEVO_INSTALLED_MIGRATION_REVALIDATION';identity:HostedExecutionJournal['identity'];historySha256:string;remoteProjectSha256:string;installedPopulationSha256?:string;observedAt:string} };
+export type NativeHostedMigrationStageResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; protocol: HostedExecutionResult | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null;compositionFailure?:CompositionFailure; admissionFailure?:AdmissionFailure;initialJournalReadFailure?:InitialJournalReadFailure;committedSchema?:CommittedSchemaSnapshot;installedSchemaMarker?:InstalledSchemaMarkerFailure;recoveryCompletion?:HostedSchemaRecoveryCompletion;installedVerification?: {version:1;purpose:'CUEVO_INSTALLED_MIGRATION_REVALIDATION';identity:HostedExecutionJournal['identity'];historySha256:string;remoteProjectSha256:string;installedPopulationSha256?:string;observedAt:string} };
 export type NativeHostedMigrationAggregateResult = { status: HostedExecutionResult['status']; evidence: 'NATIVE_ADAPTER_AGGREGATE_EXECUTION'; schemaHistoryAtomic: false; hostedAcceptance: false; stages: NativeHostedMigrationStageResult[]; cleanupCode: 'LOCK_RELEASE_UNCONFIRMED' | null; compositionCode: 'PREFLIGHT_UNCONFIRMED' | null;compositionFailure?:CompositionFailure;recoveryCompletion?:HostedSchemaRecoveryCompletion };
 function own(value: unknown, depth = 0): unknown {
   if (depth > 15) throw failure();
@@ -113,15 +115,18 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     const input = selected, root = input.repoRoot, plan = JSON.parse(canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1).json) as HostedMigrationPlanV1;
     if(plan.runtimeOnly)throw failure();
     compositionPhase='PREPARED';const expected = own(input.expected) as BackendReleaseExpected&{installedSchema?:{sourceSha:string;treeSha:string;migrationCount:number}}, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }) as PreparedBackendReleaseIntent;
+    const metadataOnly=stages.some(stage=>stage.materialization==='METADATA_ONLY');
+    if(metadataOnly&&(!aggregate||stages.some(stage=>stage.materialization!=='METADATA_ONLY'||stage.pending.length)||expected.executionScope!=='complete-backend'||!expected.installedSource||expected.installedSchema||!plan.priorCompletedRelease||plan.pending.length||plan.applied.length!==plan.migrations.length||plan.stages.some(stage=>stage.names.length)||plan.reconciliationTemplate||expected.installedSource.migrationCount!==plan.migrations.length))throw failure();
+    const admitStageFiles=metadataOnly?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
     const installedSchema=expected.installedSchema;
     const reconciliation=plan.reconciliationTemplate;
     const continuation=expected.schemaRecovery,originalTemplate=plan.reconciliationTemplate??(input.schemaRecoveryExport?validateSchemaRecoveryCompletionExport(input.schemaRecoveryExport,Date.now()).template:undefined);
     compositionPhase='RECOVERY_SCOPE';if(continuation&&(reconciliation||!input.schemaRecoveryExport||continuation.completionExportSha256!==hash(canonicalReleaseExecutionJson(input.schemaRecoveryExport))))throw failure();
     if(reconciliation){if(expected.executionScope!=='reconcile-schema'||!same(expected.reconciledPrefix,reconciliationTemplateFingerprint(reconciliation))||!installedSchema||installedSchema.migrationCount!==120||aggregate||stages.length!==1||stages[0].id!=='prefix'||stages[0].pending.length!==3)throw failure();}else if(expected.executionScope==='reconcile-schema')throw failure();
     if(installedSchema&&(expected.installedSource||!plan.priorSchemaRelease||!same(installedSchema,plan.priorSchemaRelease)))throw failure();
-    compositionPhase='PRIOR_SOURCE';if(installedSchema)verifyPriorSchemaPrefix(root,plan);
+    compositionPhase='PRIOR_SOURCE';const verifiedPriorSource=installedSchema?readVerifiedPriorSchemaSources(root,plan):null;
     const originalSchemaBlobs=new Map<string,Uint8Array>();
-    const originalSchemaSource=installedSchema?(()=>{for(const source of readHistoricalMigrationSources(root,installedSchema.sourceSha,installedSchema.treeSha))originalSchemaBlobs.set(source.name,source.bytes);return replayPlan([...originalSchemaBlobs].map(([name,bytes])=>({name,bytes})));})():undefined;
+    const originalSchemaSource=installedSchema?(()=>{if(!verifiedPriorSource)throw failure();for(const source of verifiedPriorSource)originalSchemaBlobs.set(source.name,source.bytes);return replayPlan([...originalSchemaBlobs].map(([name,bytes])=>({name,bytes})));})():undefined;
     compositionPhase='PLAN_BINDING';const body = own(JSON.parse(prepared.canonicalJson)) as { expiresAt: string }; const expiresAtMs = Date.parse(body.expiresAt);
     if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= Date.now() || plan.source.sha !== expected.releaseSha || plan.source.tree !== expected.treeSha || plan.projectRef !== expected.targets.supabase.projectRef || canonicalHostedMigrationPlan(plan).sha256 !== expected.fingerprints.migrationPlanSha256 || plan.observedHistorySha256 !== expected.fingerprints.migrationHistorySha256) throw failure();
     const toolchain = async () => {
@@ -138,9 +143,9 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     const official = async () => requireOfficial(await readBackendReleaseAdmission({effectScope:'SCHEMA_AND_SYNTHETIC_AUTH', repoRoot: root, prepared, expected, githubToken: input.githubToken }));
     const provider = async () => { const result = await readHostedMigrationProvider({ projectRef: plan.projectRef, boundProjectRef: expected.targets.supabase.projectRef, providerToken: input.providerToken }); fresh(result.observedAtMs); if (result.evidence !== 'OFFICIAL_SUPABASE_PROJECT_METADATA' || result.projectRef !== plan.projectRef || result.projectName.toLowerCase() !== 'cuevo' || result.projectStatus !== 'ACTIVE_HEALTHY' || result.directEndpoint.projectRef !== plan.projectRef || result.directEndpoint.host !== `db.${plan.projectRef}.supabase.co` || result.directEndpoint.kind !== 'direct' || result.directEndpoint.port !== 5432 || result.directEndpoint.database !== 'postgres') throw failure(); requireCurrentHostedMigrationEndpoint(input.endpoint,result,expected.fingerprints.migrationEndpointSha256); return result; };
     compositionPhase='OFFICIAL_AUTHORITY';await official();compositionPhase='PROVIDER';const currentProvider = await provider();compositionPhase='TOOLCHAIN';const manifest = await toolchain();compositionPhase='STORAGE_POLICY';await storagePolicy();
-    const artifacts: Awaited<ReturnType<typeof admitHostedMigrationStageFiles>>[] = [];
+    const artifacts: Awaited<ReturnType<typeof admitStageFiles>>[] = [];
     for (const stage of stages) {
-      compositionPhase='STAGE_FILES';const artifact = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage });
+      compositionPhase='STAGE_FILES';const artifact = await admitStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage });
       if (artifact.planSha256 !== expected.fingerprints.migrationPlanSha256 || artifact.stageSha256 !== hash(JSON.stringify({ included: stage.included.map(row => ({ name: row.name, version: row.version, sha256: row.sha256 })), configSha256: stage.configSha256 }))) throw failure();
       artifacts.push(artifact);
     }
@@ -162,7 +167,7 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     const consumed: HeldHostedMigrationStage[] = [];
     let held = false, entered = false, completed = false, installedSchemaMarkerFailed = false;
     let reconciliationPermit:NativeReconciliationPermit|undefined,reconciliationReceipt:ReconciliationReceipt|undefined;
-    const executeStage = async (stage: HostedMigrationWorkdirs['stages'][number], artifact: Awaited<ReturnType<typeof admitHostedMigrationStageFiles>>, current: { kind: 'HELD'; id: string; key: string }) => {
+    const executeStage = async (stage: HostedMigrationWorkdirs['stages'][number], artifact: Awaited<ReturnType<typeof admitStageFiles>>, current: { kind: 'HELD'; id: string; key: string }) => {
     const identity: HostedExecutionJournal['identity'] = { projectRef: plan.projectRef, sourceSha: expected.releaseSha, treeSha: expected.treeSha, planSha256: artifact.planSha256, stageId: stage.id, stageSha256: artifact.stageSha256, databaseUrl: connection.publicRecipe.databaseUrl, approvalDigest: prepared.sha256, ciRunId: expected.ciRunId, certificateSha256: input.certificate.sha256 };
     const batches=continuation&&stage.pending.length>20?(await createHostedMigrationBatchWorkdirs({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage,outputRoot:join(root,'.local/hosted-release')})).batches:undefined;
     let activeBatch:HostedMigrationBatchWorkdir|undefined,batchPhase:'before'|'after'='before';
@@ -199,14 +204,32 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       return result; };
     const inventory = async (expectedVersions: string[]) => { live(); await storagePolicy(); const result = inventorySchema.parse(own(await readHostedOperatorStorageInventory({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, projectRef: plan.projectRef, boundProjectRef: expected.targets.supabase.projectRef, providerToken: input.providerToken, storageKey: input.journalStorageKey, identity, expectedVersions: [...expectedVersions], ...(activeBatch?{batchStage:stage,batchIndex:activeBatch.index,reconciliationPermit}:{}), ...((plan.priorCompletedRelease||plan.priorSchemaRelease)?{plan}: {}) }))); return validateInventory(result,expectedVersions); };
     let admissionFailure:AdmissionFailure|undefined;
+    let initialJournalReadFailure:InitialJournalReadFailure|undefined;
     const expectedCurrentVersions=()=>activeBatch?(batchPhase==='before'?activeBatch.expectedBeforeVersions:activeBatch.expectedAfterVersions):(phase==='before'?stage.expectedBeforeVersions:stage.expectedAfterVersions);
+    const initialJournalOperation=async<T>(boundary:InitialJournalReadFailure['boundary'],phase:InitialJournalReadFailure['phase'],operation:()=>Promise<T>):Promise<T>=>{
+      const startedAtMs=Date.now(),started=performance.now();
+      try{return await operation();}catch{
+        const completedAtMs=Date.now(),clocksKnown=Number.isSafeInteger(startedAtMs)&&startedAtMs>=0&&Number.isSafeInteger(completedAtMs)&&completedAtMs>=startedAtMs;
+        const elapsed=clocksKnown?completedAtMs-startedAtMs:performance.now()-started;
+        initialJournalReadFailure??=initialJournalReadFailureSchema.parse({boundary,phase,durationMs:Number.isFinite(elapsed)?Math.min(86400000,Math.max(0,Math.trunc(elapsed))):0,...(clocksKnown?{startedAtMs,completedAtMs}:{})});
+        throw failure();
+      }
+    };
+    const renewJournalAdmission=async()=>{
+      live();if(!reconciliationPermit)return;
+      // Journal guards need the existing current native/official pair. The
+      // complete execution cohort remains owned by the later revalidation.
+      if(continuation)await database.refreshSchemaContinuation(reconciliationPermit,identity,expectedCurrentVersions());
+      else await database.refreshReconciliationPermit(reconciliationPermit,identity,phase==='before'?120:123);
+      live();requireOfficial(readNativeMigrationPermitAuthority(reconciliationPermit,identity));
+    };
     const revalidate = async () => {
       const began=Date.now(),observations:Record<keyof AdmissionFailure['agesMs'],number|null>={official:null,provider:null,target:null,postconditions:null,inventory:null};let phaseName:AdmissionFailure['phase']='STORAGE_CAPABILITY';
       try{
       await database.requireInstalledSchemaStorage();live();
       const initialFiles=async()=>{
         phaseName='TOOLCHAIN';const checkedToolchain=await toolchain();if(!same(checkedToolchain,manifest))throw failure();
-        phaseName='SOURCE_FILES';const files=await admitHostedMigrationStageFiles({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage});live();if(files.planSha256!==identity.planSha256||files.stageSha256!==identity.stageSha256)throw failure();return files;
+        phaseName='SOURCE_FILES';const files=await admitStageFiles({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage});live();if(files.planSha256!==identity.planSha256||files.stageSha256!==identity.stageSha256)throw failure();return files;
       };
       // Preparatory immutable reads precede renewed native observations. The
       // complete final byte checks below still detect changes during admission.
@@ -229,7 +252,7 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       // Complete official/source admission precedes these actual observations.
       // Final complete source/artifact validation never restamps the earlier observations.
       phaseName='FINAL_SOURCE';await storagePolicy(); const finalToolchain = await toolchain(); if (!same(finalToolchain, manifest)) throw failure();
-      const finalFiles = await admitHostedMigrationStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage }); live();
+      const finalFiles = await admitStageFiles({ repoRoot: root, sourceSha: expected.releaseSha, treeSha: expected.treeSha, plan, stage }); live();
       if (finalFiles.planSha256 !== identity.planSha256 || finalFiles.stageSha256 !== identity.stageSha256) throw failure();
       validatePreparedBackendReleaseIntent(prepared, { ...expected, now: Date.now() });
       phaseName='FINAL_FRESHNESS';fresh(officialObservedAt); fresh(currentProvider.observedAtMs); fresh(target.observedAtMs); fresh(post.observedAtMs);fresh(storage.observedAtMs);
@@ -244,6 +267,7 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
         installedVerification:{version:1,purpose:'CUEVO_INSTALLED_MIGRATION_REVALIDATION',identity,historySha256:hash(canonicalReleaseExecutionJson(observed.history)),remoteProjectSha256:remote.remoteProjectSha256,...(original?{installedPopulationSha256:hash(canonicalReleaseExecutionJson(original))}:{}),observedAt:new Date(Math.min(observed.observedAtMs,remote.observedAtMs)).toISOString()}});
       return 'NOOP';
     }
+    if(metadataOnly)throw failure();
     // Prepare exact stopped execution containers before intent and any current
     // observation window. No hosted SQL effect occurs during this preparation.
     const preparedProcesses=new Map<string,Awaited<ReturnType<typeof createHostedMigrationNativeProcess>>>();
@@ -262,10 +286,24 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
       }
     }catch{await disposeProcesses();throw failure();}
     try{
-    await priorJournals(); const journal = await createHostedMigrationDurableJournal({ repoRoot: root, journalRoot, identity, projectRef: plan.projectRef, boundProjectRef: expected.targets.supabase.projectRef, storageKey: input.journalStorageKey, providerToken: input.providerToken,...(reconciliationPermit?{reconciliationPermit}:{}) }); journalReady = true;
+    let journal:Awaited<ReturnType<typeof createHostedMigrationDurableJournal>>;
+    try{
+      // Stopped-process preparation may outlive the earlier native pair. Renew
+      // before both prior-journal and durable-construction permit consumers.
+      if(reconciliationPermit)await initialJournalOperation('BEFORE_JOURNAL_CONSTRUCTION','NATIVE_ADMISSION_RENEWAL',renewJournalAdmission);
+      journal=await initialJournalOperation('BEFORE_JOURNAL_CONSTRUCTION','ORIGINAL_JOURNAL_CONSTRUCTION',async()=>{await priorJournals();return createHostedMigrationDurableJournal({ repoRoot: root, journalRoot, identity, projectRef: plan.projectRef, boundProjectRef: expected.targets.supabase.projectRef, storageKey: input.journalStorageKey, providerToken: input.providerToken,...(reconciliationPermit?{reconciliationPermit}:{}) });});journalReady=true;
+    }catch{
+      output.stages.push({status:'REQUIRES_REVIEW',evidence:'NATIVE_ADAPTER_STAGE_EXECUTION',schemaHistoryAtomic:false,hostedAcceptance:false,protocol:null,compositionCode:'PREFLIGHT_UNCONFIRMED',...(initialJournalReadFailure?{initialJournalReadFailure}:{})});throw failure();
+    }
+    let firstJournalRead=true;
     const ports: Omit<HostedExecutionPorts, 'withLock'> = {
       now: Date.now,
-      readJournal: async () => { live(); if (!journal) throw failure(); const saved = await journal.readJournal(); live(); if (!stage.pending.length && (saved === null || (saved as HostedExecutionJournal).state !== 'COMMITTED')) throw failure(); if (saved !== null && (saved as HostedExecutionJournal).state === 'COMMITTED') { phase = 'after'; originalCommitted = true; } return saved; },
+      readJournal: async () => {
+        const initial=firstJournalRead;firstJournalRead=false;
+        if(initial&&reconciliationPermit)await initialJournalOperation('FIRST_JOURNAL_READ','NATIVE_ADMISSION_RENEWAL',renewJournalAdmission);
+        const read=async()=>{live();if(!journal)throw failure();const saved=await journal.readJournal();live();if(!stage.pending.length&&(saved===null||(saved as HostedExecutionJournal).state!=='COMMITTED'))throw failure();if(saved!==null&&(saved as HostedExecutionJournal).state==='COMMITTED'){phase='after';originalCommitted=true;}return saved;};
+        return initial?initialJournalOperation('FIRST_JOURNAL_READ','ORIGINAL_JOURNAL_READ',read):read();
+      },
       writeJournal: async value => { if (!journal) throw failure();
         // A complete earlier admission can be followed by inventory and intent
         // preparation I/O. Recheck actual native authority immediately before
@@ -311,7 +349,7 @@ async function executeNativeStages(value: unknown, aggregate: boolean): Promise<
     };
     const core = prepareHeldHostedMigrationStage({ prepared: { projectRef: plan.projectRef, sourceSha: expected.releaseSha, treeSha: expected.treeSha, planSha256: artifact.planSha256, stage }, connection, approvalDigest: prepared.sha256, repoRoot: root, ciRunId: expected.ciRunId, certificateSha256: input.certificate.sha256 }, ports);
     consumed.push(core); await core.run(current, () => held && !database.signal.aborted);
-    output.stages.push({ status: core.result.status, evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION', schemaHistoryAtomic: false, hostedAcceptance: false, protocol: core.result, compositionCode: null,...(admissionFailure?{admissionFailure}:{}),...(core.result.status==='COMMITTED'?{committedSchema:committedSchemaSnapshot(core.result,committedAcknowledgement)}:{}) });
+    output.stages.push({ status: core.result.status, evidence: 'NATIVE_ADAPTER_STAGE_EXECUTION', schemaHistoryAtomic: false, hostedAcceptance: false, protocol: core.result, compositionCode: null,...(admissionFailure?{admissionFailure}:{}),...(initialJournalReadFailure?{initialJournalReadFailure}:{}),...(core.result.status==='COMMITTED'?{committedSchema:committedSchemaSnapshot(core.result,committedAcknowledgement)}:{}) });
     return core.result.status;
     }finally{await disposeProcesses();}
     };

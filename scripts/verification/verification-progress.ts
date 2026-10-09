@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { verificationSteps } from './steps';
 
-const phaseNames = new Set<string>([...verificationSteps.map(step=>step.name),'critical-integration','critical-browser','source-freeze']);
+const phaseNames = new Set<string>([...verificationSteps.map(step=>step.name),'backend-build','web-build','critical-integration','critical-browser','source-freeze']);
 const common = z.object({profile:z.enum(['full','routine','full-runtime','main-staging']),phase:z.string().refine(value=>phaseNames.has(value))});
 const schema = z.discriminatedUnion('event',[
  common.extend({event:z.literal('START')}).strict(),

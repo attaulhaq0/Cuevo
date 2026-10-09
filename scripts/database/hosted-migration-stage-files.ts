@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
+import {lstatSync,readFileSync,readdirSync,realpathSync} from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { types } from 'node:util';
-import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, verifyCompletedMigrationPrefix, readHistoricalMigrationSources, verifyPriorSchemaPrefix, type HostedMigrationPlanV1 } from './hosted-migration-plan';
+import { canonicalHostedMigrationPlan, readCanonicalMigrationSources, verifyCompletedMigrationPrefix, readVerifiedCompletedMigrationSources, verifyPriorSchemaPrefix, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { replayPlan, nativeSourceMigration, posthogIntelligenceMigration } from './replay-plan';
 import { deriveHostedMigrationBatches } from './hosted-migration-batches';
 import type { HostedMigrationBatchWorkdir,HostedMigrationWorkdirs } from './hosted-migration-workdirs';
@@ -28,6 +29,7 @@ async function physical(root:string,path:string,kind:'directory'|'file'){
 export async function admitHostedMigrationStageFiles(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;stage:HostedMigrationWorkdirs['stages'][number]}){
  try{
   const text=JSON.stringify(plain(value));if(Buffer.byteLength(text)>2*1024*1024)throw failure();const input=JSON.parse(text) as typeof value,root=input.repoRoot;
+  if(input.stage.materialization!==undefined&&input.stage.materialization!=='SQL_FILES')throw failure();
   if(!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
   const loaded=readCanonicalMigrationSources(input),plan=JSON.parse(canonicalHostedMigrationPlan(input.plan).json) as HostedMigrationPlanV1;
   if(plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();const replay=replayPlan(loaded.sources),ordered=[...replay.before,replay.prerequisite,...replay.remaining];
@@ -44,11 +46,38 @@ export async function admitHostedMigrationStageFiles(value:{repoRoot:string;sour
   return{evidence:'VERIFIED_GIT_AND_PHYSICAL_STAGE' as const,sources:loaded.sources,stageSha256:hash(JSON.stringify({included:included.map(row=>({name:row.name,version:row.version,sha256:row.sha256})),configSha256:input.stage.configSha256})),planSha256:canonicalHostedMigrationPlan(plan).sha256};
  }catch{throw failure();}
 }
+/** Complete installed source metadata only. This cannot admit SQL files or create native effect authority. */
+export async function admitInstalledMigrationStageMetadata(value:Parameters<typeof admitHostedMigrationStageFiles>[0]){
+ try{
+  const text=JSON.stringify(plain(value));if(Buffer.byteLength(text)>2*1024*1024)throw failure();const input=JSON.parse(text) as typeof value,root=input.repoRoot,plan=JSON.parse(canonicalHostedMigrationPlan(input.plan).json) as HostedMigrationPlanV1,stage=input.stage;
+  if(stage.materialization!=='METADATA_ONLY'||plan.runtimeOnly||plan.reconciliationTemplate||plan.priorSchemaRelease||!plan.priorCompletedRelease||plan.pending.length||plan.applied.length!==plan.migrations.length||plan.stages.some(stage=>stage.names.length)||plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha||!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
+  const loaded=readCanonicalMigrationSources(input);if(!verifyCompletedMigrationPrefix(root,plan))throw failure();
+  const replay=replayPlan(loaded.sources),rows=[...replay.before,replay.prerequisite,...replay.remaining].map(name=>({name,version:name.slice(0,14),sha256:hash(loaded.sources.find(source=>source.name===name)!.bytes)})),versions=rows.map(row=>row.version).sort();
+  if(canonicalReleaseExecutionJson(rows)!==canonicalReleaseExecutionJson(plan.migrations)||canonicalReleaseExecutionJson(plan.applied)!==canonicalReleaseExecutionJson(rows.map(({version,sha256})=>({version,sha256})))||!plan.stages.some(current=>current.id===stage.id)||canonicalReleaseExecutionJson(stage.included)!==canonicalReleaseExecutionJson(rows)||stage.pending.length||JSON.stringify(stage.expectedBeforeVersions)!==JSON.stringify(versions)||JSON.stringify(stage.expectedAfterVersions)!==JSON.stringify(versions)||stage.configSha256!==hash(config))throw failure();
+  const releaseRoot=join(root,'.local/hosted-release'),directory=join(stage.workdir,'..'),part=relative(releaseRoot,directory);
+  if(!isAbsolute(stage.workdir)||resolve(stage.workdir)!==stage.workdir||!part||isAbsolute(part)||part.split(/[\\/]/).some(piece=>!piece||piece==='.'||piece==='..')||stage.workdir!==join(directory,stage.id))throw failure();
+  const args=['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',stage.workdir,'--yes','--output-format','json'];if(JSON.stringify(stage.commandArgs)!==JSON.stringify(args))throw failure();
+  await physical(root,directory,'directory');await physical(root,join(directory,'builder-state.json'),'file');
+  if(JSON.stringify((await readdir(directory)).sort())!==JSON.stringify(['builder-state.json']))throw failure();
+  const statePath=join(directory,'builder-state.json'),before=await lstat(statePath);if(before.size>49152)throw failure();
+  const stateBytes=await readFile(statePath),state={version:1,state:'READY',sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:canonicalHostedMigrationPlan(plan).sha256,execution:'NOT_EXECUTED'};
+  await physical(root,statePath,'file');const after=await lstat(statePath);
+  if(stateBytes.length>49152||before.size!==after.size||before.dev!==after.dev||before.ino!==after.ino||before.mtimeMs!==after.mtimeMs||before.ctimeMs!==after.ctimeMs||stateBytes.toString()!==JSON.stringify(state)+'\n')throw failure();
+  try{await lstat(stage.workdir);throw failure();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw failure();}
+  // The ignored builder can change during the preceding filesystem awaits.
+  // Recheck its exact original identity and bytes synchronously at return.
+  let parent=root;for(const part of relative(root,directory).split(/[\\/]/).filter(Boolean)){parent=join(parent,part);const stat=lstatSync(parent);if(!stat.isDirectory()||stat.isSymbolicLink()||realpathSync(parent)!==parent)throw failure();}
+  const finalState=lstatSync(statePath);if(!finalState.isFile()||finalState.isSymbolicLink()||realpathSync(statePath)!==statePath||finalState.nlink!==1||finalState.size>49152||finalState.dev!==after.dev||finalState.ino!==after.ino||finalState.size!==after.size||finalState.mtimeMs!==after.mtimeMs||finalState.ctimeMs!==after.ctimeMs||finalState.mode!==after.mode||!readFileSync(statePath).equals(stateBytes)||JSON.stringify(readdirSync(directory).sort())!==JSON.stringify(['builder-state.json']))throw failure();
+  try{lstatSync(stage.workdir);throw failure();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw failure();}
+  const final=readCanonicalMigrationSources(input);if(canonicalReleaseExecutionJson(final.provenance)!==canonicalReleaseExecutionJson(loaded.provenance)||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
+  return{evidence:'VERIFIED_GIT_AND_INSTALLED_STAGE_METADATA' as const,sources:loaded.sources,stageSha256:hash(JSON.stringify({included:rows,configSha256:stage.configSha256})),planSha256:canonicalHostedMigrationPlan(plan).sha256};
+ }catch{throw failure();}
+}
 /** Re-admit a source-derived child without granting an intermediate prefix execution authority. */
 export async function admitHostedMigrationBatchFiles(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;stage:HostedMigrationWorkdirs['stages'][number];batch:HostedMigrationBatchWorkdir}){
  try{
   const text=JSON.stringify(plain(value));if(Buffer.byteLength(text)>2*1024*1024)throw failure();const input=JSON.parse(text) as typeof value,parent=await admitHostedMigrationStageFiles({repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,plan:input.plan,stage:input.stage}),plan=JSON.parse(canonicalHostedMigrationPlan(input.plan).json) as HostedMigrationPlanV1;
-  const completedSource=plan.priorCompletedRelease&&input.stage.expectedBeforeVersions.length===plan.priorCompletedRelease.migrationCount?(()=>{if(!verifyCompletedMigrationPrefix(input.repoRoot,plan))throw failure();return readHistoricalMigrationSources(input.repoRoot,plan.priorCompletedRelease!.sourceSha,plan.priorCompletedRelease!.treeSha);})():undefined;
+  const completedSource=plan.priorCompletedRelease&&input.stage.expectedBeforeVersions.length===plan.priorCompletedRelease.migrationCount?(readVerifiedCompletedMigrationSources(input.repoRoot,plan)??undefined):undefined;
   const derived=deriveHostedMigrationBatches({sources:parent.sources,stage:input.stage,...(completedSource?{completedSource}:{}),...(plan.reconciliationTemplate?{reconciliationTemplate:plan.reconciliationTemplate}:{})}),batch=input.batch; if(!Number.isSafeInteger(batch.index)||batch.index<1)throw failure();const expected=derived.batches[batch.index-1];if(!expected||batch.index!==expected.index||parent.stageSha256!==derived.stageSha256)throw failure();
   const keys=['index','workdir','pending','cumulativeIncluded','expectedBeforeVersions','expectedAfterVersions','configSha256','batchSha256','manifestPath','manifestSha256','commandArgs'].sort();if(JSON.stringify(Object.keys(batch).sort())!==JSON.stringify(keys)||canonicalReleaseExecutionJson(batch.pending)!==canonicalReleaseExecutionJson(expected.pending)||canonicalReleaseExecutionJson(batch.cumulativeIncluded)!==canonicalReleaseExecutionJson(expected.cumulativeIncluded)||JSON.stringify(batch.expectedBeforeVersions)!==JSON.stringify(expected.expectedBeforeVersions)||JSON.stringify(batch.expectedAfterVersions)!==JSON.stringify(expected.expectedAfterVersions)||batch.configSha256!==hash(config)||batch.batchSha256!==expected.sha256)throw failure();
   const root=input.repoRoot,releaseRoot=join(root,'.local','hosted-release'),deliveryRoot=resolve(batch.workdir,'..'),part=relative(releaseRoot,deliveryRoot),number=String(batch.index).padStart(3,'0');if(!part||isAbsolute(part)||part.split(/[\\/]/).length!==1||!/^batches-[a-f0-9-]{36}$/.test(part)||batch.workdir!==join(deliveryRoot,'batch-'+number)||batch.manifestPath!==join(deliveryRoot,'batch-'+number+'.manifest.json')||JSON.stringify(batch.commandArgs)!==JSON.stringify(['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',batch.workdir,'--yes','--output-format','json']))throw failure();

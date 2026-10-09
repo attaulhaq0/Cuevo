@@ -2,28 +2,35 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {readFile,mkdir,writeFile,lstat,realpath,readdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {combineRuntimeLanes,runtimeLaneEvidence} from './runtime-lanes';
+import {technicalAggregateReceipt} from './runtime-lanes';
 import {readCiRuntimeSelection} from './verification-profiles';
+import {integrationIdentity,integrationPartitionIds} from './integration-partitions';
+import {readCiPartitionCoverage} from './ci-partition-coverage';
+import {canonicalReleaseExecutionJson} from './release-review';
 
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.CI!=='true'||process.env.GITHUB_JOB!=='technical-mvp'||!['push','pull_request','workflow_dispatch'].includes(process.env.GITHUB_EVENT_NAME??''))throw Error('Runtime aggregation requires the exact CI owner.');
 const sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(sourceSha!==process.env.GITHUB_SHA)throw Error('Runtime aggregate source mismatch.');
 const snapshot=async()=>{
  const paths=execFileSync('git',['ls-files','--cached','--others','--exclude-standard','-z'],{encoding:'utf8'}).split('\0').filter(Boolean),manifest:{path:string;sha256:string}[]=[];
  for(const path of new Set(paths)){try{manifest.push({path,sha256:createHash('sha256').update(await readFile(path)).digest('hex')});}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}}
- return manifest.sort((a,b)=>a.path.localeCompare(b.path));
+ return manifest.sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);
 };
 const manifest=await snapshot();
-const sourceDigest=createHash('sha256').update(JSON.stringify([...manifest].sort((a,b)=>a.path.localeCompare(b.path)))).digest('hex'),selection=await readCiRuntimeSelection();
+const sourceDigest=createHash('sha256').update(JSON.stringify([...manifest].sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0))).digest('hex'),selection=await readCiRuntimeSelection();
 const inputFolder=resolve('.local/runtime-lane-inputs');
 if(JSON.stringify((await readdir(inputFolder)).sort())!==JSON.stringify(['backend','browser','database']))throw Error('Only the three exact lane directories may be consumed.');
 const values:unknown[]=[];
 for(const lane of ['backend','browser','database']){const folder=resolve(inputFolder,lane),path=resolve(folder,'lane.json'),stat=await lstat(path);if(stat.isSymbolicLink()||!stat.isFile()||stat.nlink!==1||stat.size>49152||await realpath(path)!==path||JSON.stringify(await readdir(folder))!==JSON.stringify(['lane.json']))throw Error('Runtime lane artifact requires bounded exact files.');values.push(JSON.parse(await readFile(path,'utf8')));}
 const expected={repository:process.env.GITHUB_REPOSITORY,sourceSha,treeSha:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceDigest,githubRunId:process.env.GITHUB_RUN_ID,runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),profile:selection.profile,browserFiles:selection.browserFiles};
-const combined=combineRuntimeLanes(values,expected);
-for(const value of values){const raw=value as Record<string,unknown>;runtimeLaneEvidence(Object.fromEntries(Object.entries(raw).filter(([key])=>!['version','purpose','status'].includes(key))));}
+const integrationFolder=resolve('.local/integration-partition-inputs'),integrationValues:unknown[]=[];
+if(JSON.stringify((await readdir(integrationFolder)).sort())!==JSON.stringify([...integrationPartitionIds]))throw Error('Both original integration partition directories are required.');
+for(const partition of integrationPartitionIds){const folder=resolve(integrationFolder,partition),path=resolve(folder,'result.json'),stat=await lstat(path);if(stat.isSymbolicLink()||!stat.isFile()||stat.nlink!==1||stat.size>1024*1024||await realpath(path)!==path||JSON.stringify(await readdir(folder))!==JSON.stringify(['result.json']))throw Error('Original integration artifact requires one bounded exact JSON file.');integrationValues.push(JSON.parse(await readFile(path,'utf8')));}
+const coverage=readCiPartitionCoverage(resolve(import.meta.dirname,'../..')),identity=integrationIdentity({...expected,sourceLockSha256:createHash('sha256').update(await readFile('package-lock.json')).digest('hex'),partitionManifestSha256:coverage.manifestSha256,nodeVersion:process.version,nodeBinarySha256:createHash('sha256').update(await readFile(process.execPath)).digest('hex'),platform:process.platform,arch:process.arch});
+const aggregate=technicalAggregateReceipt(values,integrationValues,identity,coverage),combined=aggregate.result;
 const finalManifest=await snapshot(),finalDigest=createHash('sha256').update(JSON.stringify(finalManifest)).digest('hex');
 if(finalDigest!==sourceDigest)throw Error('Runtime aggregate source changed after lane consumption.');
 execFileSync('git',['diff','--quiet','--no-ext-diff','--no-textconv','HEAD','--'],{stdio:'ignore'});
 if(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()!==sourceSha)throw Error('Runtime aggregate source changed before completion.');
 const output=resolve('.local/verification',new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(output,{recursive:true});await writeFile(resolve(output,'source.json'),JSON.stringify(manifest));await writeFile(resolve(output,'source-final.json'),JSON.stringify(finalManifest));await writeFile(resolve(output,'evidence.json'),JSON.stringify(combined));
-console.log(`Combined exact ${selection.profile} database, backend and browser lanes; hosted/customer acceptance remains separate.`);
+const aggregateFolder=resolve('.local/runtime-aggregate');await mkdir(aggregateFolder,{recursive:true});await writeFile(resolve(aggregateFolder,'result.json'),canonicalReleaseExecutionJson(aggregate));
+console.log(`Combined exact ${selection.profile} database, backend, browser and both original integration partitions; hosted/customer acceptance remains separate.`);

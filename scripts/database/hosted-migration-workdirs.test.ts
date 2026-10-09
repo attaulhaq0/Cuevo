@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -101,5 +101,47 @@ test('batch builder refuses source drift during asynchronous emission before rec
   native.open=(async(...args:Parameters<typeof originalOpen>)=>{if(!changed&&String(args[0]).includes('batch-001')&&String(args[0]).endsWith('config.toml')){changed=true;writeFileSync(join(input.repoRoot,'supabase/migrations',parent.pending[0].name),'select 999;\n');}return originalOpen(...args);}) as typeof originalOpen;syncBuiltinESMExports();
   try{await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,stage:parent}));assert.equal(changed,true);const batchRoot=readdirSync(input.outputRoot).find(name=>name.startsWith('batches-'))!;assert.equal(JSON.parse(readFileSync(join(input.outputRoot,batchRoot,'builder-state.json'),'utf8')).state,'REQUIRES_REVIEW');}
   finally{native.open=originalOpen;syncBuiltinESMExports();}
+ });
+});
+
+test('observation-only preparation retains exact no-SQL stage identity without materializing migration files',async()=>{
+ const subject=await api();await fixture(async input=>{
+  const rows=input.plan.migrations,projectRef=input.plan.projectRef,now=Date.parse('2026-10-07T12:00:00Z');
+  const plan=planHostedMigrations({sources:readCanonicalMigrationSources(input).sources,source:{sha:input.sourceSha,tree:input.treeSha},priorReceipt:{projectRef,sourceSha:input.sourceSha,treeSha:input.treeSha,migrations:rows.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:rows.length},now,target:{projectRef,boundProjectRef:projectRef,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(now).toISOString(),authUsers:133,storageObjects:3,appSchemas:['app','authorization','internal'],migrationVersions:rows.map(row=>row.version),dispatchDisabled:true,population:'GUARDED_SYNTHETIC'}});
+  plan.runtimeOnly=true;
+  const built=await subject.createHostedMigrationWorkdirs({...input,plan,preparation:'RUNTIME_OBSERVATION'});
+  assert.equal(built.stages.length,4);assert.deepEqual(readdirSync(built.root),['builder-state.json']);
+  assert.ok(built.stages.every(stage=>stage.pending.length===0&&stage.included.length===rows.length&&stage.materialization==='METADATA_ONLY'));
+  for(const stage of built.stages)assert.equal(existsSync(stage.workdir),false);
+  const admission=await import('./hosted-migration-stage-files');await assert.rejects(admission.admitHostedMigrationStageFiles({...input,plan,stage:built.stages[3]}));
+  await assert.rejects(subject.createHostedMigrationWorkdirs({...input,preparation:'RUNTIME_OBSERVATION'}));await assert.rejects(subject.createHostedMigrationWorkdirs({...input,plan,preparation:'PREFIX_SQL'}));
+ });
+});
+
+test('completed inactive installation prepares no SQL copies while preserving original no-op migration identity',async()=>{
+ const subject=await api();await fixture(async input=>{
+  const rows=input.plan.migrations,projectRef=input.plan.projectRef,now=Date.parse('2026-10-07T12:00:00Z');
+  const plan=planHostedMigrations({sources:readCanonicalMigrationSources(input).sources,source:{sha:input.sourceSha,tree:input.treeSha},priorReceipt:{projectRef,sourceSha:input.sourceSha,treeSha:input.treeSha,migrations:rows.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:rows.length},now,target:{projectRef,boundProjectRef:projectRef,projectName:'Cuevo',projectStatus:'ACTIVE_HEALTHY',deploymentEnvironment:'synthetic-staging',observedAt:new Date(now).toISOString(),authUsers:133,storageObjects:3,appSchemas:['app','authorization','internal'],migrationVersions:rows.map(row=>row.version),dispatchDisabled:true,population:'GUARDED_SYNTHETIC'}});
+  const built=await subject.createHostedMigrationWorkdirs({...input,plan,preparation:'INSTALLED_NOOP' as never});
+  assert.equal(plan.runtimeOnly,undefined);assert.deepEqual(readdirSync(built.root),['builder-state.json']);
+  for(const stage of built.stages){assert.equal(stage.materialization,'METADATA_ONLY');assert.equal(existsSync(stage.workdir),false);assert.deepEqual(stage.included,rows);assert.equal(stage.pending.length,0);assert.deepEqual(stage.expectedBeforeVersions,rows.map(row=>row.version).sort());}
+  const admission=await import('./hosted-migration-stage-files');assert.equal(typeof admission.admitInstalledMigrationStageMetadata,'function');
+  const inputStage={...input,plan,stage:built.stages[3]},receipt=await admission.admitInstalledMigrationStageMetadata(inputStage);
+  assert.equal(receipt.evidence,'VERIFIED_GIT_AND_INSTALLED_STAGE_METADATA');assert.equal(receipt.sources.length,rows.length);
+  await assert.rejects(admission.admitHostedMigrationStageFiles(inputStage));
+  await assert.rejects(subject.createHostedMigrationBatchWorkdirs({...input,plan,stage:built.stages[3]}));
+  await assert.rejects(subject.createHostedMigrationWorkdirs({...input,preparation:'INSTALLED_NOOP' as never}));
+  await assert.rejects(subject.createHostedMigrationWorkdirs({...input,plan:{...plan,runtimeOnly:true},preparation:'INSTALLED_NOOP' as never}));
+  await assert.rejects(subject.createHostedMigrationWorkdirs({...input,plan:{...plan,priorCompletedRelease:undefined},preparation:'INSTALLED_NOOP' as never}));
+  await assert.rejects(admission.admitInstalledMigrationStageMetadata({...inputStage,stage:{...built.stages[3],included:rows.slice(1)}}));
+  await assert.rejects(admission.admitInstalledMigrationStageMetadata({...inputStage,stage:{...built.stages[3],commandArgs:['db','push','--yes']}}));
+  const statePath=join(built.root,'builder-state.json'),originalState=readFileSync(statePath);
+  for(const text of [originalState.toString().replace('"state":"READY"','"state":"CREATING"'),originalState.toString().replace('"state":"READY"','"state":"CREATING","state":"READY"'),' '.repeat(49153)+originalState.toString()]){writeFileSync(statePath,text);await assert.rejects(admission.admitInstalledMigrationStageMetadata(inputStage));}
+  writeFileSync(statePath,originalState);
+  const fsPromises=createRequire(import.meta.url)('node:fs/promises')as typeof import('node:fs/promises'),originalLstat=fsPromises.lstat;let changed=false;
+  fsPromises.lstat=(async(...args:Parameters<typeof originalLstat>)=>{if(!changed&&String(args[0])===built.stages[3].workdir){changed=true;writeFileSync(statePath,originalState.toString().replace('"state":"READY"','"state":"CREATING"'));}return originalLstat(...args);})as typeof originalLstat;syncBuiltinESMExports();
+  try{await assert.rejects(admission.admitInstalledMigrationStageMetadata(inputStage),'Builder state changed during the final filesystem await must refuse source metadata');assert.equal(changed,true);}finally{fsPromises.lstat=originalLstat;syncBuiltinESMExports();writeFileSync(statePath,originalState);}
+  mkdirSync(built.stages[3].workdir);await assert.rejects(admission.admitInstalledMigrationStageMetadata(inputStage));rmSync(built.stages[3].workdir,{recursive:true});
+  writeFileSync(join(input.repoRoot,'supabase/migrations',rows[0].name),'select 999;');await assert.rejects(admission.admitInstalledMigrationStageMetadata(inputStage));
  });
 });
