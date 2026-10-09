@@ -5,9 +5,26 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash}from'node:crypto';
+import {registerHooks}from'node:module';
+import {readFileSync}from'node:fs';
+import {transformSync}from'esbuild';
 import {statelessVerificationSteps} from './steps';
 import {criticalIntegrationFiles, fullIntegrationFiles} from './verification-profiles';
 const root=resolve(import.meta.dirname,'../..');
+test('one synchronous source union uses one native coverage discovery and still rejects changed assignments',async()=>{
+ const fs=await import('node:fs'),reads={count:0};
+ const hook=registerHooks({load(url,context,next){if(url.includes('/ci-partition-coverage.ts?coverage-count')){const raw=readFileSync(new URL(url.split('?')[0]),'utf8').replace("import {lstatSync,readFileSync,readdirSync,realpathSync} from 'node:fs';","import {lstatSync,readdirSync,realpathSync} from 'node:fs';const readFileSync=globalThis.cuevoCoverageRead;");return{format:'module',shortCircuit:true,source:transformSync(raw,{loader:'ts',format:'esm'}).code};}if(url.includes('/stateless-checks.ts?coverage-count')){const raw=readFileSync(new URL(url.split('?')[0]),'utf8').replace("from './ci-partition-coverage';","from './ci-partition-coverage.ts?coverage-count';");return{format:'module',shortCircuit:true,source:transformSync(raw,{loader:'ts',format:'esm'}).code};}return next(url,context);}});
+ Object.assign(globalThis,{cuevoCoverageRead:(path:Parameters<typeof fs.readFileSync>[0],...args:unknown[])=>{if(String(path).replaceAll('\\','/').endsWith('/scripts/verification/ci-partitions.json'))reads.count++;return(fs.readFileSync as(...args:unknown[])=>unknown)(path,...args);}});
+ try{
+  const coverageApi=await import(pathToFileURL(resolve(import.meta.dirname,'ci-partition-coverage.ts')).href+'?coverage-count'),sourceApi=await import(pathToFileURL(resolve(import.meta.dirname,'stateless-checks.ts')).href+'?coverage-count');
+  const coverage=coverageApi.readCiPartitionCoverage(root),identity={repository:'owner/repo',sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),sourceDigest:'c'.repeat(64),sourceLockSha256:'d'.repeat(64),partitionManifestSha256:coverage.manifestSha256,nodeVersion:process.version,nodeBinarySha256:'e'.repeat(64),toolchainSha256:'f'.repeat(64),environmentPolicySha256:'1'.repeat(64),runId:'51',runAttempt:1,job:'source-contracts'};
+  const receipts=coverage.source.map((part:{id:string;files:string[]})=>({version:1,purpose:'CUEVO_STATELESS_SOURCE_PARTITION',partition:part.id,status:'PASSED',identity:{...identity,job:'source-fixtures-'+part.id.slice(7)},files:part.files.map(path=>({path,sha256:'2'.repeat(64),group:statelessVerificationSteps.find(step=>(step.args as readonly string[]).includes(path))!.name,durationMs:1,cases:[{definitionSha256:createHash('sha256').update(path).digest('hex'),outcome:'PASSED'}]})),startedAtMs:1,completedAtMs:2,exitCode:0,signal:null,frozenBefore:true,frozenAfter:true,cleanupConfirmed:true,reasons:[],payloadSha256:''}));
+  const {canonicalReleaseExecutionJson}=await import('./release-review');for(const receipt of receipts){const{payloadSha256,...body}=receipt;void payloadSha256;receipt.payloadSha256=createHash('sha256').update(canonicalReleaseExecutionJson(body)).digest('hex');}
+  const checks=coverage.nonTestChecks.map((row:{name:string;commandSha256:string})=>({...row,exitCode:0,durationMs:1}));reads.count=0;const result=sourceApi.combineStatelessPartitions(receipts,identity,coverage,checks);assert.equal(result.files.length,coverage.source.reduce((sum:number,part:{files:string[]})=>sum+part.files.length,0));assert.equal(reads.count,1,'The synchronous union must discover current coverage once, not once per receipt');
+  const changed=structuredClone(coverage),first=changed.source[0].files[0],second=changed.source[1].files[0];changed.source[0].files[0]=second;changed.source[1].files[0]=first;for(const part of changed.source)part.files.sort();assert.throws(()=>sourceApi.combineStatelessPartitions(receipts,identity,changed,checks),'A complete union cannot authorize caller-reassigned owners');
+  const request={scope:'source',id:coverage.source[0].id,profile:'full'};let traps=0;assert.throws(()=>coverageApi.ciPartitionFileSelections(coverage,[{...request,get scope(){traps++;return'source';}}]));assert.equal(traps,0,'Batch requests must reject accessors without invoking them');
+ }finally{hook.deregister();delete(globalThis as typeof globalThis&{cuevoCoverageRead?:unknown}).cuevoCoverageRead;}
+});
 async function subject(){let value:Record<string,unknown>={};try{value=await import(pathToFileURL(resolve(import.meta.dirname,'ci-partition-coverage.ts')).href);}catch(error){if((error as NodeJS.ErrnoException).code!=='ERR_MODULE_NOT_FOUND')throw error;}assert.equal(typeof value.readCiPartitionCoverage,'function','fixed CI partition union guard must exist');return value as typeof import('./ci-partition-coverage');}
 
 test('fixed conservative partitions cover every original source and integration file exactly once',async()=>{

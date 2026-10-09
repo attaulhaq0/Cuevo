@@ -1,5 +1,9 @@
 # Local migration replay
 
+Canonical planning exposes process-local `AndSources` variants for preparation that immediately verifies installed history. They return the raw Git migration bytes already acquired by the original canonical owner; the ordinary public planners retain their original serialized result. Reuse is synchronous and does not replace later source, target, approval, journal or native history checks. Reconciliation bucket policy reuses one current source acquisition internally, and completed batch policy and the synchronous four-stage metadata map reuse their one checked historical inventory. These observations provide no SQL or native-permit authority.
+
+Native marker-failure composition runs only the supplied original failure through the real exporter in its child process. The ordinary exporter test owner still runs all five generic scenarios. Original SQL commitment, journal, marker uncertainty and cleanup assertions remain; a failed native result cannot publish completion.
+
 Bootstrap prepares one operation-local replay object and shares it with the standalone start/reset owners. Fresh synchronous source/configuration checks and each consumed staged directory check precede local effects. Standalone commands still acquire their own source. This removes duplicate folder creation without sharing mutable databases between CI jobs.
 
 Hosted preparation has closed `ALL_SQL`, `PREFIX_SQL`, `RUNTIME_OBSERVATION` and `INSTALLED_NOOP` scopes. The last scope removes SQL copies only after a completed installation has no pending migrations. `hosted-migration-stage-files.ts` admits its exact source metadata through a separate read-only surface; ordinary SQL/batch admission rejects it. The native executor retains installed-history, permissions, receipts and cleanup verification, and Auth metadata cannot enter account creation.

@@ -56,8 +56,15 @@ export function readCiPartitionCoverage(repoRoot:string):CiPartitionCoverage{
   if(!equal(manifest.separateIntegration.map(row=>row.file),integrationExclusions.map(row=>row.file)))throw fail();return{...manifest,manifestSha256:createHash('sha256').update(bytes).digest('hex'),effectAuthority:false,timeTargetAchieved:false};
  }catch{throw fail();}
 }
+/** One synchronous selection batch owns one native discovery. No selector or
+ * passing coverage capability is returned for reuse across awaited phases. */
+export function ciPartitionFileSelections(value:CiPartitionCoverage,requests:readonly {scope:'source'|'integration';id:string;profile:'full'|'critical'}[]):string[][]{
+ const selected=snapshot(requests) as typeof requests;if(!selected.length||selected.length>5||selected.some(row=>Object.keys(row).sort().join(',')!=='id,profile,scope'||!['source','integration'].includes(row.scope)||!['full','critical'].includes(row.profile)||row.scope==='source'&&row.profile!=='full'))throw fail();
+ const safe=snapshot(value) as CiPartitionCoverage,original=readCiPartitionCoverage(resolve(import.meta.dirname,'../..'));if(JSON.stringify(safe)!==JSON.stringify(original))throw fail();const{manifestSha256:_digest,effectAuthority:_authority,timeTargetAchieved:_target,...manifest}=safe;void _digest;void _authority;void _target;
+ const checked=validateCiPartitionCoverage(manifest,{sourceFiles:statelessVerificationSteps.flatMap(step=>[...step.args].filter(path=>path.endsWith('.test.ts'))),integrationFiles:fullIntegrationFiles(),criticalFiles:[...criticalIntegrationFiles]});
+ return selected.map(row=>{const part=checked[row.scope].find(part=>part.id===row.id);if(!part)throw fail();return row.profile==='critical'?part.files.filter(path=>(criticalIntegrationFiles as readonly string[]).includes(path)):[...part.files];});
+}
 export function ciPartitionFiles(value:CiPartitionCoverage,scope:'source'|'integration',id:string,profile:'full'|'critical'):string[]{
- if(!['source','integration'].includes(scope)||!['full','critical'].includes(profile)||scope==='source'&&profile!=='full')throw fail();const safe=snapshot(value) as CiPartitionCoverage,original=readCiPartitionCoverage(resolve(import.meta.dirname,'../..'));if(JSON.stringify(safe)!==JSON.stringify(original))throw fail();const{manifestSha256:_digest,effectAuthority:_authority,timeTargetAchieved:_target,...manifest}=safe;void _digest;void _authority;void _target;
- const checked=validateCiPartitionCoverage(manifest,{sourceFiles:statelessVerificationSteps.flatMap(step=>[...step.args].filter(path=>path.endsWith('.test.ts'))),integrationFiles:fullIntegrationFiles(),criticalFiles:[...criticalIntegrationFiles]});const part=checked[scope].find(part=>part.id===id);if(!part)throw fail();return profile==='critical'?part.files.filter(path=>(criticalIntegrationFiles as readonly string[]).includes(path)):[...part.files];
+ return ciPartitionFileSelections(value,[{scope,id,profile}])[0];
 }
 if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url){const coverage=readCiPartitionCoverage(resolve(import.meta.dirname,'../..'));console.log(JSON.stringify({purpose:coverage.purpose,manifestSha256:coverage.manifestSha256,sourceFiles:coverage.source.reduce((sum,part)=>sum+part.files.length,0),integrationFiles:coverage.integration.reduce((sum,part)=>sum+part.files.length,0),effectAuthority:false,timeTargetAchieved:false}));}

@@ -8,10 +8,21 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { buildRuntimeArtifact } from './build-artifacts';
+import { buildRuntimeArtifact as actualBuildRuntimeArtifact } from './build-artifacts';
+const artifactBuildCounts={api:0,'api-vercel':0};
+async function buildRuntimeArtifact(target:'api'|'api-vercel'){artifactBuildCounts[target]++;return actualBuildRuntimeArtifact(target);}
+let originalVercelArtifact:Promise<Awaited<ReturnType<typeof actualBuildRuntimeArtifact>>>|undefined;
+async function inspectOriginalVercelArtifact(){
+  originalVercelArtifact??=buildRuntimeArtifact('api-vercel');
+  const artifact=await originalVercelArtifact,directory=resolve('.local/runtime-artifacts/api-vercel');
+  for(const row of artifact.files)assert.equal(createHash('sha256').update(await readFile(join(directory,row.path))).digest('hex'),row.sha256,'Original artifact bytes changed between read-only assertions.');
+  for(const row of artifact.sources)assert.equal(createHash('sha256').update(await readFile(row.path)).digest('hex'),row.sha256,'Original source provenance changed between read-only assertions.');
+  assert.equal(createHash('sha256').update(await readFile('package-lock.json')).digest('hex'),artifact.sourceLockSha256);
+  return artifact;
+}
 
 test('prebuilt Vercel output contains one raw Node function, pinned installed dependencies and no static assets', async () => {
-  const artifact = await buildRuntimeArtifact('api-vercel');
+  const artifact = await inspectOriginalVercelArtifact();
   const directory = resolve('.local/runtime-artifacts/api-vercel');
   const output = join(directory, '.vercel/output');
   const functionRoot = join(output, 'functions/api/index.func');
@@ -28,7 +39,7 @@ test('prebuilt Vercel output contains one raw Node function, pinned installed de
 });
 
 test('compiled API function imports without a listener and preserves actual denied routes and source-locked packs', async () => {
-  const artifact = await buildRuntimeArtifact('api-vercel');
+  const artifact = await inspectOriginalVercelArtifact();
   const directory = resolve('.local/runtime-artifacts/api-vercel');
   assert.equal(artifact.delivery, 'vercel-node-function'); assert.equal(artifact.entrypoint, 'api/index.mjs');
   assert.equal(Object.hasOwn(artifact, 'start'), false);
@@ -67,6 +78,10 @@ test('compiled API function imports without a listener and preserves actual deni
   const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { cwd: functionRoot, env: { NODE_ENV: 'test', PATH: process.env.PATH, SystemRoot: process.env.SystemRoot }, encoding: 'utf8', timeout: 15000 });
   assert.equal(result.error, undefined); assert.equal(result.status, 0, result.stderr);
   assert.ok(createRequire(pathToFileURL(join(functionRoot, artifact.entrypoint))).resolve('@nestjs/core').startsWith(functionRoot));
+});
+
+test('the two nonmutating Vercel checks prepare one original artifact without hiding a second build',()=>{
+  assert.equal(artifactBuildCounts['api-vercel'],1,'Read-only packaging and denied-route checks must share one verified original preparation.');
 });
 
 test('compiled API private pack root stays relative to its artifact despite an unrelated process cwd', async () => {
@@ -111,4 +126,7 @@ test('Node and Vercel artifacts retain the private reviewed catalogue and resolv
     try{invoke(false);await writeFile(join(privateRoot,'pedagogy/revised-bloom-v1.json'),Buffer.concat([source,Buffer.from('\n')]));invoke(true);}
     finally{await writeFile(join(privateRoot,'pedagogy/revised-bloom-v1.json'),source);await rm(probe,{force:true});}
   }
+});
+test('catalogue tamper isolation retains a separate original Vercel preparation and Node compatibility build',()=>{
+  assert.equal(artifactBuildCounts['api-vercel'],2);assert.equal(artifactBuildCounts.api,1);
 });

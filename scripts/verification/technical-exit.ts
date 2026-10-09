@@ -1,13 +1,12 @@
 import { appendFile, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { createConnection } from 'node:net';
 import { resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { sameSourceManifest, restoreTechnicalState } from './rules';
 import { commandArgs } from './steps';
 import { readCiRuntimeSelection, verificationProfileSteps, verificationEvidence, validateCriticalBrowserReport, criticalBrowserArguments, criticalBrowserFiles } from './verification-profiles';
 import { parseBrowserInventory, validateBrowserRunReport, validateBrowserPhaseReceipt, compatibilityBrowserFiles, type BrowserInventory } from './browser-runtime-scope';
-import { requireStoppedBrowserPorts, type BrowserPortState } from './browser-account-phase';
+import { waitForStoppedBrowserPorts } from './browser-account-phase';
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
 import { verificationProgress } from './verification-progress';
 import {readTechnicalRequest,runtimeLaneSteps,runtimeLaneEvidence} from './runtime-lanes';
@@ -22,13 +21,7 @@ const profile=selection.profile;
 if((request.lane||request.partition)&&profile==='full')throw Error('Complete acceptance cannot be split into a partial runtime receipt.');
 if(request.partition&&(process.env.CI!=='true'||process.env.GITHUB_ACTIONS!=='true'||process.env.GITHUB_JOB!==request.partition))throw Error('Integration requires its exact isolated CI owner.');
 const selectedSteps=request.partition?integrationPartitionSteps(profile as Exclude<typeof profile,'full'>,request.partition):request.lane?runtimeLaneSteps(profile as Exclude<typeof profile,'full'>,request.lane):verificationProfileSteps(profile),runId=randomUUID();
-const probe=(port:number)=>new Promise<BrowserPortState>(done=>{
-  const socket=createConnection({host:'127.0.0.1',port});let settled=false;
-  const finish=(state:BrowserPortState)=>{if(settled)return;settled=true;socket.destroy();done(state);};
-  socket.setTimeout(1000);socket.once('connect',()=>finish('OPEN'));socket.once('timeout',()=>finish('UNKNOWN'));
-  socket.once('error',error=>finish((error as NodeJS.ErrnoException).code==='ECONNREFUSED'?'REFUSED':'UNKNOWN'));
-});
-const stopped=async()=>{const deadline=Date.now()+10000;for(;;){try{await requireStoppedBrowserPorts(probe);return;}catch{if(Date.now()>=deadline)throw Error('Stop Cuevo application processes before clean technical verification.');}await new Promise(done=>setTimeout(done,100));}};
+const stopped=waitForStoppedBrowserPorts;
 await stopped();
 const directory=resolve('.local/verification',new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(directory,{recursive:true});
 const snapshot=async()=>{

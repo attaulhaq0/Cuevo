@@ -1,5 +1,7 @@
 # Local process environment ownership
 
+The API packaging test file prepares one Vercel baseline for its first two read-only assertions, verifying original output, source and dependency-lock hashes before each use. Its later catalogue tamper test keeps a separate fresh Vercel build and Node compatibility build. This test-local reuse removes identical preparation without sharing artifacts between CI jobs or weakening private-pack and denied-route checks.
+
 Only an explicitly enabled local web child receives CUEVO_TEST_QUICK_LOGIN=1 and optional absolute CUEVO_TEST_LOGIN_ACCOUNTS_FILE. Local Auth must be56321or57421 and no Vercel/hosted deployment marker may be present. These server-only inputs are never NEXT_PUBLIC, never passed to API/worker and omitted for disabled/ordinary/hosted runs. The Auth server additionally verifies exact request origins, source identity manifest, file confinement and genuine provider identity; forwarding the flag is not authorization. Hosted synthetic review needs its own separately reviewed deployment boundary.
 
 The flag is withheld unless the web listener HOSTNAME is127.0.0.1orlocalhost. The owned development runner already binds Next to127.0.0.1 and now supplies that exact HOSTNAME/PORT3000 to the server guard; default wildcard package starts do not activate quick login. Local production review explicitly supplies127.0.0.1/54131. No listener check is inferred from a caller-supplied forwarded header.

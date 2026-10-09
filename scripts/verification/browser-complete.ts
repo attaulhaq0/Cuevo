@@ -3,9 +3,8 @@ import { resolve, isAbsolute, relative } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { browserVerificationMetadata, parseBrowserInventory, validateBrowserRunReport, validateBrowserPhaseReceipt, accountBrowserFiles, ordinaryBrowserFiles, reviewedBrowserExclusions, type BrowserPhaseReceipt } from './browser-runtime-scope';
-import { createConnection } from 'node:net';
 import { parseEnv } from 'node:util';
-import { verifyBrowserAccountPhases, validateAccountBrowserReport, restoreAccountBrowserState, requireStoppedBrowserPorts, type BrowserPortState } from './browser-account-phase';
+import { verifyBrowserAccountPhases, validateAccountBrowserReport, restoreAccountBrowserState, waitForStoppedBrowserPorts } from './browser-account-phase';
 import { configureLocalSchoolAccounts } from '../runtime/local-school-accounts';
 import { cleanupAccountPhaseCaptures, snapshotAccountPhaseRequests, accountPhaseRequestDelta, verifyRestoredAccountReference, type AccountPhaseRequest } from './account-capture-cleanup';
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
@@ -21,16 +20,7 @@ async function run(args: string[], env: NodeJS.ProcessEnv = process.env): Promis
   try { return await new Promise<number>(done => { child.once('error', () => done(1)); child.once('close', code => done(code ?? 1)); }); }
   finally { await stopOwnedProcesses([child]); ownedChildren.delete(child); }
 }
-const probe = (port: number) => new Promise<BrowserPortState>(done => {
-  const socket = createConnection({ host: '127.0.0.1', port }); let settled = false;
-  const finish = (state: BrowserPortState) => { if (settled) return; settled = true; socket.destroy(); done(state); };
-  socket.setTimeout(1000); socket.once('connect', () => finish('OPEN')); socket.once('timeout', () => finish('UNKNOWN'));
-  socket.once('error', error => finish((error as NodeJS.ErrnoException).code === 'ECONNREFUSED' ? 'REFUSED' : 'UNKNOWN'));
-});
-async function stopped() {
-  const deadline = Date.now() + 10000;
-  for (;;) { try { await requireStoppedBrowserPorts(probe); return; } catch { if (Date.now() >= deadline) throw Error('Browser runtime shutdown is not confirmed.'); } await new Promise(done => setTimeout(done, 100)); }
-}
+const stopped=waitForStoppedBrowserPorts;
 async function save(path: string, value: unknown) {
   const pending = path + '.' + randomUUID() + '.pending'; let created = false;
   try { const handle = await open(pending, 'wx', 0o600); created = true; try { await handle.writeFile(JSON.stringify(value, null, 2) + '\n'); await handle.sync(); } finally { await handle.close(); } await rename(pending, path); }

@@ -10,7 +10,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { z } from 'zod';
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
 import { statelessVerificationSteps } from './steps';
-import {readCiPartitionCoverage,ciPartitionFiles,type CiPartitionCoverage} from './ci-partition-coverage';
+import {readCiPartitionCoverage,ciPartitionFiles,ciPartitionFileSelections,type CiPartitionCoverage} from './ci-partition-coverage';
 import {canonicalReleaseExecutionJson} from './release-review';
 
 const failure=()=>Error('Stateless source-contract evidence requires review; private contents withheld.');
@@ -40,14 +40,17 @@ const expectedJob=(partition:string)=>'source-fixtures-'+partition.slice(7);
 const payload=(value:Omit<StatelessPartitionReceipt,'payloadSha256'>)=>({...value,payloadSha256:hash(canonicalReleaseExecutionJson(value))});
 export function validateStatelessPartition(value:unknown,expected:StatelessPartitionIdentity,coverage:CiPartitionCoverage):StatelessPartitionReceipt{
  const result=validateParsedPartitionOutcome(partitionReceiptSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value))));
+ return validateSelectedStatelessPartition(result,expected,coverage,ciPartitionFiles(coverage,'source',result.partition,'full'));
+}
+function validateSelectedStatelessPartition(result:StatelessPartitionReceipt,expected:StatelessPartitionIdentity,coverage:CiPartitionCoverage,files:readonly string[]):StatelessPartitionReceipt{
  if(result.identity.partitionManifestSha256!==coverage.manifestSha256)throw failure();
  for(const key of Object.keys(partitionIdentitySchema.shape)as(keyof StatelessPartitionIdentity)[])if(key!=='job'&&result.identity[key]!==expected[key])throw failure();
- const files=ciPartitionFiles(coverage,'source',result.partition,'full');if(!same(result.files.map(row=>row.path),files)||new Set(result.files.map(row=>row.path)).size!==result.files.length)throw failure();
+ if(!same(result.files.map(row=>row.path),files)||new Set(result.files.map(row=>row.path)).size!==result.files.length)throw failure();
  for(const file of result.files){const group=statelessVerificationSteps.find(step=>(step.args as readonly string[]).includes(file.path));if(!group||file.group!==group.name||new Set(file.cases.map(row=>row.definitionSha256)).size!==file.cases.length)throw failure();}
  return result;
 }
 export function combineStatelessPartitions(values:unknown,expected:StatelessPartitionIdentity,coverage:CiPartitionCoverage,checks:unknown){
- const parsed=z.array(z.unknown()).length(3).parse(JSON.parse(canonicalReleaseExecutionJson(values))),receipts=parsed.map(value=>validateStatelessPartition(value,expected,coverage));if(new Set(receipts.map(row=>row.partition)).size!==3||receipts.some(row=>row.status!=='PASSED'))throw failure();
+ const parsed=z.array(partitionReceiptSchema).length(3).parse(JSON.parse(canonicalReleaseExecutionJson(values))).map(validateParsedPartitionOutcome),selected=ciPartitionFileSelections(coverage,parsed.map(row=>({scope:'source' as const,id:row.partition,profile:'full' as const}))),receipts=parsed.map((row,index)=>validateSelectedStatelessPartition(row,expected,coverage,selected[index]));if(new Set(receipts.map(row=>row.partition)).size!==3||receipts.some(row=>row.status!=='PASSED'))throw failure();
  const files=receipts.flatMap(row=>row.files).sort((a,b)=>a.path.localeCompare(b.path)),all=statelessVerificationSteps.flatMap(step=>[...step.args].filter(path=>path.endsWith('.test.ts'))).sort();if(!same(files.map(row=>row.path),all)||new Set(files.map(row=>row.path)).size!==files.length)throw failure();
  const checkRows=z.array(z.object({name:z.string(),commandSha256:digest,exitCode:z.literal(0),durationMs:z.number().int().nonnegative()}).strict()).max(30).parse(JSON.parse(canonicalReleaseExecutionJson(checks))),expectedChecks=statelessVerificationSteps.filter(step=>!(step.args as readonly string[]).includes('--test'));
  if(!same(checkRows.map(row=>({name:row.name,commandSha256:row.commandSha256})),expectedChecks.map(step=>({name:step.name,commandSha256:hash(JSON.stringify([...step.args]))}))))throw failure();

@@ -5,6 +5,27 @@ import accounts from './playwright.accounts.config';
 import ordinary from './playwright.ordinary.config';
 import * as phases from './browser-account-phase';
 import { ordinaryBrowserExclusionPatterns } from './browser-runtime-scope';
+import {createConnection,createServer} from 'node:net';
+import {registerHooks} from 'node:module';
+import {readFileSync} from 'node:fs';
+import {readFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {transformSync} from 'esbuild';
+import {EventEmitter} from 'node:events';
+
+test('one stopped-port owner makes fresh native probes and rejects OPEN and unknown transport without caching',async()=>{
+ assert.equal(typeof phases.waitForStoppedBrowserPorts,'function','existing browser phase owner provides the single native stopped-port mechanism');
+ const observed:number[]=[],server=createServer(socket=>socket.destroy());await new Promise<void>(done=>server.listen(0,'127.0.0.1',done));const address=server.address();assert.ok(address&&typeof address!=='string');const port=address.port,originalNow=Date.now;let unknown=false;
+ const hook=registerHooks({load(url,context,next){if(url.includes('/browser-account-phase.ts?stopped-owner-fixture')){const source=readFileSync(new URL(url.split('?')[0]),'utf8');assert.equal(source.split("import { createConnection } from 'node:net';").length,2);return{format:'module',shortCircuit:true,source:transformSync(source.replace("import { createConnection } from 'node:net';",'const createConnection=globalThis.cuevoStoppedConnection;'),{loader:'ts',format:'esm'}).code};}return next(url,context);}});
+ Object.assign(globalThis,{cuevoStoppedConnection:(input:{host:string;port:number})=>{assert.equal(input.host,'127.0.0.1');observed.push(input.port);if(!unknown)return createConnection({...input,port});const socket=new EventEmitter()as EventEmitter&{setTimeout(ms:number):void;destroy():void};socket.setTimeout=ms=>{assert.equal(ms,1000);queueMicrotask(()=>socket.emit('timeout'));};socket.destroy=()=>{};return socket;}});
+ try{
+  const owner=await import(pathToFileURL(resolve(import.meta.dirname,'browser-account-phase.ts')).href+'?stopped-owner-fixture');let clocks=0;Date.now=()=>++clocks===1?0:10000;await assert.rejects(owner.waitForStoppedBrowserPorts());Date.now=originalNow;
+  assert.deepEqual(observed,[3000]);await new Promise<void>((done,reject)=>server.close(error=>error?reject(error):done()));observed.length=0;await owner.waitForStoppedBrowserPorts();assert.deepEqual(observed,[3000,4000,4001],'A later invocation must probe every current fixed port again.');
+  unknown=true;clocks=0;Date.now=()=>++clocks===1?0:10000;await assert.rejects(owner.waitForStoppedBrowserPorts());
+  for(const name of ['technical-exit.ts','browser-complete.ts']){const source=await readFile(resolve(import.meta.dirname,name),'utf8');assert.equal(source.includes('createConnection'),false,'Consumer must delegate socket ownership.');assert.ok(source.includes('waitForStoppedBrowserPorts'));}
+ }finally{Date.now=originalNow;hook.deregister();delete(globalThis as typeof globalThis&{cuevoStoppedConnection?:unknown}).cuevoStoppedConnection;if(server.listening)await new Promise<void>(done=>server.close(()=>done()));}
+});
 
 const started = Date.parse('2026-10-03T08:00:00Z');
 const requiredCases = [

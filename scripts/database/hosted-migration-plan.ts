@@ -196,7 +196,7 @@ export function verifyPriorSchemaPrefix(repoRoot:string,plan:HostedMigrationPlan
 }
 
 /** A release entry also requires all tracked and untracked authored source to match the admitted commit. */
-export function createCanonicalHostedMigrationPlan(input: { repoRoot: string; sourceSha: string; treeSha: string; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; now: number }) {
+export function createCanonicalHostedMigrationPlanAndSources(input: { repoRoot: string; sourceSha: string; treeSha: string; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; now: number }) {
   const loaded = readCanonicalMigrationSources(input);
   const { git } = checkedRoot(input.repoRoot);
   git(['diff', '--quiet', '--no-ext-diff', '--no-textconv', input.sourceSha, '--']);
@@ -219,33 +219,40 @@ export function createCanonicalHostedMigrationPlan(input: { repoRoot: string; so
     if(plan.priorSchemaRelease)validatePriorSchemaRows(plan,priorSources);
   }
   else if(plan.priorSchemaRelease)verifyPriorSchemaPrefix(input.repoRoot,plan);
-  return { plan, sourceProvenance: loaded.provenance, priorReceiptProvenance: input.priorReceipt === undefined ? 'NOT_APPLICABLE' as const : 'VERIFIED_PRIOR_GIT_SOURCE_HASHES_ONLY' as const }; 
+  return { result:{ plan, sourceProvenance: loaded.provenance, priorReceiptProvenance: input.priorReceipt === undefined ? 'NOT_APPLICABLE' as const : 'VERIFIED_PRIOR_GIT_SOURCE_HASHES_ONLY' as const },sources:loaded.sources };
 }
 
+/** Public planning results retain their original serialized shape. Raw source
+ * observations belong only to this synchronous preparation call. */
+export function createCanonicalHostedMigrationPlan(input:Parameters<typeof createCanonicalHostedMigrationPlanAndSources>[0]){return createCanonicalHostedMigrationPlanAndSources(input).result;}
+
 /** Active installed-runtime inspection has no schema execution authority. */
-export function createCanonicalInstalledRuntimePlan(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'INSTALLED_RUNTIME_READ_ONLY'}){
+export function createCanonicalInstalledRuntimePlanAndSources(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'INSTALLED_RUNTIME_READ_ONLY'}){
  if(input.operation!=='INSTALLED_RUNTIME_READ_ONLY')throw failure();
  const active=targetSchema.extend({population:z.literal('ACTIVE_SYNTHETIC'),dispatchDisabled:z.boolean()}).parse(input.target),prior=priorSchema.parse(input.priorReceipt);
  if(active.authUsers!==133||prior.sourceSha!==input.sourceSha||prior.treeSha!==input.treeSha||prior.completedSourceMigrationCount!==prior.migrations.length||active.migrationVersions.length!==prior.migrations.length)throw failure();
- const result=createCanonicalHostedMigrationPlan({...input,target:{...active,population:'GUARDED_SYNTHETIC',dispatchDisabled:true}});
+ const observed=createCanonicalHostedMigrationPlanAndSources({...input,target:{...active,population:'GUARDED_SYNTHETIC',dispatchDisabled:true}}),result=observed.result;
  if(result.plan.pending.length||result.plan.stages.some(stage=>stage.names.length)||result.plan.migrations.length!==prior.migrations.length)throw failure();
- const plan:HostedMigrationPlanV1={...result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(plan);return{...result,plan};
+ const plan:HostedMigrationPlanV1={...result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(plan);return{result:{...result,plan},sources:observed.sources};
 }
 /** Pending confirmation reuses exact complete-source no-op verification; this
  * plan cannot establish activation or permit SQL execution. */
-export function createCanonicalPendingRuntimeConfirmationPlan(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'PENDING_RUNTIME_CONFIRMATION'}){
- if(input.operation!=='PENDING_RUNTIME_CONFIRMATION')throw failure();return createCanonicalInstalledRuntimePlan({...input,operation:'INSTALLED_RUNTIME_READ_ONLY'});
+export function createCanonicalPendingRuntimeConfirmationPlanAndSources(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'PENDING_RUNTIME_CONFIRMATION'}){
+ if(input.operation!=='PENDING_RUNTIME_CONFIRMATION')throw failure();return createCanonicalInstalledRuntimePlanAndSources({...input,operation:'INSTALLED_RUNTIME_READ_ONLY'});
 }
 /** An operating update can have different repository provenance while retaining
  * the exact installed migration set. No SQL authority comes from this plan. */
-export function createCanonicalRuntimeRolloutPlan(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE'}){
+export function createCanonicalRuntimeRolloutPlanAndSources(input:{repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt:unknown;now:number;operation:'RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE'}){
  if(input.operation!=='RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE')throw failure();
  const active=targetSchema.extend({population:z.literal('ACTIVE_SYNTHETIC'),dispatchDisabled:z.boolean()}).parse(input.target),prior=priorSchema.parse(input.priorReceipt);
  if(active.authUsers!==133||prior.completedSourceMigrationCount!==prior.migrations.length||active.migrationVersions.length!==prior.migrations.length)throw failure();
- const result=createCanonicalHostedMigrationPlan({...input,target:{...active,population:'GUARDED_SYNTHETIC',dispatchDisabled:true}});
+ const observed=createCanonicalHostedMigrationPlanAndSources({...input,target:{...active,population:'GUARDED_SYNTHETIC',dispatchDisabled:true}}),result=observed.result;
  if(result.plan.pending.length||result.plan.stages.some(stage=>stage.names.length)||result.plan.migrations.length!==prior.migrations.length)throw failure();
- const plan:HostedMigrationPlanV1={...result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(plan);return{...result,plan};
+ const plan:HostedMigrationPlanV1={...result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(plan);return{result:{...result,plan},sources:observed.sources};
 }
+export function createCanonicalInstalledRuntimePlan(input:Parameters<typeof createCanonicalInstalledRuntimePlanAndSources>[0]){return createCanonicalInstalledRuntimePlanAndSources(input).result;}
+export function createCanonicalPendingRuntimeConfirmationPlan(input:Parameters<typeof createCanonicalPendingRuntimeConfirmationPlanAndSources>[0]){return createCanonicalPendingRuntimeConfirmationPlanAndSources(input).result;}
+export function createCanonicalRuntimeRolloutPlan(input:Parameters<typeof createCanonicalRuntimeRolloutPlanAndSources>[0]){return createCanonicalRuntimeRolloutPlanAndSources(input).result;}
 const plannedRowSchema = rowSchema.extend({ name: z.string().regex(/^\d{14}_[a-z0-9_]+\.sql$/) }).strict();
 const planSchema = z.object({
   version: z.literal(1), mode: z.enum(['EMPTY_INITIAL', 'INCREMENTAL']), provenance: z.literal('CALLER_SUPPLIED_SOURCE'), source: identitySchema,

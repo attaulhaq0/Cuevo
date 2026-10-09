@@ -512,8 +512,11 @@ async function denyMarkerFailureExport(result:unknown){
  // transport fixture's admission hooks. Its existing valid package fixture
  // reaches the actual result parser with these exact executor failure bytes.
  const path=join(root,'.local/hosted-release/schema-result.json');await writeFile(path,JSON.stringify(result)+'\n');
- const child=spawnSync(process.execPath,['--import','tsx','--test','--test-name-pattern=actual completion export bytes survive','scripts/verification/backend-schema-completion-admission.test.ts'],{cwd:resolve(import.meta.dirname,'../..'),env:{...process.env,CUEVO_TEST_SCHEMA_FAILURE_PATH:path},encoding:'utf8',timeout:60000,windowsHide:true});
+ const childEnv:NodeJS.ProcessEnv={...process.env,CUEVO_TEST_SCHEMA_FAILURE_PATH:path};delete childEnv.NODE_TEST_CONTEXT;
+ const child=spawnSync(process.execPath,['--import','tsx','--test','--test-name-pattern=actual completion export bytes survive','scripts/verification/backend-schema-completion-admission.test.ts'],{cwd:resolve(import.meta.dirname,'../..'),env:childEnv,encoding:'utf8',timeout:60000,windowsHide:true});
  assert.equal(child.status,0,child.stdout+child.stderr);
+  assert.equal(child.stdout.split(/\r?\n/).filter(line=>line.includes('CUEVO_ORIGINAL_FAILURE_EXPORT_CASES=')).length,1);
+  assert.match(child.stdout,/CUEVO_ORIGINAL_FAILURE_EXPORT_CASES=1(?:\r?\n|$)/,'Native failure composition must run only the exact supplied original export case');
 }
 
 test('installed marker failure preserves acknowledged SQL and actual confirmed native cleanup in the single-stage wrapper',async()=>{
