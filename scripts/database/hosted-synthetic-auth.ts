@@ -9,7 +9,7 @@ import { readBackendReleaseAdmission } from '../verification/backend-release-adm
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from '../verification/backend-release-contracts';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from '../verification/release-review';
 import { canonicalHostedMigrationPlan, type HostedMigrationPlanV1 } from './hosted-migration-plan';
-import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata } from './hosted-migration-stage-files';
+import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata,admitInstalledRuntimeStageMetadata } from './hosted-migration-stage-files';
 import { verifyHostedMigrationHistory } from './hosted-migration-history';
 import { readHostedMigrationProvider, hostedMigrationEndpointSchema, requireCurrentHostedMigrationEndpoint } from './hosted-migration-provider';
 import { prepareHostedMigrationConnection } from './hosted-migration-connection';
@@ -62,6 +62,8 @@ export async function revalidateInstalledSyntheticAuth(value:unknown):Promise<Ho
  try{
   const input=inputSchema.omit({authProvisioningKey:true,syntheticPassword:true}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value))),expected=input.expected as BackendReleaseExpected;
   if(!expected.installedSource||input.originalKey!=='cuevo-initial-hosted-synthetic-auth')throw failure();const prepared=validatePreparedBackendReleaseIntent(input.preparedApproval,{...expected,now:Date.now()}),plan=input.plan as HostedMigrationPlanV1;
+  const runtimeObservation=expected.executionScope==='installed-runtime';
+  if(runtimeObservation?(plan.runtimeOnly!==true||Number(!!expected.installedRuntime)+Number(!!expected.currentRuntime)!==1):plan.runtimeOnly)throw failure();
   if(plan.source.sha!==expected.releaseSha||plan.source.tree!==expected.treeSha||plan.projectRef!==expected.targets.supabase.projectRef||canonicalHostedMigrationPlan(plan).sha256!==expected.fingerprints.migrationPlanSha256)throw failure();
   git(input.repoRoot,['merge-base','--is-ancestor',expected.installedSource.sourceSha,expected.releaseSha]);if(git(input.repoRoot,['rev-parse',expected.installedSource.sourceSha+'^{tree}']).toString().trim()!==expected.installedSource.treeSha)throw failure();
   const source=await manifest(input.repoRoot,expected.installedSource.sourceSha),manifestSha256=hash(canonicalReleaseReviewJson(source.value));if(manifestSha256!==expected.installedSource.manifestSha256)throw failure();
@@ -72,7 +74,9 @@ export async function revalidateInstalledSyntheticAuth(value:unknown):Promise<Ho
   const released=await db.withLock(`${plan.projectRef}:HOSTED_SCHEMA_MIGRATION`,async()=>{
    let readRecoveryPermit:NativeReconciliationPermit|undefined;if(expected.schemaRecovery){if(!input.schemaRecoveryExport||!input.journalStorageKey)throw failure();readRecoveryPermit=await db.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:(expected.installedRuntime||expected.currentRuntime)?'INSTALLED_SYNTHETIC_RUNTIME_READ_ONLY':'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});}
    const observed=await db.observe();if(observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.certificate.sha256||observed.operator!=='postgres'||observed.database!=='postgres')throw failure();
-   const finalStage=input.finalStage as HostedMigrationWorkdirs['stages'][number],admitFiles=finalStage.materialization==='METADATA_ONLY'&&expected.executionScope==='complete-backend'?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
+   const finalStage=input.finalStage as HostedMigrationWorkdirs['stages'][number];
+   if(runtimeObservation&&finalStage.materialization!=='METADATA_ONLY')throw failure();
+   const admitFiles=runtimeObservation?admitInstalledRuntimeStageMetadata:finalStage.materialization==='METADATA_ONLY'&&expected.executionScope==='complete-backend'?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
    const files=await admitFiles({repoRoot:input.repoRoot,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage:finalStage});verifyHostedMigrationHistory({sources:files.sources,included:plan.migrations,expectedVersions:plan.migrations.map(row=>row.version).sort(),history:observed.historyPresent?observed.history:null});
    const initial=await db.readAuthSeedAttempt(identity);if(!initial||initial.status!=='CONFIRMED'||initial.actors.length!==133||initial.originalKey!==identity.originalKey||initial.manifestSha256!==manifestSha256||initial.actors.some((row,index)=>row.state!=='CONFIRMED'||row.actorId!==source.value.actors[index].actorId||row.emailSha256!==hash(source.value.actors[index].email)))throw failure();
    if(population(populationSchema.parse(await db.observeSyntheticPopulation()),source.value)!==133)throw failure();

@@ -307,7 +307,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts bind-api
       - name: Prepare the frontend manifest from verified backend receipts
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: inputs.scope == 'installed-runtime'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
@@ -319,7 +319,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts handover
       - name: Configure only verified public frontend settings
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: inputs.scope == 'installed-runtime'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
@@ -331,7 +331,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts configure-web
       - name: Export the verified public handover for the separate web release
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: inputs.scope == 'installed-runtime'
         id: web-transfer
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -344,7 +344,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts export-web-handover
       - name: Retain only the completed backend public handover
-        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
+        if: inputs.scope == 'installed-runtime'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}
