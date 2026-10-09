@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, chmod, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import {tmpdir} from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
@@ -66,6 +67,12 @@ export async function requireStatelessPhysical(root:string,path:string,kind:'fil
  for(const[index,piece]of [...pieces,''].entries()){const stat=await lstat(current);if(stat.isSymbolicLink()||await realpath(current)!==current||(index<pieces.length?!stat.isDirectory():kind==='directory'?!stat.isDirectory():!stat.isFile()||stat.nlink!==1))throw failure();if(piece)current=join(current,piece);}
 }
 const physical=requireStatelessPhysical;
+/** Short create-only scratch keeps Windows fixture Git paths below their limit.
+ * The caller's configured temp root and each operation remain independently owned. */
+async function createStatelessScratch(){
+ const parent=resolve(tmpdir());if(!isAbsolute(parent)||await realpath(parent)!==parent)throw failure();await physical(parent,parent,'directory');
+ const root=await mkdtemp(join(parent,'cv-'));await physical(parent,root,'directory');await chmod(root,0o700);await physical(parent,root,'directory');return{parent,root};
+}
 async function source(root:string){
  await physical(root,root,'directory');const sourceSha=sha.parse(git(root,['rev-parse','HEAD'])),treeSha=sha.parse(git(root,['rev-parse','HEAD^{tree}']));if(git(root,['status','--porcelain','--untracked-files=all']))throw failure();const lock=await readFile(join(root,'package-lock.json'));return{sourceSha,treeSha,sourceLockSha256:hash(lock)};
 }
@@ -86,7 +93,7 @@ export async function runStatelessPartition(input:{repoRoot:string;partition:str
  const partition=z.enum(partitionIds).parse(input.partition),root=input.repoRoot,coverage=readCiPartitionCoverage(root),identity=await readStatelessPartitionIdentity(root,expectedJob(partition)),files=ciPartitionFiles(coverage,'source',partition,'full');
  const rows:StatelessPartitionReceipt['files']=[];for(const path of files){await physical(root,join(root,path),'file');const group=statelessVerificationSteps.find(step=>(step.args as readonly string[]).includes(path));if(!group)throw failure();rows.push({path,sha256:hash(await readFile(join(root,path))),group:group.name,durationMs:null,cases:[]});}
  let body:Omit<StatelessPartitionReceipt,'payloadSha256'>={version:1,purpose:'CUEVO_STATELESS_SOURCE_PARTITION',partition,status:'NOT_VERIFIED',identity,files:rows,startedAtMs:Date.now(),completedAtMs:null,exitCode:null,signal:null,frozenBefore:true,frozenAfter:false,cleanupConfirmed:false,reasons:[]};await persistPartition(root,payload(body));
- const scratch=join(root,'.local/verification/source-partitions',partition,'scratch-'+randomUUID());await mkdir(scratch,{mode:0o700});await physical(root,scratch,'directory');
+ const operation=await createStatelessScratch(),scratch=operation.root;await physical(operation.parent,scratch,'directory');
  const reporter=join(import.meta.dirname,'ci-test-timings-reporter.ts'),reporterInput={repoRoot:root,files:rows.map(row=>({path:row.path,sha256:row.sha256})),identity:{sourceSha:identity.sourceSha,treeSha:identity.treeSha,sourceLockSha256:identity.sourceLockSha256,nodeVersion:identity.nodeVersion,runId:identity.runId,runAttempt:identity.runAttempt,scope:partition,partitionSha256:coverage.manifestSha256}};
  const env={...process.env,TEMP:scratch,TMP:scratch,TMPDIR:scratch,CI:'true',NEXT_TELEMETRY_DISABLED:'1',SCARF_ANALYTICS:'false',CUEVO_REQUIRE_LIVE_INTELLIGENCE:'0',CUEVO_CI_TEST_TIMING_INPUT:JSON.stringify(reporterInput)};delete(env as NodeJS.ProcessEnv).NODE_TEST_CONTEXT;delete(env as NodeJS.ProcessEnv).NODE_OPTIONS;
  let child:ChildProcess|undefined,stdout=Buffer.alloc(0),cancelled=false,processFailed=false,cleanupConfirmed=false,oversized=false;
@@ -127,9 +134,9 @@ export async function runStatelessChecks(input:{repoRoot:string;signal?:AbortSig
   for(const[index,step]of statelessVerificationSteps.entries()){const paths=[...step.args].filter(arg=>arg.startsWith('scripts/')&&arg.endsWith('.ts'));if(!paths.length)throw failure();for(const path of paths){safePath.parse(path);await physical(root,join(root,path),'file');rows[index].files.push({path,sha256:hash(await readFile(join(root,path)))});}}
   evidence.discoverySha256=hash(JSON.stringify(rows.map(row=>({name:row.name,commandSha256:row.commandSha256,files:row.files}))));
  }catch{evidence.discoverySha256=hash(JSON.stringify(rows.map(row=>({name:row.name,commandSha256:row.commandSha256,files:row.files}))));await persist(root,evidence,true);return statelessChecksEvidenceSchema.parse(evidence);}
- const directory=join(root,'.local','verification','source-contracts'),attempt=join(directory,'attempt-'+randomUUID());await mkdir(attempt,{recursive:true,mode:0o700});await physical(root,attempt,'directory');try{await physical(root,join(directory,'failure.json'),'file');await rm(join(directory,'failure.json'));}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw failure();}
+ const directory=join(root,'.local','verification','source-contracts'),operation=await createStatelessScratch(),attempt=operation.root;try{await physical(root,join(directory,'failure.json'),'file');await rm(join(directory,'failure.json'));}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw failure();}
  const run=async(index:number)=>{
-  const step=statelessVerificationSteps[index],row=rows[index];if(signal?.aborted)return;const started=performance.now();row.startedAtMs=Date.now();const scratch=join(attempt,row.scratchId);try{await mkdir(scratch,{mode:0o700});await physical(root,scratch,'directory');}catch{row.status='PROCESS_ERROR';row.completedAtMs=Date.now();row.durationMs=Math.max(0,Math.floor(performance.now()-started));return;}if(signal?.aborted){row.status='CANCELLED';row.completedAtMs=Date.now();return;}console.log('START source-contracts '+row.name);
+  const step=statelessVerificationSteps[index],row=rows[index];if(signal?.aborted)return;const started=performance.now();row.startedAtMs=Date.now();const scratch=join(attempt,row.scratchId);try{await physical(operation.parent,attempt,'directory');await mkdir(scratch,{mode:0o700});await physical(operation.parent,scratch,'directory');}catch{row.status='PROCESS_ERROR';row.completedAtMs=Date.now();row.durationMs=Math.max(0,Math.floor(performance.now()-started));return;}if(signal?.aborted){row.status='CANCELLED';row.completedAtMs=Date.now();return;}console.log('START source-contracts '+row.name);
   const environment:NodeJS.ProcessEnv={...process.env,TEMP:scratch,TMP:scratch,TMPDIR:scratch};delete environment.NODE_TEST_CONTEXT;
   let child:ChildProcess;try{child=spawnOwnedProcess(process.execPath,[...step.args],{cwd:root,shell:false,windowsHide:true,stdio:['ignore','pipe','pipe'],env:environment});}catch{row.status='PROCESS_ERROR';row.completedAtMs=Date.now();return;}
   await new Promise<void>(done=>{let settled=false,stopping=false,cancelled=false,error=false,summaryInvalid=false;const pending={stdout:Buffer.alloc(0),stderr:Buffer.alloc(0)},summary:Partial<z.infer<typeof testSummary>>={},labels=new Set<string>();let lastLocation:string|undefined,lastTitle:string|undefined;const failedTests=new Map<string,{path:string;titleSha256:string}>();
