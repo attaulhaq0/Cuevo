@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
+import {createSyntheticAuthPasswordBinding} from './seed-auth';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -15,7 +16,7 @@ type Fixture = { users: Map<string, Record<string, unknown>>; created: Record<st
 function fixture(populated = false) { const state: Fixture = { users: new Map(populated ? manifest.actors.map(actor => [actor.actorId, good(actor)]) : []), created: [], reads: [], failedCreate: false, mismatch: null, failedRead: false, intents: [] }; const client = { auth: { admin: { getUserById: async (id: string) => { state.reads.push(id); if (state.failedRead) throw Error(password); const user = state.users.get(id); return user ? { data: { user }, error: null } : { data: { user: null }, error: { status: 404, code: 'user_not_found' } }; }, createUser: async (attributes: Record<string, unknown>) => { state.created.push(attributes); const actor = manifest.actors.find(row => row.actorId === attributes.id)!; const user = good(actor); state.users.set(actor.actorId, user); if (state.failedCreate) throw Error(password); return { data: { user: state.mismatch ? { ...user, [state.mismatch]: 'unexpected' } : user }, error: null }; } } } } as unknown as SupabaseClient; return { state, client }; }
 async function api() { let module: Record<string, unknown> = {}; try { module = await import(pathToFileURL(resolve(import.meta.dirname, 'seed-auth.ts')).href); } catch (error) { if (error instanceof Error && /Synthetic identity seeding is restricted/.test(error.message)) { assert.fail('Importing the seed core must not run standalone local provider work'); } throw error; } assert.equal(typeof module.seedSyntheticAuthIdentities, 'function', 'source-owned Auth seed core export exists'); return module as typeof import('./seed-auth'); }
 const input = (prior?: unknown) => ({ manifest, password, originalKey: key, ...(prior === undefined ? {} : { prior }) });
-const originalCreateContext={version:1 as const,projectRef:'mqxdjvsyckzocokuikmx',sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),identitySha256:'c'.repeat(64),runId:'31',runAttempt:1,packageSha256:'d'.repeat(64),passwordSha256:createHash('sha256').update(password).digest('hex')};
+const originalCreateContext={version:1 as const,projectRef:'mqxdjvsyckzocokuikmx',sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),identitySha256:'c'.repeat(64),runId:'31',runAttempt:1,packageSha256:'d'.repeat(64),passwordBinding:createSyntheticAuthPasswordBinding(password)};
 
 test('version2 original create provenance persists before provider loss and exact original adoption creates no duplicate',async()=>{
  const subject=await api(),f=fixture(true),last=manifest.actors.at(-1)!;f.state.users.delete(last.actorId);f.state.failedCreate=true;
@@ -114,4 +115,18 @@ test('exported durable caller cannot select the private local compatibility mode
   await assert.rejects(seedSyntheticAuthIdentities(f.client, { ...input(), localCompatibility: true }));
   await assert.rejects(seedSyntheticAuthIdentities(f.client, input(), { localCompatibility: true } as never));
   let getters = 0; await assert.rejects(seedSyntheticAuthIdentities(f.client, input(), { get persistAttempt() { getters++; return async () => undefined; } })); assert.equal(getters, 0); assert.equal(f.state.created.length, 0);
+});
+
+test('original synthetic password binding uses a salted memory-hard verifier and rejects weaker or changed credentials',async()=>{
+ const subject=await api();assert.equal(typeof subject.createSyntheticAuthPasswordBinding,'function');assert.equal(typeof subject.verifySyntheticAuthPasswordBinding,'function');
+ const one=subject.createSyntheticAuthPasswordBinding(password),two=subject.createSyntheticAuthPasswordBinding(password);assert.equal(one.algorithm,'scrypt');assert.equal(one.N,131072);assert.equal(one.r,8);assert.equal(one.p,1);assert.match(one.salt,/^[a-f0-9]{32}$/);assert.match(one.key,/^[a-f0-9]{64}$/);assert.notDeepEqual(one,two);assert.equal(JSON.stringify(one).includes(password),false);
+ assert.equal(subject.verifySyntheticAuthPasswordBinding(password,one),true);assert.equal(subject.verifySyntheticAuthPasswordBinding('changed-private-synthetic-password',one),false);
+ for(const changed of [{...one,N:1024},{...one,salt:'00'},{...one,algorithm:'sha256'},{...one,extra:true}])assert.throws(()=>subject.verifySyntheticAuthPasswordBinding(password,changed));
+ let reads=0;assert.throws(()=>subject.verifySyntheticAuthPasswordBinding(password,new Proxy(one,{ownKeys(){reads++;return[];}})));assert.equal(reads,0);
+});
+test('original password verifier rejects malformed Unicode instead of admitting an encoding alias',async()=>{
+ const subject=await api(),valid='abcdefghijk\ufffd',malformed='abcdefghijk\ud800',binding=subject.createSyntheticAuthPasswordBinding(valid);
+ assert.equal(subject.verifySyntheticAuthPasswordBinding(valid,binding),true);
+ assert.throws(()=>subject.verifySyntheticAuthPasswordBinding(malformed,binding));assert.throws(()=>subject.createSyntheticAuthPasswordBinding(malformed));
+ assert.throws(()=>subject.createSyntheticAuthPasswordBinding('abcdefghijk\udc00'));
 });

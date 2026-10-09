@@ -37,6 +37,7 @@ type Injection = {
   stagingConsumerFailure?: boolean;
   apiSameProject?:boolean;
   fullProofChanged?: boolean;
+  cliVersion?: string;
   repositoryOwner?:'User'|'Organization'|'Bot';repositoryName?:string;repositoryUnavailable?:boolean;bypassMetadata?:'omitted'|'null'|'unsafe';
 };
 
@@ -68,6 +69,10 @@ async function withFixture(run: (fixture: Awaited<ReturnType<typeof createFixtur
 
 async function createFixture(environment: 'staging' | 'production', bridgeEnabled = false) {
   const directory = await mkdtemp(join(tmpdir(), 'cuevo-release-process-'));
+  const globalRoot=join(directory,'.local','controlled-global'),cliRoot=join(globalRoot,'vercel'),cliPath=join(cliRoot,'dist','index.js');
+  await mkdir(dirname(cliPath),{recursive:true});
+  await writeFile(join(cliRoot,'package.json'),JSON.stringify({name:'vercel',version:'62.1.0',bin:{vercel:'dist/index.js'}}));
+  await writeFile(cliPath,'// Controlled pinned CLI fixture; process transport is intercepted.\n');
   await mkdir(join(directory, 'supabase/migrations'), { recursive: true });
   await writeFile(join(directory, 'supabase/migrations/20261006000000_process.sql'), migration);
   const manifest = fixtureManifest(environment);
@@ -89,7 +94,7 @@ async function createFixture(environment: 'staging' | 'production', bridgeEnable
     privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
   const bridgeSelection = Buffer.from(canonicalReleaseReviewJson({ backendRunId: '61', backendRunAttempt: 1, artifactId: '71', transferSha256: digest })).toString('base64');
   const env = {
-    PATH: process.env.PATH, SystemRoot: process.env.SystemRoot,
+    PATH: process.env.PATH, SystemRoot: process.env.SystemRoot,TEMP:process.env.TEMP,TMP:process.env.TMP,npm_config_cache:process.env.npm_config_cache,PLAYWRIGHT_BROWSERS_PATH:process.env.PLAYWRIGHT_BROWSERS_PATH,
     GITHUB_REPOSITORY: 'owner/repo', GITHUB_SHA: sha, GITHUB_REF: 'refs/heads/main', GITHUB_RUN_ID: '51', GITHUB_RUN_ATTEMPT: '1',
     GH_TOKEN: 'synthetic-github-token', CI_RUN_ID: '42', RELEASE_SHA: sha, RELEASE_ENVIRONMENT: environment,...(environment==='production'?{FULL_VERIFICATION_RUN_ID:'84'}:{}),
     VERCEL_ORG_ID: 'team_cuevo', VERCEL_PROJECT_ID: 'prj_cuevo',
@@ -107,6 +112,8 @@ async function createFixture(environment: 'staging' | 'production', bridgeEnable
       import { mkdirSync, writeFileSync } from 'node:fs';
       import { dirname, resolve } from 'node:path';
       const state = ${JSON.stringify(injection)};
+      const cliGlobalRoot=${JSON.stringify(globalRoot)},cliPath=${JSON.stringify(cliPath)};
+      if(state.cliVersion)writeFileSync(resolve(cliGlobalRoot,'vercel','package.json'),JSON.stringify({name:'vercel',version:state.cliVersion,bin:{vercel:'dist/index.js'}}));
       const manifest = ${JSON.stringify(manifest)};
       if(state.apiSameProject)manifest.api={kind:'vercel',origin:manifest.api.origin,commitSha:manifest.commitSha,projectId:'prj_cuevo',teamId:'team_cuevo',deploymentId:'dpl_cuevoApi',deploymentUrl:'https://cuevo-api-build.vercel.app',target:'${environment==='staging'?'preview':'production'}',artifactSha256:'${digest}',metadataVerified:true,healthVerified:true,evidenceUrl:manifest.api.evidenceUrl};
       const originalTree = Buffer.from(${JSON.stringify(tree.toString('base64'))}, 'base64');
@@ -138,8 +145,16 @@ async function createFixture(environment: 'staging' | 'production', bridgeEnable
           const value = args[0] === 'ls-tree' ? (state.treeChanged ? Buffer.from('changed tree') : originalTree) : (state.diffChanged ? Buffer.from('changed diff') : originalDiff);
           return options.encoding === 'utf8' ? value.toString('utf8') : value;
         }
-        if (binary !== 'vercel' || options.shell !== false) throw Error('Unexpected executable');
+        if(binary==='npm'){
+          if(JSON.stringify(args)!=='["root","--global"]'||options.shell!==false||options.timeout!==15000||options.maxBuffer!==65536)throw Error('Unexpected CLI discovery');
+          if(options.env.VERCEL_TOKEN||options.env.GH_TOKEN||options.env.DATABASE_URL)throw Error('CLI discovery credential scope crossed');
+          console.log('CLI_DISCOVERY');return cliGlobalRoot+'\\n';
+        }
+        if (binary !== process.execPath || args[0]!==cliPath || options.shell !== false) throw Error('Unexpected executable');
+        args=args.slice(1);
         if (args.includes(process.env.VERCEL_TOKEN) || options.env.DATABASE_URL || options.env.GH_TOKEN) throw Error('Credential scope crossed');
+        if(args.slice(-2).join(',')!=='--scope,team_cuevo'||options.env.VERCEL_TOKEN!==process.env.VERCEL_TOKEN||options.env.VERCEL_ORG_ID!=='team_cuevo'||options.env.VERCEL_PROJECT_ID!=='prj_cuevo')throw Error('Pinned CLI recipient changed');
+        console.log('CLI_NODE_LAUNCH');
         console.log('SINK ' + JSON.stringify(args));
         if (args[0] === 'pull') {
           const target = '${environment === 'staging' ? 'preview' : 'production'}';
@@ -231,6 +246,17 @@ test('credential-free official founder approval is admitted and the complete pro
     assert.equal(deployment.status, 'WEB_DEPLOYMENT_VERIFIED'); assert.equal(deployment.deploymentId, 'dpl_cuevo'); assert.equal(deployment.sourceSha, sha); assert.equal(deployment.coreLearningLoopVerified, false);
     assert.doesNotMatch(JSON.stringify(deployment), /synthetic-vercel-token|PRIVATE_DATABASE_SENTINEL/);
   });
+});
+
+test('complete release wrapper discovers the pinned CLI before current approval and refuses a changed installed version',async()=>{
+ await withFixture(async fixture=>{
+  passed(fixture.execute('approval'));
+  const build=fixture.execute('build');passed(build);
+  const discovery=build.stdout.indexOf('CLI_DISCOVERY'),approval=build.stdout.indexOf('/approvals'),launch=build.stdout.indexOf('CLI_NODE_LAUNCH');
+  assert.ok(discovery>=0&&discovery<approval&&approval<launch,'pinned discovery precedes renewed approval and the exact Node launch');
+  assert.equal(build.stdout.split('CLI_NODE_LAUNCH').length-1,2,'pull and build each launch their prepared executable once');
+  const refused=fixture.execute('deploy',{cliVersion:'62.0.0'});noProvider(refused);assert.match(refused.stderr,/Pinned Vercel CLI requires review/);assert.doesNotMatch(refused.stdout,/CLI_NODE_LAUNCH/);
+ });
 });
 
 test('production re-admits one immutable full-candidate proof and refuses changed evidence before provider upload', async () => {

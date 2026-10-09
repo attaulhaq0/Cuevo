@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
-import { seedSyntheticAuthIdentities, syntheticAuthOriginalCreateMetadata, syntheticAuthOriginalCreateSha256, type SyntheticAuthSeedManifest, type SyntheticAuthSeedReceipt, type SyntheticAuthOriginalCreateContext } from '../seed-auth';
+import { seedSyntheticAuthIdentities, isExactSyntheticAuthPassword, createSyntheticAuthPasswordBinding, verifySyntheticAuthPasswordBinding, syntheticAuthOriginalCreateMetadata, syntheticAuthOriginalCreateSha256, type SyntheticAuthSeedManifest, type SyntheticAuthSeedReceipt, type SyntheticAuthOriginalCreateContext } from '../seed-auth';
 import { readBackendReleaseAdmission } from '../verification/backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from '../verification/backend-release-contracts';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from '../verification/release-review';
@@ -20,7 +20,7 @@ import type { HostedMigrationWorkdirs } from './hosted-migration-workdirs';
 
 const failure = () => Error('Hosted synthetic Auth source, original attempt or current target requires review; contents withheld.');
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
-const digest = z.string().regex(/^[a-f0-9]{64}$/), secret = z.string().min(1).max(24576).refine(value => value.trim().length > 0 && [...value].every(c => c.charCodeAt(0) > 31 && c.charCodeAt(0) !== 127));
+const digest = z.string().regex(/^[a-f0-9]{64}$/), secret = z.string().min(1).max(24576).refine(value => value.trim().length > 0 && isExactSyntheticAuthPassword(value));
 const inputSchema = z.object({ repoRoot: z.string(), endpoint: hostedMigrationEndpointSchema, expected: z.unknown(), preparedApproval: z.unknown(), githubToken: secret, providerToken: secret, certificate: z.object({ path: z.string(), sha256: digest }).strict(), migrationPassword: secret, plan: z.unknown(), finalStage: z.unknown(), schemaRecoveryExport:z.unknown().optional(),schemaRecoverySelection:z.unknown().optional(),journalStorageKey:z.string().min(20).max(4096).optional(), authProvisioningKey: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/).refine(value => !value.startsWith('sb_publishable_')), syntheticPassword: secret.min(12).max(4096), originalKey: z.string().min(8).max(180).regex(/^[A-Za-z0-9_.:-]+$/) }).strict();
 const manifestSchema = z.object({ synthetic: z.literal(true), schoolId: z.uuid(), denialSchoolId: z.uuid(), actors: z.array(z.object({ actorId: z.uuid(), schoolId: z.uuid(), email: z.email(), role: z.enum(['admin', 'coordinator', 'teacher', 'student', 'parent']), displayName: z.string() }).strict()).length(133) }).strict();
 const populationSchema = z.object({ observedAtMs: z.number().int().nonnegative(), population: z.record(z.string(), z.array(z.unknown())), authUsers: z.array(z.object({ id: z.uuid(), email: z.email(), emailConfirmedAt: z.string().nullable(), synthetic: z.boolean(), isAnonymous: z.boolean(), deletedAt: z.string().nullable(), bannedUntil: z.string().nullable() }).strict()).max(133) }).strict();
@@ -127,8 +127,8 @@ export async function provisionHostedSyntheticAuth(value: unknown): Promise<Host
       try {
         if(expected.installedSchema){const installed=await database.readInstalledPopulation();if(installed.sourceSha!==expected.releaseSha||installed.treeSha!==expected.treeSha||installed.manifestSha256!==manifestSha256||input.originalKey!=='cuevo-initial-hosted-synthetic-auth')throw failure();}
         await history(); await observe(); currentReceipt = await database.readAuthSeedAttempt(identity); live();
-        const selectedCreateContext:SyntheticAuthOriginalCreateContext=currentReceipt?.version===2?currentReceipt.originalCreateContext:{version:1,projectRef,sourceSha:identity.sourceSha,treeSha:identity.treeSha,identitySha256:hash(canonicalReleaseExecutionJson(identity)),runId:expected.releaseRunId,runAttempt:expected.runAttempt,packageSha256:prepared.sha256,passwordSha256:hash(input.syntheticPassword)};
-        if(selectedCreateContext.projectRef!==projectRef||selectedCreateContext.sourceSha!==identity.sourceSha||selectedCreateContext.treeSha!==identity.treeSha||selectedCreateContext.identitySha256!==hash(canonicalReleaseExecutionJson(identity))||selectedCreateContext.passwordSha256!==hash(input.syntheticPassword))throw failure();
+        const selectedCreateContext:SyntheticAuthOriginalCreateContext=currentReceipt?.version===2?currentReceipt.originalCreateContext:{version:1,projectRef,sourceSha:identity.sourceSha,treeSha:identity.treeSha,identitySha256:hash(canonicalReleaseExecutionJson(identity)),runId:expected.releaseRunId,runAttempt:expected.runAttempt,packageSha256:prepared.sha256,passwordBinding:createSyntheticAuthPasswordBinding(input.syntheticPassword)};
+        if(selectedCreateContext.projectRef!==projectRef||selectedCreateContext.sourceSha!==identity.sourceSha||selectedCreateContext.treeSha!==identity.treeSha||selectedCreateContext.identitySha256!==hash(canonicalReleaseExecutionJson(identity))||!verifySyntheticAuthPasswordBinding(input.syntheticPassword,selectedCreateContext.passwordBinding))throw failure();
         const originalConfirmed = currentReceipt?.status === 'CONFIRMED' ? structuredClone(currentReceipt) : null;
         let createdThisInvocation=0;
         const sdkUsers=new Map<string,{observedAtMs:number;userSha256:string}>();

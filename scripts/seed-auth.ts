@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { createHash } from 'node:crypto';
+import { createHash,randomBytes,scryptSync,timingSafeEqual } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -8,12 +8,28 @@ import { z } from 'zod';
 
 const failure = () => Error('Synthetic Auth identity source or original attempt requires review; credentials withheld.');
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+export function isExactSyntheticAuthPassword(value:string):boolean{
+ for(let index=0;index<value.length;index++){const code=value.charCodeAt(index);if(code<32||code===127)return false;if(code>=0xd800&&code<=0xdbff){const next=value.charCodeAt(++index);if(!(next>=0xdc00&&next<=0xdfff))return false;}else if(code>=0xdc00&&code<=0xdfff)return false;}return true;
+}
+const exactPassword=z.string().min(12).max(4096).refine(isExactSyntheticAuthPassword);
+const passwordBindingSchema=z.object({algorithm:z.literal('scrypt'),N:z.literal(131072),r:z.literal(8),p:z.literal(1),salt:z.string().regex(/^[a-f0-9]{32}$/),key:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export type SyntheticAuthPasswordBinding=z.infer<typeof passwordBindingSchema>;
+/** Private original-attempt verifier; never a browser or provider credential. */
+export function createSyntheticAuthPasswordBinding(password:string):SyntheticAuthPasswordBinding{
+ const input=exactPassword.parse(password),salt=randomBytes(16);
+ return{algorithm:'scrypt',N:131072,r:8,p:1,salt:salt.toString('hex'),key:scryptSync(input,salt,32,{N:131072,r:8,p:1,maxmem:256*1024*1024}).toString('hex')};
+}
+export function verifySyntheticAuthPasswordBinding(password:string,value:unknown):boolean{
+ const input=exactPassword.parse(password),binding=passwordBindingSchema.parse(own(value));
+ const actual=scryptSync(input,Buffer.from(binding.salt,'hex'),32,{N:binding.N,r:binding.r,p:binding.p,maxmem:256*1024*1024});
+ return timingSafeEqual(actual,Buffer.from(binding.key,'hex'));
+}
 const actorSchema = z.object({ actorId: z.uuid(), schoolId: z.uuid(), email: z.email().max(254), role: z.enum(['admin', 'coordinator', 'teacher', 'student', 'parent']), displayName: z.string().min(1).max(200) }).strict();
 const manifestSchema = z.object({ synthetic: z.literal(true), schoolId: z.uuid(), denialSchoolId: z.uuid(), actors: z.array(actorSchema).length(133) }).strict();
 export const syntheticAuthReceiptV1ActorSchema = z.object({ actorId: z.uuid(), emailSha256: z.string().regex(/^[a-f0-9]{64}$/), state: z.enum(['NOT_ATTEMPTED', 'INTENT', 'CONFIRMED', 'OUTCOME_UNKNOWN', 'REQUIRES_REVIEW']) }).strict();
 const receiptActor=syntheticAuthReceiptV1ActorSchema;
 const receiptV1Schema = z.object({ version: z.literal(1), evidence: z.literal('SOURCE_LOCKED_SYNTHETIC_AUTH_ATTEMPTS'), status: z.enum(['CONFIRMED', 'OUTCOME_UNKNOWN', 'REQUIRES_REVIEW']), manifestSha256: z.string().regex(/^[a-f0-9]{64}$/), originalKey: z.string().min(1).max(200), created: z.number().int().nonnegative().max(133), actors: z.array(receiptActor).length(133) }).strict();
-export const syntheticAuthOriginalCreateContextSchema=z.object({version:z.literal(1),projectRef:z.string().regex(/^[a-z]{20}$/),sourceSha:z.string().regex(/^[a-f0-9]{40}$/),treeSha:z.string().regex(/^[a-f0-9]{40}$/),identitySha256:z.string().regex(/^[a-f0-9]{64}$/),runId:z.string().regex(/^[1-9][0-9]{0,19}$/),runAttempt:z.number().int().positive().max(Number.MAX_SAFE_INTEGER),packageSha256:z.string().regex(/^[a-f0-9]{64}$/),passwordSha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export const syntheticAuthOriginalCreateContextSchema=z.object({version:z.literal(1),projectRef:z.string().regex(/^[a-z]{20}$/),sourceSha:z.string().regex(/^[a-f0-9]{40}$/),treeSha:z.string().regex(/^[a-f0-9]{40}$/),identitySha256:z.string().regex(/^[a-f0-9]{64}$/),runId:z.string().regex(/^[1-9][0-9]{0,19}$/),runAttempt:z.number().int().positive().max(Number.MAX_SAFE_INTEGER),packageSha256:z.string().regex(/^[a-f0-9]{64}$/),passwordBinding:passwordBindingSchema}).strict();
 const originalCreateSchema=z.object({operationSha256:z.string().regex(/^[a-f0-9]{64}$/),intentObservedAt:z.iso.datetime({offset:true})}).strict();
 export const syntheticAuthReceiptV2ActorSchema=receiptActor.extend({originalCreate:originalCreateSchema.nullable()}).strict();
 const receiptV2Actor=syntheticAuthReceiptV2ActorSchema;
@@ -25,7 +41,7 @@ export type SyntheticAuthSeedReceipt = z.infer<typeof receiptSchema>;
 export type SyntheticAuthSeedManifest = z.infer<typeof manifestSchema>;
 export type SyntheticAuthOriginalCreateContext=z.infer<typeof syntheticAuthOriginalCreateContextSchema>;
 export type SyntheticAuthOriginalCreate=z.infer<typeof originalCreateSchema>;
-const inputSchema = z.object({ manifest: manifestSchema, password: z.string().min(12).max(4096).refine(value => [...value].every(character => character.charCodeAt(0) > 31 && character.charCodeAt(0) !== 127)), originalKey: z.string().min(1).max(200), prior: receiptSchema.optional(),originalCreateContext:syntheticAuthOriginalCreateContextSchema.optional() }).strict();
+const inputSchema = z.object({ manifest: manifestSchema, password: exactPassword, originalKey: z.string().min(1).max(200), prior: receiptSchema.optional(),originalCreateContext:syntheticAuthOriginalCreateContextSchema.optional() }).strict();
 export type SyntheticAuthSeedOptions = { persistAttempt?: (receipt: SyntheticAuthSeedReceipt) => Promise<void>;validateOriginalUser?:(actor:SyntheticAuthSeedManifest['actors'][number],attempt:SyntheticAuthOriginalCreate,user:Record<string,unknown>,context:SyntheticAuthOriginalCreateContext)=>Promise<void> };
 function own(value: unknown, depth = 0): unknown {
   if (depth > 10) throw failure(); if (value === undefined || value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value)) return value;
@@ -72,7 +88,7 @@ async function runSyntheticAuthSeed(client: SupabaseClient, value: unknown, opti
   const manifestSha256 = hash(canonical(locked)), actors = locked.actors.map(actor => ({ actorId: actor.actorId, emailSha256: hash(actor.email), state: 'NOT_ATTEMPTED' as SyntheticAuthSeedReceipt['actors'][number]['state'] }));
   if (input.prior) { if (input.prior.manifestSha256 !== manifestSha256 || input.prior.originalKey !== input.originalKey || input.prior.actors.some((actor, index) => actor.actorId !== actors[index].actorId || actor.emailSha256 !== actors[index].emailSha256)) throw failure(); for (const [index, actor] of input.prior.actors.entries()) actors[index].state = actor.state; }
   const originalCreateContext=input.prior?.version===2?input.prior.originalCreateContext:input.prior?undefined:input.originalCreateContext;
-  if(originalCreateContext&&originalCreateContext.passwordSha256!==hash(input.password))throw failure();
+  if(originalCreateContext&&!verifySyntheticAuthPasswordBinding(input.password,originalCreateContext.passwordBinding))throw failure();
   if(input.prior?.version===2&&input.originalCreateContext&&canonical(input.prior.originalCreateContext)!==canonical(input.originalCreateContext))throw failure();
   const receipt:SyntheticAuthSeedReceipt=originalCreateContext?{version:2,evidence:'SOURCE_LOCKED_SYNTHETIC_AUTH_ATTEMPTS',status:'OUTCOME_UNKNOWN',manifestSha256,originalKey:input.originalKey,created:0,originalCreateContext,actors:actors.map((actor,index)=>({...actor,originalCreate:input.prior?.version===2?input.prior.actors[index].originalCreate:null}))}:{version:1,evidence:'SOURCE_LOCKED_SYNTHETIC_AUTH_ATTEMPTS',status:'OUTCOME_UNKNOWN',manifestSha256,originalKey:input.originalKey,created:0,actors};
   if(receipt.version===2&&input.prior?.version===2)receipt.created=input.prior.created;
