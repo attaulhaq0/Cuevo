@@ -296,7 +296,7 @@ jobs:
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts verify-restore
       - name: Bind the verified API to its reserved staging origin
-        if: inputs.scope == 'installed-runtime'
+        if: inputs.scope == 'complete-backend' || inputs.scope == 'installed-runtime'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}

@@ -19,7 +19,27 @@ const state = { events: [] as string[], failApproval: false, status: 'COMMITTED'
 
 test('first complete-backend refuses direct web handover phases before provider or approval consumers',async()=>{
  const api=await subject();await fixture(async(repoRoot,env)=>{const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='complete-backend';expected.handoff='operating-staging';await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));env.VERCEL_TOKEN=secret;
- for(const mode of ['bind-api','handover','configure-web','export-web-handover'] as const){state.events=[];await assert.rejects(api.runBackendReleasePhase({mode,repoRoot,env}));assert.deepEqual(state.events,[],mode);}
+ for(const mode of ['handover','configure-web','export-web-handover'] as const){state.events=[];await assert.rejects(api.runBackendReleasePhase({mode,repoRoot,env}));assert.deepEqual(state.events,[],mode);}
+ });
+});
+
+test('first operating generation reaches the existing API alias binder before fresh runtime handover',async()=>{
+ const api=await subject();await fixture(async(repoRoot,env)=>{
+  const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='complete-backend';expected.handoff='operating-staging';
+  await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';
+  await writeFile(join(repoRoot,'.local/hosted-release/runtime-generation-private.json'),JSON.stringify({api:{},edge:{}}));
+  const original=state.originStatus;state.originStatus='API_ORIGIN_BOUND';try{
+   const result=await api.runBackendReleasePhase({mode:'bind-api',repoRoot,env});assert.equal(result.status,'API_ORIGIN_BOUND');assert.deepEqual(state.events,['approval','origin']);
+  }finally{state.originStatus=original;}
+ });
+});
+
+test('fresh current-runtime API origin uses observation and never selects the initial alias binder',async()=>{
+ const api=await subject();await fixture(async(repoRoot,env)=>{
+  const expected=state.bundle.expected as Record<string,unknown>;expected.executionScope='installed-runtime';expected.handoff='operating-staging';expected.currentRuntime={version:2};
+  await writeFile(env.CUEVO_BACKEND_BUNDLE_PATH,canonicalReleaseReviewJson(state.bundle));env.CUEVO_BACKEND_BUNDLE_SHA256=digest(canonicalReleaseReviewJson(state.bundle));env.VERCEL_TOKEN=secret;env.CUEVO_SYNTHETIC_PILOT_PASSWORD='protected-synthetic-pilot-password';
+  await writeFile(join(repoRoot,'.local/hosted-release/runtime-private.json'),'{}');await writeFile(join(repoRoot,'.local/hosted-release/runtime-resume-result.json'),JSON.stringify({status:'CURRENT_RUNTIME_REVALIDATED',current:{current:{apiDeploymentId:'dpl_current',apiUrl:'https://cuevo-api-generated.vercel.app',apiArtifactSha256:'a'.repeat(64)}}}));
+  state.originStatus='API_ORIGIN_OBSERVED';const result=await api.runBackendReleasePhase({mode:'bind-api',repoRoot,env});assert.equal(result.status,'API_ORIGIN_OBSERVED');assert.deepEqual(state.events,['approval','origin-observe']);
  });
 });
 
@@ -80,7 +100,7 @@ registerHooks({ resolve(specifier, context, next) {
   preview:async()=>{state.events.push('preview');return{status:'CONFIRMED'};},
   webTransfer:async(input:{repoRoot:string;vercelToken:string})=>{state.events.push('web-transfer');assert.equal(input.vercelToken,secret);if(state.transferFailure)throw Error('Original handover missing');return{transferPath:join(input.repoRoot,'.local/hosted-release/web-transfer.json'),transferSha256:'c'.repeat(64),manifestSha256:'b'.repeat(64),backendRunId:'51',backendRunAttempt:1,hostedAcceptance:false};},
   webSettings:async(input:{vercelToken:string})=>{state.events.push('web-settings');assert.equal(input.vercelToken,secret);return{status:state.webStatus,canonicalReceipt:'{}',pendingGates:state.webStatus==='REQUIRES_REVIEW'?['SOURCE']:[],hostedAcceptance:false};},
-  origin:async(input:{syntheticPassword:string;vercelToken:string})=>{state.events.push('origin');assert.equal(input.syntheticPassword,'protected-synthetic-pilot-password');assert.equal(input.vercelToken,secret);return{status:state.originStatus,healthVerified:true,currentActorVerified:true,corsVerified:true,sessionsClosed:true,canonicalReceipt:'{}',hostedAcceptance:false};},
+  origin:async(input:{syntheticPassword:string;vercelToken:string;apiDeployment?:unknown})=>{state.events.push(input.apiDeployment?'origin-observe':'origin');assert.equal(input.syntheticPassword,'protected-synthetic-pilot-password');assert.equal(input.vercelToken,secret);return{status:state.originStatus,healthVerified:true,currentActorVerified:true,corsVerified:true,sessionsClosed:true,canonicalReceipt:'{}',hostedAcceptance:false};},
   restore:async(input:{operatorPassword:string;operatorDatabaseUrl:string;apiDeployment:{id:string;url:string}})=>{state.events.push('restore');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).password,'');assert.equal(input.apiDeployment.id,'dpl_exact');return{status:state.restoreStatus,recoveryVerified:state.restoreStatus==='VERIFIED',cleanupConfirmed:true,sessionsClosed:true,lockReleased:true,canonicalReceipt:'{}',hostedAcceptance:false};},
   handover:async(input:{repoRoot:string;bundleSha256:string;vercelToken:string})=>{state.events.push('handover');assert.equal(input.vercelToken,secret);assert.match(input.bundleSha256,/^[a-f0-9]{64}$/);return{status:state.handoverStatus,manifestPath:join(input.repoRoot,'.local/hosted-release/web-handover-manifest.json'),manifestSha256:'b'.repeat(64),publicConfigurationPath:join(input.repoRoot,'.local/hosted-release/web-handover-public.json'),pendingGates:state.handoverStatus==='REQUIRES_REVIEW'?['DATABASE_BACKUP_RESTORE']:[],hostedAcceptance:false};},
   recovery:async(input:{operatorDatabaseUrl:string;operatorPassword:string})=>{state.events.push('recovery');assert.equal(input.operatorPassword,secret);assert.equal(new URL(input.operatorDatabaseUrl).password,'');return{status:state.recoveryStatus,expiredLeaseRecoveryVerified:true,eventRetryVerified:true,dispatchBackoffVerified:true,cleanupStatus:'RELEASED',sessionsClosed:true,lockReleased:true,ownedControlVerified:true,canonicalReceipt:'{}',hostedAcceptance:false};},
