@@ -140,17 +140,17 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - name: Read exact source-native fixtures from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-source-partition-source-native-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-native
       - name: Read exact source-contracts fixtures from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-contracts
       - name: Read exact source-delivery fixtures from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-source-partition-source-delivery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-delivery
@@ -298,27 +298,27 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - name: Read exact backend lane from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-runtime-backend-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/backend
       - name: Read exact browser lane from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/browser
       - name: Read exact database lane from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-runtime-database-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/database
       - name: Read exact integration-learning partition from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-integration-integration-learning-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/integration-partition-inputs/integration-learning
       - name: Read exact integration-state partition from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/integration-partition-inputs/integration-state
