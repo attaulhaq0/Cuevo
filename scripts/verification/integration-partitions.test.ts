@@ -89,11 +89,11 @@ test('actual integration runner exports its nonzero original failed phase withou
  const root=await mkdtemp(join(tmpdir(),'cuevo-integration-failed-phase-'));
  try{
   const git=(args:string[])=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']});
-  await mkdir(join(root,'apps/api/test/integration'),{recursive:true});await mkdir(join(root,'.local'));await writeFile(join(root,'.gitignore'),'.local/\nnode_modules/\n');await writeFile(join(root,'vitest.config.mjs'),"export default {test:{include:['apps/api/test/integration/*.test.ts'],fileParallelism:false,testTimeout:5000}};");
+  await mkdir(join(root,'apps/api/test/integration'),{recursive:true});await mkdir(join(root,'.local'));await writeFile(join(root,'.gitignore'),'.local/\nnode_modules\n');await writeFile(join(root,'vitest.config.mjs'),"export default {test:{include:['apps/api/test/integration/*.test.ts'],fileParallelism:false,testTimeout:5000}};");
   await symlink(resolve('node_modules'),join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
   const ownerPath='scripts/verification/integration-partitions.ts';await mkdir(join(root,'scripts/verification'),{recursive:true});await writeFile(join(root,ownerPath),"const owner=await import(process.env.CUEVO_FAILURE_FIXTURE_REPORTER);export default owner.default;");
   const file='apps/api/test/integration/failure.test.ts';await writeFile(join(root,file),"import{it,expect}from'vitest';it('private phase failure',()=>expect(false,'private provider credential').toBe(true));");
-  git(['init','--quiet']);git(['add','.']);git(['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','fixture']);
+  git(['init','--quiet']);git(['add','.']);assert.equal(git(['ls-files','--','node_modules']).trim(),'','The dependency link must remain outside original source inventory on every platform.');git(['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','fixture']);
   const subject=resolve('scripts/test-integration.ts'),hook=join(root,'.local/runner-hook.mjs'),phasePath=join(root,'.local/phase.json');
   await writeFile(hook,`import{registerHooks}from'node:module';registerHooks({load(url,context,next){if(url.endsWith('/ci-partition-coverage.ts'))return{format:'module',shortCircuit:true,source:'export const readCiPartitionCoverage=()=>({});export const ciPartitionFiles=()=>["apps/api/test/integration/failure.test.ts"];'};return next(url,context);}});`);
   // Only Vitest source/runner location is adapted; the real runner, lifecycle
