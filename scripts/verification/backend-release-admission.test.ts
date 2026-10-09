@@ -18,6 +18,22 @@ import {registerHooks} from 'node:module';
 import {transformSync} from 'esbuild';
 import {readFileSync} from 'node:fs';
 const boundary={runtime:0,schema:0,unknown:false,expired:false,afterProof:undefined as (()=>Promise<void>)|undefined};
+
+test('guarded source digest preserves raw physical EOL bytes and the public fingerprint shape',async()=>{
+ const subject=await import('./backend-release-admission'),root=await mkdtemp(join(tmpdir(),'cuevo-raw-source-digest-')),hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
+ try{
+  for(const[name,bytes]of [['.gitattributes','* text eol=lf\n'],['README.md','Raw source\n'],['a-source.ts','export default 1;\n'],['Z-source.ts','export default 2;\n'],['a_source.ts','export default 3;\n']])await writeFile(join(root,name),bytes);
+  git(root,'init','--quiet');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','raw source');
+  const releaseSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}'),tree=execFileSync('git',['-C',root,'ls-tree','-r','-z',releaseSha]),fingerprints={sourceManifestSha256:hash(tree),diffSha256:hash('')},expected={releaseSha,treeSha,baseSha:releaseSha,fingerprints},paths=git(root,'ls-tree','-r','--name-only',releaseSha).split('\n');
+  const rawDigest=()=>hash(JSON.stringify(paths.map(path=>({path,sha256:hash(readFileSync(join(root,path)))})).sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0)));
+  const initial=await subject.readBackendReleaseSourceEvidenceAndGuard(root,expected);assert.deepEqual(initial.proof,fingerprints);assert.equal((initial as typeof initial&{physicalDigest?:string}).physicalDigest,rawDigest(),'The guarded reader returns the digest of its already admitted raw physical bytes');initial.finalPhysical();
+  await writeFile(join(root,'README.md'),'Raw source\r\n');
+  if(process.platform==='win32'){
+   const normalized=await subject.readBackendReleaseSourceEvidenceAndGuard(root,expected);assert.deepEqual(normalized.proof,fingerprints);assert.equal((normalized as typeof normalized&{physicalDigest?:string}).physicalDigest,rawDigest());assert.notEqual((normalized as typeof normalized&{physicalDigest?:string}).physicalDigest,(initial as typeof initial&{physicalDigest?:string}).physicalDigest,'Normalized Git equality never replaces the raw physical digest');normalized.finalPhysical();
+   git(root,'update-index','--assume-unchanged','README.md');await writeFile(join(root,'README.md'),'Changed after the raw digest\r\n');assert.throws(normalized.finalPhysical,'Late assumed-unchanged bytes still invalidate the guard');
+  }else await assert.rejects(subject.readBackendReleaseSourceEvidenceAndGuard(root,expected),'Non-Windows physical bytes must equal original Git bytes exactly');
+ }finally{await rm(root,{recursive:true,force:true});}
+});
 /** Wrapper isolation only. Original compressed source/runtime archive readers
  * are verified by their own genuine Git/ZIP owner suites. */
 async function controlledProof(value:unknown,github:(path:string)=>Promise<unknown>,schema:boolean,artifact?:unknown){
