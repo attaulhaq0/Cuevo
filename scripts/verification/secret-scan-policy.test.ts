@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { secretScanAsset, secretScanArgs, secretScanSummary, validateAuthoredPath, reviewedNonCredential } from './secret-scan-policy';
 
@@ -26,6 +28,23 @@ test('reviewed noncredentials require exact rule path whole-line hash and histor
   for (const changed of [{ file: 'supabase/migrations/other.sql' }, { rule: 'private-key' }, { lineSha256: 'a'.repeat(64) }, { endLine: 16 }, { line: 0 }, { commit: '' }, { commit: 'not-a-sha' }, { ancestorVerified: false }]) assert.equal(reviewedNonCredential('history', { ...source, ...changed }), false);
   assert.equal(reviewedNonCredential('worktree', { ...source, file: 'tests/new-secret.ts' }), false);
   assert.equal(reviewedNonCredential('worktree', { ...source, lineSha256: 'b'.repeat(64) }), false);
+});
+
+test('reviewed public host target IDs require their exact owner line and retained history authority', () => {
+  const line = readFileSync(new URL('./backend-staging-host-contract.test.ts', import.meta.url), 'utf8').split(/\r?\n/).find(value => value.startsWith('const ref = '));
+  assert.ok(line);
+  const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+  const source = { file: 'scripts/verification/backend-staging-host-contract.test.ts', rule: 'generic-api-key', line: 26, endLine: 26,
+    lineSha256: hash(line), commit: '8c60031e9c803ed074bfa0200390c22cef3d53ab', ancestorVerified: true };
+  assert.equal(source.lineSha256, 'cd4729f7836f41c6cf954523a729453834a81879fcd3bb0e4fb5aa8392a60e03');
+  assert.equal(reviewedNonCredential('history', source), true);
+  assert.equal(reviewedNonCredential('worktree', { ...source, line: 27, endLine: 27, commit: '', ancestorVerified: false }), true);
+  for (const changed of [{ file: 'scripts/verification/other.test.ts' }, { rule: 'private-key' }, { lineSha256: hash(line + " const token = 'synthetic-canary';") },
+    { lineSha256: hash(line.replace('const ref = ', 'const token = ')) }, { endLine: 27 }, { line: 0 }, { line: 26.5 }, { commit: '' }, { commit: 'not-a-sha' }, { ancestorVerified: false }]) {
+    assert.equal(reviewedNonCredential('history', { ...source, ...changed }), false);
+  }
+  assert.equal(reviewedNonCredential('worktree', { ...source, file: 'scripts/verification/other.test.ts' }), false);
+  assert.equal(reviewedNonCredential('worktree', { ...source, lineSha256: hash(line + '\n') }), false);
 });
 
 test('secret scan emits fixed fileless categories and refuses unknown/missing or inconsistent scanner results', () => {

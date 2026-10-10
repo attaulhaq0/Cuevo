@@ -10,6 +10,8 @@ const reviewedLines = new Map([
   ['docs/mvp-developer-testing.md', '584ef26519ea50ce26170e4229633e732be29e4c0d8fc16d089d6f56c9012e39'],
   ['supabase/migrations/20261001100303_analytics_claim_scope_aliases.sql', '87b621c0119e89e1492ff84c7ad2a338476a8882fe05e7b3538121fe7f3a0d26'],
   ['supabase/migrations/20261001095613_fixture_analytics_delivery.sql', 'f56c892569fa3468abce93a73cc7999018b6de7c58ffa29fc8826114241f56f5'],
+  // Reviewed 11 October: public Supabase project ref and Vercel team/project IDs only, from 8c60031; no credential.
+  ['scripts/verification/backend-staging-host-contract.test.ts', 'cd4729f7836f41c6cf954523a729453834a81879fcd3bb0e4fb5aa8392a60e03'],
 ]);
 export function reviewedNonCredential(scope: SecretScanScope, source: { file: string; rule: string; line: number; endLine: number; lineSha256: string; commit: string; ancestorVerified: boolean }): boolean {
   return source.rule === 'generic-api-key' && Number.isSafeInteger(source.line) && source.line > 0 && source.endLine === source.line

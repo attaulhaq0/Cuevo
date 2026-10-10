@@ -40,14 +40,17 @@ test('canonical planning source observations preserve public results and expose 
  },true);
 });
 test('pending confirmation no-op plan is verified against actual complete source and refuses a forged active history',async()=>{const subject=await api();assert.equal(typeof subject.createCanonicalPendingRuntimeConfirmationPlan,'function');await fixture(async(root,sourceSha,treeSha)=>{const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:target(),now}).plan,prior={projectRef,sourceSha,treeSha,migrations:initial.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:initial.migrations.length},active={...target(),population:'ACTIVE_SYNTHETIC',authUsers:133,appSchemas:['app','authorization','internal'],dispatchDisabled:false,migrationVersions:initial.migrations.map(row=>row.version)},input={repoRoot:root,sourceSha,treeSha,target:active,priorReceipt:prior,now,operation:'PENDING_RUNTIME_CONFIRMATION' as const};const result=subject.createCanonicalPendingRuntimeConfirmationPlan(input);assert.equal(result.plan.runtimeOnly,true);assert.equal(result.plan.pending.length,0);assert(result.plan.stages.every(row=>row.names.length===0));assert.equal(result.sourceProvenance.kind,'VERIFIED_GIT_BLOBS');assert.throws(()=>subject.createCanonicalPendingRuntimeConfirmationPlan({...input,priorReceipt:{...prior,migrations:prior.migrations.slice(1)}}));assert.throws(()=>subject.createCanonicalPendingRuntimeConfirmationPlan({...input,treeSha:'f'.repeat(40)}));assert.throws(()=>subject.createCanonicalPendingRuntimeConfirmationPlan({...input,target:{...active,migrationVersions:active.migrationVersions.slice(1)}}));},true);});
-function fixture(run: (root: string, sha: string, tree: string) => void | Promise<void>, complete = false) {
+function fixture(run: (root: string, sha: string, tree: string) => void | Promise<void>, complete = false, retainLooseObjects = false) {
   const root = mkdtempSync(join(tmpdir(), 'cuevo-migration-plan-'));
   mkdirSync(join(root, 'supabase/migrations'), { recursive: true });
   writeFileSync(join(root, '.gitattributes'), '* text eol=lf\n');
   if (complete) for (const row of sources()) writeFileSync(join(root, 'supabase/migrations', row.name), row.bytes);
   else writeFileSync(join(root, 'supabase/migrations/20260101000000_example.sql'), 'begin;\nselect 1;\ncommit;\n');
   writeFileSync(join(root, 'README.md'), 'Synthetic Git fixture\n');
-  git(root, 'init', '--quiet'); git(root, 'add', '.');
+  git(root, 'init', '--quiet');
+  // Object-loss cases must retain the exact loose objects they remove, before any fixture commit can launch maintenance.
+  if (retainLooseObjects) git(root, 'config', 'maintenance.auto', 'false');
+  git(root, 'add', '.');
   git(root, '-c', 'user.name=Synthetic Test', '-c', 'user.email=synthetic@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'synthetic migration source');
   const sha = git(root, 'rev-parse', 'HEAD'), tree = git(root, 'rev-parse', 'HEAD^{tree}');
   return Promise.resolve().then(() => run(root, sha, tree)).finally(() => rmSync(root, { recursive: true, force: true }));
@@ -220,10 +223,19 @@ test('raw working SQL drift cannot hide behind Git assume-unchanged metadata', a
   });
 });
 
+function malformedMetadataLineEnding(result:Buffer,mode:'carriage'|'nul'){
+  const delimiter=result.indexOf(0x0a);assert.ok(delimiter>=0,'Metadata fixture requires its original LF delimiter');
+  return Buffer.concat([result.subarray(0,delimiter),Buffer.from([mode==='carriage'?0x0d:0x00]),result.subarray(delimiter)]);
+}
 test('current canonical root properties use one strict multi-result Git query and reject malformed framing',async()=>{
+  const original=Buffer.from([0x47,0x80,0x0a,0xff,0x0a]),before=Buffer.from(original);
+  assert.deepEqual(malformedMetadataLineEnding(original,'carriage'),Buffer.from([0x47,0x80,0x0d,0x0a,0xff,0x0a]));
+  assert.deepEqual(malformedMetadataLineEnding(original,'nul'),Buffer.from([0x47,0x80,0x00,0x0a,0xff,0x0a]));
+  assert.deepEqual(original,before);
+  assert.throws(()=>malformedMetadataLineEnding(Buffer.from('no metadata delimiter'),'carriage'));
   const subject=await api();await fixture((root,sourceSha,treeSha)=>{
     const cp=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),nativeExec=cp.execFileSync,calls:string[][]=[];let mode='ordinary';
-    cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);const result=nativeExec(file,args,options as Parameters<typeof execFileSync>[2]);if(file==='git'&&args.includes('--show-toplevel')&&args.includes('--is-shallow-repository')&&Buffer.isBuffer(result)){if(mode==='extra')return Buffer.concat([result,Buffer.from('unexpected\n')]);if(mode==='missing')return Buffer.from(result.toString().split('\n').slice(1).join('\n'));if(mode==='carriage')return Buffer.from(result.toString().replace('\n','\r\n'));if(mode==='nul')return Buffer.from(result.toString().replace('\n','\0\n'));if(mode==='shallow')return Buffer.from(result.toString().replace('\nfalse\n','\ntrue\n'));if(mode==='scrambled')return Buffer.from(result.toString().split('\n').reverse().join('\n'));}return result;}) as typeof execFileSync;syncBuiltinESMExports();
+    cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);const result=nativeExec(file,args,options as Parameters<typeof execFileSync>[2]);if(file==='git'&&args.includes('--show-toplevel')&&args.includes('--is-shallow-repository')&&Buffer.isBuffer(result)){if(mode==='extra')return Buffer.concat([result,Buffer.from('unexpected\n')]);if(mode==='missing')return Buffer.from(result.toString().split('\n').slice(1).join('\n'));if(mode==='carriage'||mode==='nul')return malformedMetadataLineEnding(result,mode);if(mode==='shallow')return Buffer.from(result.toString().replace('\nfalse\n','\ntrue\n'));if(mode==='scrambled')return Buffer.from(result.toString().split('\n').reverse().join('\n'));}return result;}) as typeof execFileSync;syncBuiltinESMExports();
     try{
       assert.equal(subject.readCanonicalMigrationSources({repoRoot:root,sourceSha,treeSha}).sources.length,1);
       const metadata=calls.filter(args=>args[2]==='rev-parse'&&!args.at(-1)!.includes(':supabase/migrations'));assert.equal(metadata.length,1,'five canonical root/revision metadata properties must share one current query');
@@ -288,7 +300,7 @@ test('retained migration sources refuse missing original Git blobs and malformed
  const subject=await api();await fixture(root=>{
   const path='supabase/migrations/20990101000000_unique_missing_blob.sql';writeFileSync(join(root,path),'select 1; -- '+root+'\n');git(root,'-c','gc.auto=0','add',path);git(root,'-c','gc.auto=0','-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Unique original source');const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}');
   const plan=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:target(),now}).plan,input={repoRoot:root,sourceSha,treeSha,plan},token=subject.prepareCanonicalMigrationOperation(input),blob=git(root,'rev-parse',sourceSha+':'+path),objects=resolve(root,git(root,'rev-parse','--git-path','objects')),file=resolve(objects,blob.slice(0,2),blob.slice(2));assert.ok(objects.startsWith(root+'\\')||objects.startsWith(root+'/'));assert.ok(file.startsWith(objects+'\\')||file.startsWith(objects+'/'));unlinkSync(file);assert.throws(()=>subject.readCanonicalMigrationSources(input));assert.throws(()=>subject.readCanonicalMigrationOperation(token,input),'a retained operation cannot ignore an absent original blob');subject.disposeCanonicalMigrationOperation(token);
- },true);
+ },true,true);
  await fixture((root,sourceSha,treeSha)=>{
   const plan=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:target(),now}).plan,input={repoRoot:root,sourceSha,treeSha,plan},cp=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),nativeExec=cp.execFileSync;let mode='ordinary';
   cp.execFileSync=((file:string,args:string[],options:unknown)=>{const result=nativeExec(file,args,options as Parameters<typeof nativeExec>[2]);if(file==='git'&&args.includes('--batch-check')&&Buffer.isBuffer(result)){const text=result.toString();if(mode==='extra')return Buffer.concat([result,Buffer.from('extra\n')]);if(mode==='missing')return Buffer.from(text.split('\n').slice(1).join('\n'));if(mode==='type')return Buffer.from(text.replace(' blob ',' tree '));if(mode==='size')return Buffer.from(text.replace(/ blob ([0-9]+)/,' blob 2097153'));if(mode==='id')return Buffer.from('0'.repeat(40)+text.slice(40));}return result;}) as typeof nativeExec;syncBuiltinESMExports();
@@ -325,7 +337,7 @@ test('retained historical metadata refuses lost old trees and fresh current sour
   writeFileSync(join(root,'README.md'),'Unique historical tree '+root+'\n');git(root,'-c','gc.auto=0','add','README.md');git(root,'-c','gc.auto=0','-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Unique prior tree');const priorSha=git(root,'rev-parse','HEAD'),priorTree=git(root,'rev-parse','HEAD^{tree}');
   const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:priorSha,treeSha:priorTree,target:target(),now}).plan;writeFileSync(join(root,'supabase/migrations/20990101000000_prior_metadata_delta.sql'),'select 1; -- '+root+'\n');git(root,'-c','gc.auto=0','add','.');git(root,'-c','gc.auto=0','-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Append current tree');const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}'),priorReceipt={projectRef,sourceSha:priorSha,treeSha:priorTree,migrations:initial.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:initial.migrations.length},schemaTarget={...target(),population:'GUARDED_SYNTHETIC',authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version)},plan=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:schemaTarget,priorReceipt,now}).plan,input={repoRoot:root,sourceSha,treeSha,plan},token=subject.prepareCanonicalMigrationOperation(input);assert.ok(subject.readCanonicalMigrationPriorSources(token,input,'PRIOR_COMPLETED'));
   if(mode==='oldtree'){const objects=resolve(root,git(root,'rev-parse','--git-path','objects')),file=resolve(objects,priorTree.slice(0,2),priorTree.slice(2));assert.ok(objects.startsWith(root+'\\')||objects.startsWith(root+'/'));assert.ok(file.startsWith(objects+'\\')||file.startsWith(objects+'/'));unlinkSync(file);}else{const path='supabase/migrations/'+plan.migrations[0].name;git(root,'update-index','--assume-unchanged',path);writeFileSync(join(root,path),'select 999;\n');}assert.throws(()=>subject.readCanonicalMigrationPriorSources(token,input,'PRIOR_COMPLETED'));assert.throws(()=>subject.readCanonicalMigrationOperation(token,input));subject.disposeCanonicalMigrationOperation(token);
- },true);
+ },true,true);
 });
 
 test('owned historical child144 sources retain original marker124 and distinct current applied144 authority',async()=>{

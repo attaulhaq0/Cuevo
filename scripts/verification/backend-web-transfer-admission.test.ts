@@ -382,8 +382,8 @@ registerHooks({ load(url, context, next) {
       "const prepareNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.prepare;const readNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.read;const disposeNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.dispose;");
     source = replaceOnce(source, 'const handover = await prepareBackendWebHandover(input,admissionHandle);',
       'const handover = await globalThis.populationLearningHandover(input,admissionHandle);');
-    source = replaceOnce(source, 'const rechecked = await prepareBackendWebHandover(input);',
-      'const rechecked = await globalThis.populationLearningHandover(input);');
+    source = replaceOnce(source, 'const rechecked = await prepareBackendWebHandover(input,admissionHandle);',
+      'const rechecked = await globalThis.populationLearningHandover(input,admissionHandle);');
     source = replaceOnce(source, "process.platform !== 'linux'", 'false');
     source = replaceOnce(source, "process.env.GITHUB_WORKSPACE !== root || !root.startsWith('/home/runner/work/')",
       'process.env.GITHUB_WORKSPACE !== root || false');
@@ -593,7 +593,14 @@ handoverBase = { status: 'PREPARED_STAGING_MANIFEST', pendingGates: [],
   manifestSha256: outputDigest, receiptScope: 'BOUNDED_NATIVE_BACKUP_ISOLATED_DATABASE_SESSION_AND_OWNED_PRIVATE_BYTES',
   restorationLimitations: [], activationAllowed: false, hostedAcceptance: false };
 let latestNativeProof;
-globalThis.populationLearningHandover = async () => {
+const exportHandoverHandles = [];
+globalThis.populationLearningHandover = async (_input, admissionHandle) => {
+  if (_input !== undefined) assert(admissionHandle !== undefined);
+  if (admissionHandle !== undefined) {
+    const held = handles.get(admissionHandle); assert(held && !held.disposed);
+    if (exportHandoverHandles.length) assert.equal(admissionHandle, exportHandoverHandles[0]);
+    exportHandoverHandles.push(admissionHandle);
+  }
   // Explicit reduced-core adapter: unrelated full handover gates use fixture
   // manifest metadata. Population proof ALWAYS comes from the actual observer.
   latestNativeProof = await observer.revalidateInstalledBackendState(populationInput);
@@ -686,6 +693,8 @@ try {
   throw error;
 }
 if(input.mode==='saved-file-race')assert.fail('Changed saved population result must refuse export before web-transfer creation');
+assert.equal(exportHandoverHandles.length, 2);
+assert.equal(handles.get(exportHandoverHandles[0]).disposed, true);
 const transferBytes = readFileSync(exported.transferPath);
 assert.equal(hash(transferBytes), exported.transferSha256);
 const parsed = transfer.validateBackendWebTransfer(JSON.parse(transferBytes.toString('utf8')), clock);
