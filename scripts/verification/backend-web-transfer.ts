@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import { lstat, open, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
-import { readBackendReleaseAdmission } from './backend-release-admission';
+
+import {prepareNativeBackendReleaseAdmission,readNativeBackendReleaseAdmission,disposeNativeBackendReleaseAdmission,type NativeBackendAdmissionHandle} from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected, type BackendReleaseIntent } from './backend-release-contracts';
 import { prepareBackendWebHandover,revalidateOperatingStagingHandoff } from './backend-web-handover';
+import {parseInstalledPopulationHandoverResult} from './backend-web-handover';
+import {installedPopulationVerificationV2Schema,validateInstalledPopulationVerificationV2,type InstalledPopulationVerificationV2} from '../database/hosted-synthetic-population';
 import {validateOperatingStagingHandoff,operatingStagingBrowserInputs} from './operating-staging-handoff';
 import { validateReleaseManifest } from './cicd-contracts';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson, parseReleaseExecutionJson } from './release-review';
@@ -46,13 +49,17 @@ const transferSchema = z.object({
   privateProofReexecuted: z.literal(false), backendMutationAllowed: z.literal(false), customerReady: z.literal(false), hostedAcceptance: z.literal(false),
 }).strict();
 const currentTransferSchema=transferSchema.extend({version:z.literal(3),producers:z.array(z.object({path:z.string(),sha256:digest}).strict()).length(backendWebTransferProducerPaths.length+1)}).strict();
-export type BackendWebTransfer=z.infer<typeof transferSchema>|z.infer<typeof currentTransferSchema>;
+export const installedBackendWebTransferProducerPaths=[...backendWebTransferProducerPaths,'scripts/verification/data-api-configuration.ts','scripts/database/hosted-synthetic-population.ts','scripts/database/hosted-installed-state.ts','scripts/database/hosted-migration-database.ts'] as const;
+const installedPopulationEvidenceSchema=z.object({kind:z.literal('INSTALLED_POPULATION_REVALIDATION'),receiptSha256:digest,verification:installedPopulationVerificationV2Schema}).strict();
+const installedTransferSchema=currentTransferSchema.extend({version:z.literal(5),producers:z.array(z.object({path:z.string(),sha256:digest}).strict()).length(installedBackendWebTransferProducerPaths.length),populationEvidence:installedPopulationEvidenceSchema}).strict();
+export type BackendWebTransfer=z.infer<typeof transferSchema>|z.infer<typeof currentTransferSchema>|z.infer<typeof installedTransferSchema>;
+export type CompletedBackendPopulationEvidence={kind:'INITIAL_POPULATION_RESULT';receiptSha256:string}|{kind:'INSTALLED_POPULATION_REVALIDATION';receiptSha256:string;verification:InstalledPopulationVerificationV2};
 export const operatingBackendWebTransferProducerPaths=[...backendWebTransferProducerPaths.filter(path=>!['scripts/verification/backend-hosted-fault-recovery-native.ts','scripts/verification/backend-hosted-database-restore.ts'].includes(path)),'scripts/verification/operating-staging-handoff.ts','scripts/verification/backend-runtime-rollout.ts','scripts/database/hosted-runtime-rollout-session.ts'] as const;
 export const operatingBackendWebTransferEvidenceNames=['operating-staging-handoff.json','operating-staging-public.json','operating-handover-result.json','web-settings-result.json'] as const;
 const operatingTransferSchema=transferSchema.extend({version:z.literal(2),purpose:z.literal('CUEVO_OPERATING_BACKEND_WEB_HANDOVER'),status:z.literal('EXPORTED_OPERATING_BACKEND_HANDOVER'),receiptScope:z.literal('ORIGINAL_NATIVE_OPERATING_BACKEND_AND_CLEANUP'),producers:z.array(z.object({path:z.string(),sha256:digest}).strict()).length(operatingBackendWebTransferProducerPaths.length),evidence:z.array(z.object({name:z.string(),sha256:digest}).strict()).length(operatingBackendWebTransferEvidenceNames.length)}).strict();
 const currentOperatingTransferSchema=operatingTransferSchema.extend({version:z.literal(4),producers:z.array(z.object({path:z.string(),sha256:digest}).strict()).length(operatingBackendWebTransferProducerPaths.length+1)}).strict();
 export type OperatingBackendWebTransfer=z.infer<typeof operatingTransferSchema>|z.infer<typeof currentOperatingTransferSchema>;
-const producerPaths=(version:number,operating=false)=>[...(operating?operatingBackendWebTransferProducerPaths:backendWebTransferProducerPaths),...(version>=3?['scripts/verification/data-api-configuration.ts']:[])];
+const producerPaths=(version:number,operating=false)=>version===5&&!operating?[...installedBackendWebTransferProducerPaths]:[...(operating?operatingBackendWebTransferProducerPaths:backendWebTransferProducerPaths),...([3,4].includes(version)?['scripts/verification/data-api-configuration.ts']:[])];
 /** Explicit operating transfer retains current source/run/package and original
  * clocks without inventing full recovery/customer manifest facts. */
 export function validateOperatingBackendWebTransfer(raw:unknown,now:number){
@@ -68,7 +75,7 @@ export function validateOperatingBackendWebTransfer(raw:unknown,now:number){
 export function validateBackendWebTransfer(raw: unknown, now: number) {
   try {
     if (!Number.isSafeInteger(now) || now < 0) throw fail();
-    const transfer = z.union([transferSchema,currentTransferSchema]).parse(JSON.parse(canonicalReleaseExecutionJson(raw)));
+    const transfer = z.union([transferSchema,currentTransferSchema,installedTransferSchema]).parse(JSON.parse(canonicalReleaseExecutionJson(raw)));
     const body = JSON.parse(transfer.preparedApproval.canonicalJson) as BackendReleaseIntent;
     const exported = Date.parse(transfer.exportedAt), earliest = Date.parse(transfer.earliestProofAt);
     if (exported > now || earliest > exported || exported - earliest > 3600000
@@ -89,12 +96,15 @@ export function validateBackendWebTransfer(raw: unknown, now: number) {
       || [manifest.api.evidenceUrl, manifest.worker.evidenceUrl, manifest.database.evidenceUrl, manifest.database.dataApi.evidenceUrl, manifest.approval.evidenceUrl].some(url => url !== `https://github.com/${body.repository}/actions/runs/${body.releaseRunId}`)
       || publicConfig.supabaseUrl !== body.targets.supabase.authOrigin
       || hash(canonicalReleaseExecutionJson({ NEXT_PUBLIC_API_URL: publicConfig.apiUrl, NEXT_PUBLIC_SUPABASE_URL: publicConfig.supabaseUrl, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publicConfig.supabasePublishableKey })) !== transfer.settings.settingsSha256) throw fail();
-    const providerProof=Object.hasOwn(z.object({database:z.object({dataApi:z.record(z.string(),z.unknown())})}).parse(transfer.manifest).database.dataApi,'configurationObservation');if((transfer.version===3)!==providerProof)throw fail();if(transfer.version===3){const evidence=z.object({database:z.object({dataApi:z.object({configurationObservation:z.object({evidence:z.object({treeSha:z.literal(body.treeSha)})})})})}).parse(transfer.manifest);if(!evidence)throw fail();}
+    const providerProof=Object.hasOwn(z.object({database:z.object({dataApi:z.record(z.string(),z.unknown())})}).parse(transfer.manifest).database.dataApi,'configurationObservation');if(([3,5].includes(transfer.version))!==providerProof)throw fail();if([3,5].includes(transfer.version)){const evidence=z.object({database:z.object({dataApi:z.object({configurationObservation:z.object({evidence:z.object({treeSha:z.literal(body.treeSha)})})})})}).parse(transfer.manifest);if(!evidence)throw fail();}
     const clocks = [Date.parse(manifest.verifiedAt), Date.parse(manifest.database.dataApi.verifiedAt), Date.parse(transfer.settings.observedAt)];
     if (clocks.some(at => at < earliest || at > exported || exported - at > 3600000)) throw fail();
     if (!same(transfer.producers.map(row => row.path).sort(), producerPaths(transfer.version).sort())
       || !same(transfer.evidence.map(row => row.name).sort(), backendWebTransferEvidenceNames(manifest.api.deploymentId,body.installedRuntime!==undefined||body.currentRuntime!==undefined,body.currentRuntime!==undefined))) throw fail();
-    return { transfer, body, expected: context as BackendReleaseExpected, prepared, manifest: transfer.manifest, publicConfig, assignments, reviewFacts: body.reviews };
+    let populationEvidence:CompletedBackendPopulationEvidence|null=null;
+    if(transfer.version===5){const proof=validateInstalledPopulationVerificationV2(transfer.populationEvidence.verification,context as BackendReleaseExpected,prepared.sha256),rows=transfer.evidence.filter(row=>row.name==='web-handover-result.json');if(rows.length!==1||rows[0].sha256!==transfer.populationEvidence.receiptSha256||Date.parse(proof.observedAt)<earliest||Date.parse(proof.observedAt)>exported||exported-Date.parse(proof.observedAt)>3600000)throw fail();populationEvidence={...transfer.populationEvidence,verification:proof};}
+    else if(!body.installedRuntime&&!body.currentRuntime){const rows=transfer.evidence.filter(row=>row.name==='population-result.json');if(rows.length!==1)throw fail();populationEvidence={kind:'INITIAL_POPULATION_RESULT',receiptSha256:rows[0].sha256};}
+    return { transfer, body, expected: context as BackendReleaseExpected, prepared, manifest: transfer.manifest, publicConfig, assignments, reviewFacts: body.reviews,populationEvidence };
   } catch { throw fail(); }
 }
 
@@ -110,9 +120,9 @@ export async function readBackendWebTransferFile(root: string, path: string, max
   return bytes;
 }
 
-export async function exportBackendWebTransfer(value: unknown) {
-  const selection=z.object({handoff:z.enum(['operating-staging','customer-candidate']).optional()}).parse(JSON.parse(canonicalReleaseExecutionJson(value)));if(selection.handoff==='operating-staging')return exportOperatingBackendWebTransfer(value);if(selection.handoff==='customer-candidate'){const{handoff:_handoff,...original}=JSON.parse(canonicalReleaseExecutionJson(value)) as Record<string,unknown>;void _handoff;return exportBackendWebTransfer(original);}
-  try {
+export async function exportBackendWebTransfer(value: unknown,borrowedAdmission?:NativeBackendAdmissionHandle) {
+  const selection=z.object({handoff:z.enum(['operating-staging','customer-candidate']).optional()}).parse(JSON.parse(canonicalReleaseExecutionJson(value)));if(selection.handoff==='operating-staging')return exportOperatingBackendWebTransfer(value,borrowedAdmission);if(selection.handoff==='customer-candidate'){const{handoff:_handoff,...original}=JSON.parse(canonicalReleaseExecutionJson(value)) as Record<string,unknown>;void _handoff;return exportBackendWebTransfer(original,borrowedAdmission);}
+  let admissionHandle:NativeBackendAdmissionHandle|undefined;try {
     const input = z.object({ repoRoot: z.string(), bundleSha256: digest, githubToken: z.string().min(1), vercelToken: z.string().min(20), installedOperator:z.object({providerToken:z.string().min(20),journalStorageKey:z.string().min(20),migrationPassword:z.string().min(1)}).strict().optional() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
     const root = input.repoRoot, folder = join(root, '.local/hosted-release');
     const bundleBytes = await readBackendWebTransferFile(root, join(folder, 'backend-bundle.json'));
@@ -123,9 +133,9 @@ export async function exportBackendWebTransfer(value: unknown) {
       || process.env.GITHUB_SHA !== supplied.releaseSha || process.env.GITHUB_REF !== 'refs/heads/main' || process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch'
       || process.env.GITHUB_REPOSITORY !== supplied.repository || process.env.GITHUB_RUN_ID !== supplied.releaseRunId || process.env.GITHUB_RUN_ATTEMPT !== String(supplied.runAttempt) || process.env.NODE_OPTIONS) throw fail();
     const prepared = validatePreparedBackendReleaseIntent(bundle.preparedApproval, { ...supplied, now: Date.now() });
-    const admit = () => readBackendReleaseAdmission({ repoRoot: root, expected: supplied, prepared, githubToken: input.githubToken });
+    const admissionBinding={repoRoot:root,expected:supplied,prepared,effectScope:'COMPLETE_BACKEND' as const};admissionHandle=borrowedAdmission===undefined?await prepareNativeBackendReleaseAdmission({...admissionBinding,githubToken:input.githubToken}):borrowedAdmission;const admit=()=>readNativeBackendReleaseAdmission(admissionHandle,admissionBinding);
     await admit();
-    const handover = await prepareBackendWebHandover(input);
+    const handover = await prepareBackendWebHandover(input,admissionHandle);
     if (handover.status !== 'PREPARED_STAGING_MANIFEST' || handover.pendingGates.length || handover.manifestPath !== join(folder, 'web-handover-manifest.json') || handover.publicConfigurationPath !== join(folder, 'web-handover-public.json') || !handover.manifestSha256) throw fail();
     const manifestBytes = await readBackendWebTransferFile(root, handover.manifestPath), manifest = parseReleaseExecutionJson(new TextDecoder('utf8', { fatal: true }).decode(manifestBytes));
     if (hash(manifestBytes) !== handover.manifestSha256 || canonicalReleaseReviewJson(manifest) !== manifestBytes.toString('utf8')) throw fail();
@@ -133,9 +143,14 @@ export async function exportBackendWebTransfer(value: unknown) {
     const typed = z.object({ api: z.object({ deploymentId: z.string() }), verifiedAt: time, publicConfig: z.unknown() }).parse(manifest);
     if (!same(publicConfig, typed.publicConfig)) throw fail();
     const settings = z.object({ purpose: z.literal('CUEVO_STAGING_PUBLIC_WEB_SETTINGS'), status: z.literal('WEB_PUBLIC_SETTINGS_CONFIRMED'), operation: z.enum(['CONFIRMED', 'NOOP']), sourceSha: z.literal(supplied.releaseSha), runId: z.literal(supplied.releaseRunId), runAttempt: z.literal(supplied.runAttempt), packageSha256: z.literal(prepared.sha256), manifestSha256: z.literal(handover.manifestSha256), webProjectId: z.literal(supplied.targets.web.projectId), teamId: z.literal(supplied.targets.web.teamId), observedAt: time, settingsSha256: digest, pendingGates: z.array(z.unknown()).length(0), hostedAcceptance: z.literal(false), canonicalReceipt: z.null() }).parse(JSON.parse((await readBackendWebTransferFile(root, join(folder, 'web-settings-result.json'))).toString('utf8')));
-    const evidence = [], proofClocks = [Date.parse(typed.verifiedAt), Date.parse(settings.observedAt)];
+    const installed=supplied.installedRuntime!==undefined||supplied.currentRuntime!==undefined;
+    const savedBytes=installed?await readBackendWebTransferFile(root,join(folder,'web-handover-result.json')):null;
+    const saved=savedBytes?parseInstalledPopulationHandoverResult(JSON.parse(savedBytes.toString('utf8'))):null;
+    const compareInstalled=(fresh:unknown)=>{if(!saved)return;const current=parseInstalledPopulationHandoverResult(fresh);if(saved.manifestPath!==handover.manifestPath||saved.publicConfigurationPath!==handover.publicConfigurationPath||saved.manifestSha256!==handover.manifestSha256||current.manifestSha256!==saved.manifestSha256)throw fail();const prior=validateInstalledPopulationVerificationV2(saved.installedPopulationVerification,supplied,prepared.sha256),next=validateInstalledPopulationVerificationV2(current.installedPopulationVerification,supplied,prepared.sha256);if(Date.parse(next.observedAt)<Date.parse(prior.observedAt)||!same({...prior,observedAt:null},{...next,observedAt:null}))throw fail();};compareInstalled(handover);
+    const evidence = [], proofClocks = [Date.parse(typed.verifiedAt), Date.parse(settings.observedAt),...(saved?[Date.parse(saved.installedPopulationVerification.observedAt)]:[])];
     for (const name of backendWebTransferEvidenceNames(typed.api.deploymentId,supplied.installedRuntime!==undefined||supplied.currentRuntime!==undefined,supplied.currentRuntime!==undefined)) {
       const bytes = await readBackendWebTransferFile(root, join(folder, name));
+      if(name==='web-handover-result.json'&&savedBytes&&!bytes.equals(savedBytes))throw fail();
       // Native owners retain JSON.stringify/canonical JSON followed by LF. Hash
       // those exact bytes; normalize only the bounded in-memory timestamp read.
       const raw = JSON.parse(canonicalReleaseExecutionJson(JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(bytes)))) as Record<string, unknown>;
@@ -147,35 +162,37 @@ export async function exportBackendWebTransfer(value: unknown) {
       for (const key of ['observedAt', 'verifiedAt', 'createdAt']) if (typeof raw[key] === 'string') { const at = Date.parse(raw[key]); if (!Number.isFinite(at)) throw fail(); proofClocks.push(at); }
     }
     const producers = [];
-    for (const path of producerPaths(3)) producers.push({ path, sha256: hash(await readBackendWebTransferFile(root, join(root, path))) });
-    const rechecked = await prepareBackendWebHandover(input);
+    for (const path of producerPaths(installed?5:3)) producers.push({ path, sha256: hash(await readBackendWebTransferFile(root, join(root, path))) });
+    const rechecked = await prepareBackendWebHandover(input,admissionHandle);
     if (rechecked.status !== 'PREPARED_STAGING_MANIFEST' || rechecked.pendingGates.length || rechecked.manifestSha256 !== handover.manifestSha256) throw fail();
+    compareInstalled(rechecked);
     for (const row of evidence) if (hash(await readBackendWebTransferFile(root, join(folder, row.name))) !== row.sha256) throw fail();
     for (const row of producers) if (hash(await readBackendWebTransferFile(root, join(root, row.path))) !== row.sha256) throw fail();
     const admission = await admit(), exported = Date.now(), earliest = Math.min(...proofClocks);
     if (proofClocks.some(at => at > exported || exported - at > 3600000)) throw fail();
     const body = JSON.parse(prepared.canonicalJson) as BackendReleaseIntent;
-    const transfer = { version: 3, purpose: 'CUEVO_COMPLETED_BACKEND_WEB_HANDOVER', status: 'EXPORTED_VERIFIED_BACKEND_HANDOVER', preparedApproval: prepared,
+    const transfer = { version: installed?5:3, purpose: 'CUEVO_COMPLETED_BACKEND_WEB_HANDOVER', status: 'EXPORTED_VERIFIED_BACKEND_HANDOVER', preparedApproval: prepared,
       originalAdmission: { ciRun: admission.expected.ciRun, backendRun: admission.expected.backendRun }, manifest, manifestSha256: handover.manifestSha256,
       settings: { settingsSha256: settings.settingsSha256, observedAt: settings.observedAt, operation: settings.operation }, producers, evidence,
       exportedAt: new Date(exported).toISOString(), originalMutationExpiresAt: body.expiresAt, earliestProofAt: new Date(earliest).toISOString(), consumptionExpiresAt: new Date(earliest + 86400000).toISOString(),
-      receiptScope: 'ORIGINAL_NATIVE_BACKEND_HANDOVER_AND_CLEANUP', privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };
+      receiptScope: 'ORIGINAL_NATIVE_BACKEND_HANDOVER_AND_CLEANUP', privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false,...(saved?{populationEvidence:{kind:'INSTALLED_POPULATION_REVALIDATION',receiptSha256:evidence.find(row=>row.name==='web-handover-result.json')!.sha256,verification:saved.installedPopulationVerification}}:{}) };
     validateBackendWebTransfer(transfer, exported);
     const text = canonicalReleaseExecutionJson(transfer), transferPath = join(folder, 'web-transfer.json'), handle = await open(transferPath, 'wx', 0o600);
     try { await handle.writeFile(text); await handle.sync(); } finally { await handle.close(); }
     return { status: 'EXPORTED_VERIFIED_BACKEND_HANDOVER' as const, transferPath, transferSha256: hash(text), manifestSha256: handover.manifestSha256, backendRunId: supplied.releaseRunId, backendRunAttempt: supplied.runAttempt, hostedAcceptance: false as const };
-  } catch { throw fail(); }
+  } catch { throw fail(); }finally{if(admissionHandle&&borrowedAdmission===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);}
 }
 
 /** The completed operating transfer exports actual already-produced native
  * evidence and re-admits it without rerunning private fixture mutations. */
-export async function exportOperatingBackendWebTransfer(value:unknown){
+export async function exportOperatingBackendWebTransfer(value:unknown,borrowedAdmission?:NativeBackendAdmissionHandle){
+ let admissionHandle:NativeBackendAdmissionHandle|undefined;
  try{const input=z.object({handoff:z.literal('operating-staging'),repoRoot:z.string(),bundleSha256:digest,githubToken:z.string().min(1),vercelToken:z.string().min(20),syntheticPassword:z.string().min(16).max(128),installedOperator:z.object({providerToken:z.string().min(20),journalStorageKey:z.string().min(20),migrationPassword:z.string().min(20)}).strict()}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value))),{handoff:_handoff,...operatingInputs}=input;void _handoff;const root=input.repoRoot,folder=join(root,'.local/hosted-release'),bundleBytes=await readBackendWebTransferFile(root,join(folder,'backend-bundle.json'));if(hash(bundleBytes)!==input.bundleSha256)throw fail();const bundle=z.object({purpose:z.literal('CUEVO_BACKEND_RELEASE_EXECUTION'),repoRoot:z.literal(root),expected:z.unknown(),preparedApproval:z.unknown()}).parse(parseReleaseExecutionJson(bundleBytes.toString('utf8'))),expected=bundle.expected as BackendReleaseExpected;
   if(process.platform!=='linux'||process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_ENVIRONMENT!=='github-hosted'||process.env.GITHUB_WORKSPACE!==root||!root.startsWith('/home/runner/work/')||process.env.GITHUB_SHA!==expected.releaseSha||process.env.GITHUB_REF!=='refs/heads/main'||process.env.GITHUB_EVENT_NAME!=='workflow_dispatch'||process.env.GITHUB_REPOSITORY!==expected.repository||process.env.GITHUB_RUN_ID!==expected.releaseRunId||process.env.GITHUB_RUN_ATTEMPT!==String(expected.runAttempt)||process.env.NODE_OPTIONS)throw fail();
-  const prepared=validatePreparedBackendReleaseIntent(bundle.preparedApproval,{...expected,now:Date.now()}),admit=()=>readBackendReleaseAdmission({repoRoot:root,expected,prepared,githubToken:input.githubToken});await admit();const handover=await revalidateOperatingStagingHandoff(operatingInputs);if(handover.status!=='OPERATING_STAGING_PREPARED'||handover.pendingGates.length||handover.handoffPath!==join(folder,'operating-staging-handoff.json')||handover.publicConfigurationPath!==join(folder,'operating-staging-public.json')||!handover.handoffSha256)throw fail();
+  const prepared=validatePreparedBackendReleaseIntent(bundle.preparedApproval,{...expected,now:Date.now()}),admissionBinding={repoRoot:root,expected,prepared,effectScope:'COMPLETE_BACKEND' as const};admissionHandle=borrowedAdmission===undefined?await prepareNativeBackendReleaseAdmission({...admissionBinding,githubToken:input.githubToken}):borrowedAdmission;const admit=()=>readNativeBackendReleaseAdmission(admissionHandle,admissionBinding);await admit();const handover=await revalidateOperatingStagingHandoff(operatingInputs,admissionHandle);if(handover.status!=='OPERATING_STAGING_PREPARED'||handover.pendingGates.length||handover.handoffPath!==join(folder,'operating-staging-handoff.json')||handover.publicConfigurationPath!==join(folder,'operating-staging-public.json')||!handover.handoffSha256)throw fail();
   const manifestBytes=await readBackendWebTransferFile(root,handover.handoffPath),manifest=validateOperatingStagingHandoff(parseReleaseExecutionJson(manifestBytes.toString('utf8')),Date.now());if(hash(manifestBytes)!==handover.handoffSha256||canonicalReleaseExecutionJson(manifest)!==manifestBytes.toString('utf8'))throw fail();
   const settings=z.object({purpose:z.literal('CUEVO_STAGING_PUBLIC_WEB_SETTINGS'),status:z.literal('WEB_PUBLIC_SETTINGS_CONFIRMED'),operation:z.enum(['CONFIRMED','NOOP']),sourceSha:z.literal(expected.releaseSha),runId:z.literal(expected.releaseRunId),runAttempt:z.literal(expected.runAttempt),packageSha256:z.literal(prepared.sha256),manifestSha256:z.literal(handover.handoffSha256),webProjectId:z.literal(expected.targets.web.projectId),teamId:z.literal(expected.targets.web.teamId),observedAt:time,settingsSha256:digest,pendingGates:z.array(z.unknown()).length(0),hostedAcceptance:z.literal(false),canonicalReceipt:z.null()}).parse(parseReleaseExecutionJson((await readBackendWebTransferFile(root,join(folder,'web-settings-result.json'))).toString('utf8')));
-  const evidence=[];for(const name of operatingBackendWebTransferEvidenceNames)evidence.push({name,sha256:hash(await readBackendWebTransferFile(root,join(folder,name)))});const producers=[];for(const path of producerPaths(4,true))producers.push({path,sha256:hash(await readBackendWebTransferFile(root,join(root,path)))});const final=await revalidateOperatingStagingHandoff(operatingInputs);if(final.status!=='OPERATING_STAGING_PREPARED'||final.handoffSha256!==handover.handoffSha256)throw fail();for(const row of evidence)if(hash(await readBackendWebTransferFile(root,join(folder,row.name)))!==row.sha256)throw fail();for(const row of producers)if(hash(await readBackendWebTransferFile(root,join(root,row.path)))!==row.sha256)throw fail();const admission=await admit(),exported=Date.now(),body=JSON.parse(prepared.canonicalJson) as BackendReleaseIntent,earliest=Math.min(Date.parse(manifest.observedAt),Date.parse(settings.observedAt));validatePreparedBackendReleaseIntent(prepared,{...expected,now:exported});
+  const evidence=[];for(const name of operatingBackendWebTransferEvidenceNames)evidence.push({name,sha256:hash(await readBackendWebTransferFile(root,join(folder,name)))});const producers=[];for(const path of producerPaths(4,true))producers.push({path,sha256:hash(await readBackendWebTransferFile(root,join(root,path)))});const final=await revalidateOperatingStagingHandoff(operatingInputs,admissionHandle);if(final.status!=='OPERATING_STAGING_PREPARED'||final.handoffSha256!==handover.handoffSha256)throw fail();for(const row of evidence)if(hash(await readBackendWebTransferFile(root,join(folder,row.name)))!==row.sha256)throw fail();for(const row of producers)if(hash(await readBackendWebTransferFile(root,join(root,row.path)))!==row.sha256)throw fail();const admission=await admit(),exported=Date.now(),body=JSON.parse(prepared.canonicalJson) as BackendReleaseIntent,earliest=Math.min(Date.parse(manifest.observedAt),Date.parse(settings.observedAt));validatePreparedBackendReleaseIntent(prepared,{...expected,now:exported});
   const transfer={version:4,purpose:'CUEVO_OPERATING_BACKEND_WEB_HANDOVER',status:'EXPORTED_OPERATING_BACKEND_HANDOVER',preparedApproval:prepared,originalAdmission:{ciRun:admission.expected.ciRun,backendRun:admission.expected.backendRun},manifest,manifestSha256:handover.handoffSha256,settings:{settingsSha256:settings.settingsSha256,observedAt:settings.observedAt,operation:settings.operation},producers,evidence,exportedAt:new Date(exported).toISOString(),originalMutationExpiresAt:body.expiresAt,earliestProofAt:new Date(earliest).toISOString(),consumptionExpiresAt:new Date(earliest+86400000).toISOString(),receiptScope:'ORIGINAL_NATIVE_OPERATING_BACKEND_AND_CLEANUP',privateProofReexecuted:false,backendMutationAllowed:false,customerReady:false,hostedAcceptance:false};validateOperatingBackendWebTransfer(transfer,exported);const text=canonicalReleaseExecutionJson(transfer),transferPath=join(folder,'web-transfer.json'),handle=await open(transferPath,'wx',0o600);try{await handle.writeFile(text);await handle.sync();}finally{await handle.close();}return{status:'EXPORTED_OPERATING_BACKEND_HANDOVER' as const,transferPath,transferSha256:hash(text),manifestSha256:handover.handoffSha256,backendRunId:expected.releaseRunId,backendRunAttempt:expected.runAttempt,hostedAcceptance:false as const};
- }catch{throw fail();}
+ }catch{throw fail();}finally{if(admissionHandle&&borrowedAdmission===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);}
 }

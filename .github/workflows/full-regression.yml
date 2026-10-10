@@ -41,11 +41,25 @@ jobs:
       - name: Install complete browser engines
         run: npx --no-install playwright install --with-deps chromium firefox webkit
       - name: Run complete frozen acceptance
-        run: npm run verify:technical
-      - name: Export exact full profile evidence
+        id: full-acceptance
         env:
           CUEVO_FULL_VERIFICATION_PURPOSE: ${{ github.event_name == 'workflow_dispatch' && inputs.purpose || 'regression' }}
+        run: npm run verify:technical
+      - name: Export exact full profile evidence
+        if: always()
+        env:
+          CUEVO_FULL_VERIFICATION_PURPOSE: ${{ github.event_name == 'workflow_dispatch' && inputs.purpose || 'regression' }}
+          CUEVO_FULL_ACCEPTANCE_OUTCOME: ${{ steps.full-acceptance.outcome }}
         run: node --import tsx scripts/verification/full-verification-evidence.ts
+      - name: Retain minimized full profile diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-full-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/full-verification/diagnostic.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
       - name: Retain exact full profile summary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

@@ -1,3 +1,5 @@
+import {readPreparedEdgeArtifactManifest,readPreparedEdgeBody} from '../runtime/edge-prepared-artifact';
+import {captureEdgeCompilerSnapshot,compileEdgeCompilerSnapshot,assertEdgeCompilerSnapshotCurrent} from '../runtime/edge-compiler-snapshot';
 import { execFile, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
@@ -10,7 +12,11 @@ import { runtimeEnvironment } from '../runtime/environment';
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
 import { sameContainerIdentities, sameUnrelatedContainers, validateOutageDatabaseContainer, type ObservedContainer } from './runtime-outage-rules';
 
-const school = '10000000-0000-4000-8000-000000000001';
+/** Local CLI source serving is separate verification delivery of the same
+ * admitted compiled bytes; it does not replace the hosted ESZIP artifact. */
+export function validateLocalEdgeServingSource(value:unknown,compiled:{code:string;sources:{path:string;sha256:string}[];sourceSha:string;treeSha:string;sourceLock:Buffer;denoLock:Buffer}){
+ const manifest=readPreparedEdgeArtifactManifest(value),hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');if(manifest.sourceSha!==compiled.sourceSha||manifest.treeSha!==compiled.treeSha||manifest.sourceLockSha256!==hash(compiled.sourceLock)||manifest.denoLockSha256!==hash(compiled.denoLock)||JSON.stringify(manifest.sources)!==JSON.stringify(compiled.sources)||manifest.inputFiles.find(row=>row.path==='index.ts')?.sha256!==hash(compiled.code))throw Error('Local Edge serving source differs from prepared input.');return{code:compiled.code,config:JSON.stringify({imports:{pg:'npm:pg@8.23.1'}})+'\n'};
+}const school = '10000000-0000-4000-8000-000000000001';
 const actor = '20000000-0000-4000-8000-000000000004';
 const endpoint = 'http://supabase_kong_cuevo:8000/functions/v1/cuevo-worker';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -185,13 +191,8 @@ async function main() {
   if (baselineEdge?.running) throw Error('Existing Cuevo Edge runtime must be stopped before verification.');
   const unrelated = beforeContainers.filter(row => row.name !== '/supabase_edge_runtime_cuevo');
   const artifactPath = resolve('.local/edge-artifacts/cuevo-worker/artifact.json');
-  const artifactBytes = await readFile(artifactPath); const artifact = JSON.parse(artifactBytes.toString()) as { service: string; runtime: string; files: { path: string; sha256: string }[]; sources: { path: string; sha256: string }[] };
-  if (artifact.service !== 'cuevo-worker' || artifact.runtime !== 'deno' || !Array.isArray(artifact.files) || !Array.isArray(artifact.sources)) throw Error('Build the reviewed Edge artifact before verification.');
-  if (artifact.files.map(file => file.path).sort().join('|') !== 'deno.json|deno.lock|index.ts') throw Error('Edge artifact has an unexpected emitted file set.');
-  if ((await lstat(resolve('.local/edge-artifacts'))).isSymbolicLink() || (await lstat(resolve('.local/edge-artifacts/cuevo-worker'))).isSymbolicLink()) throw Error('Edge artifact path cannot be redirected.');
-  for (const file of artifact.files) { const path = resolve('.local/edge-artifacts/cuevo-worker', file.path); if (!['index.ts', 'deno.json', 'deno.lock'].includes(file.path) || (await lstat(path)).isSymbolicLink() || createHash('sha256').update(await readFile(path)).digest('hex') !== file.sha256) throw Error('Edge artifact bytes differ from their captured manifest.'); }
-  for (const source of artifact.sources) { requireEdgeArtifactSource(source.path); if (createHash('sha256').update(await readFile(resolve(source.path))).digest('hex') !== source.sha256) throw Error('Edge artifact source is stale or outside its owner.'); }
-  const runId = randomUUID(); const prefix = `edge-verification:${runId}:`; const ids: string[] = [];
+  const artifactBytes = await readFile(artifactPath),artifact=readPreparedEdgeArtifactManifest(JSON.parse(artifactBytes.toString()));const payload=await readFile(resolve('.local/edge-artifacts/cuevo-worker/worker.ezbr'));if(!payload.subarray(0,4).equals(Buffer.from('EZBR')))throw Error('Current Edge artifact encoding required.');readPreparedEdgeBody(payload,{rawEszipSha256:artifact.rawEszipSha256,ezbrSha256:artifact.ezbrSha256,rawByteSize:artifact.rawByteSize,maximumBytes:32*1024*1024});
+  const selected=captureEdgeCompilerSnapshot(resolve('.')),compiled=await compileEdgeCompilerSnapshot(selected),serving=validateLocalEdgeServingSource(artifact,compiled);await assertEdgeCompilerSnapshotCurrent(selected);const servingRoot=resolve('.local/verification/edge-serving/cuevo-worker');await mkdir(servingRoot,{recursive:true});if((await lstat(servingRoot)).isSymbolicLink()||(await readdir(servingRoot)).length)throw Error('Local serving path contains unowned content.');  const runId = randomUUID(); const prefix = `edge-verification:${runId}:`; const ids: string[] = [];
   const directory = resolve('.local/verification/edge-worker', runId); await mkdir(directory, { recursive: true });
   const functionsDirectory = resolve('supabase/functions'); let functionsExisted = false; try { functionsExisted = (await lstat(functionsDirectory)).isDirectory(); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const envFile = resolve(directory, 'worker.env'); const purposeKey = randomBytes(32).toString('hex'); const secretName = 'edge-verification-' + runId; const jobName = 'cuevo-edge-verification-' + runId;
@@ -234,6 +235,7 @@ async function main() {
     check(name + '-internal-gateway-auth-ready', true);
   };
   try {
+    await writeFile(resolve(servingRoot,'index.ts'),serving.code,{flag:'wx'});await writeFile(resolve(servingRoot,'deno.json'),serving.config,{flag:'wx'});
     client = await owner.connect();
     requireNoAnalyticsActivation((await client.query('select count(*)::integer count from internal.posthog_school_activation where enabled')).rows[0]?.count);
     if ((await client.query("select pg_try_advisory_lock(hashtextextended('cuevo-exclusive-edge-verification',0))as locked")).rows[0]?.locked !== true) throw Error('Another Edge verification owns the local operation.');
@@ -327,6 +329,7 @@ async function main() {
       const currentEdge = (await containers()).find(row => row.name === '/supabase_edge_runtime_cuevo');
       if (currentEdge?.running) { if (!ownedEdge || currentEdge.id !== ownedEdge.id || currentEdge.project !== 'cuevo' || !currentEdge.networks.includes('cuevo-local')) throw Error('Edge cleanup cannot claim an unrelated process.'); await docker('stop', '--time', '10', currentEdge.id); }
     });
+    await cleanup('LOCAL_SERVING_SOURCE',async()=>{for(const [name,expected]of [['index.ts',serving.code],['deno.json',serving.config]] as const){const path=resolve(servingRoot,name);let stat;try{stat=await lstat(path);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')continue;throw error;}if(stat.isSymbolicLink()||!stat.isFile()||stat.nlink!==1||(await readFile(path,'utf8'))!==expected)throw Error('Local serving source changed.');await unlink(path);}if((await readdir(servingRoot)).length)throw Error('Local serving path has extra content.');await rmdir(servingRoot);});
     if (!functionsExisted) await cleanup('FUNCTIONS_DIRECTORY', async () => { try { const entry = await lstat(functionsDirectory); if (!entry.isDirectory() || entry.isSymbolicLink() || (await readdir(functionsDirectory)).length) throw Error('Generated functions path contains unowned content.'); await rmdir(functionsDirectory); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; } });
     if (client) await cleanup('SOURCE_AND_SECRET', async () => {
       await client!.query('begin'); try {

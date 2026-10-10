@@ -10,6 +10,7 @@ For product requirements start with [product context](product/README.md) and its
 
 | Need | Read |
 |---|---|
+| Review the implemented release repairs, remaining hosting gates and timing target | [11 October release process team review](reports/2026-10-11-release-process-team-review.md): exact local source, implemented duplicate/preparation/host fixes, preserved failure evidence, unmeasured20–25-minute deployment target and remaining protected CI/hosted acceptance |
 | Current integrated source and release handover | [Canonical integration handover](reports/2026-10-04-cuevo-integration-handover.md): preserved customer and Trail source, verification plan, pending practice-signal repair, current CI and hosted/customer limits |
 | Latest paused Student/focused-navigation work | [4 October shutdown checkpoint](reports/2026-10-04-student-desk-shutdown-handover.md): selected Learning Desk, Portfolio preview and all-role focused scrolling source; remaining native QA, Coordinator/Audit work and repeated heading visual review |
 | Expanded active redesign acceptance | [5 October goal acceptance](design/2026-10-05-redesign-goal-acceptance.md): all five roles, every admitted section/nested workflow, visual/functional/source/RTL/mobile/reflow QA and exact-source CI; incomplete/failed/manual/hosted gates stay open |
