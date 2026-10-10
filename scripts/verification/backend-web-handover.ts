@@ -1,4 +1,4 @@
-import {dataApiReceiptFields,validateDataApiReceiptFields,validateDisabledDataApiConfigurationEvidence,observeDisabledDataApiConfiguration} from './data-api-configuration';
+import {dataApiReceiptFields,validateDataApiReceiptFields,validateDisabledDataApiConfigurationEvidence,observeDisabledDataApiConfiguration,type DataApiConfigurationObservation} from './data-api-configuration';
 import {originalActivationIntentSchema} from './backend-hosted-activation-export-contracts';
 import { createHash } from 'node:crypto';
 import { lstat, open, readFile, realpath, readdir } from 'node:fs/promises';
@@ -132,6 +132,16 @@ async function persistHandoverOutputs(root: string, manifest: unknown, publicCon
       const expected={sha:String(fresh.commitSha),environment:'staging' as const,ciRunId:String(fresh.ciRunId),now:Date.now(),migrations:(fresh.database as {migrations:{version:string;sha256:string}[]}).migrations.map(row=>({version:row.version,sha256:row.sha256}))};
       validateReleaseManifest(prior,expected);validateReleaseManifest(fresh,expected);
       const originalAt=Date.parse(String(prior.verifiedAt)),freshAt=Date.parse(String(fresh.verifiedAt));
+      const priorDataApi=(prior.database as {dataApi:Record<string,unknown>}).dataApi,freshDataApi=(fresh.database as {dataApi:Record<string,unknown>}).dataApi;
+      if(priorDataApi.version===2||freshDataApi.version===2){
+        if(priorDataApi.version!==2||freshDataApi.version!==2)throw fail();
+        const saved=priorDataApi.configurationObservation as DataApiConfigurationObservation,current=freshDataApi.configurationObservation as DataApiConfigurationObservation;
+        const facts=(observation:DataApiConfigurationObservation)=>{const value:Record<string,unknown>={...observation.evidence};for(const key of['metadataObservedAt','observedAt','verifiedAt','expiresAt'])delete value[key];return canonicalReleaseReviewJson(value);};
+        if(facts(saved)!==facts(current)||priorDataApi.verifiedAt!==saved.evidence.observedAt||freshDataApi.verifiedAt!==current.evidence.observedAt||['metadataObservedAt','observedAt','verifiedAt'].some(key=>Date.parse(saved.evidence[key as 'metadataObservedAt'|'observedAt'|'verifiedAt'])>Date.parse(current.evidence[key as 'metadataObservedAt'|'observedAt'|'verifiedAt'])))throw fail();
+        // Both complete proofs were validated at the current clock. Reuse the
+        // saved observation intact; fresh reads never renew its digest or expiry.
+        freshDataApi.verifiedAt=priorDataApi.verifiedAt;freshDataApi.configurationObservation=priorDataApi.configurationObservation;
+      }
       fresh.verifiedAt=prior.verifiedAt;
       if(!Number.isFinite(originalAt)||!Number.isFinite(freshAt)||originalAt>freshAt||freshAt>Date.now()||Date.now()-originalAt>3600000||canonicalReleaseReviewJson(fresh)!==priorBytes.toString('utf8'))throw fail();
       manifestText=priorBytes.toString('utf8');
