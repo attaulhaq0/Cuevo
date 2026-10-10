@@ -11,6 +11,7 @@
         "scripts/database/hosted-migration-executor.test.ts",
         "scripts/database/hosted-migration-native-process.test.ts",
         "scripts/database/hosted-migration-quiescence.test.ts",
+        "scripts/database/hosted-original-native-intent.test.ts",
         "scripts/database/hosted-runtime-role-membership.test.ts",
         "scripts/database/hosted-schema-reconciliation-executor.test.ts",
         "scripts/database/hosted-schema-reconciliation-native.test.ts",
@@ -420,6 +421,10 @@
       },
       {
         "path": "scripts/database/hosted-operator-storage-policy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-original-native-intent.test.ts",
         "durationMs": null
       },
       {

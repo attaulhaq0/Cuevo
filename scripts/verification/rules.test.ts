@@ -34,6 +34,7 @@ test('reviewed schema continuation fixtures run once in their required replay an
   { script:'test:hosted-plan', step:'migration-replay-rules', files:[
    'scripts/database/hosted-active-runtime-state.test.ts',
    'scripts/database/hosted-schema-recovery-completion.test.ts',
+   'scripts/database/hosted-original-native-intent.test.ts',
    'scripts/database/hosted-schema-continuation-native.test.ts',
    'scripts/database/hosted-schema-continuation-executor.test.ts',
    'scripts/database/hosted-migration-batch-receipt.test.ts',

@@ -13,6 +13,37 @@ function fixture(materialization?:'SQL_FILES'|'METADATA_ONLY'){const row={name:'
  return{input,ports,events,journals,cliArgs,snapshot,get runs(){return runs;},get reads(){return reads;},set after(value:boolean){after=value;},set journal(value:unknown){journal=value;},set now(value:number){now=value;}};
 }
 test('durable exact intent precedes CLI and current postconditions confirm only supplied-port execution',async()=>{const{executeHostedMigrationStage}=await api(),f=fixture(),result=await executeHostedMigrationStage(f.input,f.ports);assert.equal(result.status,'COMMITTED');assert.equal(result.evidence,'SUPPLIED_PORT_EXECUTION_ONLY');assert.equal(result.schemaHistoryAtomic,false);assert.equal(f.runs,1);assert.deepEqual(f.events,['lock','revalidate','journal:INTENT','revalidate','cli','revalidate','journal:COMMITTED','unlock']);assert.equal(JSON.stringify(result).includes(secret),false);assert.equal(JSON.stringify(f.journals).includes(secret),false);});
+
+test('exact committed acknowledgement remains confirmed when the held lease is lost during final readback',async()=>{
+ const{prepareHeldHostedMigrationStage}=await api(),f=fixture();let held=true;const original=f.ports.writeJournal;f.ports.writeJournal=async value=>{const receipt=await original(value);if((value as {state:string}).state==='COMMITTED')held=false;return receipt;};const stage=prepareHeldHostedMigrationStage(f.input,f.ports);await stage.run({kind:'HELD',id:'owned-lock',key:ref+':HOSTED_SCHEMA_MIGRATION'},()=>held);assert.equal(stage.result.status,'REQUIRES_REVIEW');assert.equal(stage.result.commitment,'CONFIRMED');assert.equal(stage.result.primaryCode,'ADMISSION_CHANGED');assert.deepEqual(stage.result.acknowledgedCommit,f.journals.find(value=>(value as {state:string}).state==='COMMITTED'));assert.equal(f.journals.some(value=>(value as {state:string}).state==='REQUIRES_REVIEW'),false);assert.equal(f.runs,1);
+});
+
+test('linked original native terminal journal preserves old intent identity and independently binds current execution',async()=>{
+ const module=await api();assert.equal(typeof module.parseHostedExecutionJournal,'function');
+ const original={projectRef:ref,sourceSha:sha,treeSha:tree,planSha256:hash,stageId:'native' as const,stageSha256:'d'.repeat(64),databaseUrl:`postgresql://postgres@db.${ref}.supabase.co:5432/postgres?sslmode=verify-full`,approvalDigest:hash,ciRunId:'42',certificateSha256:hash};
+ const current={...original,sourceSha:'e'.repeat(40),treeSha:'f'.repeat(40),planSha256:'1'.repeat(64),approvalDigest:'2'.repeat(64),ciRunId:'43'};
+ const value={version:2,identity:original,state:'COMMITTED',schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY',originalIntentExecution:{version:1,purpose:'CUEVO_ORIGINAL_NATIVE_INTENT_EXECUTION',originalOperationSha256:digest(original),originalIntentSha256:digest({version:1,identity:original,state:'INTENT',schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'}),templateSha256:'4'.repeat(64),selectionSha256:'5'.repeat(64),currentExecutionIdentity:current,runId:'44',runAttempt:1,approvalObservedAtMs:1000,nativeProofBeganAtMs:1001,beforeHistorySha256:'6'.repeat(64),afterHistorySha256:'7'.repeat(64)}};
+ const parse=module.parseHostedExecutionJournal;assert.deepEqual(JSON.parse(JSON.stringify(parse(value))),value);assert.equal(parse({version:1,identity:original,state:'INTENT',schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'}).version,1);
+ for(const changed of [{...value,state:'INTENT'},{...value,extra:true},{...value,originalIntentExecution:{...value.originalIntentExecution,originalOperationSha256:'0'.repeat(64)}},{...value,originalIntentExecution:{...value.originalIntentExecution,currentExecutionIdentity:{...current,stageSha256:'0'.repeat(64)}}}])assert.throws(()=>parse(changed));
+ for(const patch of [{originalIntentSha256:'3'.repeat(64)},{runAttempt:Number.MAX_SAFE_INTEGER+1},{approvalObservedAtMs:Number.MAX_SAFE_INTEGER+1,nativeProofBeganAtMs:Number.MAX_SAFE_INTEGER+1},{currentExecutionIdentity:{...current,databaseUrl:'x'.repeat(401)}},{currentExecutionIdentity:{...current,ciRunId:'1'.repeat(31)}}])assert.throws(()=>parse({...value,originalIntentExecution:{...value.originalIntentExecution,...patch}}));
+});
+
+test('original intent execution rejects a fabricated native ownership token before ports',async()=>{
+ const module=await api();assert.equal(typeof module.prepareHeldOriginalNativeIntentStage,'function');const f=fixture();let calls=0;const ports={now:()=>{calls++;return 1000;},readJournal:async()=>{calls++;return null;},revalidate:async()=>{calls++;return f.snapshot();},writeJournal:async()=>{calls++;return{kind:'UNCONFIRMED' as const};},runCli:async()=>{calls++;return{kind:'UNKNOWN' as const};}};
+ for(const token of [{},Object.freeze({purpose:'ORIGINAL_NATIVE_INTENT'}),null]){const stage=await module.prepareHeldOriginalNativeIntentStage(f.input,ports,token);assert.equal(stage.result.primaryCode,'INPUT_INVALID');assert.equal(stage.key,null);}assert.equal(calls,0);
+});
+
+test('shared journal decoder rejects getters proxies symbols and non-enumerable metadata without invoking traps',async()=>{
+ const{parseHostedExecutionJournal}=await api(),f=fixture();const completed=await(await api()).executeHostedMigrationStage(f.input,f.ports),identity=completed.identity!,value={version:1,identity,state:'INTENT',schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'};let traps=0;
+ const accessor={...value,get identity(){traps++;return identity;}},proxy=new Proxy(value,{get(){traps++;return undefined;},ownKeys(){traps++;return[];},getPrototypeOf(){traps++;return Object.prototype;}}),hidden={...value},symbol={...value,[Symbol('hidden')]:true};Object.defineProperty(hidden,'extra',{value:true,enumerable:false});
+ for(const invalid of[accessor,proxy,hidden,symbol,{...value,identity:new Proxy(identity,{get(){traps++;return undefined;},ownKeys(){traps++;return[];},getPrototypeOf(){traps++;return Object.prototype;}})}])assert.throws(()=>parseHostedExecutionJournal(invalid));assert.equal(traps,0);
+ const ordered={evidence:'SUPPLIED_PORT_EXECUTION_ONLY',state:'INTENT',identity,schemaHistoryAtomic:false,version:1};assert.equal(JSON.stringify(parseHostedExecutionJournal(ordered)),JSON.stringify(ordered));
+});
+
+test('native original ownership rejects proxy and descriptor tokens before reading any execution port',async()=>{
+ const{prepareHeldOriginalNativeIntentStage}=await api(),f=fixture();let traps=0,calls=0;const token=new Proxy({},{get(){traps++;return undefined;},ownKeys(){traps++;return[];},getPrototypeOf(){traps++;return Object.prototype;}}),getter={get authority(){traps++;return true;}},ports={now:()=>{calls++;return 1000;},readJournal:async()=>{calls++;return null;},revalidate:async()=>{calls++;return f.snapshot();},writeJournal:async()=>{calls++;return{kind:'UNCONFIRMED' as const};},runCli:async()=>{calls++;return{kind:'UNKNOWN' as const};}};
+ for(const value of[token,getter]){const stage=await prepareHeldOriginalNativeIntentStage(f.input,ports,value);assert.equal(stage.result.primaryCode,'INPUT_INVALID');assert.equal(stage.key,null);}assert.equal(calls,0);assert.equal(traps,0);
+});
 test('explicit SQL_FILES consumes the same CLI bytes and original journal identity as legacy SQL stages',async()=>{
  const{executeHostedMigrationStage}=await api(),legacy=fixture(),sql=fixture('SQL_FILES');
  const legacyResult=await executeHostedMigrationStage(legacy.input,legacy.ports),sqlResult=await executeHostedMigrationStage(sql.input,sql.ports);

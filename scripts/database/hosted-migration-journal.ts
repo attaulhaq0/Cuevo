@@ -6,7 +6,7 @@ import { lstat, mkdir, open, readdir, realpath, rename, unlink } from 'node:fs/p
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { types } from 'node:util';
 import { z } from 'zod';
-import type { HostedExecutionJournal, HostedExecutionPorts } from './hosted-migration-execution';
+import {parseHostedExecutionJournal,type HostedExecutionJournal, type HostedExecutionPorts} from './hosted-migration-journal-contracts';
 
 const purpose = 'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL';
 const failure = () => new Error('Hosted migration journal ownership or durability requires review; contents withheld.');
@@ -19,11 +19,7 @@ const identitySchema = z.object({
   stageSha256: digest, databaseUrl: z.string().max(400), approvalDigest: digest,
   ciRunId: z.string().regex(/^[1-9][0-9]*$/).max(30), certificateSha256: digest,
 }).strict();
-const payloadSchema = z.object({
-  version: z.literal(1), identity: identitySchema,
-  state: z.enum(['INTENT', 'COMMITTED', 'REQUIRES_REVIEW']),
-  schemaHistoryAtomic: z.literal(false), evidence: z.literal('SUPPLIED_PORT_EXECUTION_ONLY'),
-}).strict();
+const payloadSchema = z.unknown().transform(value=>parseHostedExecutionJournal(value));
 const recordSchema = z.object({
   version: z.literal(1), purpose: z.literal(purpose), sequence: z.number().int().min(1).max(3),
   previousSha256: digest.nullable(), payload: payloadSchema, payloadSha256: digest,
@@ -32,7 +28,7 @@ const inputSchema = z.object({ repoRoot: z.string(), journalRoot: z.string(), id
 type FileStat = Stats;
 type OwnedFile = { bytes: string; stat: FileStat };
 type Chain = { records: { payload: HostedExecutionJournal; payloadSha256: string; bytes: string }[] };
-export type HostedMigrationJournal = Pick<HostedExecutionPorts, 'readJournal' | 'writeJournal'>;
+export type HostedMigrationJournal = Pick<HostedExecutionPorts, 'readJournal' | 'writeJournal'> & {readOriginalIntentAcknowledgement():Promise<{payload:HostedExecutionJournal;ownerSha256:string;record1Sha256:string}>};
 
 function snapshot(value: unknown, depth = 0): unknown {
   if (depth > 8) throw failure();
@@ -180,6 +176,7 @@ export async function createHostedMigrationJournal(input: { repoRoot: string; jo
         const decoded = parse(saved.bytes);
         const record = recordSchema.parse(decoded);
         if (record.sequence !== index + 1 || record.previousSha256 !== previousSha256 || JSON.stringify(checkedIdentity(record.payload.identity)) !== JSON.stringify(identity) || record.payloadSha256 !== hash(JSON.stringify((decoded as { payload: unknown }).payload)) || !transition(records.at(-1)?.payload.state, record.payload.state)) throw failure();
+        if(record.payload.version===2&&record.payload.originalIntentExecution.originalIntentSha256!==records[0]?.payloadSha256)throw failure();
         records.push({ payload: (decoded as { payload: HostedExecutionJournal }).payload, payloadSha256: record.payloadSha256, bytes: saved.bytes });
         previousSha256 = hash(saved.bytes);
       }
@@ -188,6 +185,9 @@ export async function createHostedMigrationJournal(input: { repoRoot: string; jo
     };
     await readChain();
     return {
+      readOriginalIntentAcknowledgement:async()=>{
+        try{const first=await readChain();if(first.records.length!==1||first.records[0].payload.version!==1||first.records[0].payload.state!=='INTENT')throw failure();await syncDirectories();const second=await readChain();if(JSON.stringify(first)!==JSON.stringify(second))throw failure();return{payload:structuredClone(first.records[0].payload),ownerSha256:hash(ownerBytes),record1Sha256:hash(first.records[0].bytes)};}catch{throw failure();}
+      },
       readJournal: async () => {
         try {
           const chain = await readChain();
@@ -206,6 +206,7 @@ export async function createHostedMigrationJournal(input: { repoRoot: string; jo
           if (JSON.stringify(checkedIdentity(payload.identity)) !== JSON.stringify(identity)) throw failure();
           const payloadSha256 = hash(JSON.stringify(payload));
           const prior = await readChain();
+          if(payload.version===2&&payload.originalIntentExecution.originalIntentSha256!==prior.records[0]?.payloadSha256)throw failure();
           if (prior.records.at(-1)?.payloadSha256 !== payloadSha256 && !transition(prior.records.at(-1)?.payload.state, payload.state)) throw failure();
           const lockPath = join(journalRoot, 'writer.lock');
           const handle = await open(lockPath, 'wx', 0o600);
