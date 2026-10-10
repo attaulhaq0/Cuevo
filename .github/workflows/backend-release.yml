@@ -155,9 +155,6 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts resume-runtime
-      - name: Install pinned API deployment CLI
-        if: inputs.scope == 'complete-backend'
-        run: npm install --global vercel@62.1.0 --ignore-scripts --no-audit --no-fund
       - name: Deploy current API and inactive Edge worker
         if: inputs.scope == 'complete-backend'
         env:

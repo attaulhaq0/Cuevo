@@ -1,7 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { execFile, execFileSync } from 'node:child_process';
-import { promisify } from 'node:util';
-import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { parseServerConfig } from '@cuevo/config';
@@ -17,12 +16,13 @@ import { readHostedMigrationProvider, requireCurrentHostedMigrationEndpoint } fr
 import { providerDeploymentStateSchema, providerStateSha256, validateProviderDeploymentTransition, type ProviderDeploymentState, type ProviderDeploymentOperation, type ProviderDeploymentPhase } from '../database/hosted-provider-state';
 import {readCanonicalMigrationSources} from '../database/hosted-migration-plan';
 import {verifyHostedMigrationHistory} from '../database/hosted-migration-history';
-import {assertNativeRuntimeRolloutLease,type NativeRuntimeRolloutLease} from '../database/hosted-runtime-rollout-session';
+import {assertNativeRuntimeRolloutLease,readNativeRuntimeRolloutDeadline,type NativeRuntimeRolloutLease} from '../database/hosted-runtime-rollout-session';
+
+import {createBackendProviderCli,BackendProviderCliPreparationError,backendProviderCliFailureSchema,type BackendProviderCliFailure,type PreparedBackendProviderCli,type BackendProviderLaunchAdmission} from './backend-provider-cli';
 
 const failure = () => Error('Backend provider artifact or runtime recipient requires review; contents withheld.');
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const sha = z.string().regex(/^[a-f0-9]{40}$/), digest = z.string().regex(/^[a-f0-9]{64}$/), privateValue = z.string().min(1).max(24576);
-const execute = promisify(execFile);
 const common = z.object({ NODE_ENV: z.literal('production'), CUEVO_DEPLOYMENT_ENVIRONMENT: z.literal('synthetic-staging'), CUEVO_SYNTHETIC_PROJECT_REF: z.string().regex(/^[a-z]{20}$/), CUEVO_SYNTHETIC_WEB_ORIGIN: z.string(), SUPABASE_URL: z.string(), POSTHOG_CAPTURE_MODE: z.literal('DISABLED') });
 const apiRuntime = common.extend({ DATABASE_URL: privateValue, CUEVO_DATABASE_TLS_CA: privateValue, SUPABASE_PUBLISHABLE_KEY: z.string().startsWith('sb_publishable_').min(20), SUPABASE_SERVICE_ROLE_KEY: z.string().startsWith('sb_secret_').min(20), API_ALLOWED_ORIGIN: z.string(), AI_GENERATION_MODE: z.literal('FIXTURE'), AI_FIXTURE_ENABLED: z.literal('true') }).strict();
 const edgeRuntime = common.extend({ CUEVO_WORKER_DATABASE_URL: privateValue, CUEVO_WORKER_TLS_CA: privateValue, CUEVO_WORKER_EXECUTION_MODE: z.literal('synthetic-staging'), CUEVO_WORKER_WAKE_KEY: z.literal('') }).strict();
@@ -100,7 +100,7 @@ export async function prepareBackendProviderDeployment(value: { repoRoot: string
 }
 
 type DeploymentInput = { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; vercelToken: string; providerToken: string; githubToken: string; runtimeConfig: unknown; plan?:unknown;schemaRecoveryExport?:unknown;schemaRecoverySelection?:unknown;journalStorageKey?:string;operator: { databaseUrl: string; certificate: { path: string; sha256: string }; password: string } };
-export type BackendProviderDeploymentResult = { status: 'DEPLOYED_INACTIVE' | 'DEPLOYED_PAUSED' | 'REQUIRES_REVIEW'; purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT'; api: { deploymentId: string; url: string; artifactSha256: string; metadataVerified: true; healthVerified: boolean } | null; edge: { id: string; version: number; artifactSha256: string; denoLockSha256: string; customAuthenticationVerified: boolean; state: 'INACTIVE'|'PAUSED' } | null; mutation: 'NOT_ATTEMPTED' | 'ATTEMPTED'; hostedAcceptance: false };
+export type BackendProviderDeploymentResult = { status: 'DEPLOYED_INACTIVE' | 'DEPLOYED_PAUSED' | 'REQUIRES_REVIEW'; purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT'; providerExecutionFailure?:BackendProviderCliFailure; api: { deploymentId: string; url: string; artifactSha256: string; metadataVerified: true; healthVerified: boolean } | null; edge: { id: string; version: number; artifactSha256: string; denoLockSha256: string; customAuthenticationVerified: boolean; state: 'INACTIVE'|'PAUSED' } | null; mutation: 'NOT_ATTEMPTED' | 'ATTEMPTED'; hostedAcceptance: false };
 async function responseBytes(response: Response, signal: AbortSignal) {
   if (response.redirected || !response.body) throw failure(); const declared = response.headers.get('content-length'); if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > 1024 * 1024)) throw failure();
   const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
@@ -116,30 +116,16 @@ async function providerRequest(url: string, token: string | null, method: 'GET' 
     if (expectedEmpty && !response.body) { const length = response.headers.get('content-length'); if (length !== null && length !== '0' || controller.signal.aborted) throw failure(); return { status: response.status, value: null }; }
     const bytes = await responseBytes(response, signal); if (!bytes.length && !expectedEmpty) throw failure(); return { status: response.status, value: bytes.length ? JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(bytes)) as unknown : null }; } finally { clearTimeout(timer); controller.abort(); }
 }
-type PreparedApiCli = (expected: BackendReleaseExpected, token: string, operationSha256: string, signal: AbortSignal, admitLaunch:()=>Promise<()=>void>)=>Promise<string>;
-/** Discovery and materialization are preparation, not live effect admission.
- * The delivery remains a mutable host directory: repeat its exact checks before
- * renewal until a separately verified read-only executable/input graph exists. */
-async function prepareApiCli(root: string, artifact: VerifiedArtifact, expected: BackendReleaseExpected):Promise<PreparedApiCli> {
-  if (process.platform !== 'linux') throw failure();
-  const scopedEnvironment = Object.fromEntries(['PATH', 'LANG', 'LC_ALL', 'TZ', 'TMP', 'TEMP'].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]])), global = await execute('npm', ['root', '--global'], { env: scopedEnvironment, windowsHide: true, timeout: 15000, maxBuffer: 65536, shell: false });
-  const globalRoot = resolve(global.stdout.trim()), cliRoot = join(globalRoot, 'vercel'), packagePath=join(cliRoot,'package.json'),packageBytes=await file(cliRoot,packagePath,1024*1024),manifest = JSON.parse(packageBytes.toString('utf8')) as { name?: string; version?: string; bin?: string | Record<string, string> }; if (manifest.name !== 'vercel' || manifest.version !== '62.1.0') throw failure();
-  const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.vercel; if (!bin || isAbsolute(bin)||bin.split(/[\\/]/).some(piece => !piece||piece==='.'||piece === '..')) throw failure(); const cli = join(cliRoot, bin),cliSha256=hash(await file(cliRoot,cli,32*1024*1024));
-  const delivery = join(root, '.local/hosted-release', 'api-delivery-' + randomUUID()); await mkdir(delivery, { mode: 0o700 }); await physical(root, delivery, 'directory');
-  for (const row of artifact.files.filter(row => row.path.startsWith('.vercel/output/'))) { const path = join(delivery, row.path); await mkdir(resolve(path, '..'), { recursive: true }); await writeFile(path, row.bytes, { mode: 0o600 }); }
-  const identity={sourceSha:expected.releaseSha,teamId:expected.targets.api.teamId,projectId:expected.targets.api.projectId},projectBytes=JSON.stringify({ orgId: identity.teamId, projectId: identity.projectId });
-  await mkdir(join(delivery, '.vercel'), { recursive: true }); await writeFile(join(delivery, '.vercel/project.json'), projectBytes, { mode: 0o600 });
-  const inputs=artifact.files.filter(row=>row.path.startsWith('.vercel/output/')).map(row=>({path:row.path,sha256:hash(row.bytes)}));inputs.push({path:'.vercel/project.json',sha256:hash(projectBytes)});let consumed=false;
-  return async(selected,token,operationSha256,signal,admitLaunch)=>{
-    if(consumed)throw failure();consumed=true;
-    if(selected.releaseSha!==identity.sourceSha||selected.targets.api.teamId!==identity.teamId||selected.targets.api.projectId!==identity.projectId||signal.aborted)throw failure();
-    const collect=async(directory:string):Promise<string[]>=>{await physical(root,directory,'directory');const paths:string[]=[];for(const entry of await readdir(directory,{withFileTypes:true})){const path=join(directory,entry.name);if(entry.isDirectory())paths.push(...await collect(path));else{await physical(root,path,'file');paths.push(relative(delivery,path).replaceAll('\\','/'));}}return paths;};
-    const verify=async()=>{const paths=(await collect(delivery)).sort(),wanted=inputs.map(row=>row.path).sort();if(paths.length!==wanted.length||paths.some((path,index)=>path!==wanted[index]))throw failure();for(const row of inputs)if(hash(await file(root,join(delivery,row.path),32*1024*1024))!==row.sha256)throw failure();if(hash(await file(cliRoot,packagePath,1024*1024))!==hash(packageBytes)||hash(await file(cliRoot,cli,32*1024*1024))!==cliSha256)throw failure();};
-    await verify();const consume=await admitLaunch();await verify();consume();if(selected.releaseSha!==identity.sourceSha||selected.targets.api.teamId!==identity.teamId||selected.targets.api.projectId!==identity.projectId||signal.aborted)throw failure();const result = await execute(process.execPath, [cli, 'deploy', '--prebuilt', '--yes', '--target=preview', '--meta', 'cuevoCommitSha=' + identity.sourceSha, '--meta', 'cuevoArtifactSha256=' + artifact.sha256, '--meta', 'cuevoProviderOperation=' + operationSha256, '--scope', identity.teamId], { cwd: delivery, env: { ...scopedEnvironment, VERCEL_TOKEN: token, VERCEL_ORG_ID: identity.teamId, VERCEL_PROJECT_ID: identity.projectId, VERCEL_TELEMETRY_DISABLED: '1' }, shell: false, windowsHide: true, timeout: 20 * 60 * 1000, maxBuffer: 1024 * 1024, signal });
-    const url = result.stdout.trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/.test(url) || url.includes(token)) throw failure(); return url.replace(/\/$/, '');
-  };
+type PreparedApiCli = PreparedBackendProviderCli;
+/** Capture the complete provider input before renewing current native authority. */
+async function prepareApiCli(root:string,artifact:VerifiedArtifact,expected:BackendReleaseExpected,options:{executorSourceSha:string;token:string;operationSha256:string;expiresAtMs:number;signal:AbortSignal}):Promise<PreparedApiCli>{
+ return createBackendProviderCli({repoRoot:root,executorSourceSha:options.executorSourceSha,identity:{sourceSha:expected.releaseSha,artifactSha256:artifact.sha256,teamId:expected.targets.api.teamId,projectId:expected.targets.api.projectId,operationSha256:options.operationSha256},artifactFiles:artifact.files.filter(row=>row.path.startsWith('.vercel/output/')),expiresAtMs:options.expiresAtMs,token:options.token,signal:options.signal});
 }
-async function apiCli(preparedCli:PreparedApiCli,expected:BackendReleaseExpected,token:string,operationSha256:string,signal:AbortSignal,admitLaunch:()=>Promise<()=>void>){return preparedCli(expected,token,operationSha256,signal,admitLaunch);}
+async function apiCli(preparedCli:PreparedApiCli,expected:BackendReleaseExpected,token:string,operationSha256:string,signal:AbortSignal,admitLaunch:()=>Promise<BackendProviderLaunchAdmission>){
+ const identity={sourceSha:expected.releaseSha,artifactSha256:readBackendRuntimeFingerprints(expected.fingerprints).apiArtifactSha256,teamId:expected.targets.api.teamId,projectId:expected.targets.api.projectId,operationSha256};
+ if(signal.aborted||!token||preparedCli.prepared.identitySha256!==hash(JSON.stringify(identity)))throw failure();
+ const result=await preparedCli.run(admitLaunch);if(result.kind!=='URL')throw failure();return result.url;
+}
 /** Provider phases retain original durable intent and confirmed receipts. A
  * current approval admits pending effects; it never recreates an unknown upload. */
 export async function deployBackendProviders(value: DeploymentInput,borrowed?:NativeBackendAdmissionHandle,schemaBorrowed?:NativeBackendAdmissionHandle): Promise<BackendProviderDeploymentResult> {
@@ -188,9 +174,9 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
         if(facts.consumption!=='INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER'||!facts.population||facts.source.sha!==expected.releaseSha||facts.source.tree!==expected.treeSha||observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||Object.values(facts.post.checks).some(value=>value!==true))throw failure();
         verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});postureObservedAt=Math.min(Date.parse(facts.authority.observedAt),facts.observedAtMs,facts.provider.observedAtMs,observed.observedAtMs,facts.post.observedAtMs,facts.population.observedAtMs);live();recoveryLive();return;
        }
-       live();const observed=await database.observe(),post=await database.observeStage({stageId:'remaining',expectedAfterVersions:versions});
+       live();const nativeObservedAt=Date.now(),observed=await database.observe(),post=await database.observeStage({stageId:'remaining',expectedAfterVersions:versions});
        if(observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||post.observedAtMs>Date.now()||Date.now()-post.observedAtMs>30000||Object.values(post.checks).some(value=>value!==true))throw failure();
-       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});postureObservedAt=post.observedAtMs;live();recoveryLive();
+       verifyHostedMigrationHistory({sources:migrationSources,included,expectedVersions:versions,history:observed.historyPresent?observed.history:null});postureObservedAt=Math.min(nativeObservedAt,post.observedAtMs);live();recoveryLive();
       };
       await inactive();
       const vercel = async (path: string, method: 'GET' | 'POST' = 'GET', body?: string) => { live();if(method==='POST')recoveryLive(); const response = await providerRequest('https://api.vercel.com' + path, input.vercelToken, method, body, false, {}, database.signal); live(); return response; };
@@ -285,13 +271,13 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
         const candidate=z.array(z.object({uid:z.string(),url:z.string(),createdAt:number,readyState:z.literal('READY'),state:z.literal('READY').optional(),source:z.literal('cli'),target:z.null().or(z.literal('preview')),meta:z.object({cuevoCommitSha:z.literal(original.sourceSha),cuevoArtifactSha256:z.literal(original.apiArtifactSha256),cuevoProviderOperation:z.literal(operationSha256)})}).passthrough()).length(1).parse(rows.filter(row=>{const meta=(row as {meta?:Record<string,unknown>}).meta;return meta?.cuevoProviderOperation===operationSha256;}))[0];
         return{deploymentId:candidate.uid,url:'https://'+candidate.url,createdAtMs:candidate.createdAt};
       };
-      const apiReceipt = await phase('API_DEPLOYMENT', async () => {
+      let apiReceipt:ProviderDeploymentPhase['receipt'];try{apiReceipt = await phase('API_DEPLOYMENT', async () => {
         const prior = operation?.phases.find(row => row.name === 'API_DEPLOYMENT')?.receipt;
         const discovered=!apiUrl&&prior===null?await discoverOriginalApi():undefined,selectedUrl = apiUrl ?? (prior?.kind === 'API_DEPLOYMENT' ? prior.url : discovered?.url??null); if (!selectedUrl) return null;
         const createdAtMs=prior?.kind==='API_DEPLOYMENT'?prior.createdAtMs:discovered?.createdAtMs;
         const deployment = z.object({ id: discovered?z.literal(discovered.deploymentId):z.string().regex(/^dpl_[A-Za-z0-9]+$/), projectId: z.literal(project), ownerId: z.literal(team), url: z.literal(new URL(selectedUrl).hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), ...(createdAtMs===undefined?{}:{createdAt:z.literal(createdAtMs),source:z.literal('cli')}),meta: z.object({ cuevoCommitSha: z.literal(identity.sourceSha), cuevoArtifactSha256: z.literal(built.api.sha256), cuevoProviderOperation: z.literal(operationSha256) }) }).parse((await vercel('/v13/deployments/' + (prior?.kind === 'API_DEPLOYMENT' ? prior.deploymentId : discovered?.deploymentId??new URL(selectedUrl).hostname) + query)).value);
         return { kind: 'API_DEPLOYMENT', deploymentId: deployment.id, url: selectedUrl,...(createdAtMs===undefined?{}:{createdAtMs}) };
-      }, async () => { if(!preparedCli)throw failure();apiUrl = await apiCli(preparedCli, {...expected,releaseSha:identity.sourceSha}, input.vercelToken, operationSha256, database.signal,async()=>{await admission();built=await artifacts();await inactive();return()=>{live();recoveryLive();if(rollout)assertNativeRuntimeRolloutLease(rolloutLease!,expected);else if(postureObservedAt===undefined||postureObservedAt>Date.now()||Date.now()-postureObservedAt>30000)throw failure();validatePreparedBackendReleaseIntent(prepared,{...expected,now:Date.now()});};}); }, async () => undefined, true,async()=>{preparedCli=await prepareApiCli(root,built.api,{...expected,releaseSha:identity.sourceSha});},true);
+      }, async () => { if(!preparedCli)throw failure();apiUrl = await apiCli(preparedCli, {...expected,releaseSha:identity.sourceSha}, input.vercelToken, operationSha256, database.signal,async()=>{const officialBeganAt=Date.now();await admission();await inactive();const packageExpiry=Date.parse(JSON.parse(prepared.canonicalJson).expiresAt);const notAfterMs=Math.min(packageExpiry,officialBeganAt+30000,rollout?readNativeRuntimeRolloutDeadline(rolloutLease!,expected):postureObservedAt===undefined?0:postureObservedAt+30000);return{notAfterMs,consume:()=>{live();recoveryLive();if(Date.now()<officialBeganAt||Date.now()>=notAfterMs)throw failure();if(rollout)assertNativeRuntimeRolloutLease(rolloutLease!,expected);else if(postureObservedAt===undefined||postureObservedAt>Date.now()||Date.now()>=notAfterMs)throw failure();validatePreparedBackendReleaseIntent(prepared,{...expected,now:Date.now()});}};}); }, async () => undefined, true,async()=>{preparedCli=await prepareApiCli(root,built.api,{...expected,releaseSha:identity.sourceSha},{executorSourceSha:expected.releaseSha,token:input.vercelToken,operationSha256,expiresAtMs:Date.parse(JSON.parse(prepared.canonicalJson).expiresAt),signal:database.signal});},true);}finally{if(preparedCli)await preparedCli.dispose();}
       if (apiReceipt?.kind !== 'API_DEPLOYMENT') throw failure();
       const preview = { repoRoot: root, expected, prepared, apiDeployment: { id: apiReceipt.deploymentId, url: apiReceipt.url } };
       await createBackendPreviewTransport({ ...preview, vercelToken: input.vercelToken }, admission);
@@ -315,5 +301,5 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
     };
     const released=rollout?(await protocol(),{kind:'RELEASED' as const}):await ('withLock'in database?database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`,protocol):Promise.reject(failure()));
     if (released.kind !== 'RELEASED') throw failure(); result.status = rollout?'DEPLOYED_PAUSED':'DEPLOYED_INACTIVE';if(rollout&&result.edge)result.edge.state='PAUSED'; return result;
-  } catch { return result; }finally{try{if(schemaAdmissionHandle&&schemaBorrowed===undefined)disposeNativeBackendReleaseAdmission(schemaAdmissionHandle);if(admissionHandle&&borrowed===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);}finally{if(sourceOperation)disposeCanonicalMigrationOperation(sourceOperation);}}
+  } catch (error) { if(error instanceof BackendProviderCliPreparationError)result.providerExecutionFailure=backendProviderCliFailureSchema.parse(error.evidence);return result; }finally{try{if(schemaAdmissionHandle&&schemaBorrowed===undefined)disposeNativeBackendReleaseAdmission(schemaAdmissionHandle);if(admissionHandle&&borrowed===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);}finally{if(sourceOperation)disposeCanonicalMigrationOperation(sourceOperation);}}
 }

@@ -1,7 +1,8 @@
-export type AuditScope='build-and-runtime'|'runtime';
+export type AuditScope='build-and-runtime'|'runtime'|'provider-cli';
 export function auditArguments(scope:AuditScope):string[]{
  if(scope==='build-and-runtime')return ['audit','--json','--audit-level=moderate'];
  if(scope==='runtime')return ['audit','--omit=dev','--json','--audit-level=moderate'];
+ if(scope==='provider-cli')return ['audit','--prefix','scripts/verification/provider-cli','--omit=dev','--omit=optional','--json','--audit-level=moderate'];
  throw Error('Unknown dependency audit scope.');
 }
 export function dependencyAuditResult(scope:AuditScope,stdout:string,exitCode:number|null){

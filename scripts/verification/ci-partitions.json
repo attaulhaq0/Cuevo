@@ -153,6 +153,7 @@
         "scripts/verification/backend-hosted-recovery.test.ts",
         "scripts/verification/backend-hosted-verification.test.ts",
         "scripts/verification/backend-provider-cli-launch.test.ts",
+        "scripts/verification/backend-provider-cli.test.ts",
         "scripts/verification/backend-provider-deploy.test.ts",
         "scripts/verification/backend-release-prepare.test.ts",
         "scripts/verification/backend-runtime-rollout.test.ts",
@@ -667,6 +668,10 @@
       },
       {
         "path": "scripts/verification/backend-provider-cli-launch.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-provider-cli.test.ts",
         "durationMs": null
       },
       {
