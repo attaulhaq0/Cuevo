@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { readCompletedBackendWebTransferAdmission,readCompletedBackendWebTransferAdmissionAndGuard,disposeCompletedBackendCanonical,type CompletedBackendCanonicalToken } from './backend-web-transfer-admission';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, type ReleaseReviewInput } from './release-review';
+import {validateStagingHostContract,stagingHostContractSha256}from'./backend-staging-host-contract';
 
 const fail = () => Error('Web release backend bridge requires exact completed evidence and review; contents withheld.');
 const id = z.string().regex(/^[1-9][0-9]{0,19}$/).refine(value => Number.isSafeInteger(Number(value)));
@@ -12,6 +13,13 @@ type Admission = Awaited<ReturnType<typeof readCompletedBackendWebTransferAdmiss
 export type WebBackendBridge = Omit<Admission, 'observedAt'>;
 const same = (left: unknown, right: unknown) => canonicalReleaseReviewJson(left) === canonicalReleaseReviewJson(right);
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+function hostIdentity(value:Admission['backendIdentity']){
+ const contract=value.stagingHostContract,digest=value.stagingHostContractSha256;
+ if(contract===undefined&&digest===undefined)return;
+ if(contract===undefined||digest===undefined)throw fail();
+ const host=validateStagingHostContract(contract);
+ if(stagingHostContractSha256(host)!==digest||host.sourceSha!==value.sourceSha||host.treeSha!==value.treeSha||!same(host.targets.web,value.web))throw fail();
+}
 
 /** Missing selection is the original legacy path; partial/foreign input never falls back. */
 export function backendSelectionForWebEvent(raw: unknown, eventName: string, environment: string): WebBackendSelection | null {
@@ -36,8 +44,8 @@ export function readWebBackendSelection(encoded: string): WebBackendSelection | 
 export function encodeWebBackendSelection(selection: WebBackendSelection | null) { return selection ? Buffer.from(canonicalReleaseReviewJson(selection)).toString('base64') : ''; }
 
 type WebBackendBridgeInput={ selection: WebBackendSelection; repoRoot: string; githubToken: string; releaseSha: string; ciRunId: string; environment: string; web: { teamId: string; projectId: string; target: 'preview' | 'production' } };
-const bridgeFromAdmission=(result:Admission):WebBackendBridge=>({ purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,populationEvidence:result.populationEvidence,
- backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false });
+const bridgeFromAdmission=(result:Admission):WebBackendBridge=>{hostIdentity(result.backendIdentity);return{ purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,populationEvidence:result.populationEvidence,
+ backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };};
 export async function readWebBackendBridge(input:WebBackendBridgeInput):Promise<WebBackendBridge>{
   try {
     if (input.environment !== 'staging' || input.web.target !== 'preview') throw fail();
@@ -61,6 +69,7 @@ export function bindWebReviewToBackend(raw: unknown, assignmentsRaw: unknown, br
     const input = JSON.parse(canonicalReleaseReviewJson(raw)) as ReleaseReviewInput;
     const assignments = z.object({ baseSha: z.string(), reviews: z.array(z.object({ category: z.string(), taskId: z.string(), reportSha256: digest, evidenceSha256: digest }).strict()).length(2) }).strict().parse(JSON.parse(canonicalReleaseReviewJson(assignmentsRaw)));
     const b = bridge.backendIdentity;
+    hostIdentity(b);
     if (input.version !== 1 || input.repository !== b.repository || input.releaseSha !== b.sourceSha || input.baseSha !== b.baseSha || input.ciRunId !== b.ciRunId
       || assignments.baseSha !== b.baseSha || !same([...assignments.reviews].sort((a, b) => a.category.localeCompare(b.category)), [...bridge.assignments].sort((a, b) => a.category.localeCompare(b.category)))
       || !same(input.web, { teamId: b.web.teamId, projectId: b.web.projectId, target: b.web.target }) || !Array.isArray(input.reviews) || input.reviews.length !== 2) throw fail();

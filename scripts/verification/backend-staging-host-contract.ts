@@ -93,15 +93,17 @@ const actualVercel = z.object({ id: z.string(), accountId: z.string(), nodeVersi
 
 /** Only the selected API project's current GET is needed here. Transports,
  * response limits, official origin and final native lease remain caller-owned. */
-export function validateApiHostObservation(contractValue: unknown, observation: unknown, contextValue: unknown) {
+function validateVercelHostObservation(surface:'api'|'web',contractValue: unknown, observation: unknown, contextValue: unknown) {
   try {
-    const contract = validateStagingHostContract(contractValue), ctx = context(contextValue, contract), selected = contract.targets.api;
+    const contract = validateStagingHostContract(contractValue), ctx = context(contextValue, contract), selected = contract.targets[surface];
     const observed = read(observation, `https://api.vercel.com/v9/projects/${selected.projectId}?teamId=${selected.teamId}`, ctx), raw = actualVercel.parse(observed.value);
     const settings = { nodeVersion: raw.nodeVersion, fluid: raw.resourceConfig.fluid, functionDefaultRegions: raw.resourceConfig.functionDefaultRegions, autoAssignCustomDomains: raw.autoAssignCustomDomains, ssoDeploymentType: raw.ssoProtection.deploymentType, rootDirectory: raw.rootDirectory, framework: raw.framework };
-    if (raw.id !== selected.projectId || raw.accountId !== selected.teamId || !same(settings, contract.settings.api)) throw fail();
-    return { purpose: 'SUPPLIED_CURRENT_API_HOST_SETTINGS' as const, contractSha256: stagingHostContractSha256(contract), settingsSha256: hash(settings), observedAtMs: observed.startedAtMs, verifiedAtMs: observed.completedAtMs, notAfterMs: observed.notAfterMs, ...noAuthority };
+    if (raw.id !== selected.projectId || raw.accountId !== selected.teamId || !same(settings, contract.settings[surface])) throw fail();
+    return { purpose:surface==='api'?'SUPPLIED_CURRENT_API_HOST_SETTINGS' as const:'SUPPLIED_CURRENT_WEB_HOST_SETTINGS' as const, contractSha256: stagingHostContractSha256(contract), settingsSha256: hash(settings), observedAtMs: observed.startedAtMs, verifiedAtMs: observed.completedAtMs, notAfterMs: observed.notAfterMs, ...noAuthority };
   } catch { throw fail(); }
 }
+export function validateApiHostObservation(contractValue:unknown,observation:unknown,contextValue:unknown){return validateVercelHostObservation('api',contractValue,observation,contextValue);}
+export function validateWebHostObservation(contractValue:unknown,observation:unknown,contextValue:unknown){return validateVercelHostObservation('web',contractValue,observation,contextValue);}
 const actualProject = z.object({ id: ref, status: z.literal('ACTIVE_HEALTHY'), region, database: z.object({ host: z.string(), version: z.string().regex(/^17\.\d+(?:\.\d+){0,2}$/), postgres_engine: z.literal('17') }) });
 export function validateEdgeHostObservation(contractValue: unknown, observation: unknown, contextValue: unknown) {
   try {

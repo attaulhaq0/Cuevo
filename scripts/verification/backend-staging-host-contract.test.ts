@@ -9,6 +9,7 @@ type Subject = {
   requireStagingHostContract(value: unknown): Record<string, unknown>;
   runtimeConnectionDescriptors(value: unknown, contract: unknown): { api: { host: string; port: number; role: string }; worker: { host: string; port: number; role: string } };
   validateApiHostObservation(contract: unknown, observation: unknown, context: unknown): { settingsSha256: string; notAfterMs: number; effectAuthority: false; hostedAcceptance: false };
+  validateWebHostObservation(contract: unknown, observation: unknown, context: unknown): { settingsSha256: string; notAfterMs: number; effectAuthority: false; hostedAcceptance: false };
   validateEdgeHostObservation(contract: unknown, observation: unknown, context: unknown): { settingsSha256: string; effectAuthority: false; hostedAcceptance: false };
   validateSessionPoolerObservation(contract: unknown, observation: unknown, context: unknown): { clientCeiling: { state: string; value: number | null }; basis: string; effectAuthority: false };
   validateRuntimeConnectionSnapshot(value: unknown, contract: unknown, context: unknown): { scope: string; backendConnections: number; capacityAdequate: null; effectAuthority: false };
@@ -79,6 +80,14 @@ test('fixed API readback compares only its current project settings with exact s
   for (const patch of [{ method: 'POST' }, { url: apiRead().url + '&other=1' }, { startedAtMs: clock - 30001 }, { completedAtMs: clock + 1 }]) assert.throws(() => api.validateApiHostObservation(contract(), { ...apiRead(), ...patch }, context()));
   assert.throws(() => api.validateApiHostObservation(contract(), apiRead(), { ...context(), notAfterMs: clock }));
   assert.throws(() => api.validateApiHostObservation(contract(), apiRead(), { ...context(), sourceSha: 'e'.repeat(40) }));
+});
+
+test('web host readback uses the same exact project tuple boundary with original clocks and no authority',async()=>{
+ const api=await subject(),value={...apiValue(),id:webProject,rootDirectory:'apps/web',framework:'nextjs'},observation=fixed(`https://api.vercel.com/v9/projects/${webProject}?teamId=${team}`,value),result=api.validateWebHostObservation(contract(),observation,context());
+ assert.equal(result.effectAuthority,false);assert.equal(result.hostedAcceptance,false);assert.equal(result.notAfterMs,clock+15000);
+ for(const patch of[{id:apiProject},{accountId:'team_Other'},{rootDirectory:null},{framework:null},{nodeVersion:'22.x'},{autoAssignCustomDomains:true},{ssoProtection:null},{resourceConfig:{fluid:false,functionDefaultRegions:['sin1']}},{resourceConfig:{fluid:true,functionDefaultRegions:['iad1']}}])assert.throws(()=>api.validateWebHostObservation(contract(),{...observation,value:{...value,...patch}},context()));
+ assert.throws(()=>api.validateWebHostObservation(contract(),apiRead(),context()));assert.throws(()=>api.validateApiHostObservation(contract(),observation,context()));
+ for(const patch of[{startedAtMs:clock-30001},{completedAtMs:clock+1},{method:'POST'}])assert.throws(()=>api.validateWebHostObservation(contract(),{...observation,...patch},context()));
 });
 
 test('Edge project readback requires the bound Supabase identity, actual region and engine without guessing hosted runtime capacity', async () => {

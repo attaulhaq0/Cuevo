@@ -14,6 +14,7 @@ import {validateOperatingStagingHandoff} from './operating-staging-handoff';
 import {readCanonicalRuntimeJobsAndGuard} from './canonical-runtime-jobs';
 import {createGithubCodeqlArtifactReader} from './staging-security';
 import {captureCanonicalSourceContext} from './canonical-source-jobs';
+import {requireStagingHostContract,stagingHostContractSha256} from './backend-staging-host-contract';
 
 const fail = () => Error('Completed backend web handover consumption requires review; contents withheld.');
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -146,11 +147,12 @@ async function readCompletedBackendCapture(value: unknown) {
       await canonical.refreshOriginalMetadata();validateCompletedBackendWebApproval(finalRun,await get('actions/runs/'+input.backendRunId+'/approvals'),raw,Date.now(),input.handoff);
       validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);finalSource.finalPhysical();context.finalMetadata();canonical.assertOriginalValidity();
       if (controller.signal.aborted||Date.now()>=Date.parse(artifact.expires_at)) throw fail();
+      const stagingHostContract=admitted.body.stagingHostContract===undefined?undefined:requireStagingHostContract(admitted.expected);
       const admission={ purpose: input.handoff==='operating-staging'?'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION' as const:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
         manifest: admitted.manifest, publicConfig: admitted.publicConfig, reviewFacts: admitted.reviewFacts, assignments: admitted.assignments,
         originalEvidence: admitted.transfer.evidence,populationEvidence:'populationEvidence'in admitted?admitted.populationEvidence:null,
         backendIdentity: { repository, sourceSha: input.releaseSha, treeSha: admitted.body.treeSha, baseSha: admitted.body.baseSha, ciRunId: input.ciRunId, runId: input.backendRunId, runAttempt: input.backendRunAttempt, artifactId: input.artifactId,
-          artifactSha256: artifact.digest.slice(7), transferSha256: input.transferSha256, manifestSha256: admitted.transfer.manifestSha256, packageSha256: admitted.prepared.sha256, web: admitted.body.targets.web, settingsSha256: admitted.transfer.settings.settingsSha256,
+          artifactSha256: artifact.digest.slice(7), transferSha256: input.transferSha256, manifestSha256: admitted.transfer.manifestSha256, packageSha256: admitted.prepared.sha256, web: admitted.body.targets.web, settingsSha256: admitted.transfer.settings.settingsSha256,...(stagingHostContract?{stagingHostContract,stagingHostContractSha256:stagingHostContractSha256(stagingHostContract)}:{}),
           earliestProofAt: admitted.transfer.earliestProofAt, exportedAt: admitted.transfer.exportedAt, consumptionExpiresAt: admitted.transfer.consumptionExpiresAt },
         observedAt: new Date().toISOString(), privateProofReexecuted: false as const, backendMutationAllowed: false as const, customerReady: false as const, hostedAcceptance: false as const };
       const dispose=()=>{clearTimeout(timer);controller.abort();};

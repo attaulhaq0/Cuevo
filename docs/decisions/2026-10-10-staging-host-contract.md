@@ -1,6 +1,6 @@
 # Bind staging host settings to the existing release
 
-Status: implemented locally for backend provider admission and under final integration review. Protected CI, frontend consumption and actual hosted acceptance remain pending.
+Status: backend and frontend consumption implemented locally and under final integration review. Protected CI and actual hosted acceptance remain pending.
 
 The backend approval package can carry an explicit, secret-free staging host contract. Its source/tree, targets, region, runtime, protection, connection recipe and unchanged application limits are configuration chosen for that exact package. The schema does not hard-code the current project or supply effect authority. Historical packages retain field omission and their original bytes, hashes, comments and clocks.
 
@@ -16,6 +16,8 @@ The initializer consumes the approved digest when present in the original provid
 
 The two new tests have one direct/required owner and one source partition each. The host-contract test belongs to CICD/source-contracts; the fixed scalar test belongs to hosted-plan/source-delivery. Unknown timing measurements remain null.
 
-Frontend transfer, web environment, alias and deployment consumers must still project the original approved tuple and compare current applicable project settings before their effects. That follow-on implementation reuses the same validator; it must not add another transfer ledger or current-state cache.
+Completed transfer admission projects the optional original approved tuple and digest into its existing backend identity. Historical transfer versions, producer inventories, receipt bytes and clocks remain unchanged. The bridge checks the exact source/tree/web target and rejects incomplete or substituted projections. Original approved expectations never become cached current settings.
+
+Web environment, API alias, web alias and bridged frontend CLI consumers compare only their applicable current Vercel project with that expectation immediately before effects. Their current reads preserve original package, host and applicable native deadlines. The frontend pull/build/deploy guard runs after expensive approval/artifact checks and before the final executable checks and synchronous launch. Historical read-only paths remain distinct from new effect capability; standalone production keeps its existing separate approval route. These changes add no transfer ledger or current-state cache.
 
 Actual TLS/role and pool lifecycle, cold/warm/concurrent requests, intended-origin access, Edge CPU and complete invocation timing, lost-wake recovery and cleanup require controlled hosted verification after deployment. Local source tests and a valid snapshot cannot establish those facts. The agreed 20–25-minute deployment target remains unmeasured; PR CI and full customer acceptance have separate durations and gates.

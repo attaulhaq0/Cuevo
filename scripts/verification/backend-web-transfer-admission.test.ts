@@ -18,6 +18,7 @@ import { transformSync } from 'esbuild';
 import { backendWebTransferProducerPaths,operatingBackendWebTransferProducerPaths,operatingBackendWebTransferEvidenceNames } from './backend-web-transfer';
 import {withCanonicalJobFixture}from'./canonical-source-job-fixtures';
 import {spawnSync}from'node:child_process';
+import {validateStagingHostContract,stagingHostContractSha256,type StagingHostContract} from './backend-staging-host-contract';
 
 const { yazl } = createRequire(import.meta.url)('playwright-core/lib/utilsBundle') as { yazl: { ZipFile: new () => { outputStream: Readable; addBuffer(bytes: Buffer, name: string, options?: object): void; end(): void } } };
 async function archive(files: { name: string; bytes: Buffer; options?: object }[]) {
@@ -103,7 +104,7 @@ async function nativeReader() {
   } });
   try { return await import(pathToFileURL(resolve(import.meta.dirname, 'backend-web-transfer-admission.ts')).href + '?controlled'); } finally { hooks.deregister(); }
 }
-async function officialFixture(run: (value: { input: Record<string, unknown>; responses: Map<string, unknown>; root: string; calls: string[] }) => Promise<void>, precision: 'ordinary' | 'same-second' = 'ordinary',operating=false) {
+async function officialFixture(run: (value: { input: Record<string, unknown>; responses: Map<string, unknown>; root: string; calls: string[]; originalTransfer:unknown; expectedHost?:StagingHostContract }) => Promise<void>, precision: 'ordinary' | 'same-second' = 'ordinary',operating=false,hostMode?:'valid'|'string'|'source'|'private'|'target') {
   const root = await mkdtemp(join(tmpdir(), 'cuevo-transfer-admission-')), oldFetch = globalThis.fetch;
   const keys = ['GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'GITHUB_WORKSPACE', 'GITHUB_SHA', 'GITHUB_REF', 'GITHUB_EVENT_NAME', 'GITHUB_REPOSITORY'];
   const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
@@ -126,7 +127,10 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
     // This fixture isolates completed handover consumption. Genuine original
     // partition archive/source proof is exercised by canonical-source-jobs tests.
     const jobsResponse={total_count:runtimeJobs.length+otherJobs.length,jobs:[...runtimeJobs,...otherJobs]},canonical={runAttempt:rawCi.run_attempt,jobsSha256:transferFixtureHash(JSON.stringify({run:rawCi,current:rawCi,jobs:jobsResponse}))},body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson);
-    fixture.transfer.preparedApproval=prepareBackendReleaseIntent({...body,canonicalRuntimeVerification:canonical},{...fixture.expected,canonicalRuntimeVerification:canonical});fixture.approvals[0].comment=fixture.transfer.preparedApproval.comment;
+    let expectedHost:StagingHostContract|undefined;
+    if(hostMode){const settings=(rootDirectory:string|null,framework:string|null)=>({nodeVersion:'24.x',fluid:true,functionDefaultRegions:['sin1'],autoAssignCustomDomains:false,ssoDeploymentType:'all_except_custom_domains',rootDirectory,framework});expectedHost=validateStagingHostContract({version:1,purpose:'CUEVO_STAGING_HOST_CONTRACT',sourceSha,treeSha,deploymentEnvironment:'synthetic-staging',targets:body.targets,settings:{api:settings(null,null),web:settings('apps/web','nextjs'),supabase:{region:'ap-southeast-1',postgresEngine:'17',applicationConnection:{kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'}}},sourceBounds:{api:{node:'24',maxDurationSeconds:60,poolMax:10,connectionTimeoutMs:3000,idleTimeoutMs:10000,statementTimeoutMs:5000},worker:{poolMax:1,connectionTimeoutMs:3000,statementTimeoutMs:5000,processingDeadlineMs:20000,claimReserveMs:15000,eventLeaseSeconds:30,invocationLeaseSeconds:60,deliveryTimeoutMs:30000,recoveryIntervalSeconds:60}},capacity:{postgres:{maxConnections:60,superuserReservedConnections:3},sessionPoolerClientCeiling:{state:'UNKNOWN',value:null}},exposure:{audience:'PRIVATE_SYNTHETIC_OPERATORS',roleScope:'FIVE_REFERENCE_ROLES',gatewayPolicy:'EXISTING_PROTECTED_PREVIEW_AND_RESERVED_ORIGIN',clientAddressPolicy:'HOSTED_VERIFICATION_PENDING',fleetProtection:'NOT_VERIFIED'}});}
+    fixture.transfer.preparedApproval=prepareBackendReleaseIntent({...body,canonicalRuntimeVerification:canonical,...(expectedHost?{stagingHostContract:expectedHost}:{})},{...fixture.expected,canonicalRuntimeVerification:canonical,...(expectedHost?{stagingHostContract:expectedHost}:{})});fixture.approvals[0].comment=fixture.transfer.preparedApproval.comment;
+    if(hostMode&&hostMode!=='valid'){const altered=JSON.parse(fixture.transfer.preparedApproval.canonicalJson);if(hostMode==='string')altered.stagingHostContract='private-raw-canary';if(hostMode==='source')altered.stagingHostContract.sourceSha='f'.repeat(40);if(hostMode==='private')altered.stagingHostContract.privateToken='private-raw-canary';if(hostMode==='target')altered.stagingHostContract.targets.web.projectId='prj_Foreign';const canonicalJson=canonicalReleaseExecutionJson(altered),sha256=transferFixtureHash(canonicalJson);fixture.transfer.preparedApproval={...fixture.transfer.preparedApproval,canonicalJson,base64:Buffer.from(canonicalJson).toString('base64'),sha256,comment:`Cuevo backend staging admission approved: sha=${sourceSha}; run=51; attempt=1; package=sha256:${sha256}`};fixture.approvals[0].comment=fixture.transfer.preparedApproval.comment;}
     let selected:unknown=fixture.transfer;
     if(operating){const full=fixture.transfer.manifest as {api:{deploymentUrl:string};database:{migrations:{version:string;sha256:string}[]};publicConfig:unknown},body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson),digest='b'.repeat(64),receipt={version:1,purpose:'CUEVO_OPERATING_SYNTHETIC_STAGING_HANDOFF',repository:body.repository,sourceSha:sourceSha,treeSha,runId:'51',runAttempt:1,packageSha256:fixture.transfer.preparedApproval.sha256,observedAt:fixture.transfer.earliestProofAt,generation:'2',database:{projectRef:body.targets.supabase.projectRef,migrationCount:full.database.migrations.length,migrationManifestSha256:transferFixtureHash(canonicalReleaseExecutionJson([...full.database.migrations].sort((a,b)=>a.version.localeCompare(b.version)))),historySha256:digest,authIdentities:133,schools:2,permissionsVerified:true},api:{projectId:'prj_Api',teamId:'team_Cuevo',deploymentId:'dpl_Api',deploymentUrl:full.api.deploymentUrl,origin:body.targets.api.origin,artifactSha256:body.fingerprints.apiArtifactSha256,healthVerified:true,currentActorVerified:true,corsVerified:true},worker:{edgeId:'edge',edgeVersion:2,artifactSha256:body.fingerprints.edgeArtifactSha256,denoLockSha256:body.fingerprints.denoLockSha256,runtimeSha256:digest,generation:'2',operatingVerified:true,privateTransportVerified:true,admissionPaused:false},privateAccess:{dataApiDisabled:true,anonymousDenied:true,authenticatedDenied:true,serviceDenied:true,storageVerified:true,realtimeVerified:true},cleanup:{lockReleased:true,sessionsClosed:true,receiptSha256:digest},publicConfig:full.publicConfig,customerAcceptance:false,remainingAcceptance:['FULL_HOSTED_CUSTOMER_ACCEPTANCE','RESTORE_AND_OPERATIONAL_APPROVAL','CURRICULUM_RIGHTS_AND_SCHOOL_APPROVAL']};const producers=[];for(const path of operatingBackendWebTransferProducerPaths){const bytes=readFileSync(join(root,path));producers.push({path,sha256:transferFixtureHash(bytes)});}selected={...fixture.transfer,version:2,purpose:'CUEVO_OPERATING_BACKEND_WEB_HANDOVER',status:'EXPORTED_OPERATING_BACKEND_HANDOVER',manifest:receipt,manifestSha256:transferFixtureHash(canonicalReleaseExecutionJson(receipt)),receiptScope:'ORIGINAL_NATIVE_OPERATING_BACKEND_AND_CLEANUP',producers,evidence:operatingBackendWebTransferEvidenceNames.map(name=>({name,sha256:digest}))};}
     const text = canonicalReleaseExecutionJson(selected), zip = await archive([{ name: 'web-transfer.json', bytes: Buffer.from(text) }]);
@@ -149,7 +153,7 @@ async function officialFixture(run: (value: { input: Record<string, unknown>; re
       if (path === 'actions/artifacts/71/zip') { assert.equal(options?.redirect, 'manual'); return new Response(null, { status: 302, headers: { location: 'https://productionresultssafixture.blob.core.windows.net/artifacts/archive?sig=controlled' } }); }
       assert.equal(options?.redirect, 'error'); if (!responses.has(path)) throw Error('Unexpected fixed path'); return Response.json(responses.get(path));
     };
-    await run({ input: {...(operating?{handoff:'operating-staging'}:{}),repoRoot: root, githubToken: 'private-github-canary', releaseSha: sourceSha, ciRunId: '31', backendRunId: '51', backendRunAttempt: 1, artifactId: '71', transferSha256: transferFixtureHash(text), web: { teamId: 'team_Cuevo', projectId: 'prj_Web', target: 'preview' } }, responses, root, calls });
+    await run({ input: {...(operating?{handoff:'operating-staging'}:{}),repoRoot: root, githubToken: 'private-github-canary', releaseSha: sourceSha, ciRunId: '31', backendRunId: '51', backendRunAttempt: 1, artifactId: '71', transferSha256: transferFixtureHash(text), web: { teamId: 'team_Cuevo', projectId: 'prj_Web', target: 'preview' } }, responses, root, calls,originalTransfer:selected,...(expectedHost?{expectedHost}:{}) });
   } finally {
     globalThis.fetch = oldFetch; for (const key of keys) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; }
     assert.equal(resolve(root, '..'), resolve(tmpdir())); await rm(root, { recursive: true, force: true });
@@ -170,6 +174,22 @@ test('controlled official completed artifact source and review reader sends no t
     assert.equal(result.originalEvidence.filter((row: { name: string }) => row.name === 'population-result.json').length, 1);
     assert(fixture.calls.includes('productionresultssafixture.blob.core.windows.net/artifacts/archive'));
   });
+});
+
+test('completed transfer admission projects only the original approved host contract and digest without changing old transfer clocks',async()=>{
+ const api=await nativeReader();await officialFixture(async fixture=>{
+  const before=canonicalReleaseExecutionJson(fixture.originalTransfer),result=await api.readCompletedBackendWebTransferAdmission(fixture.input);
+  assert.deepEqual(result.backendIdentity.stagingHostContract,fixture.expectedHost);assert.equal(result.backendIdentity.stagingHostContractSha256,stagingHostContractSha256(fixture.expectedHost));
+  assert.ok(result.backendIdentity.stagingHostContract);
+  assert.equal(result.backendIdentity.stagingHostContract.sourceSha,result.backendIdentity.sourceSha);assert.equal(result.backendIdentity.stagingHostContract.treeSha,result.backendIdentity.treeSha);
+  const original=validateSelectedBackendWebTransfer(fixture.originalTransfer,Date.now());
+  assert.equal(canonicalReleaseExecutionJson(fixture.originalTransfer),before);assert.equal(canonicalReleaseExecutionJson(result.publicConfig),canonicalReleaseExecutionJson(original.publicConfig));assert.equal(Object.hasOwn(result.backendIdentity,'currentHostSettings'),false);
+ },'ordinary',false,'valid');
+ await officialFixture(async fixture=>{const result=await api.readCompletedBackendWebTransferAdmission(fixture.input);assert.equal(Object.hasOwn(result.backendIdentity,'stagingHostContract'),false);assert.equal(Object.hasOwn(result.backendIdentity,'stagingHostContractSha256'),false);});
+});
+
+test('forged string private source and target host contract cannot become completed transfer authority',async()=>{
+ const api=await nativeReader();for(const mode of['string','private','source','target']as const)await officialFixture(async fixture=>{await assert.rejects(api.readCompletedBackendWebTransferAdmission(fixture.input),error=>!String(error).includes('private-raw-canary'));},'ordinary',false,mode);
 });
 
 test('one canonical handover acquisition still refuses final approval controls artifacts and checkout drift',async()=>{
