@@ -781,7 +781,6 @@ async function runInstalledPopulationLearningFixture(mode:'valid'|'saved-file-ra
     };
     if(mode==='saved-file-race'){assert.equal(observation.phase,'SAVED_FILE_RACE_REFUSED');return;}
     assert.equal(observation.phase, 'REAL_INSTALLED_TRANSFER_EXPORTED_AND_ADMITTED');
-    await writeFile(resolve('.local/20261010-population-bridge-red/green-child-observation.json'), child.stdout.trim());
     assert.equal(observation.savedBytesUnchanged, true);
     assert.equal(observation.fullHandoverGatesSubstituted, true);
     assert.equal(observation.populationGateEntries, 1,
