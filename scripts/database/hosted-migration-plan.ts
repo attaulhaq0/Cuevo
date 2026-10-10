@@ -163,6 +163,18 @@ function checkedCurrentRoot(input:{repoRoot:string;sourceSha:string;treeSha:stri
   if(git(['for-each-ref','--format=%(refname)','refs/replace']).length)throw failure();return{root:actual,git};
 }
 
+/** Purpose-specific immutable Edge build inputs through the same bounded Git/history controls. No command/SQL authority escapes. */
+export function readCanonicalEdgeBuildSources(repoRoot: string) {
+  const { root, git } = checkedRoot(repoRoot), sourceSha = git(['rev-parse', '--verify', 'HEAD^{commit}']).toString().trim(), treeSha = git(['rev-parse', '--verify', 'HEAD^{tree}']).toString().trim();
+  if (!sha.safeParse(sourceSha).success || !sha.safeParse(treeSha).success) throw failure();
+  const allowed = ['apps/worker/src', 'packages/contracts/src/analytics.ts', 'packages/config/src/synthetic-runtime.ts', 'package-lock.json', 'apps/worker/deno.lock'];
+  const tree = git(['ls-tree', '-r', '-z', sourceSha, '--', ...allowed]), rows = tree.toString('utf8').split('\0').filter(Boolean).map(row => { const match = /^100644 blob ([a-f0-9]{40})\t(.+)$/.exec(row); if (!match) throw failure(); const path = match[2]; if (!(path.startsWith('apps/worker/src/') && path.endsWith('.ts') || allowed.slice(1).includes(path)) || path.split('/').some(part => !part || part === '.' || part === '..')) throw failure(); return { blob: match[1], path }; });
+  if (!rows.length || rows.length > 1000 || new Set(rows.map(row => row.path)).size !== rows.length || !rows.some(row => row.path === 'apps/worker/src/edge.ts') || allowed.slice(1).some(path => !rows.some(row => row.path === path))) throw failure();
+  git(['diff', '--quiet', '--no-ext-diff', '--no-textconv', sourceSha, '--', ...allowed]); if (git(['ls-files', '--others', '--exclude-standard', '-z', '--', ...allowed]).length) throw failure();
+  let total = 0; const files = rows.map(row => { const bytes = git(['cat-file', 'blob', row.blob]); total += bytes.length; if (bytes.length > 2 * 1024 * 1024 || total > 16 * 1024 * 1024) throw failure(); let current = root; for (const part of row.path.split('/')) { current = join(current, part); if (lstatSync(current).isSymbolicLink() || realpathSync(current) !== resolve(current)) throw failure(); } const stat = lstatSync(current); if (!stat.isFile() || stat.nlink !== 1 || !readFileSync(current).equals(bytes)) throw failure(); return { path: row.path, bytes: Buffer.from(bytes), sha256: hash(bytes) }; });
+  return { root, sourceSha, treeSha, files };
+}
+
 /** Real Git metadata and binary blobs are loaded independently of normalized working-file bytes. */
 const normalizeMigrationBytes=(value:Uint8Array)=>Buffer.from(value.filter((byte,index)=>byte!==13||value[index+1]!==10));
 function verifyMigrationBlobMetadata(git:ReturnType<typeof gitReader>,tree:Uint8Array,sources:MigrationSource[]){

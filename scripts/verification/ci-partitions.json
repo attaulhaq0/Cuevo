@@ -125,6 +125,9 @@
         "scripts/repository/rules.test.ts",
         "scripts/runtime/build-artifacts.test.ts",
         "scripts/runtime/build-edge-artifact.test.ts",
+        "scripts/runtime/edge-bundle-preparation.test.ts",
+        "scripts/runtime/edge-compiler-snapshot.test.ts",
+        "scripts/runtime/edge-prepared-artifact.test.ts",
         "scripts/runtime/environment.test.ts",
         "scripts/runtime/foundry-environment.test.ts",
         "scripts/runtime/initial-school.test.ts",
@@ -537,6 +540,18 @@
       {
         "path": "scripts/runtime/build-edge-artifact.test.ts",
         "durationMs": null
+      },
+      {
+        "durationMs": null,
+        "path": "scripts/runtime/edge-bundle-preparation.test.ts"
+      },
+      {
+        "durationMs": null,
+        "path": "scripts/runtime/edge-compiler-snapshot.test.ts"
+      },
+      {
+        "durationMs": null,
+        "path": "scripts/runtime/edge-prepared-artifact.test.ts"
       },
       {
         "path": "scripts/runtime/environment.test.ts",

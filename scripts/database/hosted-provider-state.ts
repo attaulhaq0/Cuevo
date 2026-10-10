@@ -6,11 +6,14 @@ const sha = z.string().regex(/^[a-f0-9]{40}$/), digest = z.string().regex(/^[a-f
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const identity = z.object({ sourceSha: sha, treeSha: sha, apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest, runtimeSha256: digest,
   teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), projectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), originalRunId: z.string().regex(/^[1-9][0-9]*$/), originalRunAttempt: positive, originalPackageSha256: digest,releaseGeneration:z.string().regex(/^[1-9][0-9]{0,18}$/).refine(value=>BigInt(value)<=9223372036854775807n).optional(),operationSha256:digest.optional(),executorSourceSha:sha.optional(),executorTreeSha:sha.optional() }).strict();
-const receipts = z.discriminatedUnion('kind', [
+export const preparedEdgeContentBindingSchema=z.object({artifactVersion:z.literal(2),rawEszipSha256:digest,ezbrSha256:digest,rawByteSize:z.number().int().min(9).max(32*1024*1024),entrypoint:z.literal('edge/index.ts')}).strict();
+export type PreparedEdgeContentBinding=z.infer<typeof preparedEdgeContentBindingSchema>;
+const receipts = z.union([
   z.object({ kind: z.literal('API_ENVIRONMENT'), keysSha256: digest, valuesSha256: digest, variables: z.array(z.object({ key: z.string().min(1).max(100), id: z.string().min(1).max(200), valueSha256: digest }).strict()).min(1).max(100) }).strict(),
   z.object({ kind: z.literal('API_DEPLOYMENT'), deploymentId: z.string().regex(/^dpl_[A-Za-z0-9]+$/), url: z.string().url().refine(value => { const url = new URL(value); return url.protocol === 'https:' && url.origin === value && /^[a-z0-9-]+\.vercel\.app$/.test(url.hostname); }),createdAtMs:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional() }).strict(),
   z.object({ kind: z.literal('EDGE_SECRETS'), valuesSha256: digest, variables: z.array(z.object({ name: z.string().min(1).max(100), valueSha256: digest }).strict()).min(1).max(100) }).strict(),
   z.object({ kind: z.literal('EDGE_DEPLOYMENT'), id: z.string().min(1).max(200), version: positive }).strict(),
+  z.object({kind:z.literal('EDGE_DEPLOYMENT'),id:z.string().min(1).max(200),version:positive,artifactVersion:z.literal(2),rawEszipSha256:digest,ezbrSha256:digest,rawByteSize:z.number().int().min(9).max(32*1024*1024),entrypoint:z.literal('edge/index.ts')}).strict(),
 ]);
 export const providerPhaseOrder = ['API_ENVIRONMENT', 'API_DEPLOYMENT', 'EDGE_SECRETS', 'EDGE_DEPLOYMENT'] as const;
 const phase = z.object({ name: z.enum(providerPhaseOrder), state: z.enum(['INTENT', 'CONFIRMED']), receipt: receipts.nullable() }).strict();

@@ -19,7 +19,7 @@ export const verificationSteps=[
  {name:'api-runtime-artifact',args:['--import','tsx','scripts/runtime/build-api-artifacts.ts']},
  {name:'worker-runtime-artifact',args:['--import','tsx','scripts/runtime/build-artifacts.ts','worker']},
  {name:'edge-runtime-artifact',args:['--import','tsx','scripts/runtime/build-edge-artifact.ts']},
- {name:'edge-artifact-fixtures',args:['--import','tsx','--test','scripts/runtime/build-edge-artifact.test.ts','scripts/runtime/build-artifacts.test.ts']},
+ {name:'edge-artifact-fixtures',args:['--import','tsx','--test','scripts/runtime/build-edge-artifact.test.ts','scripts/runtime/edge-prepared-artifact.test.ts','scripts/runtime/edge-compiler-snapshot.test.ts','scripts/runtime/edge-bundle-preparation.test.ts','scripts/runtime/build-artifacts.test.ts']},
  {name:'edge-verification-fixtures',args:['--import','tsx','--test','scripts/verification/edge-worker.test.ts']},
  {name:'browser-secrets',args:['--import','tsx','scripts/verification/browser-secrets.ts'],configured:true},
  {name:'dependency-security',args:['--import','tsx','scripts/verification/dependency-security.ts'],configured:true},

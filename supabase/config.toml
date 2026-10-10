@@ -60,5 +60,5 @@ enabled = false
 [functions.cuevo-worker]
 enabled = true
 verify_jwt = false
-entrypoint = '../.local/edge-artifacts/cuevo-worker/index.ts'
-import_map = '../.local/edge-artifacts/cuevo-worker/deno.json'
+entrypoint = '../.local/verification/edge-serving/cuevo-worker/index.ts'
+import_map = '../.local/verification/edge-serving/cuevo-worker/deno.json'
