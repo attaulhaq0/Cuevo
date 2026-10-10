@@ -5,12 +5,15 @@
     {
       "id": "source-native",
       "files": [
+        "scripts/database/hosted-child-catalogue-producer.test.ts",
+        "scripts/database/hosted-child-catalogue-reference.test.ts",
         "scripts/database/hosted-migration-database-tls.test.ts",
         "scripts/database/hosted-migration-database.test.ts",
         "scripts/database/hosted-migration-execution.test.ts",
         "scripts/database/hosted-migration-executor.test.ts",
         "scripts/database/hosted-migration-native-process.test.ts",
         "scripts/database/hosted-migration-quiescence.test.ts",
+        "scripts/database/hosted-original-child-recovery.test.ts",
         "scripts/database/hosted-original-native-intent.test.ts",
         "scripts/database/hosted-runtime-role-membership.test.ts",
         "scripts/database/hosted-schema-reconciliation-executor.test.ts",
@@ -26,6 +29,7 @@
         "scripts/database/hosted-schema-continuation-native.test.ts",
         "scripts/verification/account-capture-cleanup.test.ts",
         "scripts/verification/backend-api-origin.test.ts",
+        "scripts/verification/backend-child-catalogue-admission.test.ts",
         "scripts/verification/backend-ci-artifact-admission.test.ts",
         "scripts/verification/backend-preview-transport.test.ts",
         "scripts/verification/backend-release-admission.test.ts",
@@ -336,6 +340,14 @@
         "durationMs": null
       },
       {
+        "path": "scripts/database/hosted-child-catalogue-producer.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-child-catalogue-reference.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/database/hosted-installed-state.test.ts",
         "durationMs": null
       },
@@ -421,6 +433,10 @@
       },
       {
         "path": "scripts/database/hosted-operator-storage-policy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-original-child-recovery.test.ts",
         "durationMs": null
       },
       {
@@ -565,6 +581,10 @@
       },
       {
         "path": "scripts/verification/backend-api-origin.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-child-catalogue-admission.test.ts",
         "durationMs": null
       },
       {

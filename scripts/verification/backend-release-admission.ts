@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import {types} from 'node:util';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
@@ -9,6 +10,7 @@ import { readStagingVerificationJobsAndGuard } from './staging-verification-jobs
 import {captureCanonicalSourceContext} from './canonical-source-jobs';
 import {readCanonicalRuntimeJobsAndGuard} from './canonical-runtime-jobs';
 import {readCanonicalSchemaJobsAndGuard} from './canonical-schema-jobs';
+import {readChildCatalogueReferenceAndGuard} from './backend-child-catalogue-admission';
 import { createGithubCodeqlArtifactReader } from './staging-security';
 import { canonicalReleaseReviewJson } from './release-review';
 import { validatePreparedBackendReleaseIntent, validateFounderBackendApproval, type BackendReleaseExpected } from './backend-release-contracts';
@@ -66,40 +68,57 @@ export async function readBackendReleaseSourceEvidenceAndGuard(root:string,expec
 /** Public source evidence retains its original serializable fingerprint shape. */
 export async function readBackendReleaseSourceEvidence(root:string,expected:Parameters<typeof readBackendReleaseSourceEvidenceAndGuard>[1]){return(await readBackendReleaseSourceEvidenceAndGuard(root,expected)).proof;}
 
-/** Native current GitHub/Git reads only; no package comment, provider credential or source fingerprint is treated as caller-verified authority. */
-export async function readBackendReleaseAdmission(value:unknown):Promise<NativeBackendReleaseAdmission>{
+declare const nativeBackendAdmissionBrand:unique symbol;
+export type NativeBackendAdmissionHandle={readonly[nativeBackendAdmissionBrand]:true};
+const nativeBackendAdmissions=new WeakMap<object,{binding:string;read:()=>Promise<NativeBackendReleaseAdmission>;dispose:()=>void;active:boolean;invalid:boolean;disposed:boolean}>();
+function admissionBinding(value:unknown){
+ const checked=z.object({repoRoot:z.string(),prepared:z.unknown(),expected:z.unknown(),effectScope:inputSchema.shape.effectScope}).strict().parse(JSON.parse(canonicalReleaseReviewJson(value))),expected=JSON.parse(canonicalReleaseReviewJson(checked.expected)) as Record<string,unknown>;delete expected.now;
+ return canonicalReleaseReviewJson({...checked,expected});
+}
+/** Prepares original immutable evidence once. Current authority is observed only by each subsequent read. */
+export async function prepareNativeBackendReleaseAdmission(value:unknown):Promise<NativeBackendAdmissionHandle>{
+ let lifetime:AbortController|undefined,operation:AbortController|undefined;
  try{
   const input=inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value))),boundaryNow=Date.now(),supplied=JSON.parse(canonicalReleaseReviewJson(input.expected)) as BackendReleaseExpected,expected={...supplied,now:boundaryNow},prepared=validatePreparedBackendReleaseIntent(input.prepared,expected);
   if(input.effectScope==='COMPLETE_BACKEND'&&(expected.stagingVerification!==undefined||['schema-and-accounts','reconcile-schema','pending-runtime-confirmation','runtime-rollout'].includes(expected.executionScope??'')))throw failure();if(input.effectScope==='PENDING_RUNTIME_CONFIRMATION'&&(expected.executionScope!=='pending-runtime-confirmation'||!expected.pendingRuntimeConfirmation||expected.installedRuntime||expected.stagingVerification)||expected.executionScope==='pending-runtime-confirmation'&&input.effectScope!=='PENDING_RUNTIME_CONFIRMATION')throw failure();
   if(input.effectScope==='RUNTIME_ROLLOUT'&&(expected.executionScope!=='runtime-rollout'||!expected.runtimeRollout||expected.stagingVerification||expected.canonicalSchemaVerification)||expected.executionScope==='runtime-rollout'&&input.effectScope!=='RUNTIME_ROLLOUT')throw failure();
-  const context=captureCanonicalSourceContext(input.repoRoot,expected.releaseSha,expected.treeSha);
-  await readBackendReleaseSourceEvidence(input.repoRoot,expected);
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),180000),schemaRun=expected.canonicalSchemaVerification!==undefined;
-  const github=async(path:string)=>{const url=`https://api.github.com/repos/${expected.repository}${path?'/'+path:''}`,requestSignal=AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]),response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+input.githubToken,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},signal:requestSignal,redirect:'error'});return boundedJson(response,requestSignal);};
-  const observe=async()=>{const[repository,main,ciRaw,runRaw,environment,branches,protection,signatures,commit,approvals]=await Promise.all([github(''),github('git/ref/heads/main'),github('actions/runs/'+expected.ciRunId),github('actions/runs/'+expected.releaseRunId),github('environments/staging'),github('environments/staging/deployment-branch-policies'),github('branches/main/protection'),github('branches/main/protection/required_signatures'),github('git/commits/'+expected.releaseSha),github('actions/runs/'+expected.releaseRunId+'/approvals')]);return{repository,main,ciRaw,runRaw,environment,branches,protection,signatures,commit,approvals};};
+  const context=captureCanonicalSourceContext(input.repoRoot,expected.releaseSha,expected.treeSha),source=await readBackendReleaseSourceEvidenceAndGuard(input.repoRoot,expected);
+  lifetime=new AbortController();const capturedLifetime=lifetime,schemaRun=expected.canonicalSchemaVerification!==undefined;
+  const github=async(path:string)=>{if(capturedLifetime.signal.aborted||!operation)throw failure();const url=`https://api.github.com/repos/${expected.repository}${path?'/'+path:''}`,requestSignal=AbortSignal.any([capturedLifetime.signal,operation.signal,AbortSignal.timeout(15000)]),response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+input.githubToken,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},signal:requestSignal,redirect:'error'});return boundedJson(response,requestSignal);};
+  const observe=async()=>{const settled=await Promise.allSettled([github(''),github('git/ref/heads/main'),github('actions/runs/'+expected.ciRunId),github('actions/runs/'+expected.releaseRunId),github('environments/staging'),github('environments/staging/deployment-branch-policies'),github('branches/main/protection'),github('branches/main/protection/required_signatures'),github('git/commits/'+expected.releaseSha),github('actions/runs/'+expected.releaseRunId+'/approvals')]);if(settled.some(row=>row.status==='rejected'))throw failure();const values=settled.map(row=>{if(row.status!=='fulfilled')throw failure();return row.value;});const[repository,main,ciRaw,runRaw,environment,branches,protection,signatures,commit,approvals]=values;return{repository,main,ciRaw,runRaw,environment,branches,protection,signatures,commit,approvals};};
   const validate=(observed:Awaited<ReturnType<typeof observe>>)=>{
    const{repository,main,ciRaw,runRaw,environment,branches,protection,signatures,commit,approvals}=observed,ci=schemaRun?validateCanonicalSchemaRun(ciRaw,{sha:expected.releaseSha,repository:expected.repository,ciRunId:expected.ciRunId}):validateBackendVerificationRun(ciRaw,{sha:expected.releaseSha,repository:expected.repository,ciRunId:expected.ciRunId}),backend=runSchema.parse(runRaw),mainSha=mainSchema.parse(main).object.sha;
    validateReleaseControls({repository,environment,branches,main:protection,signatures},{repository:expected.repository,environment:'staging'});z.object({total_count:z.literal(1)}).parse(branches);const environmentId=z.object({id:z.number().int().positive(),name:z.literal('staging')}).parse(environment).id;if(mainSha!==expected.releaseSha||environmentId!==expected.environmentId||String(backend.id)!==expected.releaseRunId||backend.run_attempt!==expected.runAttempt)throw failure();
    z.object({sha:z.literal(expected.releaseSha),tree:z.object({sha:z.literal(expected.treeSha)}),verification:z.object({verified:z.literal(true),reason:z.literal('valid'),signature:z.string().min(1),payload:z.string().min(1)})}).parse(commit);
    const current:BackendReleaseExpected={...expected,currentMainSha:mainSha,environmentId,ciRun:ci,backendRun:{...backend,repository:{full_name:backend.repository.full_name}},now:Date.now()},approval=validateFounderBackendApproval(prepared,runRaw,approvals,current);return{current,approval,backend,ci};
   };
-  try{
-   const initial=await observe(),admitted=validate(initial),artifactReader=createGithubCodeqlArtifactReader(expected.repository,input.githubToken,controller.signal);
-   // One original immutable proof acquisition in this read-only invocation.
-   // Current controls, founder approval and source are independently repeated
-   // after it; neither this proof nor its original clocks are cached.
-   const focusedGuard=schemaRun?undefined:await readStagingVerificationJobsAndGuard(admitted.ci,github,artifactReader),jobs=focusedGuard?.proof,canonicalGuard=!schemaRun&&admitted.ci.path==='.github/workflows/ci.yml'?await readCanonicalRuntimeJobsAndGuard(initial.ciRaw,github,artifactReader):undefined,canonicalProof=canonicalGuard?.proof,schemaGuard=schemaRun?await readCanonicalSchemaJobsAndGuard(initial.ciRaw,github,artifactReader):undefined,schemaProof=schemaGuard?.proof;
+  const withDeadline=async<T>(run:()=>Promise<T>)=>{if(operation||capturedLifetime.signal.aborted)throw failure();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),180000);operation=controller;try{return await run();}finally{clearTimeout(timer);controller.abort();operation=undefined;}};
+  const captured=await withDeadline(async()=>{
+   const initial=await observe(),admitted=validate(initial),artifactReader=createGithubCodeqlArtifactReader(expected.repository,input.githubToken,AbortSignal.any([capturedLifetime.signal,operation!.signal])),focusedGuard=schemaRun?undefined:await readStagingVerificationJobsAndGuard(admitted.ci,github,artifactReader),jobs=focusedGuard?.proof,canonicalGuard=!schemaRun&&admitted.ci.path==='.github/workflows/ci.yml'?await readCanonicalRuntimeJobsAndGuard(initial.ciRaw,github,artifactReader):undefined,canonicalProof=canonicalGuard?.proof,schemaGuard=schemaRun?await readCanonicalSchemaJobsAndGuard(initial.ciRaw,github,artifactReader):undefined,schemaProof=schemaGuard?.proof;
+   const childBinding=z.object({originalChildRecovery:z.object({catalogueReferenceSha256:z.string().regex(/^[a-f0-9]{64}$/)}).passthrough().optional()}).passthrough().parse(expected).originalChildRecovery,childGuard=childBinding?await readChildCatalogueReferenceAndGuard({repoRoot:input.repoRoot,repository:expected.repository,sourceSha:expected.releaseSha,treeSha:expected.treeSha,ciRunId:expected.ciRunId,ciRunAttempt:z.object({run_attempt:z.number().int().positive().safe()}).parse(initial.ciRaw).run_attempt},github,artifactReader):undefined;
+   if(childBinding&&(!childGuard||digest(canonicalReleaseReviewJson(childGuard.reference))!==childBinding.catalogueReferenceSha256))throw failure();
    if(canonicalReleaseReviewJson(schemaProof??null)!==canonicalReleaseReviewJson(expected.canonicalSchemaVerification??null)||canonicalReleaseReviewJson(canonicalProof??null)!==canonicalReleaseReviewJson(expected.canonicalRuntimeVerification??null)||canonicalReleaseReviewJson(jobs?{scope:'SCHEMA_AND_SYNTHETIC_AUTH',...jobs}:null)!==canonicalReleaseReviewJson(expected.stagingVerification??null))throw failure();
-   const source=await readBackendReleaseSourceEvidenceAndGuard(input.repoRoot,admitted.current);
-   const final=validate(await observe()),stable=(value:unknown)=>{if(!schemaRun)return value;const{status:_status,conclusion:_conclusion,...identity}=value as Record<string,unknown>;void _status;void _conclusion;return identity;};
-   if(canonicalReleaseReviewJson(final.backend)!==canonicalReleaseReviewJson(admitted.backend)||canonicalReleaseReviewJson(stable(final.ci))!==canonicalReleaseReviewJson(stable(admitted.ci)))throw failure();
-   await canonicalGuard?.refreshOriginalMetadata();
-   await schemaGuard?.refreshOriginalMetadata();await focusedGuard?.refreshOriginalMetadata();
-   const freshApproval=await github('actions/runs/'+expected.releaseRunId+'/approvals');
-   if(controller.signal.aborted)throw failure();source.finalPhysical();context.finalMetadata();canonicalGuard?.assertOriginalValidity();schemaGuard?.assertOriginalValidity();focusedGuard?.assertOriginalValidity();final.current.now=Date.now();validatePreparedBackendReleaseIntent(prepared,final.current);const approval=validateFounderBackendApproval(prepared,final.backend,freshApproval,final.current);return{expected:final.current,approval,observedAt:new Date(final.current.now).toISOString(),provenance:'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE'};
-  }finally{clearTimeout(timer);controller.abort();}
- }catch{throw failure();}
+   source.finalPhysical();context.finalMetadata();canonicalGuard?.assertOriginalValidity();schemaGuard?.assertOriginalValidity();focusedGuard?.assertOriginalValidity();childGuard?.assertOriginalValidity();return{admitted,focusedGuard,canonicalGuard,schemaGuard,childGuard};
+  });
+  const stableCi=(value:unknown)=>{if(!schemaRun)return value;const{status:_status,conclusion:_conclusion,...identity}=value as Record<string,unknown>;void _status;void _conclusion;return identity;};
+  const read=()=>withDeadline(async()=>{
+   source.finalPhysical();context.finalMetadata();captured.canonicalGuard?.assertOriginalValidity();captured.schemaGuard?.assertOriginalValidity();captured.focusedGuard?.assertOriginalValidity();captured.childGuard?.assertOriginalValidity();validatePreparedBackendReleaseIntent(prepared,{...expected,now:Date.now()});
+   const initial=validate(await observe());if(canonicalReleaseReviewJson(stableCi(initial.ci))!==canonicalReleaseReviewJson(stableCi(captured.admitted.ci)))throw failure();
+   const final=validate(await observe());if(canonicalReleaseReviewJson(final.backend)!==canonicalReleaseReviewJson(initial.backend)||canonicalReleaseReviewJson(stableCi(final.ci))!==canonicalReleaseReviewJson(stableCi(initial.ci)))throw failure();
+   await captured.canonicalGuard?.refreshOriginalMetadata();await captured.schemaGuard?.refreshOriginalMetadata();await captured.focusedGuard?.refreshOriginalMetadata();await captured.childGuard?.refreshOriginalMetadata();const freshApproval=await github('actions/runs/'+expected.releaseRunId+'/approvals');
+   if(capturedLifetime.signal.aborted||operation!.signal.aborted)throw failure();source.finalPhysical();context.finalMetadata();captured.canonicalGuard?.assertOriginalValidity();captured.schemaGuard?.assertOriginalValidity();captured.focusedGuard?.assertOriginalValidity();captured.childGuard?.assertOriginalValidity();final.current.now=Date.now();validatePreparedBackendReleaseIntent(prepared,final.current);const approval=validateFounderBackendApproval(prepared,final.backend,freshApproval,final.current);return{expected:final.current,approval,observedAt:new Date(final.current.now).toISOString(),provenance:'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE' as const};
+  });
+  const handle=Object.freeze({}) as NativeBackendAdmissionHandle;nativeBackendAdmissions.set(handle,{binding:admissionBinding({repoRoot:input.repoRoot,prepared:input.prepared,expected:input.expected,effectScope:input.effectScope}),read,dispose:()=>capturedLifetime.abort(),active:false,invalid:false,disposed:false});return handle;
+ }catch{operation?.abort();lifetime?.abort();throw failure();}
 }
+/** Exact opaque handle plus immutable original binding; each call reads current authority anew. */
+export async function readNativeBackendReleaseAdmission(handle:unknown,binding:unknown):Promise<NativeBackendReleaseAdmission>{
+ if(!handle||typeof handle!=='object'||types.isProxy(handle))throw failure();const registered=nativeBackendAdmissions.get(handle);if(!registered||registered.invalid||registered.disposed)throw failure();
+ try{if(registered.binding!==admissionBinding(binding))throw failure();if(registered.active){registered.invalid=true;registered.dispose();throw failure();}registered.active=true;const result=await registered.read();if(registered.invalid||registered.disposed)throw failure();return result;}catch{registered.invalid=true;registered.dispose();throw failure();}finally{registered.active=false;}
+}
+export function disposeNativeBackendReleaseAdmission(handle:unknown):void{if(!handle||typeof handle!=='object'||types.isProxy(handle))throw failure();const registered=nativeBackendAdmissions.get(handle);if(!registered)throw failure();registered.disposed=true;registered.dispose();}
+/** One-shot compatibility consumer. Prepared handles never serialize cached approval as authority. */
+export async function readBackendReleaseAdmission(value:unknown):Promise<NativeBackendReleaseAdmission>{const handle=await prepareNativeBackendReleaseAdmission(value);try{const input=inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));return await readNativeBackendReleaseAdmission(handle,{repoRoot:input.repoRoot,prepared:input.prepared,expected:input.expected,effectScope:input.effectScope});}finally{disposeNativeBackendReleaseAdmission(handle);}}
 /** Direct post-activation consumers cannot admit local success bytes when the
  * original publisher returned review. The current official step is separate
  * execution provenance; existing native and receipt gates still apply. */

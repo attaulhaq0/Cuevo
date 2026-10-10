@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { types } from 'node:util';
 import { parseReconciliationTemplate, verifyReconciledPrefix, type ReconciliationTemplate } from './hosted-schema-reconciliation';
 import { replayPlan, nativeSourceMigration, posthogEnvironmentMigration, posthogIntelligenceMigration } from './replay-plan';
+import {originalChildRecoveryPlanContextSchema,validateOriginalChildRecoveryPlanContext,originalChildRecoveryFingerprint,originalChildReconciledPlanProjection,type OriginalChildRecoveryPlanContext} from './hosted-original-child-recovery';
+import {canonicalReleaseExecutionJson} from '../verification/release-review';
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -41,10 +43,12 @@ export type HostedMigrationPlanV1 = {
   priorSchemaRelease?: {sourceSha:string;treeSha:string;migrationCount:number};
   runtimeOnly?:true;
   reconciliationTemplate?:ReconciliationTemplate;
+  originalChildRecovery?:OriginalChildRecoveryPlanContext;
+  reconciledChild?:{version:1;purpose:'CUEVO_RECONCILED_CHILD144_PLAN';observedMigrationCount:144;historySha256:string;templateSha256:string;catalogueReferenceSha256:string};
 };
 
 /** Caller-supplied source/history is planning input, never execution admission or proof of Git review. */
-export function planHostedMigrations(input: { sources: MigrationSource[]; source: unknown; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; now: number }): HostedMigrationPlanV1 {
+export function planHostedMigrations(input: { sources: MigrationSource[]; source: unknown; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; originalChildRecovery?:unknown; now: number }): HostedMigrationPlanV1 {
   const identity = identitySchema.safeParse(input.source), target = targetSchema.safeParse(input.target);
   if (!identity.success || !target.success || !Number.isSafeInteger(input.now) || input.now < 0) throw failure();
   const current = target.data, observedAt = Date.parse(current.observedAt);
@@ -56,6 +60,8 @@ export function planHostedMigrations(input: { sources: MigrationSource[]; source
   const order = [...replay.before, replay.prerequisite, ...replay.remaining];
   if (order.length !== input.sources.length || new Set(order).size !== order.length) throw failure();
   const migrations = order.map(name => ({ version: name.slice(0, 14), sha256: hash(input.sources.find(row => row.name === name)!.bytes), name }));
+  const originalChildRecovery=input.originalChildRecovery===undefined?undefined:validateOriginalChildRecoveryPlanContext(input.originalChildRecovery,migrations,identity.data);
+  if(originalChildRecovery&&(input.reconciliationTemplate!==undefined||current.population!=='SCHEMA_ONLY'||current.authUsers!==0||current.migrationVersions.length!==144))throw failure();
   let reconciliationTemplate:ReconciliationTemplate|undefined;
   if(input.reconciliationTemplate!==undefined){reconciliationTemplate=parseReconciliationTemplate(input.reconciliationTemplate);verifyReconciledPrefix(reconciliationTemplate,migrations);if(reconciliationTemplate.recoverySource.sourceSha!==identity.data.sha||reconciliationTemplate.recoverySource.treeSha!==identity.data.tree||reconciliationTemplate.originalIdentity.projectRef!==current.projectRef||current.population!=='SCHEMA_ONLY'||current.migrationVersions.length!==120)throw failure();}
   const history = [...current.migrationVersions].sort();
@@ -70,10 +76,11 @@ export function planHostedMigrations(input: { sources: MigrationSource[]; source
       || prior.data.projectRef !== current.projectRef || new Set(prior.data.migrations.map(row => row.version)).size !== prior.data.migrations.length
       || JSON.stringify(prefix.map(row => row.version).sort()) !== JSON.stringify(history)) throw failure();
     const canonicalRows = (rows: { version: string; sha256: string }[]) => JSON.stringify([...rows].sort((a, b) => a.version.localeCompare(b.version)));
-    if (canonicalRows(prior.data.migrations) !== canonicalRows(prefix.map(({ version, sha256 }) => ({ version, sha256 })))) throw failure();
+    if (canonicalRows(prior.data.migrations) !== canonicalRows((originalChildRecovery?prefix.slice(0,124):prefix).map(({ version, sha256 }) => ({ version, sha256 })))) throw failure();
+    if(originalChildRecovery&&(prior.data.completedSourceMigrationCount!==undefined||prior.data.sourceSha!==originalChildRecovery.installedMarker.sourceSha||prior.data.treeSha!==originalChildRecovery.installedMarker.treeSha||canonicalRows(prior.data.migrations)!==canonicalRows(originalChildRecovery.installedMarker.migrations)))throw failure();
     const boundaries = [replay.before.length, replay.before.length + 1, replay.before.length + 1 + replay.remaining.indexOf(posthogIntelligenceMigration), migrations.length];
     const completedPrior = prior.data.completedSourceMigrationCount === prior.data.migrations.length && prior.data.completedSourceMigrationCount === history.length;
-    if (!boundaries.includes(history.length) && !completedPrior&&!(current.population==='SCHEMA_ONLY'&&(history.length!==120||reconciliationTemplate))) throw failure();
+    if (!boundaries.includes(history.length) && !completedPrior&&!originalChildRecovery&&!(current.population==='SCHEMA_ONLY'&&history.length===120&&reconciliationTemplate)) throw failure();
     if(reconciliationTemplate&&(prior.data.sourceSha!==reconciliationTemplate.originalIdentity.sourceSha||prior.data.treeSha!==reconciliationTemplate.originalIdentity.treeSha||prior.data.completedSourceMigrationCount!==undefined))throw failure();
     applied = prefix.map(({ version, sha256 }) => ({ version, sha256 }));
   }
@@ -90,8 +97,9 @@ export function planHostedMigrations(input: { sources: MigrationSource[]; source
     projectRef: current.projectRef, observedAt: current.observedAt, migrations, applied, pending, stages,
     sourceSetSha256: hash(JSON.stringify(migrations)), observedHistorySha256: hash(JSON.stringify(history)), dispatch: 'DISABLED', seed: 'DISABLED', vault: 'DISABLED',
     ...(reconciliationTemplate?{reconciliationTemplate}:{}),
+    ...(originalChildRecovery?{originalChildRecovery,reconciledChild:originalChildReconciledPlanProjection(originalChildRecovery)}:{}),
     ...(current.population!=='SCHEMA_ONLY'&&input.priorReceipt!==undefined&&priorSchema.parse(input.priorReceipt).completedSourceMigrationCount!==undefined?{priorCompletedRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:priorSchema.parse(input.priorReceipt).completedSourceMigrationCount!}}:{}),
-    ...(current.population==='SCHEMA_ONLY'?{priorSchemaRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:applied.length}}:{}) };
+    ...(current.population==='SCHEMA_ONLY'?{priorSchemaRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:originalChildRecovery?124:applied.length}}:{}) };
 }
 
 const gitEnvironment = () => Object.fromEntries(['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'TMP', 'TEMP'].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]).concat([['GIT_NO_REPLACE_OBJECTS', '1'], ['GIT_CONFIG_NOSYSTEM', '1'], ['GIT_CONFIG_GLOBAL', process.platform === 'win32' ? 'NUL' : '/dev/null']]));
@@ -176,7 +184,8 @@ export function verifyCompletedMigrationPrefix(repoRoot:string,plan:HostedMigrat
 
 /** Internal rows come only from this owner's actual original Git acquisition. */
 function validatePriorSchemaRows(plan:HostedMigrationPlanV1,sources:MigrationSource[]):void{
- const prior=plan.priorSchemaRelease;if(!prior||prior.migrationCount!==plan.applied.length)throw failure();const replay=replayPlan(sources);
+ const prior=plan.priorSchemaRelease;if(!prior||prior.migrationCount!==(plan.originalChildRecovery?124:plan.applied.length))throw failure();const replay=replayPlan(sources);
+ if(plan.originalChildRecovery){const context=validateOriginalChildRecoveryPlanContext(plan.originalChildRecovery,plan.migrations,plan.source),fingerprint=originalChildRecoveryFingerprint(context.template);if(plan.applied.length!==144||!plan.reconciledChild||plan.reconciledChild.templateSha256!==fingerprint.templateSha256||plan.reconciledChild.historySha256!==context.template.afterHistorySha256||prior.sourceSha!==context.installedMarker.sourceSha||prior.treeSha!==context.installedMarker.treeSha)throw failure();const historical=replayPlan(sources),rows=[...historical.before,historical.prerequisite,...historical.remaining].map(name=>({name,version:name.slice(0,14),sha256:hash(sources.find(source=>source.name===name)!.bytes)}));if(canonicalReleaseExecutionJson(rows.slice(0,180))!==canonicalReleaseExecutionJson(context.template.stageRows))throw failure();}
  const order=[...replay.before,replay.prerequisite,...replay.remaining],boundaries=[replay.before.length,replay.before.length+1,replay.before.length+1+replay.remaining.indexOf(posthogIntelligenceMigration),order.length];
  if(!boundaries.includes(prior.migrationCount)){if(prior.migrationCount!==120||!plan.reconciliationTemplate)throw failure();const template=parseReconciliationTemplate(plan.reconciliationTemplate);verifyReconciledPrefix(template,plan.migrations);if(template.recoverySource.sourceSha!==plan.source.sha||template.recoverySource.treeSha!==plan.source.tree||template.originalIdentity.sourceSha!==prior.sourceSha||template.originalIdentity.treeSha!==prior.treeSha)throw failure();}
  else if(plan.reconciliationTemplate)throw failure();
@@ -186,7 +195,7 @@ function validatePriorSchemaRows(plan:HostedMigrationPlanV1,sources:MigrationSou
 export function readVerifiedPriorSchemaSources(repoRoot:string,plan:HostedMigrationPlanV1):MigrationSource[]|null{
  if(!plan.priorSchemaRelease)return null;
  const{git}=checkedRoot(repoRoot),prior=plan.priorSchemaRelease;
- if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==plan.applied.length)throw failure();
+ if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==(plan.originalChildRecovery?124:plan.applied.length))throw failure();
  git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
  const sources=readHistoricalMigrationSources(repoRoot,prior.sourceSha,prior.treeSha);validatePriorSchemaRows(plan,sources);return sources;
 }
@@ -196,12 +205,12 @@ export function verifyPriorSchemaPrefix(repoRoot:string,plan:HostedMigrationPlan
 }
 
 /** A release entry also requires all tracked and untracked authored source to match the admitted commit. */
-export function createCanonicalHostedMigrationPlanAndSources(input: { repoRoot: string; sourceSha: string; treeSha: string; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; now: number }) {
+export function createCanonicalHostedMigrationPlanAndSources(input: { repoRoot: string; sourceSha: string; treeSha: string; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; originalChildRecovery?:unknown; now: number }) {
   const loaded = readCanonicalMigrationSources(input);
   const { git } = checkedRoot(input.repoRoot);
   git(['diff', '--quiet', '--no-ext-diff', '--no-textconv', input.sourceSha, '--']);
   if (git(['ls-files', '--others', '--exclude-standard', '-z']).length) throw failure();
-  const plan = planHostedMigrations({ sources: loaded.sources, source: { sha: input.sourceSha, tree: input.treeSha }, target: input.target, priorReceipt: input.priorReceipt, reconciliationTemplate:input.reconciliationTemplate, now: input.now });
+  const plan = planHostedMigrations({ sources: loaded.sources, source: { sha: input.sourceSha, tree: input.treeSha }, target: input.target, priorReceipt: input.priorReceipt, reconciliationTemplate:input.reconciliationTemplate,originalChildRecovery:input.originalChildRecovery, now: input.now });
   if (input.priorReceipt !== undefined) {
     const prior = priorSchema.parse(input.priorReceipt);
     if (git(['rev-parse', '--verify', `${prior.sourceSha}^{commit}`]).toString('utf8').trim() !== prior.sourceSha
@@ -262,6 +271,8 @@ const planSchema = z.object({
   priorSchemaRelease: z.object({sourceSha:sha,treeSha:sha,migrationCount:z.number().int().positive().max(1000)}).strict().optional(),
   runtimeOnly:z.literal(true).optional(),
   reconciliationTemplate:z.unknown().optional(),
+  originalChildRecovery:originalChildRecoveryPlanContextSchema.optional(),
+  reconciledChild:z.object({version:z.literal(1),purpose:z.literal('CUEVO_RECONCILED_CHILD144_PLAN'),observedMigrationCount:z.literal(144),historySha256:digest,templateSha256:digest,catalogueReferenceSha256:digest}).strict().optional(),
   sourceSetSha256: digest, observedHistorySha256: digest, dispatch: z.literal('DISABLED'), seed: z.literal('DISABLED'), vault: z.literal('DISABLED'),
 }).strict();
 function jsonSnapshot(value: unknown, depth = 0): unknown {
@@ -289,7 +300,8 @@ export function canonicalHostedMigrationPlan(plan: HostedMigrationPlanV1) {
     || value.stages.map(stage => stage.id).join('|') !== 'prefix|native|pre-observability|remaining'
     || JSON.stringify(value.stages.flatMap(stage => stage.names)) !== JSON.stringify(value.pending.map(row => row.name))) throw failure();
   if(value.priorCompletedRelease&&value.priorCompletedRelease.migrationCount!==value.applied.length)throw failure();
-  if(value.priorSchemaRelease&&(value.priorSchemaRelease.migrationCount!==value.applied.length||value.priorCompletedRelease))throw failure();
+  if(value.priorSchemaRelease&&(value.priorSchemaRelease.migrationCount!==(value.originalChildRecovery?124:value.applied.length)||value.priorCompletedRelease))throw failure();
+  if(value.originalChildRecovery){const context=validateOriginalChildRecoveryPlanContext(value.originalChildRecovery,value.migrations,value.source);if(value.mode!=='INCREMENTAL'||value.applied.length!==144||value.runtimeOnly||value.reconciliationTemplate||!value.priorSchemaRelease||value.priorSchemaRelease.sourceSha!==context.installedMarker.sourceSha||value.priorSchemaRelease.treeSha!==context.installedMarker.treeSha||!value.reconciledChild||canonicalReleaseExecutionJson(value.reconciledChild)!==canonicalReleaseExecutionJson(originalChildReconciledPlanProjection(context)))throw failure();}else if(value.reconciledChild||value.priorSchemaRelease?.migrationCount===144)throw failure();
   if(value.reconciliationTemplate!==undefined){const template=parseReconciliationTemplate(value.reconciliationTemplate);verifyReconciledPrefix(template,value.migrations);if(value.applied.length!==120||!value.priorSchemaRelease||template.recoverySource.sourceSha!==value.source.sha||template.recoverySource.treeSha!==value.source.tree||template.originalIdentity.sourceSha!==value.priorSchemaRelease.sourceSha||template.originalIdentity.treeSha!==value.priorSchemaRelease.treeSha||template.originalIdentity.projectRef!==value.projectRef||value.runtimeOnly)throw failure();value.reconciliationTemplate=template;}
   if(value.priorSchemaRelease?.migrationCount===120&&value.reconciliationTemplate===undefined)throw failure();
   if(value.runtimeOnly&&(!value.priorCompletedRelease||value.pending.length||value.stages.some(stage=>stage.names.length)))throw failure();

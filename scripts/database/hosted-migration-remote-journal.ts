@@ -48,7 +48,8 @@ export async function createHostedMigrationRemoteJournal(value: unknown): Promis
     const matchesOriginal=(row:Chain)=>permit!==null&&row.operation===permit.originalOperationSha256&&JSON.stringify(row.identity)===JSON.stringify(permit.originalIdentity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===permit.originalChainSha256;
     if(permit&&(permit.originalOperationSha256===operation||chains.filter(matchesOriginal).length!==1))throw failure();
     const ownedSafetyReview=(row:Chain)=>safety&&permit?.ownedSafetyIdentities?.some(identity=>JSON.stringify(identity)===JSON.stringify(row.identity))&&row.records[0]?.payload.state==='INTENT'&&row.records.at(-1)?.payload.state==='REQUIRES_REVIEW';
-    if(chains.some(row=>row.operation!==operation&&row.records.at(-1)?.payload.state!=='COMMITTED'&&!matchesOriginal(row)&&!ownedSafetyReview(row)))throw failure();
+    const selectedChildReview=(row:Chain)=>permit?.selectedOriginalChild&&row.operation===permit.selectedOriginalChild.operationSha256&&JSON.stringify(row.identity)===JSON.stringify(permit.selectedOriginalChild.identity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===permit.selectedOriginalChild.chainSha256;
+    if(chains.some(row=>row.operation!==operation&&row.records.at(-1)?.payload.state!=='COMMITTED'&&!matchesOriginal(row)&&!ownedSafetyReview(row)&&!selectedChildReview(row)))throw failure();
   };
   const requirePriorOperations=async(chains:Chain[],safety=false)=>comparePriorOperations(chains,await requirePermit(safety),safety);
   const admitSelectedOriginalIntent=(chains:Chain[],permit:Awaited<ReturnType<typeof requirePermit>>)=>{
