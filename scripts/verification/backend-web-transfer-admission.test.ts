@@ -293,3 +293,505 @@ test('reusable completed metadata guard acquires one transfer and ten canonical 
  test('captured completed transfer expiry is checked after actual physical scan',async()=>{const result=await runGuardedArchiveFixture(['metadata-capture-expiry']);assert.equal(result.status,0,result.stderr);});
 
  test('failed metadata constructor disposes its actual captured transport lifetime',async()=>{const result=await runGuardedArchiveFixture(['metadata-constructor-failure']);assert.equal(result.status,0,result.stderr);});
+/** Reduced composition: actual native population observer, exporter, ZIP,
+ * completed admission, web bridge and learning gate. The handover adapter below
+ * substitutes unrelated full-handover gates and forwards only actual native
+ * proof; this test does not claim full handover or browser acceptance. */
+const installedPopulationLearningFixtureSource = String.raw`
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { createRequire, registerHooks } from 'node:module';
+import { execFileSync } from 'node:child_process';
+const input = JSON.parse(readFileSync(process.env.CUEVO_POPULATION_LEARNING_FIXTURE, 'utf8'));
+const root = process.cwd(), hash = value => createHash('sha256').update(value).digest('hex');
+const clock = Date.parse('2026-10-10T13:00:00Z'), NativeDate = Date;
+globalThis.Date = class extends NativeDate {
+  constructor(value) { super(value === undefined ? clock : value); }
+  static now() { return clock; }
+};
+delete process.env.NODE_OPTIONS;
+const state = { nativeReads: 0, nativeSessionsClosed: 0, originalReads: 0,
+  schemaWrites: 0, seedWrites: 0, authCreates: 0, apiUploads: 0, edgeUploads: 0,
+  populationGateEntries: 0, webReadmits: 0, canonicalArchives: 0, transferArchives: 0, nonGithubGets: 0 };
+globalThis.populationLearningGateEntered = () => { state.populationGateEntries++; };
+const handles = new WeakMap();
+let expected, prepared, populationInput, original, history, handoverBase;
+globalThis.populationLearningAdmission = {
+  prepare: async value => { const handle = Object.freeze({}); handles.set(handle,
+    { binding: JSON.stringify({ repoRoot: value.repoRoot, expected: value.expected,
+      prepared: value.prepared, effectScope: value.effectScope }), disposed: false }); return handle; },
+  read: async (handle, value) => { const held = handles.get(handle);
+    assert(held && !held.disposed); assert.equal(held.binding, JSON.stringify(value));
+    return { expected, provenance: 'OFFICIAL_GITHUB_AND_VERIFIED_GIT_SOURCE',
+      approval: { packageSha256: prepared.sha256 } }; },
+  dispose: handle => { const held = handles.get(handle); assert(held && !held.disposed);
+    held.disposed = true; }
+};
+const { transformSync } = createRequire(input.transferUrl)('esbuild');
+let raceReplaced = false;
+globalThis.populationLearningSavedFileRead = path => {
+  if(input.mode!=='saved-file-race'||raceReplaced||!String(path).endsWith('web-handover-result.json'))return;
+  const changed=JSON.parse(readFileSync(path,'utf8'));changed.installedPopulationVerification.original.manifestSha256='f'.repeat(64);
+  writeFileSync(path,JSON.stringify(changed)+String.fromCharCode(10));raceReplaced=true;
+};
+const replaceOnce = (source, anchor, replacement) => {
+  assert.equal(source.split(anchor).length - 1, 1, 'Exact test-only hook anchor changed: ' + anchor);
+  return source.replace(anchor, replacement);
+};
+registerHooks({ load(url, context, next) {
+  if (url === input.observerUrl) {
+    let source = readFileSync(new URL(url), 'utf8');
+    source = replaceOnce(source,
+      "import { prepareNativeBackendReleaseAdmission, readNativeBackendReleaseAdmission, disposeNativeBackendReleaseAdmission, type NativeBackendAdmissionHandle } from '../verification/backend-release-admission';",
+      "const prepareNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.prepare;const readNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.read;const disposeNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.dispose;");
+    source = replaceOnce(source,
+      "import { createHostedMigrationDatabase, hostedSyntheticSeedSha256, readOriginalSyntheticSeed } from './hosted-migration-database';",
+      "import { hostedSyntheticSeedSha256, readOriginalSyntheticSeed } from './hosted-migration-database';const createHostedMigrationDatabase=(...args)=>globalThis.populationLearningDatabase(...args);");
+    source = replaceOnce(source,
+      "import { readHostedOperatorStorageInventory } from './hosted-operator-storage-inventory';",
+      "const readHostedOperatorStorageInventory=(...args)=>globalThis.populationLearningStorage(...args);");
+    return { format: 'module', shortCircuit: true,
+      source: transformSync(source, { loader: 'ts', format: 'esm' }).code };
+  }
+  if (url === input.transferUrl) {
+    let source = readFileSync(new URL(url), 'utf8');
+    source = replaceOnce(source,
+      "import {prepareNativeBackendReleaseAdmission,readNativeBackendReleaseAdmission,disposeNativeBackendReleaseAdmission,type NativeBackendAdmissionHandle} from './backend-release-admission';",
+      "const prepareNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.prepare;const readNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.read;const disposeNativeBackendReleaseAdmission=globalThis.populationLearningAdmission.dispose;");
+    source = replaceOnce(source, 'const handover = await prepareBackendWebHandover(input,admissionHandle);',
+      'const handover = await globalThis.populationLearningHandover(input,admissionHandle);');
+    source = replaceOnce(source, 'const rechecked = await prepareBackendWebHandover(input);',
+      'const rechecked = await globalThis.populationLearningHandover(input);');
+    source = replaceOnce(source, "process.platform !== 'linux'", 'false');
+    source = replaceOnce(source, "process.env.GITHUB_WORKSPACE !== root || !root.startsWith('/home/runner/work/')",
+      'process.env.GITHUB_WORKSPACE !== root || false');
+    source = replaceOnce(source, 'return bytes;' + String.fromCharCode(10) + '}',
+      'globalThis.populationLearningSavedFileRead(path);return bytes;' + String.fromCharCode(10) + '}');
+    return { format: 'module', shortCircuit: true,
+      source: transformSync(source, { loader: 'ts', format: 'esm' }).code };
+  }
+  if (url === input.admissionUrl) {
+    let source = readFileSync(new URL(url), 'utf8');
+    source = replaceOnce(source, "process.platform !== 'linux'", 'false');
+    source = replaceOnce(source, "!input.repoRoot.startsWith('/home/runner/work/')", 'false');
+    return { format: 'module', shortCircuit: true,
+      source: transformSync(source, { loader: 'ts', format: 'esm' }).code };
+  }
+  if (url === input.browserUrl) {
+    let source = readFileSync(new URL(url), 'utf8');
+    source = replaceOnce(source, "process.platform!=='linux'", 'false');
+    source = replaceOnce(source, "!root.startsWith('/home/runner/work/')", 'false');
+    return { format: 'module', shortCircuit: true,
+      source: transformSync(source, { loader: 'ts', format: 'esm' }).code };
+  }
+  if (url === input.learningUrl) {
+    const gate = "if(requireCompletedBackendPopulationEvidence(admitted).receiptSha256!==input.populationReceiptSha256)throw failure();";
+    let source = readFileSync(new URL(url), 'utf8');
+    // Observe reachability only. Preserve the exact production condition and
+    // refusal so an unrelated early denial cannot be reported as this RED.
+    source = replaceOnce(source, gate, 'globalThis.populationLearningGateEntered();' + String.fromCharCode(10) + gate);
+    return { format: 'module', shortCircuit: true,
+      source: transformSync(source, { loader: 'ts', format: 'esm' }).code };
+  }
+  return next(url, context);
+}});
+const review = await import(input.reviewUrl);
+const planOwner = await import(input.planUrl);
+const installed = await import(input.installedUrl);
+const observer = await import(input.observerUrl);
+const { prepareBackendReleaseIntent } = await import(input.contractsUrl);
+const { backendWebTransferFixture } = await import(input.fixtureUrl);
+const canonical = await import(input.canonicalUrl);
+const admission = await import(input.admissionUrl);
+const bridge = await import(input.bridgeUrl);
+const transfer = await import(input.transferUrl);
+const { canonicalReleaseExecutionJson: json, canonicalReleaseReviewJson: reviewJson } = review;
+const project = 'mqxdjvsyckzocokuikmx';
+const endpoint = { projectRef: project, kind: 'direct', host: 'db.' + project + '.supabase.co',
+  port: 5432, database: 'postgres' };
+const manifest = JSON.parse(readFileSync('supabase/seed/identities.json', 'utf8'));
+const id = (prefix, number) => prefix + String(number).padStart(12, '0');
+const school = id('10000000-0000-4000-8000-', 1);
+const denial = id('10000000-0000-4000-8000-', 2);
+const actor = number => id('20000000-0000-4000-8000-', number);
+const relation = (schoolId, fields) => ({ schoolId, ...fields, status: 'active',
+  effectiveFrom: '2026-09-01 00:00:00+00', effectiveTo: null });
+const population = { observedAtMs: clock, authUsers: [], population: {
+  schools: [{ id: school, name: 'Cuevo Reference Academy – Doha', countryCode: 'QA',
+    languages: ['en', 'ar'], status: 'active' }, { id: denial, name: 'Synthetic Isolation School',
+    countryCode: 'QA', languages: ['en', 'ar'], status: 'active' }],
+  people: manifest.actors.map(row => ({ schoolId: row.schoolId, actorId: row.actorId,
+    displayName: row.displayName, synthetic: true })),
+  memberships: manifest.actors.map((row, index) => ({ id: id('21000000-0000-4000-8000-', index + 1),
+    ...relation(row.schoolId, { actorId: row.actorId, role: row.role }) })),
+  academicYears: [1, 2].map(index => ({ schoolId: index === 1 ? school : denial,
+    id: id('40000000-0000-4000-8000-', index), name: '2026–2027',
+    startsOn: '2026-09-01', endsOn: '2027-07-01' })),
+  terms: [1, 2].map(index => ({ schoolId: index === 1 ? school : denial,
+    id: id('41000000-0000-4000-8000-', index), academicYearId: id('40000000-0000-4000-8000-', index),
+    name: 'Autumn term', startsOn: '2026-09-01', endsOn: '2026-12-20' })),
+  yearGroups: [1, 2, 3, 4, 5].map(index => ({ schoolId: index < 5 ? school : denial,
+    id: id('42000000-0000-4000-8000-', index), name: index < 5 ? 'Year ' + index : 'Isolation Year Group',
+    ordinal: index < 5 ? index : 1 })),
+  classes: [1, 2, 3, 4, 5, 6, 7].map(index => ({ schoolId: index < 7 ? school : denial,
+    id: id('30000000-0000-4000-8000-', index), academicYearId: id('40000000-0000-4000-8000-', index < 7 ? 1 : 2),
+    yearGroupId: id('42000000-0000-4000-8000-', index < 7 ? (index - 1) % 4 + 1 : 5),
+    name: ['Year 1 · Cedar', 'Year 2 · Maple', 'Year 3 · Willow', 'Year 4 · Oak',
+      'Year 1 · Olive', 'Year 2 · Palm', 'Isolation Class'][index - 1], status: 'active' })),
+  subjects: [1, 2, 3, 4, 5, 6, 7, 8, 9].map(index => ({ schoolId: index < 9 ? school : denial,
+    id: id('43000000-0000-4000-8000-', index), name: ['Mathematics', 'English', 'Arabic',
+      'Science', 'Computing', 'Art', 'Physical Education', 'School Custom Project', 'Isolation Subject'][index - 1] })),
+  enrollments: [...Array.from({ length: 60 }, (_, index) => relation(school,
+    { classId: id('30000000-0000-4000-8000-', index % 6 + 1), studentActorId: actor(index + 12) })),
+    relation(denial, { classId: id('30000000-0000-4000-8000-', 7), studentActorId: actor(133) })],
+  teacherAssignments: Array.from({ length: 8 }, (_, index) => relation(school,
+    { classId: id('30000000-0000-4000-8000-', index % 6 + 1),
+      subjectId: id('43000000-0000-4000-8000-', index + 1), teacherActorId: actor(index + 4) })),
+  parentRelationships: Array.from({ length: 60 }, (_, index) => relation(school,
+    { parentActorId: actor(index + 72), studentActorId: actor(index + 12), relationshipType: 'guardian' })),
+  entitlements: [...['school.context', 'learning', 'assessment', 'curriculum', 'learner.state',
+    'improvement', 'school.operations', 'community', 'portfolio'].flatMap(code => [school, denial].map(schoolId =>
+      ({ schoolId, code, enabled: true, effectiveFrom: '2026-09-01 00:00:00+00', effectiveTo: null }))),
+    { schoolId: school, code: 'restricted.records', enabled: true,
+      effectiveFrom: '2026-09-01 00:00:00+00', effectiveTo: null }],
+  learnerStatePolicies: [{ schoolId: school, version: 1, developmentWindowDays: 14, approvedBy: actor(2) },
+    { schoolId: denial, version: 1, developmentWindowDays: 14, approvedBy: actor(132) }],
+  intelligencePolicies: [{ schoolId: school, version: 1, fixtureEnabled: true, liveEnabled: false, approvedBy: actor(2) },
+    { schoolId: denial, version: 1, fixtureEnabled: true, liveEnabled: false, approvedBy: actor(132) }],
+  schoolCustomVersions: [{ schoolId: school, id: id('60000000-0000-4000-8000-', 1),
+    version: 'synthetic-school-1', sourceType: 'SCHOOL_AUTHORED', rightsStatus: 'PERMITTED', createdBy: actor(2) }],
+  schoolCustomReferences: [{ schoolId: school, id: id('61000000-0000-4000-8000-', 1),
+    versionId: id('60000000-0000-4000-8000-', 1), title: 'Synthetic school-authored explanation objective',
+    description: 'Demonstration objective created by the synthetic school; not an official curriculum standard.',
+    code: null, status: 'APPROVED', createdBy: actor(2), approvedBy: actor(2),
+    approvedAt: '2026-10-01 00:00:00+00' }]
+}};
+let locked = false;
+globalThis.populationLearningDatabase = async () => ({
+  withLock: async (key, run) => { assert.equal(key, project + ':HOSTED_SCHEMA_MIGRATION');
+    assert.equal(locked, false); locked = true;
+    try { await run(); } finally { locked = false; state.nativeSessionsClosed++; }
+    return { kind: 'RELEASED' }; },
+  observe: async () => { assert(locked); return { operator: 'postgres', database: 'postgres',
+    tls: { kind: 'PEER_VERIFIED', host: endpoint.host, certificateSha256: 'b'.repeat(64) },
+    historyPresent: true, history: structuredClone(history) }; },
+  observeStage: async () => { assert(locked); return { observedAtMs: clock,
+    checks: { rls: true, privateStorage: true, transportPrivate: true, dispatchInactive: false,
+      recoveryCronInactive: false } }; },
+  observeSyntheticPopulation: async () => { assert(locked); return structuredClone(population); },
+  readInstalledPopulation: async () => { assert(locked); state.originalReads++;
+    return installed.readInstalledPopulationReceipt([{ state: 'COMPLETED',
+      fingerprint: installed.installedPopulationFingerprint(original), response: structuredClone(original) }], project); },
+  executeOriginalSyntheticSeed: async () => { state.seedWrites++; throw Error('No seed in installed observation'); }
+});
+globalThis.populationLearningStorage = async () => { assert(locked); return { observedAtMs: clock,
+  applicationStorageObjects: 0, remoteProjectSha256: 'd'.repeat(64), operations: [] }; };
+const setupGet = path => path === 'actions/runs/31' ? input.run :
+  path.includes('/jobs?') ? { total_count: input.jobs.length, jobs: input.jobs } :
+  path.includes('/artifacts?') ? { total_count: input.artifacts.length, artifacts: input.artifacts } :
+  path.startsWith('git/commits/') ? { sha: input.run.head_sha, tree: { sha: input.tree } } :
+  assert.fail('Unexpected canonical metadata ' + path);
+const canonicalProof = await canonical.readCanonicalRuntimeJobsAndGuard(input.run, async path => setupGet(path),
+  async artifactId => Buffer.from(input.archives[String(artifactId)], 'base64'));
+const proof = canonicalProof.proof;
+assert.equal(proof.runAttempt, 2);
+const sources = planOwner.readCanonicalMigrationSources({ repoRoot: root,
+  sourceSha: input.run.head_sha, treeSha: input.tree }).sources;
+const initialPlan = planOwner.planHostedMigrations({ sources, source: { sha: input.run.head_sha, tree: input.tree },
+  now: clock, target: { projectRef: project, boundProjectRef: project, projectName: 'Cuevo',
+    projectStatus: 'ACTIVE_HEALTHY', deploymentEnvironment: 'synthetic-staging', observedAt: new Date().toISOString(),
+    authUsers: 0, storageObjects: 0, appSchemas: [], migrationVersions: [], dispatchDisabled: true, population: 'EMPTY' } });
+const plan = { ...initialPlan, mode: 'INCREMENTAL', applied: initialPlan.migrations.map(({ version, sha256 }) =>
+  ({ version, sha256 })), pending: [], stages: initialPlan.stages.map(stage => ({ ...stage, names: [] })),
+  observedHistorySha256: hash(JSON.stringify(initialPlan.migrations.map(row => row.version).sort())),
+  priorCompletedRelease: { sourceSha: input.run.head_sha, treeSha: input.tree,
+    migrationCount: initialPlan.migrations.length }, runtimeOnly: true };
+const planDigest = planOwner.canonicalHostedMigrationPlan(plan).sha256;
+history = plan.migrations.map(row => ({ version: row.version, name: row.name.slice(15, -4),
+  statements: [Buffer.from(sources.find(source => source.name === row.name).bytes).toString('utf8').trim()] }));
+const fixture = backendWebTransferFixture({ now: clock, sourceSha: input.run.head_sha, treeSha: input.tree,
+  baseSha: input.run.head_sha, sourceManifestSha256: hash(execFileSync('git', ['ls-tree', '-r', '-z', input.run.head_sha])),
+  diffSha256: hash(Buffer.alloc(0)) });
+const body = JSON.parse(fixture.transfer.preparedApproval.canonicalJson);
+const activation = { status: 'ACTIVATED_VERIFIED', observedAt: new Date(clock - 3600000).toISOString() };
+const installedRuntime = { version: 1, purpose: 'CUEVO_INSTALLED_ACTIVE_RUNTIME',
+  sourceSha: input.run.head_sha, treeSha: input.tree, originalRunId: '11', originalRunAttempt: 1,
+  originalPackageSha256: 'a'.repeat(64), runtimeSha256: 'b'.repeat(64), apiDeploymentId: 'dpl_Api',
+  apiUrl: 'https://cuevo-api-deployment.vercel.app', edgeId: 'edge-fixture', edgeVersion: 1,
+  activationId: '10000000-0000-4000-8000-000000000002',
+  vaultSecretName: 'cuevo_worker_10000000000040008000000000000002', jobId: 42,
+  endpoint: body.targets.supabase.edgeOrigin, activationReceiptSha256: hash(json(activation)) };
+const installedSource = { sourceSha: input.run.head_sha, treeSha: input.tree,
+  seedSha256: installed.hostedSyntheticSeedSha256, manifestSha256: hash(json(manifest)),
+  migrationCount: plan.migrations.length };
+const fingerprints = { ...body.fingerprints, migrationPlanSha256: planDigest,
+  migrationEndpointSha256: hash(json(endpoint)) };
+const currentRuntime={version:2,purpose:'CUEVO_CURRENT_ACTIVE_RUNTIME',originalActivation:installedRuntime,
+  current:{generation:'2',sourceSha:input.run.head_sha,treeSha:input.tree,runId:'21',runAttempt:1,packageSha256:'9'.repeat(64),runtimeSha256:installedRuntime.runtimeSha256,apiArtifactSha256:fingerprints.apiArtifactSha256,edgeArtifactSha256:fingerprints.edgeArtifactSha256,denoLockSha256:fingerprints.denoLockSha256,migrationSetSha256:'8'.repeat(64),compatibilitySha256:'7'.repeat(64),apiDeploymentId:installedRuntime.apiDeploymentId,apiUrl:installedRuntime.apiUrl,edgeId:installedRuntime.edgeId,edgeVersion:installedRuntime.edgeVersion},activationReceiptSha256:installedRuntime.activationReceiptSha256,stateSha256:'e'.repeat(64)};
+const selectedRuntime=input.mode==='current-runtime'?{currentRuntime}:{installedRuntime};
+expected = { ...fixture.expected, ciRun: input.run, canonicalRuntimeVerification: proof,
+  fingerprints, ...selectedRuntime, installedSource, executionScope: 'installed-runtime' };
+prepared = prepareBackendReleaseIntent({ ...body, fingerprints, ...selectedRuntime, installedSource,
+  executionScope: 'installed-runtime', canonicalRuntimeVerification: proof }, expected);
+original = installed.installedPopulationReceiptSchema.parse({ version: 1,
+  purpose: 'CUEVO_INSTALLED_SYNTHETIC_POPULATION', projectRef: project,
+  sourceSha: installedSource.sourceSha, treeSha: installedSource.treeSha,
+  seedSha256: installedSource.seedSha256, manifestSha256: installedSource.manifestSha256 });
+const originalText = json(original);
+populationInput = { repoRoot: root, endpoint, expected, preparedApproval: prepared,
+  githubToken: 'private-github-canary', providerToken: 'private-provider-canary',
+  journalStorageKey: 'private-journal-canary', operatorStoragePolicyPath: 'unused-policy.json',
+  certificate: { path: 'unused-ca.pem', sha256: 'b'.repeat(64) }, migrationPassword: 'private-migration-canary',
+  plan, stageIdentity: { projectRef: project, sourceSha: input.run.head_sha, treeSha: input.tree,
+    planSha256: planDigest, stageId: 'remaining', stageSha256: 'c'.repeat(64),
+    databaseUrl: 'postgresql://postgres@' + endpoint.host + ':5432/postgres?sslmode=verify-full',
+    approvalDigest: prepared.sha256, ciRunId: '31', certificateSha256: 'b'.repeat(64) } };
+const output = fixture.transfer.manifest;
+output.database.migrations = plan.migrations.map(({ version, sha256 }) => ({ version, sha256 }));
+const at = output.verifiedAt, config = { version: 1,
+  purpose: 'CUEVO_DATA_API_CONFIGURATION_OBSERVATION', source: 'SUPABASE_MANAGEMENT_POSTGREST_CONFIG',
+  projectRef: project, sourceSha: input.run.head_sha, treeSha: input.tree,
+  url: 'https://api.supabase.com/v1/projects/' + project + '/postgrest',
+  configurationState: 'DISABLED', configurationValueSha256: hash(json('')),
+  metadataBasis: 'SUPPLIED_CURRENT_METADATA_PORT', metadataObservedAt: at, observedAt: at, verifiedAt: at,
+  expiresAt: new Date(Date.parse(at) + 3600000).toISOString(), effectAuthority: false, hostedAcceptance: false };
+const { validateDisabledDataApiConfigurationEvidence } = await import(new URL('./data-api-configuration.ts', input.transferUrl).href);
+assert.equal(validateDisabledDataApiConfigurationEvidence(config, { projectRef: project,
+  sourceSha: input.run.head_sha, treeSha: input.tree, now: clock }).basis, 'SUPABASE_MANAGEMENT_POSTGREST_CONFIG');
+output.database.dataApi = { ...output.database.dataApi, version: 2,
+  configurationObservation: { evidence: config, sha256: hash(json(config)) } };
+const outputDigest = hash(reviewJson(output));
+const folder = join(root, '.local/hosted-release');
+mkdirSync(folder, { recursive: true });
+const write = (name, value, lf = false) => writeFileSync(join(folder, name),
+  lf ? JSON.stringify(value) + String.fromCharCode(10) : json(value));
+write('web-handover-manifest.json', output); write('web-handover-public.json', output.publicConfig);
+handoverBase = { status: 'PREPARED_STAGING_MANIFEST', pendingGates: [],
+  manifestPath: join(folder, 'web-handover-manifest.json'), publicConfigurationPath: join(folder, 'web-handover-public.json'),
+  manifestSha256: outputDigest, receiptScope: 'BOUNDED_NATIVE_BACKUP_ISOLATED_DATABASE_SESSION_AND_OWNED_PRIVATE_BYTES',
+  restorationLimitations: [], activationAllowed: false, hostedAcceptance: false };
+let latestNativeProof;
+globalThis.populationLearningHandover = async () => {
+  // Explicit reduced-core adapter: unrelated full handover gates use fixture
+  // manifest metadata. Population proof ALWAYS comes from the actual observer.
+  latestNativeProof = await observer.revalidateInstalledBackendState(populationInput);
+  state.nativeReads++;
+  assert.equal(latestNativeProof.installedPopulationSha256, hash(originalText));
+  assert.equal(json(latestNativeProof.original), originalText);
+  assert.equal(latestNativeProof.history.length, plan.migrations.length);
+  assert.equal(latestNativeProof.observedAt, new Date(clock).toISOString());
+  // The baseline observer has no version-two projection. If the real owner
+  // gains it, forward it unchanged; never fabricate future proof in this test.
+  return { ...handoverBase, ...(latestNativeProof.installedPopulationVerification ?
+    { installedPopulationVerification: latestNativeProof.installedPopulationVerification } : {}) };
+};
+for (const name of transfer.backendWebTransferEvidenceNames('dpl_Api', true, input.mode==='current-runtime'))
+  if (!['web-handover-result.json', 'runtime-resume-result.json', 'web-settings-result.json'].includes(name))
+    write(name, { observedAt: at, status: 'VERIFIED' }, true);
+write('runtime-resume-result.json', input.mode==='current-runtime'?{status:'CURRENT_RUNTIME_REVALIDATED',sourceSha:input.run.head_sha,treeSha:input.tree,runId:'51',runAttempt:1,packageSha256:prepared.sha256,sourceProcessed:true,scheduledRecoveryVerified:true,nativeExecutionVerified:true,privateTransportVerified:true,lockReleased:true,sessionClosed:true,current:currentRuntime,observedAt:at}:{ status: 'INSTALLED_RUNTIME_REVALIDATED',
+  sourceSha: input.run.head_sha, runId: '51', runAttempt: 1, packageSha256: prepared.sha256,
+  nativeExecutionVerified: true, lockReleased: true, original: installedRuntime,
+  activation, cleanup: { lockReleased: true, sessionsClosed: true }, observedAt: at }, true);
+write('web-settings-result.json', { purpose: 'CUEVO_STAGING_PUBLIC_WEB_SETTINGS',
+  status: 'WEB_PUBLIC_SETTINGS_CONFIRMED', operation: 'NOOP', sourceSha: input.run.head_sha,
+  runId: '51', runAttempt: 1, packageSha256: prepared.sha256, manifestSha256: outputDigest,
+  webProjectId: 'prj_Web', teamId: 'team_Cuevo', observedAt: at,
+  settingsSha256: fixture.transfer.settings.settingsSha256, pendingGates: [],
+  hostedAcceptance: false, canonicalReceipt: null }, true);
+const bundle = { purpose: 'CUEVO_BACKEND_RELEASE_EXECUTION', repoRoot: root, expected, preparedApproval: prepared };
+write('backend-bundle.json', bundle);
+const responses = {
+  '': { full_name: 'owner/repo', name: 'repo', owner: { id: 1, login: 'owner', type: 'User' } },
+  'git/ref/heads/main': { object: { type: 'commit', sha: input.run.head_sha } },
+  'actions/runs/31': input.run,
+  'environments/staging': { id: 123, name: 'staging', can_admins_bypass: false,
+    protection_rules: [{ type: 'required_reviewers', prevent_self_review: false,
+      reviewers: [{ type: 'User', reviewer: { id: 95836629, login: 'attaulhaq0', type: 'User' } }] }],
+    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } },
+  'environments/staging/deployment-branch-policies': { total_count: 1, branch_policies: [{ name: 'main', type: 'branch' }] },
+  'branches/main/protection': { allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false },
+    enforce_admins: { enabled: true }, required_status_checks: { strict: true, contexts: ['required'] },
+    required_pull_request_reviews: { dismiss_stale_reviews: true, require_code_owner_reviews: false,
+      required_approving_review_count: 0, require_last_push_approval: false } },
+  'branches/main/protection/required_signatures': { enabled: true },
+  ['git/commits/' + input.run.head_sha]: { sha: input.run.head_sha, tree: { sha: input.tree },
+    verification: { verified: true, reason: 'valid', signature: 'controlled-signature', payload: 'controlled-payload' } }
+};
+let transferZip, transferArtifact;
+globalThis.fetch = async (raw, options) => {
+  assert.equal(options.method, 'GET'); const url = new URL(String(raw));
+  if (url.origin === 'https://api.supabase.com') {
+    state.nonGithubGets++; assert.equal(new Headers(options.headers).get('Authorization'), 'Bearer private-provider-canary');
+    if (url.pathname.endsWith('/config/database/pooler')) return Response.json([{
+      identifier: project, database_type: 'PRIMARY', db_user: 'postgres.' + project,
+      db_host: 'aws-0-ap-southeast-1.pooler.supabase.com', db_port: 5432,
+      db_name: 'postgres', pool_mode: 'session' }]);
+    assert.equal(url.pathname, '/v1/projects/' + project);
+    return Response.json({ id: project, name: 'Cuevo', status: 'ACTIVE_HEALTHY',
+      database: { host: endpoint.host, version: '17.4', postgres_engine: '17' } });
+  }
+  assert.equal(url.origin, 'https://api.github.com');
+  assert.equal(new Headers(options.headers).get('Authorization'), 'Bearer private-github-canary');
+  const path = url.pathname.replace('/repos/owner/repo/', '');
+  if (path.endsWith('/zip')) {
+    const artifactId = Number(path.split('/').at(-2));
+    if (artifactId === 901) { state.transferArchives++; return new Response(new Uint8Array(transferZip)); }
+    state.canonicalArchives++;
+    return new Response(new Uint8Array(Buffer.from(input.archives[String(artifactId)], 'base64')));
+  }
+  const value = url.pathname === '/repos/owner/repo' ? responses[''] :
+    path.includes('/jobs') ? { total_count: input.jobs.length, jobs: input.jobs } :
+    path.endsWith('/artifacts') ? { total_count: input.artifacts.length, artifacts: input.artifacts } : responses[path];
+  assert(value, 'Unexpected metadata ' + path); return Response.json(value);
+};
+Object.assign(process.env, { GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
+  GITHUB_WORKSPACE: root, GITHUB_SHA: input.run.head_sha, GITHUB_REF: 'refs/heads/main',
+  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REPOSITORY: 'owner/repo',
+  GITHUB_RUN_ID: '51', GITHUB_RUN_ATTEMPT: '1' });
+const savedHandover = await globalThis.populationLearningHandover();
+write('web-handover-result.json', savedHandover, true);
+const savedBytes = readFileSync(join(folder, 'web-handover-result.json'));
+let exported;
+try {
+  exported = await transfer.exportBackendWebTransfer({ repoRoot: root, bundleSha256: hash(json(bundle)),
+    githubToken: 'private-github-canary', vercelToken: 'private-vercel-canary',
+    installedOperator: { providerToken: 'private-provider-canary', journalStorageKey: 'private-journal-canary',
+      migrationPassword: 'private-migration-canary' } });
+} catch (error) {
+  console.error(JSON.stringify({ fixturePhase: 'EXPORTER_SETUP_REFUSAL', nativeReads: state.nativeReads,
+    nativeSessionsClosed: state.nativeSessionsClosed, originalReads: state.originalReads }));
+  if(input.mode==='saved-file-race'){assert.equal(raceReplaced,true);assert.equal(createRequire(input.transferUrl)('node:fs').existsSync(join(folder,'web-transfer.json')),false);console.log(JSON.stringify({phase:'SAVED_FILE_RACE_REFUSED',raceReplaced:true}));process.exit(0);}
+  throw error;
+}
+if(input.mode==='saved-file-race')assert.fail('Changed saved population result must refuse export before web-transfer creation');
+const transferBytes = readFileSync(exported.transferPath);
+assert.equal(hash(transferBytes), exported.transferSha256);
+const parsed = transfer.validateBackendWebTransfer(JSON.parse(transferBytes.toString('utf8')), clock);
+assert.equal(parsed.transfer.evidence.some(row => row.name === 'population-result.json'), false);
+assert.equal(parsed.transfer.evidence.find(row => row.name === 'web-handover-result.json').sha256, hash(savedBytes));
+assert.equal(readFileSync(join(folder, 'web-handover-result.json')).equals(savedBytes), true);
+const { yazl } = createRequire(input.transferUrl)('playwright-core/lib/utilsBundle');
+const zip = new yazl.ZipFile(), pieces = [];
+const zipped = new Promise((yes, no) => { zip.outputStream.on('data', chunk => pieces.push(chunk));
+  zip.outputStream.on('error', no); zip.outputStream.on('end', () => yes(Buffer.concat(pieces))); });
+zip.addBuffer(transferBytes, 'web-transfer.json'); zip.end(); transferZip = await zipped;
+assert.deepEqual(await admission.readBackendWebTransferArchive(transferZip, hash(transferZip),
+  exported.transferSha256), JSON.parse(transferBytes.toString('utf8')));
+fixture.approvals[0].comment = prepared.comment;
+responses['actions/runs/51'] = { ...fixture.completedRun, updated_at: new Date(clock).toISOString() };
+transferArtifact = { id: 901, name: 'cuevo-web-handover-51-1', size_in_bytes: transferZip.length,
+  expired: false, digest: 'sha256:' + hash(transferZip), created_at: new Date(clock).toISOString(),
+  expires_at: new Date(clock + 86400000).toISOString(),
+  workflow_run: { id: 51, head_sha: input.run.head_sha, head_branch: 'main' } };
+responses['actions/artifacts/901'] = transferArtifact;
+responses['actions/runs/51/approvals'] = fixture.approvals;
+const selection = { backendRunId: '51', backendRunAttempt: 1, artifactId: '901',
+  transferSha256: exported.transferSha256 };
+const admitted = await bridge.readWebBackendBridge({ selection, repoRoot: root,
+  githubToken: 'private-github-canary', releaseSha: input.run.head_sha, ciRunId: '31',
+  environment: 'staging', web: { teamId: 'team_Cuevo', projectId: 'prj_Web', target: 'preview' } });
+assert.equal(admitted.purpose, 'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION');
+assert.equal(admitted.backendIdentity.transferSha256, exported.transferSha256);
+assert.equal(admitted.backendIdentity.artifactSha256, hash(transferZip));
+assert.equal(admitted.originalEvidence.some(row => row.name === 'population-result.json'), false);
+assert.equal(admitted.publicConfig.api.kind, 'vercel');
+assert.equal(admitted.publicConfig.worker.kind, 'supabase-edge');
+assert.notDeepEqual(admitted.publicConfig, output.publicConfig);
+assert.deepEqual({ apiUrl: admitted.publicConfig.apiUrl, supabaseUrl: admitted.publicConfig.supabaseUrl,
+  supabasePublishableKey: admitted.publicConfig.supabasePublishableKey }, output.publicConfig);
+const admittedPopulation = admitted.populationEvidence;
+if (admittedPopulation) {
+  assert.equal(admittedPopulation.kind, 'INSTALLED_POPULATION_REVALIDATION');
+  assert.equal(admittedPopulation.receiptSha256, hash(savedBytes));
+  assert.equal(admittedPopulation.verification.originalSha256, hash(originalText));
+}
+Object.assign(process.env, { GITHUB_RUN_ID: '81', GITHUB_RUN_ATTEMPT: '2', GITHUB_JOB: 'web-release',
+  GITHUB_WORKFLOW_REF: 'owner/repo/.github/workflows/release.yml@refs/heads/main', RELEASE_ENVIRONMENT: 'staging' });
+const learning = await import(input.learningUrl);
+const result = await learning.verifyHostedLearningLoop({ repoRoot: root, releaseSha: input.run.head_sha,
+  ciRunId: '31', ...selection, populationReceiptSha256: hash(savedBytes),
+  web: { teamId: 'team_Cuevo', projectId: 'prj_Web', target: 'preview' },
+  webDeployment: { id: 'dpl_Web', url: 'https://cuevo-web-deployment.vercel.app' },
+  selectedActorIds: { admin: actor(1), coordinator: actor(2), teacher: actor(4), student: actor(12), parent: actor(72) },
+  githubToken: 'private-github-canary', vercelToken: 'private-vercel-canary',
+  syntheticPassword: 'protected-synthetic-password' }, {
+    readmitWeb: async () => { state.webReadmits++; throw Error('STOP_AT_FIRST_CURRENT_WEB_READMIT'); }
+  });
+assert.equal(result.status, 'REQUIRES_REVIEW'); assert.equal(result.roleSessions, 0);
+assert.equal(result.canonicalReceipt, null); assert.equal(json(original), originalText);
+assert.equal(state.populationGateEntries, 1,
+  'The actual learning entry must reach its unchanged population evidence condition');
+assert.equal(state.nativeReads, 3); assert.equal(state.nativeSessionsClosed, 3);
+assert.equal(state.originalReads, 6); assert.equal(state.canonicalArchives, 20);
+assert.equal(state.transferArchives, 2); assert.equal(state.schemaWrites + state.seedWrites +
+  state.authCreates + state.apiUploads + state.edgeUploads, 0);
+console.log(JSON.stringify({ phase: 'REAL_INSTALLED_TRANSFER_EXPORTED_AND_ADMITTED',
+  populationGateEntries: state.populationGateEntries,
+  readmitWebCalls: state.webReadmits, resultStatus: result.status, state,
+  originalPopulationSha256: latestNativeProof.installedPopulationSha256,
+  exportedProofFileSha256: hash(savedBytes), transferSha256: exported.transferSha256,
+  savedBytesUnchanged: readFileSync(join(folder, 'web-handover-result.json')).equals(savedBytes),
+  fullHandoverGatesSubstituted: true }));
+`;
+async function runInstalledPopulationLearningFixture(mode:'valid'|'saved-file-race'|'current-runtime') {
+  const migrationPaths = [
+    'supabase/migrations/20261002021129_current_school_schedule_projection.sql',
+    'supabase/migrations/20261002021206_curriculum_context_lifecycle.sql',
+    'supabase/migrations/20261002021737_native_academic_source_identity.sql',
+    'supabase/migrations/20261002204500_posthog_environment_claim.sql',
+    'supabase/migrations/20261002195537_posthog_intelligence_observability.sql',
+  ];
+  const sourcePaths = [...new Set([...backendWebTransferProducerPaths,
+    'scripts/verification/data-api-configuration.ts', 'scripts/database/hosted-synthetic-population.ts',
+    'scripts/database/hosted-installed-state.ts', 'scripts/database/hosted-migration-database.ts',
+    ...migrationPaths, 'supabase/seed/identities.json'])];
+  const additionalSources = sourcePaths.map(path => ({ path, bytes: readFileSync(resolve(path), 'utf8') }));
+  await withCanonicalJobFixture('runtime', () => undefined, { additionalSources }, async context => {
+    const root = context.fixture.root;
+    const script = join(root, '.local/installed-population-learning.mjs');
+    const inputPath = join(root, '.local/installed-population-learning.json');
+    const url = (path: string) => pathToFileURL(resolve(path)).href;
+    await writeFile(inputPath, JSON.stringify({ mode,run: context.run, jobs: context.jobs,
+      artifacts: context.artifacts, archives: context.archives, tree: context.tree,
+      observerUrl: url('scripts/database/hosted-synthetic-population.ts'),
+      planUrl: url('scripts/database/hosted-migration-plan.ts'),
+      installedUrl: url('scripts/database/hosted-installed-state.ts'),
+      reviewUrl: url('scripts/verification/release-review.ts'),
+      contractsUrl: url('scripts/verification/backend-release-contracts.ts'),
+      fixtureUrl: url('scripts/verification/backend-web-transfer-fixtures.ts'),
+      canonicalUrl: url('scripts/verification/canonical-runtime-jobs.ts'),
+      transferUrl: url('scripts/verification/backend-web-transfer.ts'),
+      admissionUrl: url('scripts/verification/backend-web-transfer-admission.ts'),
+      bridgeUrl: url('scripts/verification/web-backend-bridge.ts'),
+      browserUrl: url('scripts/verification/backend-hosted-browser.ts'),
+      learningUrl: url('scripts/verification/backend-hosted-learning-loop.ts') }));
+    await writeFile(script, installedPopulationLearningFixtureSource);
+    const child = spawnSync(process.execPath, [
+      '--import', url('node_modules/tsx/dist/loader.mjs'),
+      '--import', pathToFileURL(context.fixture.hook).href, script,
+    ], { cwd: root, encoding: 'utf8', env: { ...process.env,
+      CUEVO_CANONICAL_FIXTURE_CONFIG: context.fixture.hookInput,
+      CUEVO_POPULATION_LEARNING_FIXTURE: inputPath } });
+    assert.equal(child.status, 0, child.stderr);
+    const observation = JSON.parse(child.stdout.trim()) as {
+      phase: string; populationGateEntries: number; readmitWebCalls: number; savedBytesUnchanged: boolean;
+      fullHandoverGatesSubstituted: boolean;
+    };
+    if(mode==='saved-file-race'){assert.equal(observation.phase,'SAVED_FILE_RACE_REFUSED');return;}
+    assert.equal(observation.phase, 'REAL_INSTALLED_TRANSFER_EXPORTED_AND_ADMITTED');
+    await writeFile(resolve('.local/20261010-population-bridge-red/green-child-observation.json'), child.stdout.trim());
+    assert.equal(observation.savedBytesUnchanged, true);
+    assert.equal(observation.fullHandoverGatesSubstituted, true);
+    assert.equal(observation.populationGateEntries, 1,
+      'Only a reached unchanged population evidence condition can establish this RED');
+    // RED on85b: actual installed transfer and native proof pass, but the real
+    // learning owner refuses its absent population-result row before this port.
+    assert.equal(observation.readmitWebCalls, 1,
+      'A valid installed full transfer with actual native population proof must reach current web admission');
+  });
+}
+test('native installed population proof reaches learning admission through its exact completed transfer',async()=>runInstalledPopulationLearningFixture('valid'));
+test('a replaced saved installed population result refuses export before transfer creation',async()=>runInstalledPopulationLearningFixture('saved-file-race'));
+test('same-source current runtime population proof reaches learning through the current transfer',async()=>runInstalledPopulationLearningFixture('current-runtime'));

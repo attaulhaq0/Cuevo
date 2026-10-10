@@ -36,7 +36,7 @@ export function readWebBackendSelection(encoded: string): WebBackendSelection | 
 export function encodeWebBackendSelection(selection: WebBackendSelection | null) { return selection ? Buffer.from(canonicalReleaseReviewJson(selection)).toString('base64') : ''; }
 
 type WebBackendBridgeInput={ selection: WebBackendSelection; repoRoot: string; githubToken: string; releaseSha: string; ciRunId: string; environment: string; web: { teamId: string; projectId: string; target: 'preview' | 'production' } };
-const bridgeFromAdmission=(result:Admission):WebBackendBridge=>({ purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,
+const bridgeFromAdmission=(result:Admission):WebBackendBridge=>({ purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,populationEvidence:result.populationEvidence,
  backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false });
 export async function readWebBackendBridge(input:WebBackendBridgeInput):Promise<WebBackendBridge>{
   try {

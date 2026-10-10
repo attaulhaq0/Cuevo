@@ -8,6 +8,8 @@ import { readCanonicalMigrationSources } from '../database/hosted-migration-plan
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
 import { canonicalReleaseExecutionJson } from './release-review';
 import { readBackendWebTransferFile, validateBackendWebTransfer,validateOperatingBackendWebTransfer } from './backend-web-transfer';
+import {type CompletedBackendPopulationEvidence} from './backend-web-transfer';
+import {installedPopulationVerificationV2Schema} from '../database/hosted-synthetic-population';
 import {validateOperatingStagingHandoff} from './operating-staging-handoff';
 import {readCanonicalRuntimeJobsAndGuard} from './canonical-runtime-jobs';
 import {createGithubCodeqlArtifactReader} from './staging-security';
@@ -146,7 +148,7 @@ async function readCompletedBackendCapture(value: unknown) {
       if (controller.signal.aborted||Date.now()>=Date.parse(artifact.expires_at)) throw fail();
       const admission={ purpose: input.handoff==='operating-staging'?'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION' as const:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
         manifest: admitted.manifest, publicConfig: admitted.publicConfig, reviewFacts: admitted.reviewFacts, assignments: admitted.assignments,
-        originalEvidence: admitted.transfer.evidence,
+        originalEvidence: admitted.transfer.evidence,populationEvidence:'populationEvidence'in admitted?admitted.populationEvidence:null,
         backendIdentity: { repository, sourceSha: input.releaseSha, treeSha: admitted.body.treeSha, baseSha: admitted.body.baseSha, ciRunId: input.ciRunId, runId: input.backendRunId, runAttempt: input.backendRunAttempt, artifactId: input.artifactId,
           artifactSha256: artifact.digest.slice(7), transferSha256: input.transferSha256, manifestSha256: admitted.transfer.manifestSha256, packageSha256: admitted.prepared.sha256, web: admitted.body.targets.web, settingsSha256: admitted.transfer.settings.settingsSha256,
           earliestProofAt: admitted.transfer.earliestProofAt, exportedAt: admitted.transfer.exportedAt, consumptionExpiresAt: admitted.transfer.consumptionExpiresAt },
@@ -170,6 +172,12 @@ async function readCompletedBackendCapture(value: unknown) {
 /** The original public facade retains its serializable evidence shape and
  * closes its reader immediately. Only a guarded same-invocation consumer owns it. */
 export async function readCompletedBackendWebTransferAdmission(value:unknown){const result=await readCompletedBackendWebTransferAdmissionAndGuard(value);try{return result.admission;}finally{disposeCompletedBackendCanonical(result.token);}}
+/** One admitted full-transfer proof file; never an alternate native authority. */
+export function requireCompletedBackendPopulationEvidence(admitted:Pick<Awaited<ReturnType<typeof readCompletedBackendWebTransferAdmission>>,'purpose'|'populationEvidence'|'originalEvidence'|'backendIdentity'>):CompletedBackendPopulationEvidence{
+ if(admitted.purpose!=='COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION'||!admitted.populationEvidence)throw fail();const proof=admitted.populationEvidence,name=proof.kind==='INITIAL_POPULATION_RESULT'?'population-result.json':'web-handover-result.json',rows=admitted.originalEvidence.filter(row=>row.name===name&&row.sha256===proof.receiptSha256);if(rows.length!==1||admitted.originalEvidence.filter(row=>row.name===name).length!==1)throw fail();
+ if(proof.kind==='INSTALLED_POPULATION_REVALIDATION'){const verification=installedPopulationVerificationV2Schema.parse(proof.verification),identity=admitted.backendIdentity;if(verification.currentSourceSha!==identity.sourceSha||verification.currentTreeSha!==identity.treeSha||verification.ciRunId!==identity.ciRunId||verification.runId!==identity.runId||verification.runAttempt!==identity.runAttempt||verification.approvalDigest!==identity.packageSha256||Date.parse(verification.observedAt)<Date.parse(identity.earliestProofAt)||Date.parse(verification.observedAt)>Date.parse(identity.exportedAt))throw fail();}
+ return proof;
+}
 
 /** Existing web approval token remains single-use and owns only its requested capture. */
 export async function readCompletedBackendWebTransferAdmissionAndGuard(value:unknown){const held=await readCompletedBackendCapture(value),token=Object.freeze(Object.create(null)) as CompletedBackendCanonicalToken;completedCanonicalTokens.set(token,held.capture);return{admission:held.admission,token};}
