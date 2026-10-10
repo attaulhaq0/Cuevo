@@ -74,6 +74,7 @@
         "scripts/verification/runtime-contract-manifest.test.ts",
         "scripts/verification/runtime-lanes.test.ts",
         "scripts/verification/runtime-outage-rules.test.ts",
+        "scripts/verification/source-test-cohorts.test.ts",
         "scripts/verification/staging-security.test.ts",
         "scripts/verification/staging-verification-jobs.test.ts",
         "scripts/verification/staging-verification.test.ts",
@@ -160,6 +161,7 @@
         "scripts/verification/backend-web-transfer-admission.test.ts",
         "scripts/verification/backend-web-transfer.test.ts",
         "scripts/verification/hosted-learning-loop-journal.test.ts",
+        "scripts/verification/hosted-learning-qa-adapter.test.ts",
         "scripts/verification/hosted-learning-qa-workflow.test.ts",
         "scripts/verification/hosted-learning-qa.test.ts",
         "scripts/verification/protected-preview.test.ts",
@@ -756,6 +758,14 @@
         "durationMs": null
       },
       {
+        "path": "scripts/verification/canonical-source-jobs.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/canonical-source-legacy.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/verification/ci-partition-coverage.test.ts",
         "durationMs": null
       },
@@ -804,11 +814,19 @@
         "durationMs": null
       },
       {
+        "path": "scripts/verification/hosted-learning-qa-adapter.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/verification/hosted-learning-qa-workflow.test.ts",
         "durationMs": null
       },
       {
         "path": "scripts/verification/hosted-learning-qa.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/integration-partitions.test.ts",
         "durationMs": null
       },
       {
@@ -872,6 +890,10 @@
         "durationMs": null
       },
       {
+        "durationMs": null,
+        "path": "scripts/verification/source-test-cohorts.test.ts"
+      },
+      {
         "path": "scripts/verification/staging-security.test.ts",
         "durationMs": null
       },
@@ -885,6 +907,10 @@
       },
       {
         "path": "scripts/verification/stateless-checks.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/stateless-source-partitions.test.ts",
         "durationMs": null
       },
       {
@@ -913,22 +939,6 @@
       },
       {
         "path": "scripts/verification/web-test-assets.test.ts",
-        "durationMs": null
-      },
-      {
-        "path": "scripts/verification/stateless-source-partitions.test.ts",
-        "durationMs": null
-      },
-      {
-        "path": "scripts/verification/canonical-source-jobs.test.ts",
-        "durationMs": null
-      },
-      {
-        "path": "scripts/verification/canonical-source-legacy.test.ts",
-        "durationMs": null
-      },
-      {
-        "path": "scripts/verification/integration-partitions.test.ts",
         "durationMs": null
       }
     ],
@@ -1376,5 +1386,10 @@
       "name": "dependency-security",
       "commandSha256": "ce30758cf6cf245372294b9837e72457742d279f405c02dc44a9fb137e50e60f"
     }
-  ]
+  ],
+  "sourceCohorts": {
+    "version": 1,
+    "file": "scripts/database/hosted-schema-continuation-executor.test.ts",
+    "policySha256": "50987b89854a2b153f2b201b4aa09ae723a5ce54e0b45b48b54cec5fce9dd345"
+  }
 }

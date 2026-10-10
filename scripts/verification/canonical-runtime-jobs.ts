@@ -11,12 +11,40 @@ import {integrationIdentitySchema} from './integration-partitions';
 import {resolve} from 'node:path';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {types} from 'node:util';
 
 const positive=z.number().int().positive().max(Number.MAX_SAFE_INTEGER),sha=z.string().regex(/^[a-f0-9]{40}$/);
 const runSchema=z.object({id:positive,run_attempt:positive,head_sha:sha,head_branch:z.literal('main'),event:z.literal('push'),path:z.literal('.github/workflows/ci.yml'),status:z.literal('completed'),conclusion:z.literal('success'),repository:z.object({full_name:z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)})});
 const stepSchema=z.object({name:z.string(),number:positive,status:z.literal('completed'),conclusion:z.enum(['success','skipped'])});
 const jobSchema=z.object({id:positive,name:z.string(),run_id:positive,run_attempt:positive,head_sha:sha,head_branch:z.literal('main'),status:z.literal('completed'),conclusion:z.enum(['success','skipped']),started_at:z.iso.datetime({offset:true}).nullable().optional(),completed_at:z.iso.datetime({offset:true}).nullable().optional(),steps:z.array(stepSchema).max(100)});
 const fail=()=>Error('Canonical isolated runtime source and original job attempt require review.');
+const contextBindingSchema=z.object({repoRoot:z.string(),repository:z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),sourceSha:sha,treeSha:sha,runId:z.string().regex(/^[1-9][0-9]*$/),runAttempt:positive,purpose:z.enum(['CURRENT_SOURCE','ORIGINAL_RUNTIME_METADATA'])}).strict();
+export type CanonicalRuntimeContextBinding=z.infer<typeof contextBindingSchema>;
+declare const canonicalRuntimeContextBrand:unique symbol;
+export type CanonicalRuntimeContext={proof:{runAttempt:number;jobsSha256:string};refreshOriginalMetadata:()=>Promise<void>;assertOriginalValidity:()=>void;readonly[canonicalRuntimeContextBrand]:true};
+type RegisteredCanonicalContext={binding:string;assert:()=>void;assertOriginal:()=>void;assertCompletion:()=>void;refresh:()=>Promise<void>;invalidate:()=>void;lease?:CanonicalRuntimeArtifactConsumption};
+const canonicalContexts=new WeakMap<object,RegisteredCanonicalContext>();
+declare const canonicalRuntimeArtifactConsumptionBrand:unique symbol;
+export type CanonicalRuntimeArtifactConsumption={readonly[canonicalRuntimeArtifactConsumptionBrand]:true};
+const canonicalArtifactConsumers=new WeakMap<object,{context:RegisteredCanonicalContext;completed:boolean}>();
+function registerCanonicalRuntimeContext(binding:CanonicalRuntimeContextBinding,proof:CanonicalRuntimeContext['proof'],original:{assertOriginalValidity:()=>void;refreshOriginalMetadata:()=>Promise<void>},context:ReturnType<typeof captureCanonicalSourceContext>):CanonicalRuntimeContext{
+ const originalProof=canonicalReleaseExecutionJson(proof);let invalid=false,refreshing=false;
+ const assertOriginalValidity=()=>{try{if(invalid||canonicalReleaseExecutionJson(proof)!==originalProof)throw fail();context.finalMetadata();original.assertOriginalValidity();}catch{invalid=true;throw fail();}};
+ const refreshOriginalMetadata=async(lease?:CanonicalRuntimeArtifactConsumption)=>{if(invalid||refreshing||registered?.lease!==lease){invalid=true;throw fail();}refreshing=true;try{assertOriginalValidity();await original.refreshOriginalMetadata();assertOriginalValidity();}catch{invalid=true;throw fail();}finally{refreshing=false;}};
+ assertOriginalValidity();const guard=Object.freeze({proof,refreshOriginalMetadata:()=>refreshOriginalMetadata(),assertOriginalValidity}) as CanonicalRuntimeContext;const registered:RegisteredCanonicalContext={binding:canonicalReleaseExecutionJson(contextBindingSchema.parse(binding)),assert:()=>{if(refreshing||registered.lease){invalid=true;throw fail();}assertOriginalValidity();},assertOriginal:assertOriginalValidity,assertCompletion:()=>{if(refreshing){invalid=true;throw fail();}assertOriginalValidity();},refresh:()=>refreshOriginalMetadata(registered.lease),invalidate:()=>{invalid=true;}};canonicalContexts.set(guard,registered);return guard;
+}
+/** Only this owner's exact process-local context can reuse immutable archives. */
+export function consumeCanonicalRuntimeContext(value:unknown,binding:CanonicalRuntimeContextBinding):CanonicalRuntimeContext{
+ if(!value||typeof value!=='object'||types.isProxy(value))throw fail();const registered=canonicalContexts.get(value);if(!registered)throw fail();try{const checked=contextBindingSchema.parse(JSON.parse(canonicalReleaseExecutionJson(binding)));if(resolve(checked.repoRoot)!==checked.repoRoot||registered.binding!==canonicalReleaseExecutionJson(checked))throw fail();registered.assert();return value as CanonicalRuntimeContext;}catch{registered.invalidate();throw fail();}
+}
+/** One fixed artifact reader reserves its original context until terminal cleanup. */
+export function beginCanonicalRuntimeArtifactConsumption(value:unknown,binding:CanonicalRuntimeContextBinding):CanonicalRuntimeArtifactConsumption{
+ const guard=consumeCanonicalRuntimeContext(value,binding),context=canonicalContexts.get(guard)!;const lease=Object.freeze({}) as CanonicalRuntimeArtifactConsumption;context.lease=lease;canonicalArtifactConsumers.set(lease,{context,completed:false});return lease;
+}
+function canonicalArtifactConsumer(value:unknown){if(!value||typeof value!=='object'||types.isProxy(value))throw fail();const registered=canonicalArtifactConsumers.get(value);if(!registered||registered.completed||registered.context.lease!==value)throw fail();return registered;}
+export async function refreshCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);try{await registered.context.refresh();}catch{registered.context.invalidate();throw fail();}}
+export function completeCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);try{registered.context.assertCompletion();registered.completed=true;registered.context.lease=undefined;}catch{registered.context.invalidate();throw fail();}}
+export function abortCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);registered.context.invalidate();registered.completed=true;registered.context.lease=undefined;}
 const ciCanonicalJobs={...ciRuntimeJobs,...ciSourceJobs,'database-checks':ciDatabaseJob};
 async function runtimeArtifacts(run:z.infer<typeof runSchema>,treeSha:string,jobs:z.infer<typeof jobSchema>[],github:(path:string)=>Promise<unknown>,artifact:GithubArtifactReader|undefined,inputs:Awaited<ReturnType<typeof readCanonicalSourceArtifactsAndInputs>>,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',git:ReturnType<typeof captureCanonicalSourceContext>['git']){
  if(!artifact)throw fail();
@@ -40,7 +68,7 @@ async function runtimeArtifacts(run:z.infer<typeof runSchema>,treeSha:string,job
 }
 /** Current official GET facade is supplied by the native admission owner.
  * Raw run_attempt must be retained; normalized legacy run metadata is refused. */
-export async function readCanonicalRuntimeJobsAndGuard(value:unknown,github:(path:string)=>Promise<unknown>,artifact?:GithubArtifactReader,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA'='CURRENT_SOURCE'){
+export async function readCanonicalRuntimeJobsAndGuard(value:unknown,github:(path:string)=>Promise<unknown>,artifact?:GithubArtifactReader,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA'='CURRENT_SOURCE'):Promise<CanonicalRuntimeContext>{
  try{
   const run=runSchema.parse(JSON.parse(canonicalReleaseReviewJson(value))),context=captureCanonicalSourceContext('.',run.head_sha,undefined,purpose),path=`actions/runs/${run.id}`,same=(left:unknown,right:unknown)=>canonicalReleaseReviewJson(left)===canonicalReleaseReviewJson(right);
   const current=async()=>{if(!same(runSchema.parse(await github(path)),run))throw fail();};await current();
@@ -50,7 +78,8 @@ export async function readCanonicalRuntimeJobsAndGuard(value:unknown,github:(pat
    if(total!==undefined&&response.total_count!==total||!response.jobs.length)throw fail();total=response.total_count;jobs.push(...response.jobs);if(jobs.length>total)throw fail();if(jobs.length===total)break;if(response.jobs.length!==100||page===10)throw fail();
   }
   if(jobs.length!==total||new Set(jobs.map(job=>job.id)).size!==jobs.length||new Set(jobs.map(job=>job.name)).size!==jobs.length)throw fail();return jobs;};const jobs=await readJobs();
-  if(purpose==='ORIGINAL_RUNTIME_METADATA'&&run.head_sha==='752c2e1fc5c244222a5df9f86dfb085b1a777894'&&run.id===37928686446&&run.run_attempt===1){if(!artifact)throw fail();const legacy=await readLegacy752RuntimeMetadataAndGuard({...run,purpose},jobs,github,artifact);context.finalMetadata();legacy.assertOriginalValidity();return{proof:legacy.proof,assertOriginalValidity:legacy.assertOriginalValidity,refreshOriginalMetadata:async()=>{await legacy.refreshOriginalMetadata();await current();context.finalMetadata();legacy.assertOriginalValidity();}};}
+  const binding={repoRoot:context.root,repository:run.repository.full_name,sourceSha:run.head_sha,treeSha:context.treeSha,runId:String(run.id),runAttempt:run.run_attempt,purpose};
+  if(purpose==='ORIGINAL_RUNTIME_METADATA'&&run.head_sha==='752c2e1fc5c244222a5df9f86dfb085b1a777894'&&run.id===37928686446&&run.run_attempt===1){if(!artifact)throw fail();const legacy=await readLegacy752RuntimeMetadataAndGuard({...run,purpose},jobs,github,artifact);context.finalMetadata();legacy.assertOriginalValidity();return registerCanonicalRuntimeContext(binding,legacy.proof,{assertOriginalValidity:legacy.assertOriginalValidity,refreshOriginalMetadata:async()=>{await legacy.refreshOriginalMetadata();await current();context.finalMetadata();legacy.assertOriginalValidity();}},context);}
   const required=[...Object.keys(ciCanonicalJobs),'codeql','secret-scan','required'];
   if(jobs.length<required.length||jobs.length>required.length+1||required.some(name=>!jobs.some(job=>job.name===name))||jobs.some(job=>!required.includes(job.name)&&job.name!=='dependency-review'))throw fail();
   for(const job of jobs){if(job.run_id!==run.id||job.run_attempt!==run.run_attempt||job.head_sha!==run.head_sha)throw fail();if(job.name==='dependency-review'){if(job.conclusion!=='skipped'||job.steps.length)throw fail();}else if(job.conclusion!=='success'||!job.steps.length||job.steps.some(step=>step.conclusion!=='success'&&!step.name.startsWith('Post ')))throw fail();}
@@ -69,7 +98,7 @@ export async function readCanonicalRuntimeJobsAndGuard(value:unknown,github:(pat
   }
   const commit=z.object({sha:z.literal(run.head_sha),tree:z.object({sha})}).parse(await github('git/commits/'+run.head_sha));if(commit.tree.sha!==context.treeSha)throw fail();const inputs=await readCanonicalSourceArtifactsAndInputs(run,commit.tree.sha,selected,github,artifact,purpose),runtime=await runtimeArtifacts(run,commit.tree.sha,jobs,github,artifact,inputs,purpose,context.git);
   if(!same(jobs,await readJobs()))throw fail();await current();context.finalMetadata();const proof={runAttempt:run.run_attempt,jobsSha256:createHash('sha256').update(canonicalReleaseReviewJson({repository:run.repository.full_name,sourceSha:run.head_sha,treeSha:commit.tree.sha,runId:run.id,runAttempt:run.run_attempt,jobs:[...jobs].sort((left,right)=>left.name.localeCompare(right.name)),canonicalSource:inputs.proof,canonicalRuntime:runtime.proof})).digest('hex')};
-  const assertOriginalValidity=()=>{inputs.assertOriginalValidity();runtime.assertOriginalValidity();},refreshOriginalMetadata=async()=>{await inputs.refreshOriginalMetadata();await runtime.refreshOriginalMetadata();if(!same(jobs,await readJobs()))throw fail();await current();context.finalMetadata();assertOriginalValidity();};assertOriginalValidity();return{proof,refreshOriginalMetadata,assertOriginalValidity};
+  const assertOriginalValidity=()=>{inputs.assertOriginalValidity();runtime.assertOriginalValidity();},refreshOriginalMetadata=async()=>{await inputs.refreshOriginalMetadata();await runtime.refreshOriginalMetadata();if(!same(jobs,await readJobs()))throw fail();await current();context.finalMetadata();assertOriginalValidity();};assertOriginalValidity();return registerCanonicalRuntimeContext(binding,proof,{refreshOriginalMetadata,assertOriginalValidity},context);
  }catch{throw fail();}
 }
 

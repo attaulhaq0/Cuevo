@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { membershipSchema } from '@cuevo/contracts';
 import { canonicalReleaseExecutionJson } from './release-review';
-import { readBackendReleaseAdmission } from './backend-release-admission';
+import {prepareNativeBackendReleaseAdmission,readNativeBackendReleaseAdmission,disposeNativeBackendReleaseAdmission,type NativeBackendAdmissionHandle} from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from './backend-release-contracts';
 import { prepareHostedRuntimeRecipients,prepareHostedOperatingRecipients } from './backend-provider-deploy';
 import { backendPreviewHeaders } from './backend-preview-transport';
@@ -26,8 +26,9 @@ async function request(url: string, method: 'GET' | 'POST', headers: Record<stri
 const denied = (value: { status: number }) => [401, 403, 404].includes(value.status);
 /** Runs fixed hosted health/current-role and direct Data API/worker denial probes.
  * Missing provider configuration/private-flow proof always prevents activation. */
-export async function verifyHostedBackendPrerequisites(value: unknown): Promise<HostedBackendVerificationResult> {
+export async function verifyHostedBackendPrerequisites(value: unknown,borrowed?:NativeBackendAdmissionHandle): Promise<HostedBackendVerificationResult> {
   const result: HostedBackendVerificationResult = { status: 'REQUIRES_REVIEW', purpose: 'CUEVO_HOSTED_PREREQUISITE_VERIFICATION', apiReady: null, roleSessions: 0, crossSchoolDenied: null, dataApi: { anonymousRestDenied: null, authenticatedRestDenied: null, serviceRestDenied: null, rpcDenied: null, graphqlDenied: null, configuration: 'REQUIRES_CURRENT_PROVIDER_CONFIGURATION_EVIDENCE' }, worker: { missingSignatureDenied: null, malformedSignatureDenied: null, staleSignatureDenied: null, activated: false }, privateStorage: 'NOT_VERIFIED', privateRealtime: 'NOT_VERIFIED', restrictedDatabaseGrants: 'NOT_VERIFIED', activationAllowed: false, hostedAcceptance: false };
+  let admissionHandle:NativeBackendAdmissionHandle|undefined;
   try {
     const input = schema.parse(JSON.parse(canonicalReleaseExecutionJson(value))), expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }), runtime = z.object({edge:z.object({CUEVO_WORKER_RELEASE_GENERATION:z.string()}).passthrough()}).passthrough().safeParse(input.runtimeConfig).success?prepareHostedOperatingRecipients(input.runtimeConfig,expected):prepareHostedRuntimeRecipients(input.runtimeConfig, expected);
     const componentSha=expected.runtimeRollout?.desired.sourceSha??expected.currentRuntime?.current.sourceSha??expected.releaseSha,active=expected.currentRuntime?.current;
@@ -37,7 +38,8 @@ export async function verifyHostedBackendPrerequisites(value: unknown): Promise<
     const requestApi=async(url:string,method:'GET'|'POST',headers:Record<string,string>,body?:unknown)=>request(url,method,{...await backendPreviewHeaders({...preview,url}),...headers},body);
     const auth = expected.targets.supabase.authOrigin, project = expected.targets.supabase.projectRef, manifestBytes = await readFile(join(input.repoRoot, 'supabase/seed/identities.json')); if (hash(manifestBytes) !== '7464b3487adc3998d8f4ad4582ffd08ebafbdc8fd9a568433ddc687f4f03ac21') throw failure();
     const manifest = z.object({ schoolId: z.uuid(), denialSchoolId: z.uuid(), actors: z.array(z.object({ actorId: z.uuid(), schoolId: z.uuid(), role: z.string(), email: z.email() }).passthrough()).length(133) }).parse(JSON.parse(manifestBytes.toString('utf8')));
-    await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' });
+    const admissionBinding={repoRoot:input.repoRoot,expected,prepared,effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT' as const:'COMPLETE_BACKEND' as const};admissionHandle=borrowed===undefined?await prepareNativeBackendReleaseAdmission({...admissionBinding,githubToken:input.githubToken}):borrowed;const admission=()=>readNativeBackendReleaseAdmission(admissionHandle,admissionBinding);
+    await admission();
     const vercelUrl = `https://api.vercel.com/v13/deployments/${input.apiDeployment.id}?teamId=${expected.targets.api.teamId}`;
     const deployment = z.object({ id: z.literal(input.apiDeployment.id), projectId: z.literal(expected.targets.api.projectId), ownerId: z.literal(expected.targets.api.teamId), url: z.literal(apiUrl.hostname), readyState: z.literal('READY'), target: z.null().or(z.literal('preview')), meta: z.object({ cuevoCommitSha: z.literal(componentSha),...(active||expected.runtimeRollout?{cuevoArtifactSha256:z.literal(expected.fingerprints.apiArtifactSha256)}:{}) }) }).parse((await request(vercelUrl, 'GET', { Authorization: 'Bearer ' + input.vercelToken })).value); if (deployment.id !== input.apiDeployment.id) throw failure();
     const edge = z.object({ id: z.literal(input.edgeDeployment.id), slug: z.literal('cuevo-worker'), status: z.literal('ACTIVE'), version: z.literal(input.edgeDeployment.version), verify_jwt: z.literal(false) }).parse((await request(`https://api.supabase.com/v1/projects/${project}/functions/cuevo-worker`, 'GET', { Authorization: 'Bearer ' + input.providerToken })).value); if (edge.version !== input.edgeDeployment.version) throw failure();
@@ -64,8 +66,9 @@ export async function verifyHostedBackendPrerequisites(value: unknown): Promise<
     const body = { version: 1, wakeId: '00000000-0000-4000-8000-000000000000' }, endpoint = expected.targets.supabase.edgeOrigin, base = { 'Content-Type': 'application/json' };
     const workerDenied = async (headers: Record<string, string>) => { const response = await request(endpoint, 'POST', headers, body); return response.status === 401 && z.object({ code: z.literal('WORKER_AUTH_REQUIRED') }).strict().safeParse(response.value).success; };
     result.worker.missingSignatureDenied = await workerDenied(base); result.worker.malformedSignatureDenied = await workerDenied({ ...base, 'x-cuevo-wake-time': 'not-time', 'x-cuevo-wake-signature': 'invalid' }); result.worker.staleSignatureDenied = await workerDenied({ ...base, 'x-cuevo-wake-time': '1', 'x-cuevo-wake-signature': '0'.repeat(64) });
-    await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' });
+    await admission();
     if (result.roleSessions !== 5 || result.crossSchoolDenied !== true || [result.dataApi.anonymousRestDenied, result.dataApi.authenticatedRestDenied, result.dataApi.serviceRestDenied, result.dataApi.rpcDenied, result.dataApi.graphqlDenied, result.worker.missingSignatureDenied, result.worker.malformedSignatureDenied, result.worker.staleSignatureDenied].some(value => value !== true)) throw failure();
     result.status = 'PREREQUISITES_OBSERVED'; return result;
   } catch { return result; }
+  finally{if(admissionHandle&&borrowed===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);}
 }

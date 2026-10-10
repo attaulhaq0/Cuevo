@@ -4,7 +4,7 @@ import { types } from 'node:util';
 import { z } from 'zod';
 import { canonicalReleaseReviewJson, canonicalReleaseExecutionJson, parseCanonicalReleaseReviewJson, validateOfficialFounderApproval } from './release-review';
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
-import { readBackendReleaseSourceEvidence } from './backend-release-admission';
+import { readBackendReleaseSourceEvidenceAndGuard } from './backend-release-admission';
 import { hostedMigrationEndpointSchema } from '../database/hosted-migration-provider';
 
 const purpose = 'CUEVO_HOSTED_LEARNING_LOOP_NATIVE' as const;
@@ -42,6 +42,14 @@ export type HostedLearningLoopNativeAdmissionPorts = {
   readCurrentWeb(selection: HostedLearningLoopNativePackage): Promise<z.infer<typeof webFacts>>;
   readOfficialUiArtifact(selection: HostedLearningLoopNativePackage): Promise<z.infer<typeof uiFacts>>;
 };
+declare const nativeQaAdmissionGuardBrand:unique symbol;
+export type HostedLearningLoopNativeAdmissionGuard={readCurrentAdmission:()=>Promise<HostedLearningLoopNativeAdmission>;assertOriginalValidity:()=>void;dispose:()=>void;readonly[nativeQaAdmissionGuardBrand]:true};
+export type HostedLearningLoopNativeAdmission={purpose:typeof purpose;status:'NATIVE_QA_ADMITTED';selection:HostedLearningLoopNativePackage;packageSha256:string;approval:ReturnType<typeof validateOfficialFounderApproval>;facts:{backend:z.infer<typeof backendFacts>;web:z.infer<typeof webFacts>;ui:z.infer<typeof uiFacts>};observedAt:string;provenance:'OFFICIAL_CURRENT_PROTECTED_QA_AND_SUPPLIED_ADMITTED_CONSUMER_FACTS';nativeExecutionVerified:false;hostedAcceptance:false;customerReady:false};
+const nativeQaGuards=new WeakMap<object,{binding:string;ports:HostedLearningLoopNativeAdmissionPorts;assert:()=>void;invalidate:()=>void}>();
+export function consumeHostedLearningLoopNativeAdmissionGuard(value:unknown,expected:unknown,rawPorts:unknown){
+  if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=nativeQaGuards.get(value);if(!held)throw failure();
+  try{const input=parse(inputSchema.omit({githubToken:true}),expected),ports=functions(rawPorts);if(canonicalReleaseExecutionJson(input)!==held.binding||Object.keys(held.ports).some(key=>ports[key as keyof typeof ports]!==held.ports[key as keyof typeof ports]))throw failure();held.assert();return value as HostedLearningLoopNativeAdmissionGuard;}catch{held.invalidate();throw failure();}
+}
 function parse<T>(schema: z.ZodType<T>, value: unknown): T { return schema.parse(JSON.parse(canonicalReleaseExecutionJson(value))); }
 const equal = (left: unknown, right: unknown) => canonicalReleaseExecutionJson(left) === canonicalReleaseExecutionJson(right);
 const comment = (selection: z.infer<typeof selectionSchema>, digest: string) => `Cuevo hosted learning native QA approved: sha=${selection.sourceSha}; run=${selection.qaRunId}; attempt=${selection.qaRunAttempt}; package=sha256:${digest}`;
@@ -105,20 +113,26 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 /** Current protected QA purpose only. Completed backend/UI producers are read
  * through separately admitted fixed ports; their runs are never relabeled as
  * the current waiting/in-progress QA run. Invoke again after native work. */
-export async function readHostedLearningLoopNativeAdmission(value: unknown, rawPorts: unknown) {
+export async function readHostedLearningLoopNativeAdmissionAndGuard(value: unknown, rawPorts: unknown):Promise<HostedLearningLoopNativeAdmissionGuard> {
   try {
     const input = parse(inputSchema, value), ports = functions(rawPorts), selection = validatePreparedHostedLearningLoopNativePackage(input.prepared, Date.now()); runner(input, selection);
+    const envNames=['GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_WORKSPACE','GITHUB_REPOSITORY','GITHUB_SHA','GITHUB_REF','GITHUB_EVENT_NAME','GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT','GITHUB_JOB','GITHUB_WORKFLOW_REF','GITHUB_SERVER_URL','GITHUB_API_URL','NODE_OPTIONS'],envSnapshot=JSON.stringify(envNames.map(name=>process.env[name]??null)),originalPorts={...ports};
     const source = { releaseSha: selection.sourceSha, treeSha: selection.treeSha, baseSha: selection.baseSha, fingerprints: { sourceManifestSha256: selection.sourceManifestSha256, diffSha256: selection.diffSha256 } };
-    await readBackendReleaseSourceEvidence(input.repoRoot, source);
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 180000), base = 'https://api.github.com/repos/' + selection.repository;
+    const sourceGuard=await readBackendReleaseSourceEvidenceAndGuard(input.repoRoot, source);
+    runner(input,selection);if(JSON.stringify(envNames.map(name=>process.env[name]??null))!==envSnapshot)throw failure();const capturedPorts=functions(rawPorts);for(const key of Object.keys(originalPorts) as (keyof HostedLearningLoopNativeAdmissionPorts)[])if(capturedPorts[key]!==originalPorts[key])throw failure();
+    const controller = new AbortController(),deadlineAtMs=Date.now()+180000, timer = setTimeout(() => controller.abort(), 180000), base = 'https://api.github.com/repos/' + selection.repository;let invalid=false,busy=false,disposed=false;
+    const invalidate=()=>{invalid=true;controller.abort();};
+    const assertOriginalValidity=()=>{try{if(invalid||disposed||controller.signal.aborted||Date.now()>=deadlineAtMs||JSON.stringify(envNames.map(name=>process.env[name]??null))!==envSnapshot)throw failure();runner(input,selection);const currentPorts=functions(rawPorts);for(const key of Object.keys(originalPorts) as (keyof HostedLearningLoopNativeAdmissionPorts)[])if(currentPorts[key]!==originalPorts[key])throw failure();validatePreparedHostedLearningLoopNativePackage(input.prepared,Date.now());sourceGuard.finalPhysical();validatePreparedHostedLearningLoopNativePackage(input.prepared,Date.now());if(controller.signal.aborted||Date.now()>=deadlineAtMs)throw failure();}catch{invalidate();throw failure();}};
     const get = async (path: string) => {
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]), url = base + (path ? '/' + path : '');
       const response = await abortable(fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + input.githubToken, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, signal, redirect: 'error', cache: 'no-store', credentials: 'omit' }), signal);
-      return body(response, signal);
+      return JSON.parse(canonicalReleaseExecutionJson(await body(response, signal))) as unknown;
     };
     const consumerFacts = async () => {
       const requested = structuredClone(selection);
-      const [backendRaw, webRaw, uiRaw] = await abortable(Promise.all([ports.readCompletedBackend(requested), ports.readCurrentWeb(structuredClone(selection)), ports.readOfficialUiArtifact(structuredClone(selection))]), controller.signal);
+      const reads:(()=>Promise<unknown>)[]=[()=>originalPorts.readCompletedBackend(requested),()=>originalPorts.readCurrentWeb(structuredClone(selection)),()=>originalPorts.readOfficialUiArtifact(structuredClone(selection))];
+      const observed=await Promise.allSettled(reads.map(read=>Promise.resolve().then(read).then(raw=>JSON.parse(canonicalReleaseExecutionJson(raw)) as unknown)));
+      if(observed.some(row=>row.status!=='fulfilled')||controller.signal.aborted)throw failure();const[backendRaw,webRaw,uiRaw]=observed.map(row=>(row as PromiseFulfilledResult<unknown>).value);
       const backend = parse(backendFacts, backendRaw), web = parse(webFacts, webRaw), ui = parse(uiFacts, uiRaw), now = Date.now();
       if (!equal(backend.backend, selection.backend) || backend.sourceSha !== selection.sourceSha || backend.treeSha !== selection.treeSha || backend.ciRunId !== selection.ciRunId
         || !equal(web.web, selection.web) || web.sourceSha !== selection.sourceSha || !equal(ui.ui, selection.ui) || ui.sourceSha !== selection.sourceSha || ui.treeSha !== selection.treeSha
@@ -128,7 +142,7 @@ export async function readHostedLearningLoopNativeAdmission(value: unknown, rawP
     };
     const official = async () => {
       const paths = ['', 'git/ref/heads/main', 'actions/runs/' + selection.ciRunId, 'actions/runs/' + selection.qaRunId, 'environments/staging', 'environments/staging/deployment-branch-policies', 'branches/main/protection', 'branches/main/protection/required_signatures', 'git/commits/' + selection.sourceSha, 'actions/runs/' + selection.qaRunId + '/approvals'];
-      const [repo, main, ciRaw, qaRaw, environment, branches, protection, signatures, commit, approvals] = await Promise.all(paths.map(get));
+      const observed=await Promise.allSettled(paths.map(get));if(observed.some(row=>row.status!=='fulfilled')||controller.signal.aborted)throw failure();const [repo, main, ciRaw, qaRaw, environment, branches, protection, signatures, commit, approvals]=observed.map(row=>(row as PromiseFulfilledResult<unknown>).value);
       const ci = parse(ciRun, ciRaw), qa = parse(currentRun, qaRaw); validateCiRun(ci, { sha: selection.sourceSha, repository: selection.repository, ciRunId: selection.ciRunId });
       if (String(qa.id) !== selection.qaRunId || qa.run_attempt !== selection.qaRunAttempt || qa.head_sha !== selection.sourceSha || qa.repository.full_name !== selection.repository) throw failure();
       z.object({ object: z.object({ type: z.literal('commit'), sha: z.literal(selection.sourceSha) }) }).parse(main);
@@ -139,14 +153,21 @@ export async function readHostedLearningLoopNativeAdmission(value: unknown, rawP
         environmentId: selection.environmentId, environmentName: 'staging', packageSha256: input.prepared.sha256, comment: input.prepared.comment });
       return { qa, ci, repo, main, environment, branches, protection, signatures, approval };
     };
-    try {
-      const initial = await official(), facts = await consumerFacts(); await readBackendReleaseSourceEvidence(input.repoRoot, source);
+    const readCurrentAdmission=async():Promise<HostedLearningLoopNativeAdmission>=>{
+      if(busy){invalidate();throw failure();}busy=true;
+      try {assertOriginalValidity();
+      const initial = await official(), facts = await consumerFacts(); sourceGuard.finalPhysical();
       const finalFacts = await consumerFacts(), final = await official(); if (!equal(initial, final) || !equal(facts, finalFacts)) throw failure();
-      runner(input, selection); const finalNow = Date.now(); validatePreparedHostedLearningLoopNativePackage(input.prepared, finalNow);
+      assertOriginalValidity(); const finalNow = Date.now(); validatePreparedHostedLearningLoopNativePackage(input.prepared, finalNow);
       for (const fact of [finalFacts.backend, finalFacts.web, finalFacts.ui]) if (Date.parse(fact.expiresAt) <= finalNow) throw failure();
       if (controller.signal.aborted) throw failure();
-      return { purpose, status: 'NATIVE_QA_ADMITTED' as const, selection, packageSha256: input.prepared.sha256, approval: final.approval, facts: finalFacts, observedAt: new Date().toISOString(),
-        provenance: 'OFFICIAL_CURRENT_PROTECTED_QA_AND_SUPPLIED_ADMITTED_CONSUMER_FACTS' as const, nativeExecutionVerified: false as const, hostedAcceptance: false as const, customerReady: false as const };
-    } finally { clearTimeout(timer); controller.abort(); }
+      return structuredClone({ purpose, status: 'NATIVE_QA_ADMITTED' as const, selection, packageSha256: input.prepared.sha256, approval: final.approval, facts: finalFacts, observedAt: new Date().toISOString(),
+        provenance: 'OFFICIAL_CURRENT_PROTECTED_QA_AND_SUPPLIED_ADMITTED_CONSUMER_FACTS' as const, nativeExecutionVerified: false as const, hostedAcceptance: false as const, customerReady: false as const });
+      }catch{invalidate();throw failure();}finally{busy=false;}
+    };
+    const guard=Object.freeze({readCurrentAdmission,assertOriginalValidity:()=>{if(busy){invalidate();throw failure();}assertOriginalValidity();},dispose:()=>{disposed=true;invalidate();clearTimeout(timer);}}) as HostedLearningLoopNativeAdmissionGuard;
+    const{githubToken:_token,...binding}=input;void _token;nativeQaGuards.set(guard,{binding:canonicalReleaseExecutionJson(binding),ports:originalPorts,assert:()=>{if(busy){invalidate();throw failure();}assertOriginalValidity();},invalidate});return guard;
   } catch { throw failure(); }
 }
+/** One independent admission keeps its original data shape and closes its source lifetime. */
+export async function readHostedLearningLoopNativeAdmission(value:unknown,rawPorts:unknown):Promise<HostedLearningLoopNativeAdmission>{const guard=await readHostedLearningLoopNativeAdmissionAndGuard(value,rawPorts);try{return await guard.readCurrentAdmission();}finally{guard.dispose();}}

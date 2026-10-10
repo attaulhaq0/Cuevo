@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { hostedChildCatalogueCategories, hostedChildCatalogueSummarySchema, applySourceChildCatalogueProviderDeltas, parseHostedChildCatalogueReceipt } from './hosted-child-catalogue-reference';
+import { hostedChildCatalogueCategories, hostedChildCatalogueSummarySchema, applySourceChildCatalogueProviderDeltas, parseHostedChildCatalogueReceipt, verifySourceChildCatalogueImage,sourceChildCatalogueImage } from './hosted-child-catalogue-reference';
 import policy from './unknown-prefix-catalogue-policy.json';
 
 test('child catalogue summary requires every exact category once in canonical order and remains small', () => {
@@ -28,4 +28,11 @@ test('exact provider transform applies each reviewed replacement and preserves u
 
 test('catalogue receipt refuses user baselines, raw catalogue rows and missing source or cleanup identities',()=>{
  for(const value of [{},{version:1,purpose:'CUEVO_SOURCE_CHILD144_CATALOGUE',catalogue:{rows:[]}},{hostedAcceptance:true},{cleanupConfirmed:false}])assert.throws(()=>parseHostedChildCatalogueReceipt(value),/requires review/);
+});
+
+test('catalogue image proof accepts only the pinned repository index and exact amd64 image identities on both Docker stores',()=>{
+ const input={Id:sourceChildCatalogueImage.configDigest,RepoDigests:[sourceChildCatalogueImage.pinnedReference],Os:'linux',Architecture:'amd64'};
+ assert.deepEqual(verifySourceChildCatalogueImage(input),sourceChildCatalogueImage);
+ assert.deepEqual(verifySourceChildCatalogueImage({...input,Id:sourceChildCatalogueImage.indexDigest}),sourceChildCatalogueImage);
+ for(const patch of [{Id:'sha256:'+'0'.repeat(64)},{RepoDigests:['other.example/postgres@'+sourceChildCatalogueImage.indexDigest]},{RepoDigests:['public.ecr.aws/supabase/postgres@sha256:'+'0'.repeat(64)]},{Os:'windows'},{Architecture:'arm64'},{Id:sourceChildCatalogueImage.manifestDigest}])assert.throws(()=>verifySourceChildCatalogueImage({...input,...patch}),/requires review/);
 });

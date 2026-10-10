@@ -46,6 +46,18 @@ test('full regression has separate scheduled diagnostic and explicit customer pu
   for (const changed of [text.replace('npm run verify:technical','echo passed'), text.replace('chromium firefox webkit','chromium'), text.replace('purpose:','mode:'), text.replace('path: .local/full-verification/summary.json','path: .local/'), text.replace('cancel-in-progress: false','cancel-in-progress: true')]) assert.ok(validateFullRegressionWorkflow(changed).length);
 });
 
+test('full regression retains failed-phase diagnostics at one exact bounded path without weakening success summary',async()=>{
+  const text=await readFile('.github/workflows/full-regression.yml','utf8'),flow=yaml.load(text) as {jobs:{'technical-mvp':{steps:Record<string,unknown>[]}}},steps=flow.jobs['technical-mvp'].steps;
+  const exporter=steps.find(row=>row.name==='Export exact full profile evidence')!,acceptance=steps.find(row=>row.name==='Run complete frozen acceptance')!;
+  assert.equal(acceptance.id,'full-acceptance');assert.equal(exporter.if,'always()');
+  assert.equal((exporter.env as Record<string,unknown>).CUEVO_FULL_ACCEPTANCE_OUTCOME,'${{ steps.full-acceptance.outcome }}');
+  const diagnostics=steps.filter(row=>row.name==='Retain minimized full profile diagnostics');assert.equal(diagnostics.length,1);
+  assert.equal(diagnostics[0].if,'always()');assert.deepEqual(diagnostics[0].with,{name:'cuevo-full-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/full-verification/diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14});
+  const summary=steps.find(row=>row.name==='Retain exact full profile summary')!;assert.equal((summary.with as Record<string,unknown>).path,'.local/full-verification/summary.json');assert.equal(summary.if,undefined);
+  assert.deepEqual(validateFullRegressionWorkflow(text),[]);
+  for(const changed of [text.replace('path: .local/full-verification/diagnostic.json','path: .local/'),text.replace('CUEVO_FULL_ACCEPTANCE_OUTCOME:','CUEVO_FULL_UNTRUSTED_OUTCOME:'),text.replace('id: full-acceptance','id: foreign')])assert.ok(validateFullRegressionWorkflow(changed).length);
+});
+
 test('isolated source contracts execute each stateless owner once while fast checks retain complete lint types and unit work', async () => {
   const ci = await readFile('.github/workflows/ci.yml','utf8'), runner = await readFile('scripts/verification/stateless-checks.ts','utf8');
   type Job = { 'timeout-minutes': number; needs?: string[]; steps: { run?: string; name?: string }[] };

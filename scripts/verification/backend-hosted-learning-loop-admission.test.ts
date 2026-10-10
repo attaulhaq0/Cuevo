@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { canonicalReleaseReviewJson } from './release-review';
-import { registerHooks } from 'node:module';
+import { createRequire, registerHooks, syncBuiltinESMExports } from 'node:module';
 import { transformSync } from 'esbuild';
 
 const digest = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -89,11 +89,83 @@ async function controlled(_owner: Awaited<ReturnType<typeof api>>) {
 
 test('current native QA admits its own protected run while completed producers stay separate facts', async () => {
   await fixture(async (owner, input, _facts, _replies, calls, ports) => {
-    const reader = await controlled(owner), result = await reader.readHostedLearningLoopNativeAdmission(input, ports);
+    const cp=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),fs=createRequire(import.meta.url)('node:fs/promises') as typeof import('node:fs/promises'),originalExec=cp.execFileSync,originalRead=fs.readFile,commands:string[][]=[];let sourceByteReads=0;
+    cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')commands.push([...args]);return originalExec(file,args,options as Parameters<typeof originalExec>[2]);}) as typeof originalExec;
+    fs.readFile=(async(...args:Parameters<typeof originalRead>)=>{if(String(args[0])===join(input.repoRoot as string,'README.md'))sourceByteReads++;return originalRead(...args);}) as typeof originalRead;syncBuiltinESMExports();
+    let result:Awaited<ReturnType<typeof owner.readHostedLearningLoopNativeAdmission>>;
+    try{const reader=await controlled(owner);result=await reader.readHostedLearningLoopNativeAdmission(input,ports);}finally{cp.execFileSync=originalExec;fs.readFile=originalRead;syncBuiltinESMExports();}
+    assert.equal(commands.filter(args=>args.includes('--batch-check')).length,1,'one authentic full-source Git acquisition must cover both native QA observations');assert.equal(sourceByteReads,1,'original physical source bytes are acquired once');assert.ok(commands.filter(args=>args.at(-1)==='HEAD^{tree}').length>=2,'both later physical source boundaries must remain current');
     assert.equal(result.purpose, 'CUEVO_HOSTED_LEARNING_LOOP_NATIVE'); assert.equal(result.status, 'NATIVE_QA_ADMITTED'); assert.equal(result.nativeExecutionVerified, false); assert.equal(result.hostedAcceptance, false);
     assert.equal(result.approval.releaseRunId, '91'); assert.equal(result.selection.backend.runId, '51'); assert.equal(result.selection.ui.runId, '81');
     assert.equal(calls.filter(path => path === 'actions/runs/91').length, 2); assert.equal(calls.filter(path => path === 'backend').length, 2);
     assert(!JSON.stringify(result).includes('private-qa-token'));
+  });
+});
+
+test('late final native QA facts cannot hide physical source untracked or HEAD drift',async()=>{
+  for(const mode of ['hidden-source','untracked','head'] as const)await fixture(async(owner,input,_facts,_replies,_calls,ports)=>{
+    const reader=await controlled(owner),original=ports.readOfficialUiArtifact as ()=>Promise<unknown>;let reads=0;
+    ports.readOfficialUiArtifact=async()=>{if(++reads===2){const root=input.repoRoot as string;if(mode==='hidden-source'){git(root,'update-index','--assume-unchanged','README.md');await writeFile(join(root,'README.md'),'Hidden source after final facts\n');}else if(mode==='untracked')await writeFile(join(root,'late-unreviewed.txt'),'Unreviewed source\n');else git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','--allow-empty','-m','Later HEAD');}return original();};
+    await assert.rejects(reader.readHostedLearningLoopNativeAdmission(input,ports),/requires review; contents withheld/);
+  });
+});
+
+test('native QA original expiry is checked after its final physical source scan',async()=>{
+  await fixture(async(owner,input,_facts,_replies,_calls,ports)=>{
+    const reader=await controlled(owner),selection=owner.validatePreparedHostedLearningLoopNativePackage(input.prepared,Date.now()),cp=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),originalExec=cp.execFileSync,originalNow=Date.now;let finalScans=0,clock=originalNow();
+    cp.execFileSync=((file:string,args:string[],options:unknown)=>{const result=originalExec(file,args,options as Parameters<typeof originalExec>[2]);if(file==='git'&&args.at(-1)==='HEAD^{tree}'&&++finalScans===2)clock=Date.parse(selection.expiresAt);return result;}) as typeof originalExec;syncBuiltinESMExports();Date.now=()=>clock;
+    try{await assert.rejects(reader.readHostedLearningLoopNativeAdmission(input,ports),/requires review; contents withheld/);assert.equal(finalScans,2);}finally{cp.execFileSync=originalExec;syncBuiltinESMExports();Date.now=originalNow;}
+  });
+});
+
+test('one retained native QA source guard performs two complete current admission reads',async()=>{
+  await fixture(async(owner,input,_facts,_replies,calls,ports)=>{
+    const reader=await controlled(owner),cp=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),originalExec=cp.execFileSync;let acquisitions=0,currentPhysical=0;
+    cp.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git'&&args.includes('--batch-check'))acquisitions++;if(file==='git'&&args.at(-1)==='HEAD^{tree}')currentPhysical++;return originalExec(file,args,options as Parameters<typeof originalExec>[2]);}) as typeof originalExec;syncBuiltinESMExports();
+    try{
+      await reader.readHostedLearningLoopNativeAdmission(input,ports);await reader.readHostedLearningLoopNativeAdmission(input,ports);assert.equal(acquisitions,2,'independent facade invocations keep separate source acquisitions');calls.length=0;acquisitions=0;currentPhysical=0;
+      const guard=await reader.readHostedLearningLoopNativeAdmissionAndGuard(input,ports),first=await guard.readCurrentAdmission(),second=await guard.readCurrentAdmission();assert.equal(acquisitions,1);assert.ok(currentPhysical>=4);assert.equal(calls.filter(path=>path==='actions/runs/91').length,4);assert.equal(calls.filter(path=>path==='backend').length,4);assert.equal(calls.filter(path=>path==='web').length,4);assert.equal(calls.filter(path=>path==='ui').length,4);assert.equal(first.packageSha256,second.packageSha256);assert.equal(second.nativeExecutionVerified,false);assert.equal(second.hostedAcceptance,false);guard.dispose();await assert.rejects(guard.readCurrentAdmission());
+    }finally{cp.execFileSync=originalExec;syncBuiltinESMExports();}
+  });
+});
+
+test('retained native QA guards bind original package ports environment and poison failed reads',async()=>{
+  for(const mode of ['source','head','untracked','ports','environment','controls','expiry','package'] as const)await fixture(async(owner,input,_facts,replies,_calls,ports)=>{
+    const reader=await controlled(owner),guard=await reader.readHostedLearningLoopNativeAdmissionAndGuard(input,ports),originalNow=Date.now,{githubToken:_token,...binding}=input;void _token;
+    try{
+      assert.equal(reader.consumeHostedLearningLoopNativeAdmissionGuard(guard,binding,ports),guard);const first=await guard.readCurrentAdmission();first.selection.sourceSha='0'.repeat(40);assert.equal((await guard.readCurrentAdmission()).selection.sourceSha,owner.validatePreparedHostedLearningLoopNativePackage(input.prepared,Date.now()).sourceSha,'returned data cannot mutate captured authority input');
+      if(mode==='source'){git(input.repoRoot as string,'update-index','--assume-unchanged','README.md');await writeFile(join(input.repoRoot as string,'README.md'),'Changed after native work\n');}else if(mode==='head')git(input.repoRoot as string,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','--allow-empty','-m','Later source');else if(mode==='untracked')await writeFile(join(input.repoRoot as string,'outside-source.txt'),'Unreviewed\n');else if(mode==='ports')ports.readCompletedBackend=async()=>{throw Error('Changed producer port');};else if(mode==='environment')process.env.GITHUB_RUN_ATTEMPT='3';else if(mode==='controls')replies.set('branches/main/protection/required_signatures',{enabled:false});else if(mode==='expiry')Date.now=()=>Date.parse(owner.validatePreparedHostedLearningLoopNativePackage(input.prepared,originalNow()).expiresAt);else if(mode==='package'){assert.throws(()=>reader.consumeHostedLearningLoopNativeAdmissionGuard(guard,{...binding,repoRoot:(input.repoRoot as string)+'/foreign'},ports));}
+      await assert.rejects(guard.readCurrentAdmission(),/requires review; contents withheld/);assert.throws(()=>guard.assertOriginalValidity());await assert.rejects(guard.readCurrentAdmission());
+    }finally{Date.now=originalNow;guard.dispose();}
+  });
+});
+
+test('native QA guard rejects foreign tokens and drains overlapping or failed producer reads',async()=>{
+  await fixture(async(owner,input,_facts,_replies,_calls,ports)=>{
+    const reader=await controlled(owner),guard=await reader.readHostedLearningLoopNativeAdmissionAndGuard(input,ports),{githubToken:_token,...binding}=input;void _token;let traps=0;
+    for(const foreign of [null,{},structuredClone({}),new Proxy(guard,{get(){traps++;throw Error('Private trap');}})])assert.throws(()=>reader.consumeHostedLearningLoopNativeAdmissionGuard(foreign,binding,ports));assert.equal(traps,0);
+    guard.dispose();await assert.rejects(guard.readCurrentAdmission());
+  });
+  for(const mode of ['overlap','failed']as const)await fixture(async(owner,input,_facts,_replies,_calls,ports)=>{
+    const reader=await controlled(owner),original=ports.readOfficialUiArtifact as ()=>Promise<unknown>;let entered!:()=>void,release!:()=>void;const began=new Promise<void>(done=>entered=done),gate=new Promise<void>(done=>release=done);let drained=false;
+    ports.readOfficialUiArtifact=async()=>{entered();await gate;drained=true;return original();};if(mode==='failed')ports.readCompletedBackend=async()=>{throw Error('Controlled producer refusal');};
+    const guard=await reader.readHostedLearningLoopNativeAdmissionAndGuard(input,ports),first=guard.readCurrentAdmission();await began;if(mode==='overlap')await assert.rejects(guard.readCurrentAdmission());else{let completed=false;void first.then(()=>{completed=true;},()=>{completed=true;});await Promise.resolve();assert.equal(completed,false,'failure cannot drop an active sibling fact read');}release();await assert.rejects(first);assert.equal(drained,true);assert.throws(()=>guard.assertOriginalValidity());guard.dispose();
+  });
+});
+
+test('native QA guard captures original producer functions before awaited source acquisition',async()=>{
+  await fixture(async(owner,input,_facts,_replies,_calls,ports)=>{
+    const reader=await controlled(owner),fs=createRequire(import.meta.url)('node:fs/promises') as typeof import('node:fs/promises'),originalRead=fs.readFile,previous=ports.readCompletedBackend as (selection:import('./backend-hosted-learning-loop-admission').HostedLearningLoopNativePackage)=>Promise<unknown>;let replaced=false;
+    fs.readFile=(async(...args:Parameters<typeof originalRead>)=>{const value=await originalRead(...args);if(!replaced&&String(args[0])===join(input.repoRoot as string,'README.md')){replaced=true;ports.readCompletedBackend=async(selection:import('./backend-hosted-learning-loop-admission').HostedLearningLoopNativePackage)=>previous(selection);}return value;}) as typeof originalRead;syncBuiltinESMExports();
+    let unexpected:Awaited<ReturnType<typeof reader.readHostedLearningLoopNativeAdmissionAndGuard>>|undefined;
+    try{await assert.rejects(reader.readHostedLearningLoopNativeAdmissionAndGuard(input,ports).then(guard=>{unexpected=guard;return guard;}),/requires review; contents withheld/);assert.equal(replaced,true);}finally{unexpected?.dispose();fs.readFile=originalRead;syncBuiltinESMExports();}
+  });
+});
+
+test('retained native QA keeps its original absolute reader budget without timer clock restamping',async()=>{
+  await fixture(async(owner,input,_facts,_replies,_calls,ports)=>{
+    const reader=await controlled(owner),originalNow=Date.now;let clock=originalNow();Date.now=()=>clock;const guard=await reader.readHostedLearningLoopNativeAdmissionAndGuard(input,ports);
+    try{await guard.readCurrentAdmission();clock+=180001;await assert.rejects(guard.readCurrentAdmission(),/requires review; contents withheld/);assert.throws(()=>guard.assertOriginalValidity());}finally{Date.now=originalNow;guard.dispose();}
   });
 });
 

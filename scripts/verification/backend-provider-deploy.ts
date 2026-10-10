@@ -7,12 +7,12 @@ import { z } from 'zod';
 import { parseServerConfig } from '@cuevo/config';
 import { hostedSyntheticRuntime, requireHostedSyntheticDatabase } from '@cuevo/config/synthetic-runtime';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './release-review';
-import { readBackendReleaseAdmission } from './backend-release-admission';
+import { prepareNativeBackendReleaseAdmission, readNativeBackendReleaseAdmission, disposeNativeBackendReleaseAdmission, type NativeBackendAdmissionHandle } from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, readBackendRuntimeFingerprints, type BackendReleaseExpected, type PreparedBackendReleaseIntent } from './backend-release-contracts';
 import { createBackendPreviewTransport, backendPreviewHeaders } from './backend-preview-transport';
 import { createHostedMigrationDatabase } from '../database/hosted-migration-database';
 import {assertNativeSchemaRecoveryConsumption,readNativeSchemaStageAdmission,type NativeReconciliationPermit} from '../database/hosted-migration-database';
-import {canonicalHostedMigrationPlan,type HostedMigrationPlanV1} from '../database/hosted-migration-plan';
+import {canonicalHostedMigrationPlan,prepareCanonicalMigrationOperation,readCanonicalMigrationOperation,disposeCanonicalMigrationOperation,type CanonicalMigrationOperation,type HostedMigrationPlanV1} from '../database/hosted-migration-plan';
 import { readHostedMigrationProvider, requireCurrentHostedMigrationEndpoint } from '../database/hosted-migration-provider';
 import { providerDeploymentStateSchema, providerStateSha256, validateProviderDeploymentTransition, type ProviderDeploymentState, type ProviderDeploymentOperation, type ProviderDeploymentPhase } from '../database/hosted-provider-state';
 import {readCanonicalMigrationSources} from '../database/hosted-migration-plan';
@@ -86,15 +86,17 @@ export type BackendProviderPreparation = { status: 'PREPARED_ONLY'; purpose: 'CU
 /** Physical-artifact/runtime preparation only. No provider environment or
  * deployment is changed; the actual consumers must repeat this before writing. */
 export async function prepareBackendProviderDeployment(value: { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; githubToken: string; runtimeConfig: unknown }): Promise<BackendProviderPreparation> {
+  let admissionHandle:NativeBackendAdmissionHandle|undefined;
   try {
     const input = z.object({ repoRoot: z.string(), preparedApproval: z.unknown(), expected: z.unknown(), apiArtifactRoot: z.string(), edgeArtifactRoot: z.string(), githubToken: z.string().min(1), runtimeConfig: z.unknown() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value))), expected = input.expected as BackendReleaseExpected;
     const prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }), recipients = prepareHostedRuntimeRecipients(input.runtimeConfig, expected);
-    await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' });
+    const binding={repoRoot:input.repoRoot,expected,prepared,effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT' as const:'COMPLETE_BACKEND' as const};admissionHandle=await prepareNativeBackendReleaseAdmission({...binding,githubToken:input.githubToken});
+    await readNativeBackendReleaseAdmission(admissionHandle,binding);
     const api = await artifact(input.repoRoot, input.apiArtifactRoot, readBackendRuntimeFingerprints(expected.fingerprints).apiArtifactSha256, 'api'), edge = await artifact(input.repoRoot, input.edgeArtifactRoot, readBackendRuntimeFingerprints(expected.fingerprints).edgeArtifactSha256, 'cuevo-worker');
     if (edge.manifest.denoLockSha256 !== readBackendRuntimeFingerprints(expected.fingerprints).denoLockSha256) throw failure();
-    await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' });
+    await readNativeBackendReleaseAdmission(admissionHandle,binding);
     return { status: 'PREPARED_ONLY', purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT', apiArtifactSha256: api.sha256, edgeArtifactSha256: edge.sha256, denoLockSha256: readBackendRuntimeFingerprints(expected.fingerprints).denoLockSha256, runtimeSha256: recipients.runtimeSha256, apiEnvironmentKeys: Object.keys(recipients.api).sort(), edgeEnvironmentKeys: Object.keys(recipients.edge).sort(), apiTarget: 'preview', edgeWorker: 'INACTIVE', hostedAcceptance: false };
-  } catch { throw failure(); }
+  } catch { throw failure(); }finally{if(admissionHandle)disposeNativeBackendReleaseAdmission(admissionHandle);}
 }
 
 type DeploymentInput = { repoRoot: string; preparedApproval: PreparedBackendReleaseIntent; expected: BackendReleaseExpected; apiArtifactRoot: string; edgeArtifactRoot: string; vercelToken: string; providerToken: string; githubToken: string; runtimeConfig: unknown; plan?:unknown;schemaRecoveryExport?:unknown;schemaRecoverySelection?:unknown;journalStorageKey?:string;operator: { databaseUrl: string; certificate: { path: string; sha256: string }; password: string } };
@@ -140,35 +142,47 @@ async function prepareApiCli(root: string, artifact: VerifiedArtifact, expected:
 async function apiCli(preparedCli:PreparedApiCli,expected:BackendReleaseExpected,token:string,operationSha256:string,signal:AbortSignal,admitLaunch:()=>Promise<()=>void>){return preparedCli(expected,token,operationSha256,signal,admitLaunch);}
 /** Provider phases retain original durable intent and confirmed receipts. A
  * current approval admits pending effects; it never recreates an unknown upload. */
-export async function deployBackendProviders(value: DeploymentInput): Promise<BackendProviderDeploymentResult> {
- return deployProviderProtocol(value);
+export async function deployBackendProviders(value: DeploymentInput,borrowed?:NativeBackendAdmissionHandle,schemaBorrowed?:NativeBackendAdmissionHandle): Promise<BackendProviderDeploymentResult> {
+ return deployProviderProtocol(value,undefined,borrowed,schemaBorrowed);
 }
-export async function deployBackendProvidersForRollout(value:DeploymentInput,lease:NativeRuntimeRolloutLease):Promise<BackendProviderDeploymentResult>{return deployProviderProtocol(value,lease);}
-async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:NativeRuntimeRolloutLease):Promise<BackendProviderDeploymentResult>{
+export async function deployBackendProvidersForRollout(value:DeploymentInput,lease:NativeRuntimeRolloutLease,borrowed?:NativeBackendAdmissionHandle):Promise<BackendProviderDeploymentResult>{return deployProviderProtocol(value,lease,borrowed);}
+async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:NativeRuntimeRolloutLease,borrowed?:NativeBackendAdmissionHandle,schemaBorrowed?:NativeBackendAdmissionHandle):Promise<BackendProviderDeploymentResult>{
   const result: BackendProviderDeploymentResult = { status: 'REQUIRES_REVIEW', purpose: 'CUEVO_BACKEND_PROVIDER_DEPLOYMENT', api: null, edge: null, mutation: 'NOT_ATTEMPTED', hostedAcceptance: false };
+  let admissionHandle:NativeBackendAdmissionHandle|undefined,schemaAdmissionHandle:NativeBackendAdmissionHandle|undefined,sourceOperation:CanonicalMigrationOperation|undefined;
   try {
     const input = z.object({ repoRoot: z.string(), preparedApproval: z.unknown(), expected: z.unknown(), apiArtifactRoot: z.string(), edgeArtifactRoot: z.string(), vercelToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), providerToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/), githubToken: z.string().min(1), runtimeConfig: z.unknown(),plan:z.unknown().optional(),schemaRecoveryExport:z.unknown().optional(),schemaRecoverySelection:z.unknown().optional(),journalStorageKey:z.string().min(20).max(4096).optional(), operator: z.object({ databaseUrl: z.string().max(400), password: privateValue, certificate: z.object({ path: z.string(), sha256: digest }).strict() }).strict() }).strict().parse(JSON.parse(canonicalReleaseExecutionJson(value)));
     const expected = input.expected as BackendReleaseExpected, prepared = validatePreparedBackendReleaseIntent(input.preparedApproval, { ...expected, now: Date.now() }),rollout=rolloutLease?assertNativeRuntimeRolloutLease(rolloutLease,expected):undefined;
     if(expected.executionScope==='runtime-rollout'&&!rollout||rollout&&expected.executionScope!=='runtime-rollout')throw failure();const rolloutState=rollout?await rollout.readState():undefined,recipients=rollout?prepareHostedRolloutRecipients(input.runtimeConfig,expected,rolloutState!.original.wakeKey,expected.runtimeRollout!.desired.generation):prepareHostedRuntimeRecipients(input.runtimeConfig, expected), root = input.repoRoot;
-    const admission = async () => { await readBackendReleaseAdmission({ repoRoot: root, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' }); };
+    const binding={repoRoot:root,expected,prepared,effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT' as const:'COMPLETE_BACKEND' as const};admissionHandle=borrowed===undefined?await prepareNativeBackendReleaseAdmission({...binding,githubToken:input.githubToken}):borrowed;
+    // Schema consumption and provider effects have distinct existing scopes.
+    // Retain one opaque owner for each; never retag a COMPLETE_BACKEND handle.
+    if(schemaBorrowed!==undefined&&(rollout||!expected.schemaRecovery))throw failure();
+    if(!rollout&&expected.schemaRecovery){const schemaBinding={repoRoot:root,expected,prepared,effectScope:'SCHEMA_AND_SYNTHETIC_AUTH' as const};schemaAdmissionHandle=schemaBorrowed===undefined?await prepareNativeBackendReleaseAdmission({...schemaBinding,githubToken:input.githubToken}):schemaBorrowed;await readNativeBackendReleaseAdmission(schemaAdmissionHandle,schemaBinding);}
+    const admission = async () => { await readNativeBackendReleaseAdmission(admissionHandle,binding); };
     const retainedSource=rollout&&expected.runtimeRollout!.version===2&&expected.runtimeRollout!.action==='ROLL_BACK'?expected.runtimeRollout!.rollbackArtifacts:undefined;const artifacts = async () => { const api = await artifact(root, input.apiArtifactRoot, readBackendRuntimeFingerprints(expected.fingerprints).apiArtifactSha256, 'api',retainedSource??undefined), edge = await artifact(root, input.edgeArtifactRoot, readBackendRuntimeFingerprints(expected.fingerprints).edgeArtifactSha256, 'cuevo-worker',retainedSource??undefined); if (edge.manifest.denoLockSha256 !== readBackendRuntimeFingerprints(expected.fingerprints).denoLockSha256) throw failure(); return { api, edge }; };
     await admission(); let built = await artifacts();
     const team = expected.targets.api.teamId, project = expected.targets.api.projectId, projectRef = expected.targets.supabase.projectRef, query = '?teamId=' + team;
     const operatorUrl = new URL(input.operator.databaseUrl), endpoint = { projectRef, kind: operatorUrl.hostname === `db.${projectRef}.supabase.co` ? 'direct' as const : 'session-pooler' as const, host: operatorUrl.hostname, port: 5432 as const, database: 'postgres' as const };
     requireCurrentHostedMigrationEndpoint(endpoint, await readHostedMigrationProvider({ projectRef, boundProjectRef: projectRef, providerToken: input.providerToken }), expected.fingerprints.migrationEndpointSha256);
+    const sourcePlan=input.plan===undefined?undefined:JSON.parse(canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1).json)as HostedMigrationPlanV1,sourceBinding=sourcePlan?{repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan:sourcePlan}:undefined;
+    if(sourcePlan&&(sourcePlan.source.sha!==expected.releaseSha||sourcePlan.source.tree!==expected.treeSha||sourcePlan.projectRef!==projectRef||canonicalHostedMigrationPlan(sourcePlan).sha256!==expected.fingerprints.migrationPlanSha256))throw failure();
+    if(sourceBinding)sourceOperation=prepareCanonicalMigrationOperation(sourceBinding);
+    const readCurrentSource=()=>{if(!sourceOperation||!sourceBinding)throw failure();return readCanonicalMigrationOperation(sourceOperation,sourceBinding);};
     const database = rollout??await createHostedMigrationDatabase({ repoRoot: root, projectRef, ...input.operator });
-    const migrationSources=readCanonicalMigrationSources({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha}).sources;
+    const migrationSources=(sourceOperation?readCurrentSource():readCanonicalMigrationSources({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha})).sources;
     const included=migrationSources.map(source=>({name:source.name,version:source.name.slice(0,14),sha256:hash(source.bytes)})),versions=included.map(row=>row.version).sort();
     const protocol=async () => {
       let recoveryPermit:NativeReconciliationPermit|undefined,postureObservedAt:number|undefined;const recoveryPlan=input.plan as HostedMigrationPlanV1|undefined,recoveryIdentity=recoveryPlan?{projectRef,sourceSha:expected.releaseSha,treeSha:expected.treeSha,planSha256:canonicalHostedMigrationPlan(recoveryPlan).sha256,stageId:'remaining' as const,stageSha256:hash(JSON.stringify({included:recoveryPlan.migrations.map(({name,version,sha256})=>({name,version,sha256})),configSha256:hash('project_id = "cuevo"\n\n[db]\nmajor_version = 17\n\n[db.migrations]\nenabled = true\n\n[db.seed]\nenabled = false\n')})),databaseUrl:input.operator.databaseUrl,approvalDigest:prepared.sha256,ciRunId:expected.ciRunId,certificateSha256:input.operator.certificate.sha256}:undefined;
       const recoveryLive=()=>{if(expected.schemaRecovery){if(!recoveryPermit||!recoveryIdentity)throw failure();readNativeSchemaStageAdmission(recoveryPermit,recoveryIdentity,versions);assertNativeSchemaRecoveryConsumption(recoveryPermit,recoveryIdentity,'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER');}};
       const live = () => { if (database.signal.aborted) throw failure(); };
       const inactive=async()=>{
+       if(sourceOperation)readCurrentSource();
        if(rollout){assertNativeRuntimeRolloutLease(rolloutLease!,expected);await rollout.requireDrained();const state=await rollout.readState();if(state.pending?.runtimeConfigurationSha256!==recipients.runtimeSha256||state.pending.identity.generation!==expected.runtimeRollout!.desired.generation)throw failure();return;}
        if(!('observe' in database))throw failure();
        if(expected.schemaRecovery){
         if(!input.plan||!input.schemaRecoveryExport||!input.journalStorageKey||!recoveryIdentity)throw failure();
-        if(!recoveryPermit)recoveryPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan:input.plan,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})});else await database.refreshSchemaContinuation(recoveryPermit,recoveryIdentity,versions);
+        if(!schemaAdmissionHandle)throw failure();
+        if(!recoveryPermit)recoveryPermit=await database.admitSchemaContinuation({completionExport:input.schemaRecoveryExport,expected,prepared,plan:sourcePlan,admissionHandle:schemaAdmissionHandle,githubToken:input.githubToken,providerToken:input.providerToken,storageKey:input.journalStorageKey,consumption:'INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER',...(input.schemaRecoverySelection?{selection:input.schemaRecoverySelection}:{})},sourceOperation);else await database.refreshSchemaContinuation(recoveryPermit,recoveryIdentity,versions);
         const facts=readNativeSchemaStageAdmission(recoveryPermit,recoveryIdentity,versions),observed=facts.target;
         requireCurrentHostedMigrationEndpoint(endpoint,facts.provider,expected.fingerprints.migrationEndpointSha256);
         if(facts.consumption!=='INSTALLED_SYNTHETIC_FOR_AUTH_OR_PROVIDER'||!facts.population||facts.source.sha!==expected.releaseSha||facts.source.tree!==expected.treeSha||observed.operator!=='postgres'||observed.database!=='postgres'||observed.tls.kind!=='PEER_VERIFIED'||observed.tls.host!==endpoint.host||observed.tls.certificateSha256!==input.operator.certificate.sha256||Object.values(facts.post.checks).some(value=>value!==true))throw failure();
@@ -301,5 +315,5 @@ async function deployProviderProtocol(value:DeploymentInput,rolloutLease?:Native
     };
     const released=rollout?(await protocol(),{kind:'RELEASED' as const}):await ('withLock'in database?database.withLock(`${projectRef}:HOSTED_SCHEMA_MIGRATION`,protocol):Promise.reject(failure()));
     if (released.kind !== 'RELEASED') throw failure(); result.status = rollout?'DEPLOYED_PAUSED':'DEPLOYED_INACTIVE';if(rollout&&result.edge)result.edge.state='PAUSED'; return result;
-  } catch { return result; }
+  } catch { return result; }finally{try{if(schemaAdmissionHandle&&schemaBorrowed===undefined)disposeNativeBackendReleaseAdmission(schemaAdmissionHandle);if(admissionHandle&&borrowed===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);}finally{if(sourceOperation)disposeCanonicalMigrationOperation(sourceOperation);}}
 }
