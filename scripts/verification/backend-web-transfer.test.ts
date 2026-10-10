@@ -14,7 +14,7 @@ import {validateInstalledPopulationVerificationV2} from '../database/hosted-synt
 import { registerHooks } from 'node:module';
 import { transformSync } from 'esbuild';
 import { readFileSync } from 'node:fs';
-let transferPreparations=0,transferDisposals=0;const transferHandles=new WeakMap<object,{binding:unknown;disposed:boolean}>();
+let transferPreparations=0,transferDisposals=0,handoverHandles:object[]=[];const transferHandles=new WeakMap<object,{binding:unknown;disposed:boolean}>();
 Object.assign(globalThis,{transferAdmissionOwner:{prepare:async(input:Record<string,unknown>)=>{transferPreparations++;const handle=Object.freeze({});transferHandles.set(handle,{binding:{repoRoot:input.repoRoot,expected:input.expected,prepared:input.prepared,effectScope:'COMPLETE_BACKEND'},disposed:false});return handle;},read:async(handle:object,binding:unknown)=>{const record=transferHandles.get(handle);assert(record&&!record.disposed);assert.deepEqual(record.binding,binding);return (globalThis as typeof globalThis&{transferAdmissionFixture:(input:unknown)=>Promise<unknown>}).transferAdmissionFixture(binding);},dispose:(handle:object)=>{const record=transferHandles.get(handle);assert(record&&!record.disposed);record.disposed=true;transferDisposals++;}}});
 
 
@@ -104,7 +104,7 @@ test('physical transfer reads refuse symlink hardlink/outside/oversized files an
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-type FixtureGlobals = typeof globalThis & { transferAdmissionFixture?: () => Promise<unknown>; transferHandoverFixture?: () => Promise<unknown> };
+type FixtureGlobals = typeof globalThis & { transferAdmissionFixture?: (input:unknown) => Promise<unknown>; transferHandoverFixture?: (input:unknown,handle:object) => Promise<unknown> };
 async function exporter() {
   const hook = registerHooks({ load(url, context, next) {
     if (url.includes('/backend-web-transfer.ts?controlled-export')) {
@@ -119,7 +119,7 @@ async function exporter() {
   try { return await import(pathToFileURL(resolve(import.meta.dirname, 'backend-web-transfer.ts')).href + '?controlled-export'); } finally { hook.deregister(); }
 }
 async function exportFixture(mode: 'normal' | 'handover' | 'admission' | 'settings' | 'cleanup' | 'original', run: (input: unknown, root: string) => Promise<void>) {
-  transferPreparations=0;transferDisposals=0;const root = await mkdtemp(join(tmpdir(), 'cuevo-transfer-export-')), folder = join(root, '.local/hosted-release'), fixture = backendWebTransferFixture();const fixtureManifest=fixture.transfer.manifest as {database:{dataApi:Record<string,unknown>}};Object.assign(fixtureManifest.database.dataApi,{version:2,configurationObservation:providerConfigurationObservation(fixture.expected.releaseSha,fixture.expected.treeSha,fixture.expected.targets.supabase.projectRef,fixture.transfer.earliestProofAt)});fixture.transfer.manifestSha256=transferFixtureHash(canonicalReleaseExecutionJson(fixtureManifest));
+  transferPreparations=0;transferDisposals=0;handoverHandles=[];const root = await mkdtemp(join(tmpdir(), 'cuevo-transfer-export-')), folder = join(root, '.local/hosted-release'), fixture = backendWebTransferFixture();const fixtureManifest=fixture.transfer.manifest as {database:{dataApi:Record<string,unknown>}};Object.assign(fixtureManifest.database.dataApi,{version:2,configurationObservation:providerConfigurationObservation(fixture.expected.releaseSha,fixture.expected.treeSha,fixture.expected.targets.supabase.projectRef,fixture.transfer.earliestProofAt)});fixture.transfer.manifestSha256=transferFixtureHash(canonicalReleaseExecutionJson(fixtureManifest));
   const envs = ['GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'GITHUB_WORKSPACE', 'GITHUB_SHA', 'GITHUB_REF', 'GITHUB_EVENT_NAME', 'GITHUB_REPOSITORY', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'];
   const previous = Object.fromEntries(envs.map(key => [key, process.env[key]])), globals = globalThis as FixtureGlobals;
   try {
@@ -139,7 +139,7 @@ async function exportFixture(mode: 'normal' | 'handover' | 'admission' | 'settin
     if (mode === 'original') await writeFile(join(folder, 'web-transfer.json'), 'original retained bytes');
     for (const path of [...backendWebTransferProducerPaths,'scripts/verification/data-api-configuration.ts']) { await mkdir(resolve(root, path, '..'), { recursive: true }); await writeFile(join(root, path), 'Controlled reviewed producer\n'); }
     globals.transferAdmissionFixture = async () => { if (mode === 'admission') throw Error('private-provider-canary'); return { expected: fixture.expected }; };
-    globals.transferHandoverFixture = async () => ({ status: mode === 'handover' ? 'REQUIRES_REVIEW' : 'PREPARED_STAGING_MANIFEST', pendingGates: mode === 'handover' ? ['FRESH_PRIVATE_SOURCE_AND_CLEANUP'] : [], manifestPath: join(folder, 'web-handover-manifest.json'), publicConfigurationPath: join(folder, 'web-handover-public.json'), manifestSha256: fixture.transfer.manifestSha256 });
+    globals.transferHandoverFixture = async (_input,handle) => {const record=transferHandles.get(handle);assert(record&&!record.disposed,'Both actual exporter handovers require the same live admission owner.');handoverHandles.push(handle);return{ status: mode === 'handover' ? 'REQUIRES_REVIEW' : 'PREPARED_STAGING_MANIFEST', pendingGates: mode === 'handover' ? ['FRESH_PRIVATE_SOURCE_AND_CLEANUP'] : [], manifestPath: join(folder, 'web-handover-manifest.json'), publicConfigurationPath: join(folder, 'web-handover-public.json'), manifestSha256: fixture.transfer.manifestSha256 };};
     Object.assign(process.env, { GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted', GITHUB_WORKSPACE: root, GITHUB_SHA: fixture.expected.releaseSha, GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '51', GITHUB_RUN_ATTEMPT: '1' });
     await run({ repoRoot: root, bundleSha256: transferFixtureHash(canonicalReleaseExecutionJson(bundle)), githubToken: 'private-gh-canary', vercelToken: 'private-vercel-canary' }, root);
   } finally {
@@ -155,6 +155,7 @@ test('controlled actual exporter reuses native gate and never copies private pro
     assert.doesNotMatch(text, /private-synthetic-must-not-transfer|private-gh-canary|private-vercel-canary|runtime-private|database-ca|\.dump/);
     const admitted = validateBackendWebTransfer(JSON.parse(text), Date.now()); assert.equal(admitted.transfer.evidence.length, backendWebTransferEvidenceNames('dpl_Api').length);
     assert.equal(result.transferPath, join(root, '.local/hosted-release/web-transfer.json'));
+    assert.equal(transferPreparations,1);assert.equal(transferDisposals,1);assert.equal(handoverHandles.length,2);assert.equal(handoverHandles[0],handoverHandles[1]);assert.equal(transferHandles.get(handoverHandles[0])?.disposed,true);
     await assert.rejects(api.exportBackendWebTransfer(input)); assert.equal(await readFile(result.transferPath, 'utf8'), text);
   });
 });

@@ -6,7 +6,7 @@ Prepared 11 October 2026, Asia/Riyadh. Review baseline: signed local commit `384
 
 Keep the application architecture. Simplify release execution inside the existing owners, preserve completed work, and verify current provider state immediately before changing it.
 
-The audited repairs are implemented with local tests and bounded independent review. The current complete protected CI and hosted deployment have not run. We therefore have a reviewable candidate, not a proved smooth deployment or a permanently fault-free system.
+The earlier audited repairs are implemented with local tests and bounded independent review. The later full candidate review identified an additional activation-export contract blocker. Its bounded correction has passed local owner tests and awaits independent review. The current complete protected CI and hosted deployment have not run. We therefore have a reviewable work in progress, not a proved smooth deployment or a permanently fault-free system.
 
 The agreed **20–25-minute deployment target remains unmeasured**. Report CI, preparation, first database installation, account creation, provider deployment and hosted acceptance separately. A passing local test count is not hosted installation progress.
 
@@ -107,9 +107,24 @@ Scheduled complete regression and frozen customer-candidate acceptance remain se
 | Current project check validates identity and host settings together | Retire the redundant ID-only lookup | Separate initial intent admission and final effect readback |
 | Completed installation uses its existing observation route | Avoid repeating SQL/accounts merely to deploy or inspect runtime | Pending-only migrations when source actually changes |
 
-The final finite call-chain audit found no additional confirmed unnecessary duplicate execution in the effective ordinary CI/release paths. It withdrew a tentative API-packaging duplicate after tracing profiles: the packaging test belongs to a separate source producer, and its mutable catalogue test needs an isolated baseline. We did not remove those assertions.
+The earlier finite call-chain audit found no additional confirmed unnecessary duplicate execution in its selected paths. A later independent candidate review found a missed final handover capture and an owned temporary-folder cleanup defect. The corrections and evidence are recorded below. The audit also withdrew a tentative API-packaging duplicate after tracing profiles: the packaging test belongs to a separate source producer, and its mutable catalogue test needs an isolated baseline. We did not remove those assertions.
 
 This is a bounded audit result, not a proof that every semantically equivalent computation in the entire product has disappeared.
+
+## Final independent review corrections
+
+Independent source and QA reviews of signed local candidate `63fbb38fb273b2e6bc24d8596b4eb236f2988dad` identified the defects below. That candidate's changes-required finding remains historical evidence; these local corrections need their own signed source binding and current protected CI.
+
+| Finding | Correction | Local verification and limit |
+| --- | --- | --- |
+| The complete source runner allocated an owned `cv-*` attempt without removing it | Drain every started owned process, remove only the guarded attempt, and retain scratch with a nonpassing `STOP_UNCONFIRMED` result when cleanup cannot be confirmed | Full owner suite: 22 passed, zero skips/failures, 40.931s. Unrelated temporary files and failure diagnostics remain protected |
+| Cleanup could finish after the source comparison | Move the existing final source comparison after awaited cleanup; add no second source scan | A regression first reproduced an incorrect pass when source changed during draining; the corrected suite rejects it |
+| The final customer handover omitted its live admission handle | Pass the same handle to both handover checks; creator disposal remains once and borrowed ownership remains with its caller | Full owner suite: 14 passed, zero skips/failures, 2.107s. Two pre-fix cases reproduced the omitted handle. Current handover checks remain in place |
+| The original activation export rejected the approved host contract | Carry the existing strict optional contract through the expected-input schema and original public projection | Combined contract/filesystem owner suites: 16 passed, zero skips/failures, 1.022s. After test-only normalization of two line endings, three affected cases passed on final bytes in 0.679s; transpiled JavaScript was unchanged. Both boundaries reproduced the pre-fix failure; independent successor review remains pending |
+
+The cleanup ordering gap was found while reviewing the cleanup correction, not another duplicate-execution defect. Narrow independent QA accepted both final two-file corrections. The full candidate source review and successor review binding remain separate from those narrow results. Combined typecheck passed on the four corrected files. These tests neither execute provider effects nor prove the complete deployment time.
+
+The continuing source review found that the original activation export's strict expected-input schema and public projection omitted the new approved host contract. Provider deployment now requires that exact contract; stripping it disagrees with the approved package. Regression tests reproduced the rejection in both the contract producer and filesystem wrapper. The bounded correction carries the existing optional public contract, retains legacy omitted-field bytes and original clocks, and refuses changed source/targets, unknown fields or private content. The complete two-owner local run passed 16 cases. Two test-file line endings were then normalized with identical transpiled JavaScript; three affected cases passed on the final bytes. This transparent evidence combination proves the controlled export path, while native current authority, protected CI and hosted activation remain unproved. No production filesystem wrapper change was needed.
 
 ## The actual release sequence
 
@@ -159,7 +174,7 @@ Provider diagnosis identifies the awaited owner phase, not the root cause. Wrapp
 | Measurement | Evidence | Interpretation |
 | --- | --- | --- |
 | Old published PR #35 attempt 1 | 08:02:39→08:28:09 UTC, about 25m30s; failed | Older source; not the repaired candidate's timing |
-| Five local continuation cohorts | About 23m53s wall span | Controlled local verification, not deployment |
+| Earlier five local continuation cohorts | About 23m53s wall span | Historical controlled local verification; affected tests/dependencies have since changed. Current protected CI must execute the current cohorts |
 | Local API protected-input proof | Complete API/CLI input exercised with cleanup | Mechanism proof with stated local boundary adapters |
 | Genuine local Linux Edge packaging | 13.344s; 14 packages / 138 files | Packaging proof, not managed-provider activation |
 | Local backend host/provider tests | Passing scoped/full-plus-affected unions | Regression evidence, not a hosting ETA |

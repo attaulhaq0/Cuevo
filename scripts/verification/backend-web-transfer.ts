@@ -163,7 +163,7 @@ export async function exportBackendWebTransfer(value: unknown,borrowedAdmission?
     }
     const producers = [];
     for (const path of producerPaths(installed?5:3)) producers.push({ path, sha256: hash(await readBackendWebTransferFile(root, join(root, path))) });
-    const rechecked = await prepareBackendWebHandover(input);
+    const rechecked = await prepareBackendWebHandover(input,admissionHandle);
     if (rechecked.status !== 'PREPARED_STAGING_MANIFEST' || rechecked.pendingGates.length || rechecked.manifestSha256 !== handover.manifestSha256) throw fail();
     compareInstalled(rechecked);
     for (const row of evidence) if (hash(await readBackendWebTransferFile(root, join(folder, row.name))) !== row.sha256) throw fail();
