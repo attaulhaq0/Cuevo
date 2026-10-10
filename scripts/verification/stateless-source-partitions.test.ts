@@ -2,13 +2,35 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {mkdtemp,mkdir,writeFile,readFile,rm,symlink,lstat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {join,resolve,relative} from 'node:path';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {statelessVerificationSteps} from './steps';
 import ts from 'typescript';
 import {pathToFileURL} from 'node:url';
 const runningCancellationFixtureSource=String.raw`import{readFileSync,writeFileSync,existsSync}from'node:fs';const input=JSON.parse(readFileSync(new URL('./running-cancel-input.json',import.meta.url),'utf8'));const{runStatelessPartition}=await import(input.subject);const controller=new AbortController(),timer=setInterval(()=>{if(existsSync('.local/hold-started'))controller.abort();},20);try{const value=await runStatelessPartition({repoRoot:input.repoRoot,partition:'source-native',signal:controller.signal});writeFileSync(input.output,JSON.stringify(value));}finally{clearInterval(timer);}`;
+
+test('allocated scratch cleanup refusal cannot be reported as confirmed partition cleanup',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-scratch-outcome-')),scratchParent=join(root,'scratch');
+ try{
+  await mkdir(join(root,'scripts/verification'),{recursive:true});await mkdir(join(root,'.local'),{recursive:true});await mkdir(scratchParent);
+  const file='scripts/verification/owned.test.ts';await writeFile(join(root,file),"import{test}from'node:test';test('must not start',()=>{});\n");await writeFile(join(root,'.gitignore'),'.local/\nscratch/\n');await writeFile(join(root,'.gitattributes'),'* text eol=lf\n');await writeFile(join(root,'package-lock.json'),'{}\n');await writeFile(join(root,'package.json'),'{}\n');
+  const git=(args:string[])=>execFileSync('git',['-C',root,...args],{encoding:'utf8',windowsHide:true}).trim();git(['init','--quiet']);git(['add','.']);git(['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','source']);const sha=git(['rev-parse','HEAD']),steps=[{name:'cicd-fixtures',args:['--import','tsx','--test',file]}],coverage={manifestSha256:'c'.repeat(64),source:[{id:'source-native',files:[file]}],sourceCohorts:undefined};
+  const hook=join(root,'.local/scratch-hook.mjs'),subject=pathToFileURL(resolve('scripts/verification/stateless-checks.ts')).href;
+  await writeFile(hook,`import fs from'node:fs/promises';import{syncBuiltinESMExports,registerHooks}from'node:module';import{resolve,relative}from'node:path';const original={mkdtemp:fs.mkdtemp,chmod:fs.chmod,rm:fs.rm};let allocated=null,removals=0;globalThis.scratchOutcome=()=>({allocated,removals});fs.mkdtemp=async(...args)=>{if(process.env.CUEVO_SCRATCH_MODE==='allocate-refuse')throw Error('private-scratch-canary');const result=await original.mkdtemp(...args);allocated=result;return result;};fs.chmod=async(path,...args)=>{if(path===allocated)throw Error('private-scratch-canary');return original.chmod(path,...args);};fs.rm=async(path,...args)=>{if(path===allocated){removals++;if(process.env.CUEVO_SCRATCH_MODE==='remove-refuse')throw Error('private-scratch-canary');}return original.rm(path,...args);};syncBuiltinESMExports();registerHooks({load(url,context,next){if(url.endsWith('/steps.ts'))return{format:'module',shortCircuit:true,source:${JSON.stringify('export const statelessVerificationSteps='+JSON.stringify(steps)+';')}};if(url.endsWith('/ci-partition-coverage.ts'))return{format:'module',shortCircuit:true,source:${JSON.stringify('const coverage='+JSON.stringify(coverage)+';export const readCiPartitionCoverage=()=>coverage;export const ciPartitionFiles=()=>coverage.source[0].files;export const ciPartitionFileSelections=()=>[coverage.source[0].files];')}};return next(url,context);}});`);
+  const runner=join(root,'.local/scratch-runner.mjs');await writeFile(runner,`import{runStatelessPartition,runStatelessChecks}from ${JSON.stringify(subject)};import{writeFileSync}from'node:fs';const result=process.env.CUEVO_SCRATCH_OWNER==='complete'?await runStatelessChecks({repoRoot:process.cwd()}):await runStatelessPartition({repoRoot:process.cwd(),partition:'source-native'});writeFileSync('.local/outcome.json',JSON.stringify({result,diagnostic:globalThis.scratchOutcome()}));`);
+  for(const owner of ['partition','complete'])for(const mode of ['remove-refuse','remove-success','allocate-refuse']){
+   const run=spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--import',pathToFileURL(hook).href,runner],{cwd:root,encoding:'utf8',env:{...process.env,TEMP:scratchParent,TMP:scratchParent,TMPDIR:scratchParent,CI:'true',GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'owner/repo',GITHUB_SHA:sha,GITHUB_RUN_ID:'51',GITHUB_RUN_ATTEMPT:'2',GITHUB_JOB:'source-fixtures-native',CUEVO_SCRATCH_MODE:mode,CUEVO_SCRATCH_OWNER:owner}});
+   assert.equal(run.status,0,run.stderr);const outcome=JSON.parse(await readFile(join(root,'.local/outcome.json'),'utf8'));
+   if(owner==='partition'){assert.equal(outcome.result.status,'FAILED');assert.equal(outcome.result.exitCode,null);assert.equal(outcome.result.files[0].cases.length,0);assert.equal(outcome.result.cleanupConfirmed,mode==='remove-success','only actual guarded removal can confirm scratch cleanup');assert.equal(outcome.result.reasons.includes('STOP_UNCONFIRMED'),mode!=='remove-success');}
+   else{assert.equal(outcome.result.status,mode==='remove-success'?'FAILED':'STOP_UNCONFIRMED');assert.equal(outcome.result.groups[0].status,mode==='remove-success'?'PROCESS_ERROR':'STOP_UNCONFIRMED');assert.equal(outcome.result.groups[0].exitCode,null);assert.equal(outcome.result.groups[0].summary,null);}
+   assert.equal(JSON.stringify(outcome.result).includes('private-scratch-canary'),false);
+   if(mode==='remove-refuse'){assert.equal(outcome.diagnostic.removals,1);const allocated=resolve(outcome.diagnostic.allocated);assert.equal(resolve(allocated,'..'),resolve(scratchParent));assert.match(relative(scratchParent,allocated),/^cv-[a-zA-Z0-9]+$/);assert.equal((await lstat(allocated)).isDirectory(),true);await rm(allocated,{recursive:true,force:true});}
+   if(mode==='remove-success'){assert.equal(outcome.diagnostic.removals,1);await assert.rejects(lstat(outcome.diagnostic.allocated),{code:'ENOENT'});}
+   if(mode==='allocate-refuse'){assert.equal(outcome.diagnostic.allocated,null);assert.equal(outcome.diagnostic.removals,0);}
+  }
+ }finally{await rm(root,{recursive:true,force:true});}
+});
 
 test('current closed cohort policy rejects passing file rows without original process coverage',async()=>{
  const api=await import('./stateless-checks'),cohorts=await import('./source-test-cohorts'),coverage=await import('./ci-partition-coverage'),review=await import('./release-review'),root=resolve(import.meta.dirname,'../..'),policy=coverage.readCiPartitionCoverage(root),plan=cohorts.readSourceTestCohortPlan(root);

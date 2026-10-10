@@ -84,7 +84,7 @@ test('aliased configured temporary root cannot allocate an unverified child scra
   const fs=await import('node:fs/promises'),target=join(root,'.local/temp-target'),alias=join(root,'.local/temp-alias');await mkdir(target,{recursive:true});await fs.symlink(target,alias,process.platform==='win32'?'junction':'dir');
   assert.equal(execFileSync('git',['-C',root,'status','--porcelain','--untracked-files=all'],{encoding:'utf8',windowsHide:true}).trim(),'','The alias fixture must reach scratch admission from clean source');
   const original={TEMP:process.env.TEMP,TMP:process.env.TMP,TMPDIR:process.env.TMPDIR};Object.assign(process.env,{TEMP:alias,TMP:alias,TMPDIR:alias});
-  try{await assert.rejects(run({repoRoot:root}));assert.deepEqual(await fs.readdir(target),[]);}
+  try{const result=await run({repoRoot:root});assert.equal(result.status,'STOP_UNCONFIRMED');assert.equal(result.groups[0].status,'STOP_UNCONFIRMED');assert.equal(result.groups[0].exitCode,null);assert.equal(result.groups[0].summary,null);assert.ok(result.groups.slice(1).every(row=>row.status==='NOT_STARTED'));assert.deepEqual(await fs.readdir(target),[]);}
   finally{for(const[key,value]of Object.entries(original))if(value===undefined)delete process.env[key];else process.env[key]=value;}
  });
 });
