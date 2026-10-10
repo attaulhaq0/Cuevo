@@ -12,6 +12,36 @@ const targets = { web: { teamId: 'team_Cuevo', projectId: 'prj_Web', origin: 'ht
 const assignments = [{ category: 'source-spec-code', taskId: 'source-review', reportSha256: '8'.repeat(64), evidenceSha256: '9'.repeat(64) }, { category: 'qa-regression-operations', taskId: 'qa-review', reportSha256: 'a'.repeat(64), evidenceSha256: 'b'.repeat(64) }];
 const identity = { repository: 'attaulhaq0/Cuevo', releaseSha: sha, treeSha: tree, baseSha: base, ciRunId: '31', releaseRunId: '51', runAttempt: 1, environmentId: 123, environmentName: 'staging', deploymentEnvironment: 'synthetic-staging', canonicalRuntimeVerification:{runAttempt:2,jobsSha256:'e'.repeat(64)} };
 
+function hostContract() {
+ const settings=(rootDirectory:string|null,framework:string|null)=>({nodeVersion:'24.x',fluid:true,functionDefaultRegions:['sin1'],autoAssignCustomDomains:false,ssoDeploymentType:'all_except_custom_domains',rootDirectory,framework});
+ return {version:1,purpose:'CUEVO_STAGING_HOST_CONTRACT',sourceSha:sha,treeSha:tree,deploymentEnvironment:'synthetic-staging',targets:structuredClone(targets),settings:{api:settings(null,null),web:settings('apps/web','nextjs'),supabase:{region:'ap-southeast-1',postgresEngine:'17',applicationConnection:{kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'}}},sourceBounds:{api:{node:'24',maxDurationSeconds:60,poolMax:10,connectionTimeoutMs:3000,idleTimeoutMs:10000,statementTimeoutMs:5000},worker:{poolMax:1,connectionTimeoutMs:3000,statementTimeoutMs:5000,processingDeadlineMs:20000,claimReserveMs:15000,eventLeaseSeconds:30,invocationLeaseSeconds:60,deliveryTimeoutMs:30000,recoveryIntervalSeconds:60}},capacity:{postgres:{maxConnections:60,superuserReservedConnections:3},sessionPoolerClientCeiling:{state:'UNKNOWN',value:null}},exposure:{audience:'PRIVATE_SYNTHETIC_OPERATORS',roleScope:'FIVE_REFERENCE_ROLES',gatewayPolicy:'EXISTING_PROTECTED_PREVIEW_AND_RESERVED_ORIGIN',clientAddressPolicy:'HOSTED_VERIFICATION_PENDING',fleetProtection:'NOT_VERIFIED'}};
+}
+
+test('absent optional host configuration preserves historical version one and two canonical bytes digest and comment',async()=>{
+ const api=await subject();for(const version of[1,2]){
+  const body={...input(),version},canonicalJson=canonicalReleaseReviewJson({...body,reviews:[...body.reviews].sort((a,b)=>a.category.localeCompare(b.category))}),sha256=createHash('sha256').update(canonicalJson).digest('hex'),prepared=api.prepareBackendReleaseIntent(body,expected());
+  assert.deepEqual(prepared,{status:'PREPARED_ONLY',canonicalJson,base64:Buffer.from(canonicalJson).toString('base64'),sha256,comment:`Cuevo backend staging admission approved: sha=${sha}; run=51; attempt=1; package=sha256:${sha256}`});
+  assert.equal(Object.hasOwn(JSON.parse(prepared.canonicalJson),'stagingHostContract'),false);assert.equal(api.validatePreparedBackendReleaseIntent(prepared,{...expected(),now:now+1}).sha256,sha256);
+ }
+});
+
+test('present host configuration binds exact package source target environment and approved expectation',async()=>{
+ const api=await subject(),stagingHostContract=hostContract(),body={...input(),version:2,executionScope:'complete-backend',stagingHostContract},context={...expected(),executionScope:'complete-backend',stagingHostContract},prepared=api.prepareBackendReleaseIntent(body,context);
+ assert.deepEqual(JSON.parse(prepared.canonicalJson).stagingHostContract,stagingHostContract);assert.equal(api.validatePreparedBackendReleaseIntent(prepared,context).sha256,prepared.sha256);
+ const changed={...stagingHostContract,settings:{...stagingHostContract.settings,api:{...stagingHostContract.settings.api,fluid:false}}};
+ assert.notEqual(api.prepareBackendReleaseIntent({...body,stagingHostContract:changed},{...context,stagingHostContract:changed}).sha256,prepared.sha256);
+ assert.throws(()=>api.prepareBackendReleaseIntent(body,{...context,stagingHostContract:changed}));assert.throws(()=>api.validatePreparedBackendReleaseIntent(prepared,{...context,stagingHostContract:changed}));
+ for(const patch of[{sourceSha:base},{treeSha:base},{deploymentEnvironment:'production'},{targets:{...stagingHostContract.targets,api:{...stagingHostContract.targets.api,teamId:'team_Other'}}},{privateToken:'private-canary'}]){const altered={...stagingHostContract,...patch};assert.throws(()=>api.prepareBackendReleaseIntent({...body,stagingHostContract:altered},{...context,stagingHostContract:altered}));}
+ const missing={...context}as Record<string,unknown>;delete missing.stagingHostContract;assert.throws(()=>api.prepareBackendReleaseIntent(body,missing));
+});
+
+test('host configuration cannot add runtime capability to schema reconciliation or pending confirmation packages',async()=>{
+ const api=await subject(),stagingHostContract=hostContract();
+ const body={...input(),version:2,executionScope:'schema-and-accounts',fingerprints:{...fingerprints,apiArtifactSha256:null,edgeArtifactSha256:null,denoLockSha256:null},stagingHostContract};
+ const absent={...body}as Record<string,unknown>;delete absent.stagingHostContract;assert.doesNotThrow(()=>api.prepareBackendReleaseIntent(absent,{...expected(),executionScope:body.executionScope,fingerprints:body.fingerprints}));
+ assert.throws(()=>api.prepareBackendReleaseIntent(body,{...expected(),executionScope:body.executionScope,fingerprints:body.fingerprints,stagingHostContract}));
+});
+
 test('version two database packages have no runtime artifact capability and historical version one digests remain valid',async()=>{
  const api=await subject(),body={...input(),version:2,executionScope:'schema-and-accounts',fingerprints:{...fingerprints,apiArtifactSha256:null,edgeArtifactSha256:null,denoLockSha256:null}},current={...expected(),executionScope:'schema-and-accounts',fingerprints:body.fingerprints};
  const prepared=api.prepareBackendReleaseIntent(body,current);assert.equal(api.validatePreparedBackendReleaseIntent(prepared,current).sha256,prepared.sha256);
@@ -40,6 +70,7 @@ test('reconciliation schema scope requires its explicit immutable template finge
  const api=await subject(),reconciledPrefix={templateSha256:'a'.repeat(64),originalOperationSha256:'b'.repeat(64),originalChainSha256:'c'.repeat(64),prefixCount:120,stageCount:123,cataloguePolicySha256:'d'.repeat(64),catalogueSha256:'e'.repeat(64)};
  const body={...input(),executionScope:'reconcile-schema',reconciledPrefix},current={...expected(),executionScope:'reconcile-schema',reconciledPrefix};
  assert.doesNotThrow(()=>api.prepareBackendReleaseIntent(body,current));
+ assert.throws(()=>api.prepareBackendReleaseIntent({...body,stagingHostContract:hostContract()},{...current,stagingHostContract:hostContract()}));
  assert.throws(()=>api.prepareBackendReleaseIntent({...body,reconciledPrefix:undefined},current));
  assert.throws(()=>api.prepareBackendReleaseIntent({...body,executionScope:'complete-backend'},{...current,executionScope:'complete-backend'}));
  assert.throws(()=>api.prepareBackendReleaseIntent(body,{...current,reconciledPrefix:{...reconciledPrefix,templateSha256:'f'.repeat(64)}}));

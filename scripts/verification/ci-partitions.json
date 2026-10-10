@@ -41,6 +41,7 @@
         "scripts/verification/backend-runtime-recovery-export.test.ts",
         "scripts/verification/backend-runtime-resume.test.ts",
         "scripts/verification/backend-schema-completion-admission.test.ts",
+        "scripts/verification/backend-staging-host-contract.test.ts",
         "scripts/verification/backend-workflow.test.ts",
         "scripts/verification/browser-account-phase.test.ts",
         "scripts/verification/browser-runtime-scope.test.ts",
@@ -110,6 +111,7 @@
         "scripts/database/hosted-operator-storage-inventory.test.ts",
         "scripts/database/hosted-operator-storage-policy.test.ts",
         "scripts/database/hosted-provider-state.test.ts",
+        "scripts/database/hosted-runtime-connection-snapshot.test.ts",
         "scripts/database/hosted-runtime-rollout-session.test.ts",
         "scripts/database/hosted-schema-catalogue.test.ts",
         "scripts/database/hosted-schema-recovery-completion.test.ts",
@@ -454,6 +456,10 @@
         "durationMs": null
       },
       {
+        "path": "scripts/database/hosted-runtime-connection-snapshot.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/database/hosted-runtime-role-membership.test.ts",
         "durationMs": null
       },
@@ -735,6 +741,10 @@
       },
       {
         "path": "scripts/verification/backend-schema-completion-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-staging-host-contract.test.ts",
         "durationMs": null
       },
       {

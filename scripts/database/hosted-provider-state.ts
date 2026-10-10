@@ -5,7 +5,7 @@ import { canonicalReleaseReviewJson } from '../verification/release-review';
 const sha = z.string().regex(/^[a-f0-9]{40}$/), digest = z.string().regex(/^[a-f0-9]{64}$/);
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const identity = z.object({ sourceSha: sha, treeSha: sha, apiArtifactSha256: digest, edgeArtifactSha256: digest, denoLockSha256: digest, runtimeSha256: digest,
-  teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), projectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), originalRunId: z.string().regex(/^[1-9][0-9]*$/), originalRunAttempt: positive, originalPackageSha256: digest,releaseGeneration:z.string().regex(/^[1-9][0-9]{0,18}$/).refine(value=>BigInt(value)<=9223372036854775807n).optional(),operationSha256:digest.optional(),executorSourceSha:sha.optional(),executorTreeSha:sha.optional() }).strict();
+  teamId: z.string().regex(/^team_[A-Za-z0-9]+$/), projectId: z.string().regex(/^prj_[A-Za-z0-9]+$/), originalRunId: z.string().regex(/^[1-9][0-9]*$/), originalRunAttempt: positive, originalPackageSha256: digest,releaseGeneration:z.string().regex(/^[1-9][0-9]{0,18}$/).refine(value=>BigInt(value)<=9223372036854775807n).optional(),operationSha256:digest.optional(),executorSourceSha:sha.optional(),executorTreeSha:sha.optional(),stagingHostContractSha256:digest.optional() }).strict();
 export const preparedEdgeContentBindingSchema=z.object({artifactVersion:z.literal(2),rawEszipSha256:digest,ezbrSha256:digest,rawByteSize:z.number().int().min(9).max(32*1024*1024),entrypoint:z.literal('edge/index.ts')}).strict();
 export type PreparedEdgeContentBinding=z.infer<typeof preparedEdgeContentBindingSchema>;
 const receipts = z.union([

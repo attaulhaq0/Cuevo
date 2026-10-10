@@ -18,6 +18,7 @@ import {prepareBackendReleaseIntent} from './backend-release-contracts';
 import { canonicalReleaseReviewJson, canonicalReleaseExecutionJson, parseReleaseExecutionJson } from './release-review';
 import { canonicalizeHostedSchemaCatalogue } from '../database/hosted-schema-catalogue';
 import {z} from 'zod';
+import type {StagingHostContract} from './backend-staging-host-contract';
 
 const digest = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex'), ref = 'mqxdjvsyckzocokuikmx', repository = 'attaulhaq0/Cuevo', githubToken = 'private-backend-prepare-github', providerToken = 'private-backend-prepare-provider';
 const realRoot = resolve(import.meta.dirname, '../..'), realSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: realRoot, encoding: 'utf8' }).trim(), realTree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: realRoot, encoding: 'utf8' }).trim();
@@ -74,6 +75,32 @@ Object.assign(globalThis,{backendPrepareCanonicalRolloutPlan:createCanonicalRunt
 Object.assign(globalThis,{backendPrepareHistoricalSources:readHistoricalMigrationSources,backendPrepareCanonicalRuntimePlanAndSources:createCanonicalInstalledRuntimePlanAndSources,backendPrepareCanonicalPendingPlanAndSources:createCanonicalPendingRuntimeConfirmationPlanAndSources,backendPrepareCanonicalRolloutPlanAndSources:createCanonicalRuntimeRolloutPlanAndSources});
 function git(root: string, ...args: string[]) { return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).trim(); }
 async function api() { let module: Record<string, unknown> = {}; try { module = await import(pathToFileURL(resolve(import.meta.dirname, 'backend-release-prepare.ts')).href); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw error; } assert.equal(typeof module.prepareNativeBackendRelease, 'function'); return module as typeof import('./backend-release-prepare'); }
+
+function stagingHostFixture(input:Record<string,unknown>):StagingHostContract{
+ const targets=(input.input as{targets:StagingHostContract['targets']}).targets,settings=(rootDirectory:string|null,framework:string|null)=>({nodeVersion:'24.x' as const,fluid:true,functionDefaultRegions:['sin1'],autoAssignCustomDomains:false as const,ssoDeploymentType:'all_except_custom_domains' as const,rootDirectory,framework});
+ return{version:1,purpose:'CUEVO_STAGING_HOST_CONTRACT',sourceSha:input.sha as string,treeSha:git(state.root,'rev-parse','HEAD^{tree}'),deploymentEnvironment:'synthetic-staging',targets:structuredClone(targets),settings:{api:settings(null,null),web:settings('apps/web','nextjs'),supabase:{region:'ap-southeast-1',postgresEngine:'17',applicationConnection:{kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'}}},sourceBounds:{api:{node:'24',maxDurationSeconds:60,poolMax:10,connectionTimeoutMs:3000,idleTimeoutMs:10000,statementTimeoutMs:5000},worker:{poolMax:1,connectionTimeoutMs:3000,statementTimeoutMs:5000,processingDeadlineMs:20000,claimReserveMs:15000,eventLeaseSeconds:30,invocationLeaseSeconds:60,deliveryTimeoutMs:30000,recoveryIntervalSeconds:60}},capacity:{postgres:{maxConnections:60,superuserReservedConnections:3},sessionPoolerClientCeiling:{state:'UNKNOWN',value:null}},exposure:{audience:'PRIVATE_SYNTHETIC_OPERATORS',roleScope:'FIVE_REFERENCE_ROLES',gatewayPolicy:'EXISTING_PROTECTED_PREVIEW_AND_RESERVED_ORIGIN',clientAddressPolicy:'HOSTED_VERIFICATION_PENDING',fleetProtection:'NOT_VERIFIED'}};
+}
+
+test('actual preparation carries reviewed host tuple into expected and canonical approval before provider effects',async()=>{
+ const subject=await api();await fixture(async input=>{
+  await installedAccountsFixture(input);const stagingHostContract=stagingHostFixture(input);(input.input as Record<string,unknown>).stagingHostContract=stagingHostContract;
+  const result=await subject.prepareNativeBackendRelease(input),body=JSON.parse(result.preparedApproval.canonicalJson)as{stagingHostContract:unknown;preparedAt:string;expiresAt:string};
+  assert.deepEqual((result.expected as unknown as{stagingHostContract:unknown}).stagingHostContract,stagingHostContract);assert.deepEqual(body.stagingHostContract,stagingHostContract);
+  assert.equal(Date.parse(body.preparedAt),result.expected.now);assert.equal(Date.parse(body.expiresAt)-Date.parse(body.preparedAt),3600000);
+  assert.equal(result.plan.pending.length,0);assert.equal(result.delivery.kind,'CI_RUNTIME_ARTIFACTS');assert.equal(state.calls.includes('ci-artifact-admission'),true);assert.deepEqual(state.builds,[]);
+  const persisted=JSON.parse(await readFile(result.bundlePath,'utf8'))as{expected:{stagingHostContract:unknown};preparedApproval:{canonicalJson:string}};
+  assert.deepEqual(persisted.expected.stagingHostContract,stagingHostContract);assert.equal(persisted.preparedApproval.canonicalJson,result.preparedApproval.canonicalJson);assert(!JSON.stringify(persisted).includes(providerToken));
+ });
+});
+
+test('actual schema preparation refuses an inappropriate host tuple without acquiring runtime artifacts',async()=>{
+ const subject=await api();await fixture(async input=>{
+  (input.input as Record<string,unknown>).stagingHostContract=stagingHostFixture(input);
+  await writeFile(input.eventPath as string,JSON.stringify({ref:'refs/heads/main',inputs:{commit_sha:input.sha,ci_run_id:'31',scope:'schema-and-accounts',runtime_action:''},repository:{full_name:repository}}));
+  await assert.rejects(subject.prepareNativeBackendRelease(input));assert.equal(state.calls.includes('ci-artifact-admission'),false);assert.deepEqual(state.builds,[]);
+  await assert.rejects(readFile(join(state.root,'.local/hosted-release/backend-bundle.json')));
+ });
+});
 
 test('database-only preparation has an explicit null deployment payload and invokes no artifact reader or builder',async()=>{const subject=await api();await fixture(async input=>{await writeFile(input.eventPath as string,JSON.stringify({ref:'refs/heads/main',inputs:{commit_sha:input.sha,ci_run_id:'31',scope:'schema-and-accounts',runtime_action:''},repository:{full_name:repository}}));const scoped={runAttempt:1,jobsSha256:'a'.repeat(64)};Object.assign(globalThis,{backendPrepareSchemaProof:async()=>scoped});const result=await subject.prepareNativeBackendRelease(input);assert.equal(state.calls.filter(row=>row==='schema-acquire').length,1);assert.equal(state.calls.filter(row=>row==='schema-refresh').length,1);assert.equal(result.version,2);assert.deepEqual(result.delivery,{kind:'DATABASE_ONLY',apiRoot:null,edgeRoot:null});assert.equal(result.expected.fingerprints.apiArtifactSha256,null);assert.equal(result.expected.fingerprints.edgeArtifactSha256,null);assert.equal(result.expected.fingerprints.denoLockSha256,null);assert.equal('artifacts'in result,false);assert.equal(state.calls.includes('ci-artifact-admission'),false);assert.deepEqual(state.builds,[]);});});
 async function fixture(run: (input: Record<string, unknown>) => Promise<void>,recovery=false) {
