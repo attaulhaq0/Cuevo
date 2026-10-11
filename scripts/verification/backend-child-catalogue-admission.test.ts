@@ -3,6 +3,9 @@ import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
+import { registerHooks } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { transformSync } from 'esbuild';
 import { mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -20,6 +23,12 @@ import policy from '../database/unknown-prefix-catalogue-policy.json';
 import { readFileSync } from 'node:fs';
 
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
+async function nativeBoundedResponseReader(){
+ const url=pathToFileURL(resolve(import.meta.dirname,'backend-release-admission.ts')).href+'?catalogue-response-bound';
+ const hook=registerHooks({load(selected,context,next){if(selected===url)return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(selected),'utf8')+'\nexport {boundedJson as catalogueResponseFixtureReader};',{loader:'ts',format:'esm'}).code};return next(selected,context);}});
+ try{return(await import(url)).catalogueResponseFixtureReader as(response:Response,signal:AbortSignal)=>Promise<unknown>;}finally{hook.deregister();}
+}
+function exactCommitResponse(value:unknown,bytes:number){const body=JSON.stringify({...value as object,padding:''}),remaining=bytes-Buffer.byteLength(body);assert.ok(remaining>=0);return body.slice(0,-2)+'x'.repeat(remaining)+'"}';}
 const files=['scripts/database/hosted-child-catalogue-producer.ts','scripts/database/hosted-child-catalogue-reference.ts','scripts/database/hosted-child-catalogue-bootstrap.sql','scripts/database/hosted-schema-catalogue.ts','scripts/database/replay-plan.ts','scripts/database/unknown-prefix-catalogue-policy.json'];
 const {yazl}=createRequire(import.meta.url)('playwright-core/lib/utilsBundle') as {yazl:{ZipFile:new()=>{outputStream:Readable;addBuffer(bytes:Buffer,name:string):void;end():void}}};
 async function zip(value:unknown,name='reference.json',canonical=true){const archive=new yazl.ZipFile(),parts:Buffer[]=[],complete=new Promise<Buffer>((done,reject)=>{archive.outputStream.on('data',part=>parts.push(part));archive.outputStream.on('error',reject);archive.outputStream.on('end',()=>done(Buffer.concat(parts)));});archive.addBuffer(Buffer.from(canonical?canonicalReleaseExecutionJson(value):JSON.stringify(value)),name);archive.end();return complete;}
@@ -34,7 +43,7 @@ async function fixture(native180=false){
  let childBytes:Buffer|undefined,childArtifact:Record<string,unknown>|undefined;
  if(native180){receipt.version=2;receipt.imageReference='ghcr.io/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';childBytes=await zip(receipt);childArtifact={...artifact,id:72,size_in_bytes:childBytes.length,digest:'sha256:'+hash(childBytes)};const prior=hash(canonicalReleaseExecutionJson(receipt)),prefix=readHistoricalMigrationSources(root,'9bee5e0d59d95274266158a0644139fd4df5334e','2574891343d9bfd1be09c57dd4e450e086f76f40'),order=replayPlan(prefix),selected=[...order.before,order.prerequisite,...order.remaining].slice(0,180).map(name=>prefix.find(row=>row.name===name)!);Object.assign(receipt,{version:3,purpose:'CUEVO_SOURCE_NATIVE180_CATALOGUE',baselineSourceSha:'9bee5e0d59d95274266158a0644139fd4df5334e',baselineTreeSha:'2574891343d9bfd1be09c57dd4e450e086f76f40',migrationCount:180,migrationRowsSha256:'28ad9500aa5719898303ffce30e6dc8d598d22b650413d4a9639c5bd1313cbb4',sourceInventorySha256:hash(canonicalReleaseExecutionJson(selected.map(row=>({name:row.name,sha256:hash(row.bytes)})))),provider144:small,scratch180:small,child144ReceiptSha256:prior});artifact.name='cuevo-native180-catalogue-31-2';}
  const fileName=native180?'source180.json':'reference.json';let bytes=await zip(receipt,fileName),archiveReads=0;artifact.size_in_bytes=bytes.length;artifact.digest='sha256:'+hash(bytes);
- const github=async(path:string)=>{if(path==='git/ref/heads/main')return{object:{type:'commit',sha:sourceSha}};if(path==='commits/'+sourceSha)return{sha:sourceSha,commit:{tree:{sha:treeSha},verification:{verified:true,reason:'valid'}}};if(path==='actions/runs/31')return run;if(path.includes('/jobs?'))return{total_count:1,jobs:[job]};if(path==='actions/runs/31/artifacts?per_page=100')return{total_count:childArtifact?2:1,artifacts:childArtifact?[artifact,childArtifact]:[artifact]};throw Error('Unexpected fixture path');};
+ const github=async(path:string)=>{if(path==='git/ref/heads/main')return{object:{type:'commit',sha:sourceSha}};if(path==='git/commits/'+sourceSha)return{sha:sourceSha,tree:{sha:treeSha},verification:{verified:true,reason:'valid'}};if(path==='actions/runs/31')return run;if(path.includes('/jobs?'))return{total_count:1,jobs:[job]};if(path==='actions/runs/31/artifacts?per_page=100')return{total_count:childArtifact?2:1,artifacts:childArtifact?[artifact,childArtifact]:[artifact]};throw Error('Unexpected fixture path');};
  return{root,receipt,run,job,artifact,github,expected:{repoRoot:root,repository:'attaulhaq0/Cuevo',sourceSha,treeSha,ciRunId:'31',ciRunAttempt:2},archive:async(id?:number)=>{archiveReads++;return id===72&&childBytes?childBytes:bytes;},archiveReads:()=>archiveReads,rebuild:async(name=fileName,canonical=true)=>{bytes=await zip(receipt,name,canonical);artifact.size_in_bytes=bytes.length;artifact.digest='sha256:'+hash(bytes);},destroy:()=>rm(root,{recursive:true,force:true})};
  }catch(error){await rm(root,{recursive:true,force:true});throw error;}
 }
@@ -47,6 +56,24 @@ test('the source reader admits the exact version-two GHCR transport and refuses 
 
 test('native180 catalogue admits its exact independent source artifact and retains all sixteen categories',async()=>{
  const f=await fixture(true);try{const result=await readNative180CatalogueReferenceAndGuard(f.expected,f.github,f.archive);assert.equal(result.receipt.version,3);assert.equal(result.reference.appliedMigrationCount,180);assert.equal(result.reference.migrationRowsSha256,'28ad9500aa5719898303ffce30e6dc8d598d22b650413d4a9639c5bd1313cbb4');assert.equal(result.reference.catalogueSummary.categories.length,16);await result.refreshOriginalMetadata();assert.equal(f.archiveReads(),2);}finally{await f.destroy();}
+});
+
+test('catalogue commit metadata admits the small verified Git object through the unchanged native response bound',async()=>{
+ const bounded=await nativeBoundedResponseReader();
+ for(const native180 of [false,true]){const f=await fixture(native180);try{
+  const legacy=exactCommitResponse({sha:f.expected.sourceSha,commit:{tree:{sha:f.expected.treeSha},verification:{verified:true,reason:'valid'}}},704482),object=exactCommitResponse({sha:f.expected.sourceSha,tree:{sha:f.expected.treeSha},verification:{verified:true,reason:'valid'}},2725),paths:string[]=[];
+  assert.equal(Buffer.byteLength(legacy),704482);assert.equal(Buffer.byteLength(object),2725);
+  for(const declared of [false,true])await assert.rejects(bounded(new Response(legacy,{headers:declared?{'content-length':String(Buffer.byteLength(legacy))}:undefined}),new AbortController().signal),'the original 512KiB reader still refuses the expanded REST commit');
+  const github=async(path:string)=>{paths.push(path);const value=path==='commits/'+f.expected.sourceSha?legacy:path==='git/commits/'+f.expected.sourceSha?object:JSON.stringify(await f.github(path));return bounded(new Response(value),new AbortController().signal);};
+  const result=await(native180?readNative180CatalogueReferenceAndGuard:readChildCatalogueReferenceAndGuard)(f.expected,github,f.archive);assert.equal(result.reference.appliedMigrationCount,native180?180:144);assert.equal(paths.includes('commits/'+f.expected.sourceSha),false);assert.ok(paths.includes('git/commits/'+f.expected.sourceSha));await result.refreshOriginalMetadata();assert.equal(f.archiveReads(),native180?2:1);
+ }finally{await f.destroy();}}
+});
+
+test('catalogue Git object metadata still rejects wrong source tree signature shape and refresh drift',async()=>{
+ for(const native180 of [false,true]){const f=await fixture(native180);try{const valid={sha:f.expected.sourceSha,tree:{sha:f.expected.treeSha},verification:{verified:true,reason:'valid'}};
+  for(const mode of ['sha','tree','unsigned','reason','rest-shape']){const value=structuredClone(valid);if(mode==='sha')value.sha='0'.repeat(40);if(mode==='tree')value.tree.sha='0'.repeat(40);if(mode==='unsigned')value.verification.verified=false;if(mode==='reason')value.verification.reason='unsigned';const shaped=mode==='rest-shape'?{sha:value.sha,commit:{tree:value.tree,verification:value.verification}}:value;const github=(path:string)=>path==='git/commits/'+f.expected.sourceSha?Promise.resolve(shaped):f.github(path);await assert.rejects((native180?readNative180CatalogueReferenceAndGuard:readChildCatalogueReferenceAndGuard)(f.expected,github,f.archive),/requires review/,mode);}
+  let drift=false;const github=(path:string)=>path==='git/commits/'+f.expected.sourceSha?Promise.resolve(drift?{...valid,tree:{sha:'0'.repeat(40)}}:valid):f.github(path),result=await(native180?readNative180CatalogueReferenceAndGuard:readChildCatalogueReferenceAndGuard)(f.expected,github,f.archive),reads=f.archiveReads();drift=true;await assert.rejects(result.refreshOriginalMetadata(),/requires review/);assert.throws(result.assertOriginalValidity,/requires review/);assert.equal(f.archiveReads(),reads);
+ }finally{await f.destroy();}}
 });
 
 test('native180 catalogue refuses relabeled144 artifacts, stale boundaries and skipped proof retention',async()=>{

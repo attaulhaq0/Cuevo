@@ -16,7 +16,7 @@
         "scripts/database/hosted-original-child-recovery.test.ts",
         "scripts/database/hosted-original-native-intent.test.ts",
         "scripts/database/hosted-runtime-role-membership.test.ts",
-        "scripts/database/hosted-schema-reconciliation-executor.test.ts",
+        "scripts/database/hosted-schema-continuation-native.test.ts",
         "scripts/database/hosted-schema-reconciliation-native.test.ts",
         "scripts/database/hosted-schema-reconciliation-policy.test.ts",
         "scripts/database/hosted-schema-reconciliation.test.ts"
@@ -26,7 +26,7 @@
       "id": "source-contracts",
       "files": [
         "scripts/database/hosted-schema-continuation-executor.test.ts",
-        "scripts/database/hosted-schema-continuation-native.test.ts",
+        "scripts/database/hosted-schema-reconciliation-executor.test.ts",
         "scripts/verification/account-capture-cleanup.test.ts",
         "scripts/verification/backend-api-origin.test.ts",
         "scripts/verification/backend-child-catalogue-admission.test.ts",
