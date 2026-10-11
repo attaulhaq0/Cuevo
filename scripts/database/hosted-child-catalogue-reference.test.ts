@@ -36,3 +36,11 @@ test('catalogue image proof accepts only the pinned repository index and exact a
  assert.deepEqual(verifySourceChildCatalogueImage({...input,Id:sourceChildCatalogueImage.indexDigest}),sourceChildCatalogueImage);
  for(const patch of [{Id:'sha256:'+'0'.repeat(64)},{RepoDigests:['other.example/postgres@'+sourceChildCatalogueImage.indexDigest]},{RepoDigests:['public.ecr.aws/supabase/postgres@sha256:'+'0'.repeat(64)]},{Os:'windows'},{Architecture:'arm64'},{Id:sourceChildCatalogueImage.manifestDigest}])assert.throws(()=>verifySourceChildCatalogueImage({...input,...patch}),/requires review/);
 });
+test('the fixed GHCR transport requires its selected reviewed digest while legacy ECR proof stays separate',()=>{
+ const mirror='ghcr.io/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
+ const input={Id:sourceChildCatalogueImage.configDigest,RepoDigests:[mirror],Os:'linux',Architecture:'amd64'};
+ assert.deepEqual(verifySourceChildCatalogueImage(input,mirror),sourceChildCatalogueImage);
+ assert.throws(()=>verifySourceChildCatalogueImage(input),/requires review/);
+ assert.throws(()=>verifySourceChildCatalogueImage({...input,RepoDigests:[sourceChildCatalogueImage.pinnedReference]},mirror),/requires review/);
+ for(const patch of[{Id:sourceChildCatalogueImage.manifestDigest},{RepoDigests:[mirror,mirror]},{RepoDigests:['ghcr.io/foreign/postgres@'+sourceChildCatalogueImage.indexDigest]},{RepoDigests:['ghcr.io/supabase/postgres@sha256:'+'0'.repeat(64)]},{Os:'windows'},{Architecture:'arm64'}])assert.throws(()=>verifySourceChildCatalogueImage({...input,...patch},mirror),/requires review/);
+});
