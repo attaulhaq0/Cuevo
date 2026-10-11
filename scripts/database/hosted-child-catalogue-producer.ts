@@ -19,10 +19,13 @@ const image=sourceChildCatalogueImage.tag,imageId=sourceChildCatalogueImage.inde
 const producerFiles=['scripts/database/hosted-child-catalogue-producer.ts','scripts/database/hosted-child-catalogue-reference.ts','scripts/database/hosted-schema-catalogue.ts','scripts/database/replay-plan.ts','scripts/database/unknown-prefix-catalogue-policy.json'];
 type ProducerPhase='SOURCE'|'SERVICE_START'|'SERVICE_IMAGE'|'SERVICE_DUMPS'|'RAW_START'|'RAW_IMAGE'|'RAW_READY'|'BOOTSTRAP'|'SERVICE_RESTORE'|'SOURCE_REPLAY'|'CATALOGUE'|'CLEANUP'|'RECEIPT';
 type ServiceImageDiagnostic={tagMatches:boolean|null;idClass:'INDEX'|'CONFIG'|'MANIFEST'|'OTHER'|'UNKNOWN';repositoryDigestPresent:boolean|null;osMatches:boolean|null;architectureMatches:boolean|null};
+const cliStartErrorCodes=['ImagePrepullError','StartWorkdirError','StartConfigLoadError','StartInvalidConfigError','NetworkCreateError','VolumeCreateError','ContainerCreateError','ContainerStartError','HealthCheckTimeoutError','DbSetupError'] as const;
+type ServiceStartDiagnostic={exitCode:number|null;signal:'SIGTERM'|'SIGKILL'|'SIGINT'|'SIGHUP'|'OTHER'|null;timedOut:boolean|null;cliErrorCode:typeof cliStartErrorCodes[number]|'UNKNOWN'};
 let serviceImageDiagnostic:ServiceImageDiagnostic|null=null;
+let serviceStartDiagnostic:ServiceStartDiagnostic|null=null;
 let producerPhase:ProducerPhase='SOURCE',phaseAt=Date.now();
 function phase(value:ProducerPhase){producerPhase=value;phaseAt=Date.now();console.log(JSON.stringify({check:'source-child144-producer-phase',phase:value}));}
-async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,serviceImage:producerPhase==='SERVICE_IMAGE'?serviceImageDiagnostic:null,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
+async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,serviceImage:producerPhase==='SERVICE_IMAGE'?serviceImageDiagnostic:null,serviceStart:producerPhase==='SERVICE_START'?serviceStartDiagnostic:null,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
 const exec=(file:string,args:string[],input?:Uint8Array,env?:NodeJS.ProcessEnv)=>execFileSync(file,args,{input,env,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:120000,maxBuffer:32*1024*1024});
 function removeOwnedReference(rawId:string,label:string){
  const raw=JSON.parse(exec('docker',['inspect',rawId]).toString('utf8')) as {Id:string;Image:string;Config:{Labels:Record<string,string>}}[];
@@ -45,7 +48,14 @@ export async function produceHostedChildCatalogueReference(){
  try{exec('docker',['network','inspect','cuevo-local']);}catch{exec('docker',['network','create','--subnet','10.252.60.0/24','cuevo-local']);}
  try{exec('docker',['inspect','supabase_db_cuevo']);throw fail();}catch(error){if((error as {status?:number}).status!==1)throw fail();}
  // CLI 2.119 otherwise resolves cached/pulled GHCR or Hub fallbacks, contrary to this owner's exact ECR admission.
- phase('SERVICE_START');exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'public.ecr.aws'});
+ phase('SERVICE_START');
+ try{exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor','--output-format','json'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'public.ecr.aws'});}catch(error){
+  const field=(key:string)=>error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,key)?.value:undefined,status=field('status'),signal=field('signal'),code=field('code'),exitCode=typeof status==='number'&&Number.isInteger(status)&&status>=0&&status<=255?status:null;
+  serviceStartDiagnostic={exitCode,signal:typeof signal!=='string'?null:signal==='SIGTERM'||signal==='SIGKILL'||signal==='SIGINT'||signal==='SIGHUP'?signal:'OTHER',timedOut:code==='ETIMEDOUT'?true:exitCode!==null?false:null,cliErrorCode:'UNKNOWN'};
+  // Native JSON errors carry a code beside private message/detail fields; retain only exact source-known codes.
+  try{const stdout=field('stdout');if(Buffer.isBuffer(stdout)&&stdout.length<=32*1024*1024){const parsed=JSON.parse(stdout.toString('utf8'));if(parsed?._tag==='Error'&&cliStartErrorCodes.includes(parsed.error?.code))serviceStartDiagnostic.cliErrorCode=parsed.error.code;}}catch{/* Unstructured or truncated output cannot identify the startup failure. */}
+  throw error;
+ }
  phase('SERVICE_IMAGE');
  serviceImageDiagnostic={tagMatches:null,idClass:'UNKNOWN',repositoryDigestPresent:null,osMatches:null,architectureMatches:null};
  const db=JSON.parse(exec('docker',['inspect','supabase_db_cuevo']).toString('utf8')) as {Id:string;Config:{Image:string};Image:string}[];
