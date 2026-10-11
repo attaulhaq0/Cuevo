@@ -35,6 +35,9 @@ export function deriveSourceChildCatalogueBaseline(prefix123:unknown,prefix144:u
   return{scratch123,provider123,scratch144,provider144,policySha256:unknownPrefixCataloguePolicySha256,querySha256:hostedSchemaCatalogueQuerySha256};
  }catch{throw fail();}
 }
+export function deriveSourceNative180CatalogueBaseline(prefix180:unknown){
+ try{return{scratch180:summarizeSourceChildCatalogue(prefix180),provider180:summarizeSourceChildCatalogue(applySourceChildCatalogueProviderDeltas(prefix180).rows)};}catch{throw fail();}
+}
 const hostedChildCatalogueReceiptCommonSchema=z.object({purpose:z.literal('CUEVO_SOURCE_CHILD144_CATALOGUE'),repository:z.literal('attaulhaq0/Cuevo'),sourceSha:sha,treeSha:sha,baselineSourceSha:z.literal('1a493ad735798bb6d3fa0ffaabc779e62149ac37'),baselineTreeSha:z.literal('a207a7ec44dd29d61adc0490b85fedbf1e696fcd'),runId:z.string().regex(/^[1-9][0-9]*$/),runAttempt:positive,producerJob:z.literal('database-checks'),producerStep:z.literal('Build exact source child144 catalogue reference'),migrationCount:z.literal(144),migrationRowsSha256:z.literal('54b0bffc96d8f5f6386eff4ca851997d1926e9a0c44797351c192c1ea0d96198'),sourceInventorySha256:digest,querySha256:digest,policySha256:digest,producerSha256:digest,bootstrapSha256:digest,serviceSchemaSha256:z.object({auth:digest,storage:digest,realtime:digest}).strict(),image:z.literal(sourceChildCatalogueImage.tag),imageId:z.literal(sourceChildCatalogueImage.indexDigest),imageManifestSha256:z.literal(sourceChildCatalogueImage.manifestDigest),imageConfigSha256:z.literal(sourceChildCatalogueImage.configDigest),imagePlatform:z.literal(sourceChildCatalogueImage.platform),sourceLockSha256:digest,nodeVersion:z.literal('v24.16.0'),nodeBinarySha256:digest,scratch123:hostedChildCatalogueSummarySchema,provider123:hostedChildCatalogueSummarySchema,scratch144:hostedChildCatalogueSummarySchema,catalogueSummary:hostedChildCatalogueSummarySchema,startedAt:date,capturedAt:date,cleanupCompletedAt:date,cleanupConfirmed:z.literal(true),sourceFrozen:z.literal(true),hostedAcceptance:z.literal(false),effectAuthority:z.literal(false)}).strict();
 export const hostedChildCatalogueReceiptSchema=z.discriminatedUnion('version',[hostedChildCatalogueReceiptCommonSchema.extend({version:z.literal(1),imageReference:z.literal(sourceChildCatalogueImage.pinnedReference)}),hostedChildCatalogueReceiptCommonSchema.extend({version:z.literal(2),imageReference:z.literal(sourceChildCatalogueImage.mirrorPinnedReference)})]);
 export type HostedChildCatalogueReceipt=z.infer<typeof hostedChildCatalogueReceiptSchema>;
@@ -46,3 +49,16 @@ export function parseHostedChildCatalogueReceipt(value:unknown):HostedChildCatal
  }catch{throw fail();}
 }
 export const sourceChildCatalogueReceiptSha256=(value:unknown)=>hash(canonicalReleaseExecutionJson(parseHostedChildCatalogueReceipt(value)));
+
+/** Finite recovery of run38125155826's observed complete pre-observability prefix.
+ * The original144 receipt is retained independently; neither receipt grants SQL authority. */
+export const hostedNative180CatalogueReceiptSchema=hostedChildCatalogueReceiptCommonSchema.omit({purpose:true,baselineSourceSha:true,baselineTreeSha:true,migrationCount:true,migrationRowsSha256:true}).extend({version:z.literal(3),purpose:z.literal('CUEVO_SOURCE_NATIVE180_CATALOGUE'),baselineSourceSha:z.literal('9bee5e0d59d95274266158a0644139fd4df5334e'),baselineTreeSha:z.literal('2574891343d9bfd1be09c57dd4e450e086f76f40'),migrationCount:z.literal(180),migrationRowsSha256:z.literal('28ad9500aa5719898303ffce30e6dc8d598d22b650413d4a9639c5bd1313cbb4'),imageReference:z.literal(sourceChildCatalogueImage.mirrorPinnedReference),provider144:hostedChildCatalogueSummarySchema,scratch180:hostedChildCatalogueSummarySchema,child144ReceiptSha256:digest}).strict();
+export type HostedNative180CatalogueReceipt=z.infer<typeof hostedNative180CatalogueReceiptSchema>;
+export function parseHostedNative180CatalogueReceipt(value:unknown):HostedNative180CatalogueReceipt{
+ try{if(Buffer.byteLength(canonicalReleaseExecutionJson(value))>49152)throw fail();const r=hostedNative180CatalogueReceiptSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value))),p=policy.completedPrefix;
+  if(r.querySha256!==hostedSchemaCatalogueQuerySha256||r.policySha256!==unknownPrefixCataloguePolicySha256||Date.parse(r.startedAt)>Date.parse(r.capturedAt)||Date.parse(r.capturedAt)>Date.parse(r.cleanupCompletedAt)||r.sourceSha===r.baselineSourceSha)throw fail();
+  for(const[actual,expected]of [[r.scratch123,p.scratch],[r.provider123,p.expected]]as const)if(actual.sha256!==expected.catalogueSha256||actual.rows!==expected.rows||actual.bytes!==expected.bytes||!same(actual.categories,expected.categories))throw fail();
+  return r;
+ }catch{throw fail();}
+}
+export const sourceNative180CatalogueReceiptSha256=(value:unknown)=>hash(canonicalReleaseExecutionJson(parseHostedNative180CatalogueReceipt(value)));

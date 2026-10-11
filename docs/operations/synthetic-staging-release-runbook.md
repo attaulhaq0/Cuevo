@@ -2,6 +2,8 @@
 
 This runbook explains the source implementation in the [incremental lifecycle decision](../decisions/2026-10-08-incremental-release-lifecycle.md). A local passing test or completed GitHub job does not establish hosted provisioning. Read the original native receipts and current provider state before reporting a milestone.
 
+The [original 180 outcome decision](../decisions/2026-10-11-native180-outcome-reconciliation.md) covers the exact interrupted run `38125155826`. Observed 180 SQL history remains distinct from its unknown original stage commitment and missing second batch receipt. Select its closed recovery evidence, verify the new source-produced 180 catalogue and publish a fresh native observation under current approval before the remaining 51 migrations. Preserve the old 124 marker and original 120/144/180 journals; do not retry the completed SQL or relabel old acknowledgements. Its source implementation and controlled tests do not themselves confirm a hosted recovery.
+
 ## Choose the next operation from actual state
 
 | Current verified state | Next operation | Required result |

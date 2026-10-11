@@ -1,0 +1,15 @@
+# Reconcile the original 180 migration outcome
+
+The founder authorized completing private synthetic staging through the existing release owners. This decision addresses the actual schema run `38125155826`, attempt one, on source `9bee5e0d59d95274266158a0644139fd4df5334e`. It adds no product or curriculum authority.
+
+The first residual batch, 144 to 164, has a confirmed original receipt. The second, 164 to 180, exited successfully, but final admission exceeded the unchanged 30-second limit: official evidence was 30,461 milliseconds old and provider evidence was 30,195 milliseconds old. The original stage remains `REQUIRES_REVIEW` with an unknown commitment. Subsequent official history reads matched all 180 source SQL files. They do not manufacture the missing second batch receipt or a committed original stage.
+
+The existing original-child recovery owner now carries a second closed incident selection. Its template binds the exact original source, package, result, journal owner, INTENT and REVIEW records, preserved 144 adoption, first batch receipt and absent second receipt. Native reconciliation requires current reviewed source, exact approval, TLS, lease, complete 180 history, independently produced catalogue, private original chains and current disabled capabilities. It publishes a separate immutable `PREFIX180_OBSERVED` receipt with current observation clocks and package expiry. The original 124 marker and both earlier review journals remain distinct. After admission, only the remaining 51 migrations can execute under the existing batch owner.
+
+The catalogue producer replays once to 180 in its owned pinned PostgreSQL 17.11 instance and captures 123, 144 and 180. The old 144 receipt remains unchanged. A separate 180 receipt binds its source inventory and the same producer's 144 receipt. Both artifact digests, all sixteen catalogue categories, producer/source/run/attempt, cleanup and earliest expiry must validate. New recovery packages cannot outlive any required original recovery artifact; the prepared admission handle refreshes metadata without reacquiring archives.
+
+Preparatory immutable source and bucket-policy derivation move before renewed official and provider observations in the native stage owner. Final physical source, toolchain, staged SQL, private-state and freshness checks remain. Controlled timing and denial tests cover the actual combined owner; they do not establish hosted capacity or guarantee every future release succeeds.
+
+Current CI discovery explicitly includes all 29 continuation parents and 32 cases in the five isolated cohorts. Historical receipts retain the exact earlier 25-parent, 28-case policy through a source-hash-bound historical decoder. Current discovery refuses that older inventory.
+
+Actual protected CI, native reconciliation, 231 migration completion, two fictional schools, 133 Auth identities, API/worker/frontend hosting and hosted acceptance remain separate results. A compatible future update, schema-changing maintenance, retained-component rollback and customer launch require their own recorded evidence.
