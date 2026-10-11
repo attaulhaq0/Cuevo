@@ -1,5 +1,8 @@
 # Technical verification scripts
 
+Current contract source verification uses seven named fixed cohort jobs plus one ordinary-only producer, all consumed by the existing logical source assembler. It reconstructs complete continuation and reconciliation file receipts from their exact unions and retains native/contracts/delivery as the three source partitions. The ordinary artifact is partial; the complete contracts artifact belongs to the assembler. Current official producer identities, complete reports, source/toolchain, clocks and confirmed cleanup are required. Safe progress artifacts are diagnostic only. Measured complete pipeline time and hosted acceptance remain pending.
+
+
 Original231 preparation and current admission consume the fixed signed-source historical provenance owner. They no longer renew or download old GitHub recovery evidence, and package expiry is bounded by current catalogue/CI inputs and one hour. Historical validators remain read-only audit paths; current schema/security/source/founder/native controls remain mandatory.
 
 

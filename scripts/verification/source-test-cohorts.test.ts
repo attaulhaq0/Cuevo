@@ -46,6 +46,13 @@ test('the closed continuation cohort owner exposes source discovery and exact re
  assert.equal(typeof api?.aggregateSourceTestCohorts,'function');
 });
 
+test('fixed physical source producers select only the original seven contract cohorts with exact job identities',async()=>{
+ const api=await import('./source-test-cohorts') as unknown as Record<string,unknown>;assert.equal(typeof api.readFixedSourceCohortProducer,'function','one exact cohort per physical runner needs a finite source-owned mapping');
+ const owner=api as unknown as {readFixedSourceCohortProducer:(root:string,id:string)=>{id:string;job:string;plan:SourceTestCohortPlan;commandArgs:string[]}},ids=['continuation-1','continuation-2','continuation-3','continuation-4','continuation-5','reconciliation-1','reconciliation-2'];
+ const selected=ids.map(id=>owner.readFixedSourceCohortProducer(repoRoot,id));assert.equal(new Set(selected.map(row=>row.job)).size,7);for(const row of selected){assert.equal(row.job,'source-cohort-'+row.id);assert.equal(row.commandArgs.at(-1),row.plan.file.path);assert.equal(row.plan.cohorts.some(cohort=>cohort.id===row.id),true);}
+ for(const id of ['native-1','native-2','unknown','continuation-1 --test-name-pattern=.*'])assert.throws(()=>owner.readFixedSourceCohortProducer(repoRoot,id),/requires review/);
+});
+
 test('the fixed reconciliation owner discovers all30 definitions including only the original six-mode loop',async()=>{
  const api=await import('./source-test-cohorts') as unknown as Record<string,unknown>;
  assert.equal(typeof api.readReconciliationSourceTestCohortPlan,'function','the third fixed file needs its own finite discovery owner');

@@ -309,5 +309,6 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
       reasons: [...reasons].sort(), summary, files: rows.map(file => file.row) };
     return structuredClone(final);
   }
-  return { consume, finish };
+  function progress(){return{version:1,purpose:'CUEVO_SOURCE_COHORT_DIAGNOSTIC_PROGRESS',effectAuthority:false,completeSource:false,identity,observedAtMs:clock(),files:[...files.values()].map(file=>({path:file.row.path,sha256:file.row.sha256,started:file.units.filter(unit=>!unit.wrapper&&unit.startedAtMs!==null).length,completed:file.row.cases.length,outcomes:file.row.cases.map(row=>({titleSha256:row.titleSha256,suiteSha256:row.suiteSha256,line:row.line,column:row.column,nesting:row.nesting,outcome:row.outcome,durationMs:row.durationMs}))}))};}
+  return { consume, finish,progress };
 }

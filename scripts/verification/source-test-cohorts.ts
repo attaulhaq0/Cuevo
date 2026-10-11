@@ -56,6 +56,8 @@ const assignments=[
  {id:'continuation-5',ordinals:[4,5,13,16,18,27,29]},
 ] as const;
 export const SOURCE_TEST_COHORT_IDS=assignments.map(row=>row.id);
+export const FIXED_SOURCE_COHORT_PRODUCERS=['continuation-1','continuation-2','continuation-3','continuation-4','continuation-5','reconciliation-1','reconciliation-2'] as const;
+export type FixedSourceCohortProducerId=typeof FIXED_SOURCE_COHORT_PRODUCERS[number];
 const digest=z.string().regex(/^[a-f0-9]{64}$/),time=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),duration=z.number().finite().min(0).max(86400000),count=z.number().int().nonnegative().max(10000),positive=z.number().int().positive().max(1000000);
 const identitySchema=z.object({sourceSha:z.string().regex(/^[a-f0-9]{40}$/),treeSha:z.string().regex(/^[a-f0-9]{40}$/),sourceLockSha256:digest,nodeVersion:z.string().regex(/^v24[.][0-9]+[.][0-9]+$/),runId:z.string().regex(/^[1-9][0-9]{0,18}$/).nullable(),runAttempt:z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),scope:z.enum(['source-contracts','source-native']),partitionSha256:digest}).strict().refine(value=>(value.runId===null)===(value.runAttempt===null));
 const caseSchema=z.object({titleSha256:digest,suiteSha256:digest.nullable(),line:positive,column:positive,nesting:count.max(1),testNumber:positive,startedAtMs:time,completedAtMs:time,durationMs:duration,outcome:z.literal('PASSED')}).strict();
@@ -160,6 +162,10 @@ function readClosedTestCohortPlan(repoRoot:string,filePath:typeof SOURCE_TEST_CO
 }
 export function sourceTestCohortCommand(input:{repoRoot:string;plan:unknown;cohortId:string}):string[]{
  try{if(!isAbsolute(input.repoRoot)||resolve(input.repoRoot)!==input.repoRoot)throw failure();const checked=plan(input.plan),cohort=checked.cohorts.find(row=>row.id===input.cohortId);if(!cohort)throw failure();return['--import',pathToFileURL(join(input.repoRoot,'node_modules/tsx/dist/loader.mjs')).href,'--test','--test-name-pattern='+cohort.pattern,'--test-reporter='+pathToFileURL(join(input.repoRoot,'scripts/verification/ci-test-timings-reporter.ts')).href,...(checked.file.path!==SOURCE_TEST_COHORT_FILE?['--enable-source-maps']:[]),checked.file.path];}catch{throw failure();}
+}
+/** Fixed physical dispatch only; original logical file policies stay unchanged. */
+export function readFixedSourceCohortProducer(repoRoot:string,idValue:unknown){
+ try{const id=z.enum(FIXED_SOURCE_COHORT_PRODUCERS).parse(idValue),plan=id.startsWith('continuation-')?readSourceTestCohortPlan(repoRoot):readReconciliationSourceTestCohortPlan(repoRoot);return{id,job:'source-cohort-'+id,plan,commandArgs:sourceTestCohortCommand({repoRoot,plan,cohortId:id})};}catch{throw failure();}
 }
 function verifyCases(checked:SourceTestCohortPlan,id:string,cases:z.infer<typeof caseSchema>[],summary:z.infer<typeof summarySchema>,startedAtMs:number,completedAtMs:number){
  const cohort=checked.cohorts.find(row=>row.id===id);if(!cohort||completedAtMs<startedAtMs||cases.length!==cohort.expectedCases||summary.counts.tests!==cohort.expectedCases||summary.counts.passed!==cohort.expectedCases||summary.counts.topLevel!==cohort.expectedTopLevel)throw failure();

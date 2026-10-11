@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile,readFile,lstat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -297,5 +297,15 @@ test('closed original231 failure diagnostic follows actual failed Node declarati
   assert.equal(collect([diagnosticEvent,diagnosticEvent]).files[0].failedCaseDiagnostics,undefined,'duplicate diagnostics are unavailable');
   const hostile=[{type:'test:diagnostic',data:Object.defineProperty({...diagnosticEvent.data},'message',{get(){evaluated++;throw Error(privateCanary);}})},{type:'test:diagnostic',data:dangerous},{type:'test:stdout',data:{message:privateCanary}},{type:'test:stderr',data:{message:privateCanary}}];const withheld=collect(hostile);assert.equal(evaluated,0);assert.equal(withheld.files[0].failedCaseDiagnostics,undefined);assert.equal(JSON.stringify(withheld).includes(privateCanary),false);
 
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('diagnostic progress retains actual hashed case completion without creating complete source evidence',async()=>{
+ await fixture('pass',async({root,files,events})=>{const{createCiTestTimingCollector}=await import('./ci-test-timings'),collector=createCiTestTimingCollector({repoRoot:root,files,identity,now:Date.now});for(const event of events)collector.consume(event);const progress=collector.progress();assert.equal(progress.completeSource,false);assert.equal(progress.effectAuthority,false);assert.equal(progress.files.length,files.length);assert.ok(progress.files.some(row=>row.completed>0));assert.equal(JSON.stringify(progress).includes(privateCanary),false);assert.equal(JSON.stringify(progress).includes('message'),false);assert.equal(Object.hasOwn(progress,'status'),false);const report=collector.finish();assert.equal(report.status,'PASSED');});
+});
+
+test('fixed cohort reporter writes safe progress only into its exact source-owned diagnostic directory',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-progress-scope-'));try{const path='scripts/database/hosted-schema-continuation-executor.test.ts',text="import{test}from'node:test';test('one known case',()=>{});\n";await mkdir(join(root,'scripts/database'),{recursive:true});await writeFile(join(root,path),text);const folder=join(root,'.local/verification/source-cohort-producers/continuation-1');await mkdir(folder,{recursive:true});const input={repoRoot:root,files:[{path,sha256:hash(text)}],identity:{...identity,scope:'source-contracts'}},run=(job:string,workspace:string)=>spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--test','--test-reporter='+pathToFileURL(resolve(import.meta.dirname,'ci-test-timings-reporter.ts')).href,path],{cwd:root,encoding:'utf8',timeout:15000,maxBuffer:4*1024*1024,env:{...process.env,NODE_TEST_CONTEXT:undefined,CI:'true',GITHUB_ACTIONS:'true',GITHUB_WORKSPACE:workspace,GITHUB_JOB:job,GITHUB_RUN_ID:'51',GITHUB_RUN_ATTEMPT:'2',CUEVO_CI_TEST_TIMING_INPUT:JSON.stringify(input)}});
+  for(const [job,workspace]of [['source-cohort-unknown',root],['source-cohort-continuation-1',root+'-foreign']]){const result=run(job,workspace);assert.equal(result.status,0,result.stderr);await assert.rejects(lstat(join(folder,'progress.json')),{code:'ENOENT'});}const result=run('source-cohort-continuation-1',root);assert.equal(result.status,0,result.stderr);const progress=JSON.parse(await readFile(join(folder,'progress.json'),'utf8'));assert.equal(progress.purpose,'CUEVO_SOURCE_COHORT_DIAGNOSTIC_PROGRESS');assert.equal(progress.completeSource,false);assert.equal(progress.effectAuthority,false);assert.equal(progress.files[0].completed,1);assert.equal(JSON.stringify(progress).includes('one known case'),false);assert.equal(JSON.stringify(progress).includes(privateCanary),false);
  }finally{await rm(root,{recursive:true,force:true});}
 });

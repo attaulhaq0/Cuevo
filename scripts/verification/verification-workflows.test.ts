@@ -70,14 +70,14 @@ test('isolated source contracts execute each stateless owner once while fast che
   assert.ok(source, 'Stateless source contracts need their own isolated required runner.');
   assert.equal(source['timeout-minutes'], 10);
   assert.equal(fast['timeout-minutes'], 20);
-  assert.deepEqual(source.needs,['source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery']); assert.equal(fast.needs, undefined);
+  assert.deepEqual(source.needs,['source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery',...['continuation-1','continuation-2','continuation-3','continuation-4','continuation-5','reconciliation-1','reconciliation-2'].map(id=>'source-cohort-'+id)]); assert.equal(fast.needs, undefined);
   assert.equal(source.steps.filter(step => step.run?.includes('node --import tsx scripts/verification/stateless-source-aggregate.ts')).length, 1);
   assert.equal(fast.steps.some(step => step.run?.includes('stateless-checks.ts')), false);
   assert.equal(fast.steps.filter(step => step.run === 'npm run lint && npm run typecheck && npm test').length, 1);
   assert.equal(source.steps.some(step => step.run?.includes('npm run lint')), false);
   assert.ok(jobs.required.needs?.includes('source-contracts'));
-  assert.equal(ci.split('node --import tsx scripts/verification/stateless-checks.ts --partition=').length-1,3);
-  for(const partition of ['native','contracts','delivery'])assert.equal(jobs['source-fixtures-'+partition].steps.filter(step=>step.run==='node --import tsx scripts/verification/stateless-checks.ts --partition=source-'+partition).length,1);
+  assert.equal(ci.split('node --import tsx scripts/verification/stateless-checks.ts --partition=').length-1,2);assert.equal(ci.split('--cohort-producer=').length-1,7);
+  for(const partition of ['native','contracts','delivery'])assert.equal(jobs['source-fixtures-'+partition].steps.filter(step=>step.run==='node --import tsx scripts/verification/stateless-checks.ts '+(partition==='contracts'?'--ordinary-contracts':'--partition=source-'+partition)).length,1);
   assert.ok(runner.includes('statelessVerificationSteps'));
   const stateless=statelessVerificationSteps;
   for(const name of ['verification-rules','local-runtime','migration-replay-rules','cicd-fixtures']) assert.ok(stateless.some(step=>step.name===name));

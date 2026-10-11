@@ -1431,5 +1431,17 @@
     "version": 1,
     "file": "scripts/database/hosted-schema-reconciliation-executor.test.ts",
     "policySha256": "71e9ef6cc05ff8960c4d8a9b058f0991bb630692f092d00c9e8bd21c56de5ec5"
+  },
+  "isolatedContractCohorts": {
+    "version": 1,
+    "producers": [
+      "continuation-1",
+      "continuation-2",
+      "continuation-3",
+      "continuation-4",
+      "continuation-5",
+      "reconciliation-1",
+      "reconciliation-2"
+    ]
   }
 }
