@@ -1426,5 +1426,10 @@
     "version": 1,
     "file": "scripts/database/hosted-schema-continuation-native.test.ts",
     "policySha256": "bd3300c5a78cb2104145841482cb8f595c2894a0cabd0bf0161f56d63a40aeb4"
+  },
+  "sourceReconciliationCohorts": {
+    "version": 1,
+    "file": "scripts/database/hosted-schema-reconciliation-executor.test.ts",
+    "policySha256": "71e9ef6cc05ff8960c4d8a9b058f0991bb630692f092d00c9e8bd21c56de5ec5"
   }
 }

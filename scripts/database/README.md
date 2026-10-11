@@ -1,5 +1,8 @@
 # Local migration replay
 
+The finite original231 historical provenance is sealed in `original231-provenance.json` and owned by `hosted-original231-provenance.ts`. Its independently authenticated eighteen-archive chain supplies historical truth only; current approval/source/catalogue/package and native private/history/lease checks still govern metadata completion. The strict source descriptor replaces old archive copies/deadlines for this route and rejects an old recovery selector.
+
+
 The [finite original231 observation](../../docs/decisions/2026-10-11-original231-observation-completion.md) preserves the original failed remaining-stage journal and missing third receipt. Its strict plan observes231 source migrations with prior124 and zero pending SQL; `ORIGINAL231_OBSERVATION_METADATA` allocates four metadata descriptors and no SQL folders or CLI arguments. The compact private projection requires actual retained native180 bytes and canonical231 source rows to reconstruct the complete template. Current native publication/completion and the Supabase owner permission correction remain unverified until their own evidence passes.
 
 Historical source-root checks collect the exact repository path, shallow state and graft path in one bounded Git query per invocation. Historical tree identity, replacement refs, blob framing and late current-source checks remain separate; this metadata reuse grants no execution authority.

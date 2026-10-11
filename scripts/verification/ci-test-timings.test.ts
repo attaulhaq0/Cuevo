@@ -270,3 +270,32 @@ export default async function* rejectTransport(source){for await(const event of 
     }
   });
 });
+
+test('closed original231 failure diagnostic follows actual failed Node declaration and excludes private output',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-original231-diagnostic-'));
+ try{
+  const path='scripts/database/hosted-schema-continuation-executor.test.ts';await mkdir(join(root,'scripts/database'),{recursive:true});
+  const title='original231 executor observes and completes only metadata with four NOOPs and unchanged unknown journals';
+  const diagnostic={version:1,purpose:'CUEVO_ORIGINAL231_EXECUTOR_FAILURE',phase:'FIRST_OBSERVATION',status:'REQUIRES_REVIEW',stages:0,commands:0,cleanupCode:null,compositionPhase:'CONTINUATION',admissionPhase:null,nativeFailurePhase:'CATALOGUE'};
+  const text=`import{test}from'node:test';\ntest(${JSON.stringify(title)},t=>{process.stdout.write(${JSON.stringify(privateCanary)});process.stderr.write(${JSON.stringify(privateCanary)});t.diagnostic('CUEVO_ORIGINAL231_EXECUTOR_DIAGNOSTIC '+${JSON.stringify(JSON.stringify(diagnostic))});throw Error(${JSON.stringify(privateCanary)});});\n`;
+  await writeFile(join(root,path),text);const environment:NodeJS.ProcessEnv={...process.env,CUEVO_CI_TEST_TIMING_INPUT:JSON.stringify({repoRoot:root,files:[{path,sha256:hash(text)}],identity})};delete environment.NODE_TEST_CONTEXT;
+  const result=spawnSync(process.execPath,['--import',pathToFileURL(resolve(import.meta.dirname,'../../node_modules/tsx/dist/loader.mjs')).href,'--test','--test-reporter='+pathToFileURL(resolve(import.meta.dirname,'ci-test-timings-reporter.ts')).href,join(root,path)],{cwd:root,env:environment,encoding:'utf8',timeout:15000,maxBuffer:1024*1024});
+  assert.notEqual(result.status,0);assert.equal(result.stdout.includes(privateCanary),false);const report=JSON.parse(result.stdout);assert.equal(report.status,'FAILED');assert.equal(report.files[0].cases[0].outcome,'FAILED');
+  const actual=report.files[0].cases[0],definition={column:actual.column,line:actual.line,nesting:actual.nesting,suiteSha256:actual.suiteSha256,titleSha256:actual.titleSha256};
+  assert.deepEqual(report.files[0].failedCaseDiagnostics,[{definitionSha256:hash(JSON.stringify(definition)),diagnostic}]);
+  const {createCiTestTimingCollector,readOriginal231ExecutorFailureDiagnostic}=await api();
+  let evaluated=0;const dangerous=new Proxy({}, {get(){evaluated++;throw Error(privateCanary);},getPrototypeOf(){evaluated++;throw Error(privateCanary);}});
+  assert.equal(readOriginal231ExecutorFailureDiagnostic(dangerous),null);assert.equal(readOriginal231ExecutorFailureDiagnostic(Object.defineProperty({...diagnostic},'phase',{get(){evaluated++;throw Error(privateCanary);}})),null);assert.equal(evaluated,0);
+  for(const value of[{...diagnostic,phase:privateCanary},{...diagnostic,commands:8},{...diagnostic,stages:5},{...diagnostic,private:privateCanary},{...diagnostic,compositionPhase:privateCanary},{...diagnostic,nativeFailurePhase:privateCanary}])assert.equal(readOriginal231ExecutorFailureDiagnostic(value),null);
+  const eventData={name:title,file:join(root,path),line:2,column:1,nesting:0,type:'test'},details={duration_ms:1,type:'test',passed:false};
+  const collect=(messages:unknown[],failed=true)=>{let now=1000;const collector=createCiTestTimingCollector({repoRoot:root,files:[{path,sha256:hash(text)}],identity,now:()=>++now});collector.consume({type:'test:enqueue',data:eventData});collector.consume({type:'test:dequeue',data:eventData});collector.consume({type:'test:complete',data:{...eventData,testNumber:1,details:{...details,passed:!failed}}});for(const event of messages)collector.consume(event);return collector.finish();};
+  const diagnosticEvent={type:'test:diagnostic',data:{file:join(root,path),line:2,column:1,nesting:0,message:'CUEVO_ORIGINAL231_EXECUTOR_DIAGNOSTIC '+JSON.stringify(diagnostic)}};
+  const valid=collect([diagnosticEvent]);assert.equal(valid.files[0].failedCaseDiagnostics?.length,1);
+  const attacks=[{...diagnosticEvent,data:{...diagnosticEvent.data,message:'CUEVO_ORIGINAL231_EXECUTOR_DIAGNOSTIC {'}}, {...diagnosticEvent,data:{...diagnosticEvent.data,message:'CUEVO_ORIGINAL231_EXECUTOR_DIAGNOSTIC '+JSON.stringify({...diagnostic,private:privateCanary})}}, {...diagnosticEvent,data:{...diagnosticEvent.data,line:3}}, {...diagnosticEvent,data:{...diagnosticEvent.data,file:join(root,'scripts/database/foreign.test.ts')}}, {...diagnosticEvent,data:{...diagnosticEvent.data,message:'CUEVO_ORIGINAL231_EXECUTOR_DIAGNOSTIC '+privateCanary.repeat(200)}}];
+  for(const event of attacks){const refused=collect([event]);assert.equal(refused.files[0].failedCaseDiagnostics,undefined);assert.equal(JSON.stringify(refused).includes(privateCanary),false);}
+  assert.equal(collect([diagnosticEvent],false).files[0].failedCaseDiagnostics,undefined,'passing cases never carry failure diagnostics');
+  assert.equal(collect([diagnosticEvent,diagnosticEvent]).files[0].failedCaseDiagnostics,undefined,'duplicate diagnostics are unavailable');
+  const hostile=[{type:'test:diagnostic',data:Object.defineProperty({...diagnosticEvent.data},'message',{get(){evaluated++;throw Error(privateCanary);}})},{type:'test:diagnostic',data:dangerous},{type:'test:stdout',data:{message:privateCanary}},{type:'test:stderr',data:{message:privateCanary}}];const withheld=collect(hostile);assert.equal(evaluated,0);assert.equal(withheld.files[0].failedCaseDiagnostics,undefined);assert.equal(JSON.stringify(withheld).includes(privateCanary),false);
+
+ }finally{await rm(root,{recursive:true,force:true});}
+});

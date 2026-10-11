@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import ts from 'typescript';
 import {readFileSync} from 'node:fs';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
@@ -43,6 +44,31 @@ test('the closed continuation cohort owner exposes source discovery and exact re
  assert.equal(typeof api?.readSourceTestCohortPlan,'function');
  assert.equal(typeof api?.recordSourceTestCohort,'function');
  assert.equal(typeof api?.aggregateSourceTestCohorts,'function');
+});
+
+test('the fixed reconciliation owner discovers all30 definitions including only the original six-mode loop',async()=>{
+ const api=await import('./source-test-cohorts') as unknown as Record<string,unknown>;
+ assert.equal(typeof api.readReconciliationSourceTestCohortPlan,'function','the third fixed file needs its own finite discovery owner');
+ const owner=api as unknown as {RECONCILIATION_SOURCE_TEST_COHORT_FILE:string;readReconciliationSourceTestCohortPlan:(root:string)=>{inventory:{ordinal:number;sourceLine:number;sourceColumn:number}[];cohorts:{expectedCases:number}[]};discoverReconciliationSourceTestCohortPlan:(source:string)=>unknown};
+ const source=readFileSync(resolve(repoRoot,owner.RECONCILIATION_SOURCE_TEST_COHORT_FILE),'utf8'),plan=owner.readReconciliationSourceTestCohortPlan(repoRoot);
+ assert.equal(plan.inventory.length,30);assert.equal(plan.cohorts.length,2);assert.equal(plan.cohorts.reduce((sum,row)=>sum+row.expectedCases,0),30);
+ assert.equal(new Set(plan.inventory.slice(6,12).map(row=>row.sourceLine+':'+row.sourceColumn)).size,1,'six unique titles retain their original shared declaration location');
+ for(const changed of[source.replace("import {before,after,test} from 'node:test';", "import hiddenTest,{before,after,test} from 'node:test';")+"\nhiddenTest('hidden',async()=>{});",source.replace("for(const mode of ['source'", "for await(const mode of ['source'"),source.replace("['source','approval','expiry','lease','tls','original']","['source','approval','expiry','lease','tls','tls']"),source.replace("['source','approval','expiry','lease','tls','original']","modes"),source.replace("'first journal renewal refuses '+mode+' drift through actual native authority before current intent'","'first journal renewal refuses '+String(mode)+' drift through actual native authority before current intent'"),source.replace("for(const mode of ['source','approval','expiry','lease','tls','original']as const)test(","for(const mode of ['source','approval','expiry','lease','tls','original']as const)test.skip("),source+"\ntest('extra',()=>{});",source+"\nconst alias=test;alias('hidden',()=>{});"] )assert.throws(()=>owner.discoverReconciliationSourceTestCohortPlan(changed),/requires review/);
+});
+
+test('real reconciliation reports retain30 original shared-loop definitions once and reject missing or altered evidence',async()=>{
+ const api=await import('./source-test-cohorts'),original=api.readReconciliationSourceTestCohortPlan(repoRoot),actualSource=readFileSync(resolve(repoRoot,api.RECONCILIATION_SOURCE_TEST_COHORT_FILE),'utf8'),sourceFile=ts.createSourceFile('owner.ts',actualSource,ts.ScriptTarget.Latest,true),titles=new Map<string,string>();
+ const collect=(node:ts.Node)=>{if(ts.isCallExpression(node)&&node.expression.getText(sourceFile)==='test'&&ts.isStringLiteral(node.arguments[0]))titles.set(hash(node.arguments[0].text),node.arguments[0].text);ts.forEachChild(node,collect);};collect(sourceFile);
+ const root=await mkdtemp(join(tmpdir(),'cv-reconciliation-cohort-'));try{
+  await mkdir(join(root,'scripts/database'),{recursive:true});let source="import{test}from'node:test';\n";
+  for(const row of original.inventory){if(row.ordinal===7)source+="for(const mode of ['source','approval','expiry','lease','tls','original']as const)test('first journal renewal refuses '+mode+' drift through actual native authority before current intent',async()=>{});\n";else if(row.ordinal<7||row.ordinal>12)source+=`test(${JSON.stringify(titles.get(row.titleSha256))},async()=>{});\n`;}
+  await writeFile(join(root,original.file.path),source);const plan=api.readReconciliationSourceTestCohortPlan(root),reporter=pathToFileURL(resolve(import.meta.dirname,'ci-test-timings-reporter.ts')).href,tsx=pathToFileURL(resolve(repoRoot,'node_modules/tsx/dist/loader.mjs')).href,env={...process.env};delete env.NODE_TEST_CONTEXT;
+  const reports:unknown[]=[],commands:string[][]=[];for(const cohort of plan.cohorts){const command=api.sourceTestCohortCommand({repoRoot:root,plan,cohortId:cohort.id}),actual=[...command];actual[1]=tsx;actual[4]='--test-reporter='+reporter;const result=spawnSync(process.execPath,actual,{cwd:root,env:{...env,CUEVO_CI_TEST_TIMING_INPUT:JSON.stringify({repoRoot:root,files:[plan.file],identity})},encoding:'utf8',timeout:15000,maxBuffer:4*1024*1024,windowsHide:true});assert.equal(result.status,0,result.stderr);reports.push(JSON.parse(result.stdout));commands.push(command);}
+  const record=(report:unknown,index:number)=>api.recordSourceTestCohort({repoRoot:root,plan,cohortId:plan.cohorts[index].id,identity,report,commandArgs:commands[index],exitCode:0,signal:null,cleanupConfirmed:true}),receipts=reports.map(record),union=api.aggregateSourceTestCohorts(plan,receipts,identity);assert.equal(union.cases.length,30);assert.equal(new Set(union.cases.map(row=>row.definitionSha256)).size,30);assert.equal(union.cohortEvidence.receipts.length,2);assert.deepEqual(api.validateSourceTestCohortEvidence(plan,union.cohortEvidence,identity),union);
+  const whole=spawnSync(process.execPath,['--import',tsx,'--test','--test-reporter='+reporter,'--enable-source-maps',plan.file.path],{cwd:root,env:{...env,CUEVO_CI_TEST_TIMING_INPUT:JSON.stringify({repoRoot:root,files:[plan.file],identity})},encoding:'utf8',timeout:15000,maxBuffer:4*1024*1024});assert.equal(whole.status,0,whole.stderr);const wholeCases=JSON.parse(whole.stdout).files[0].cases as{titleSha256:string;suiteSha256:string|null;line:number;column:number;nesting:number}[];assert.deepEqual(union.cases.map(row=>row.definitionSha256).sort(),wholeCases.map(row=>hash(canonicalReleaseExecutionJson({titleSha256:row.titleSha256,suiteSha256:row.suiteSha256,line:row.line,column:row.column,nesting:row.nesting}))).sort());
+  for(const mode of ['missing','duplicate','line','column','scope','file','skip','failed','clock']as const){const changed=structuredClone(reports[0]) as MutableReport;if(mode==='missing')changed.files[0].cases.pop();if(mode==='duplicate')changed.files[0].cases[1]=structuredClone(changed.files[0].cases[0]);if(mode==='line')changed.files[0].cases[0].line++;if(mode==='column')changed.files[0].cases[0].column++;if(mode==='scope')Object.assign((changed as unknown as {identity:Record<string,unknown>}).identity,{scope:'source-native'});if(mode==='file')changed.files[0].path=api.SOURCE_TEST_COHORT_FILE;if(mode==='skip')changed.files[0].cases[0].outcome='SKIPPED';if(mode==='failed')changed.files[0].cases[0].outcome='FAILED';if(mode==='clock')changed.files[0].cases[0].completedAtMs=changed.files[0].cases[0].startedAtMs-1;assert.throws(()=>record(changed,0),/requires review/,mode);}
+  assert.throws(()=>api.aggregateSourceTestCohorts(plan,receipts.slice(0,1),identity));assert.throws(()=>api.aggregateSourceTestCohorts(plan,[receipts[0],receipts[0]],identity));
+ }finally{await rm(root,{recursive:true,force:true});}
 });
 
 test('real isolated Node reports cover every original title and nested parent once with original definition identity',async()=>{

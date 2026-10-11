@@ -28,6 +28,41 @@ const integer = (value: unknown, max = Number.MAX_SAFE_INTEGER): value is number
 const duration = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_DURATION_MS;
 const marked = (value: unknown) => value !== undefined && value !== false;
 
+export const original231ExecutorFailurePhases = [
+  'FIXTURE_PREPARATION', 'LOCAL_JOURNAL_PREPARATION', 'FIRST_OBSERVATION',
+  'FIRST_METADATA_ASSERTIONS', 'ORIGINAL_JOURNAL_ASSERTIONS',
+  'MARKER_FAILURE_OBSERVATION', 'MARKER_FAILURE_ASSERTIONS', 'FRESH_ADOPTION',
+  'FRESH_ADOPTION_ASSERTIONS', 'ALTERED_LOCAL_RECORD_OBSERVATION',
+  'ALTERED_LOCAL_RECORD_ASSERTIONS', 'RESTORATION',
+] as const;
+export type Original231ExecutorFailureDiagnostic = {
+  version: 1; purpose: 'CUEVO_ORIGINAL231_EXECUTOR_FAILURE';
+  phase: typeof original231ExecutorFailurePhases[number];
+  status: 'NOOP' | 'REQUIRES_REVIEW' | null; stages: number; commands: number;
+  cleanupCode: 'LOCK_RELEASE_UNCONFIRMED' | null;
+  compositionPhase: string | null; admissionPhase: string | null;
+  nativeFailurePhase: string | null;
+};
+export type FailedCaseDiagnostic = {
+  definitionSha256: string; diagnostic: Original231ExecutorFailureDiagnostic;
+};
+const original231DiagnosticPrefix = 'CUEVO_ORIGINAL231_EXECUTOR_DIAGNOSTIC ';
+const original231DiagnosticFile = 'scripts/database/hosted-schema-continuation-executor.test.ts';
+const original231DiagnosticTitle = 'original231 executor observes and completes only metadata with four NOOPs and unchanged unknown journals';
+const compositionDiagnosticPhases = ['INPUT','PREPARED','RECOVERY_SCOPE','PRIOR_SOURCE','PLAN_BINDING','OFFICIAL_AUTHORITY','PROVIDER','TOOLCHAIN','STORAGE_POLICY','STAGE_FILES','CONNECTION_RECIPE','DATABASE_FACTORY','LEASE','RECONCILIATION','CONTINUATION','STAGE_CORE','INSTALLED_SCHEMA_MARKER','COMPLETION'] as const;
+const admissionDiagnosticPhases = ['STORAGE_CAPABILITY','PRIOR_JOURNALS','OFFICIAL_AUTHORITY','PROVIDER','TOOLCHAIN','SOURCE_FILES','TARGET','OPERATOR_INVENTORY','HISTORY_AND_SCOPE','POPULATION','POSTCONDITIONS','FINAL_SOURCE','FINAL_FRESHNESS'] as const;
+const nativeDiagnosticPhases = ['READY','ENVIRONMENT','CONNECT','TLS','IDENTITY','LEASE','RECONCILIATION_CONTEXT','SOURCE','OFFICIAL_AUTHORITY','ORIGINAL_OBJECTS','CATALOGUE','TARGET_HISTORY','ABSENCE','STORAGE_CAPABILITY','RECEIPT_READ','RECEIPT_PERSIST','REFRESH','CLEANUP'] as const;
+/** Closed sanitized failure facts only. It never inspects raw errors or gives effect authority. */
+export function readOriginal231ExecutorFailureDiagnostic(value: unknown): Original231ExecutorFailureDiagnostic | null {
+  const row=record(value),keys=['version','purpose','phase','status','stages','commands','cleanupCode','compositionPhase','admissionPhase','nativeFailurePhase'] as const;
+  const enumValue=(value:unknown,values:readonly string[])=>typeof value==='string'&&values.includes(value);
+  const nullableEnum=(value:unknown,values:readonly string[])=>value===null||enumValue(value,values);
+  if(!row||!exact(row,keys)||row.version!==1||row.purpose!=='CUEVO_ORIGINAL231_EXECUTOR_FAILURE'||
+     !enumValue(row.phase,original231ExecutorFailurePhases)||!nullableEnum(row.status,['NOOP','REQUIRES_REVIEW'])||
+     !integer(row.stages,4)||!integer(row.commands,7)||!nullableEnum(row.cleanupCode,['LOCK_RELEASE_UNCONFIRMED'])||
+     !nullableEnum(row.compositionPhase,compositionDiagnosticPhases)||!nullableEnum(row.admissionPhase,admissionDiagnosticPhases)||!nullableEnum(row.nativeFailurePhase,nativeDiagnosticPhases))return null;
+  return {...row} as Original231ExecutorFailureDiagnostic;
+}
 export type CiTestTimingIdentity = {
   sourceSha: string; treeSha: string; sourceLockSha256: string; nodeVersion: string;
   runId: string | null; runAttempt: number | null; scope: string; partitionSha256: string;
@@ -57,7 +92,7 @@ export type CiTestTimingEvidence = {
   reasons: CiTestTimingReason[]; summary: Summary | null;
   files: {
     path: string; sha256: string; startedAtMs: number | null; completedAtMs: number | null;
-    durationMs: number | null; summary: Summary | null; cases: TimingCase[]; suites: TimingCase[];
+    durationMs: number | null; summary: Summary | null; cases: TimingCase[]; suites: TimingCase[]; failedCaseDiagnostics?: FailedCaseDiagnostic[];
   }[];
 };
 type Unit = {
@@ -65,7 +100,7 @@ type Unit = {
   type: 'test' | 'suite'; wrapper: boolean; startedAtMs: number | null; complete: TimingCase | null;
   parent: Unit | null; ancestrySha256: string; resultSeen: boolean;
 };
-type FileState = { row: CiTestTimingEvidence['files'][number]; units: Unit[]; wrapperCompleted: boolean };
+type FileState = { row: CiTestTimingEvidence['files'][number]; units: Unit[]; wrapperCompleted: boolean; diagnosticRejected?: boolean };
 
 /**
  * Observe a process-isolated Node TestsStream without producing release authority.
@@ -143,6 +178,15 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
     if (!integer(failed, 1_000_000) || Number(counts.tests) !== Number(counts.passed) + failed + Number(counts.cancelled) + Number(counts.skipped) + Number(counts.todo)) { reasons.add('SUMMARY_INCONSISTENT'); return null; }
     return { counts: { tests: counts.tests as number, passed: counts.passed as number, failed, cancelled: counts.cancelled as number, skipped: counts.skipped as number, todo: counts.todo as number, suites: counts.suites as number, topLevel: counts.topLevel as number }, durationMs: data.duration_ms, success: data.success };
   }
+  function consumeClosedDiagnostic(value: unknown) {
+    const data=record(value);if(!data||typeof data.message!=='string'||data.message.length>2048||!data.message.startsWith(original231DiagnosticPrefix)||data.nesting!==0||!integer(data.line,1_000_000)||data.line<1||!integer(data.column,1_000_000)||data.column<1||typeof data.file!=='string')return;
+    const file=files.get(original231DiagnosticFile);if(!file||data.file.replaceAll('\\','/')!==original231DiagnosticFile&&data.file.replaceAll('\\','/')!==resolve(repoRoot,original231DiagnosticFile).replaceAll('\\','/'))return;
+    const matched=file.units.filter(unit=>!unit.wrapper&&unit.type==='test'&&unit.titleSha256===hash(original231DiagnosticTitle)&&unit.line===data.line&&unit.column===data.column&&unit.nesting===0&&unit.complete?.outcome==='FAILED');if(matched.length!==1||file.diagnosticRejected)return;
+    let diagnostic:Original231ExecutorFailureDiagnostic|null=null;try{diagnostic=readOriginal231ExecutorFailureDiagnostic(JSON.parse(data.message.slice(original231DiagnosticPrefix.length)));}catch{return;}if(!diagnostic)return;
+    if(file.row.failedCaseDiagnostics){delete file.row.failedCaseDiagnostics;file.diagnosticRejected=true;return;}
+    const failed=matched[0].complete!;const definition={column:failed.column,line:failed.line,nesting:failed.nesting,suiteSha256:failed.suiteSha256,titleSha256:failed.titleSha256};
+    file.row.failedCaseDiagnostics=[{definitionSha256:hash(JSON.stringify(definition)),diagnostic}];
+  }
   function consume(event: unknown) {
     if (final) throw fixedError();
     if (++eventCount > MAX_EVENTS) { reasons.add('LIMIT_EXCEEDED'); return; }
@@ -150,7 +194,8 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
       const envelope = record(event);
       if (!envelope || !exact(envelope, ['type', 'data']) || typeof envelope.type !== 'string') { reasons.add('EVENT_INVALID'); return; }
       const type = envelope.type;
-      if (['test:stdout', 'test:stderr', 'test:diagnostic', 'test:coverage', 'test:plan', 'test:start'].includes(type)) return;
+      if(type==='test:diagnostic'){consumeClosedDiagnostic(envelope.data);return;}
+      if (['test:stdout', 'test:stderr', 'test:coverage', 'test:plan', 'test:start'].includes(type)) return;
       if (!['test:enqueue', 'test:dequeue', 'test:complete', 'test:pass', 'test:fail', 'test:summary'].includes(type)) { reasons.add('EVENT_UNSUPPORTED'); return; }
       const data = record(envelope.data);
       if (!data) { reasons.add('EVENT_INVALID'); return; }
