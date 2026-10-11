@@ -17,11 +17,17 @@ const fail=()=>Error('Source child144 catalogue producer requires review; conten
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
 const image=sourceChildCatalogueImage.tag,imageId=sourceChildCatalogueImage.indexDigest;
 const producerFiles=['scripts/database/hosted-child-catalogue-producer.ts','scripts/database/hosted-child-catalogue-reference.ts','scripts/database/hosted-schema-catalogue.ts','scripts/database/replay-plan.ts','scripts/database/unknown-prefix-catalogue-policy.json'];
-type ProducerPhase='SOURCE'|'SERVICE_START'|'SERVICE_IMAGE'|'SERVICE_DUMPS'|'RAW_START'|'RAW_IMAGE'|'RAW_READY'|'BOOTSTRAP'|'SERVICE_RESTORE'|'SOURCE_REPLAY'|'CATALOGUE'|'CLEANUP'|'RECEIPT';
+type ProducerPhase='SOURCE'|'SERVICE_POSTGRES_PREPARATION'|'SERVICE_START'|'SERVICE_IMAGE'|'SERVICE_DUMPS'|'RAW_START'|'RAW_IMAGE'|'RAW_READY'|'BOOTSTRAP'|'SERVICE_RESTORE'|'SOURCE_REPLAY'|'CATALOGUE'|'CLEANUP'|'RECEIPT';
+type ServiceImageDiagnostic={tagMatches:boolean|null;idClass:'INDEX'|'CONFIG'|'MANIFEST'|'OTHER'|'UNKNOWN';repositoryDigestPresent:boolean|null;osMatches:boolean|null;architectureMatches:boolean|null};
+const cliStartErrorCodes=['ImagePrepullError','StartWorkdirError','StartConfigLoadError','StartInvalidConfigError','NetworkCreateError','VolumeCreateError','ContainerCreateError','ContainerStartError','HealthCheckTimeoutError','DbSetupError'] as const;
+type AcquisitionDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION';imageKeys:('postgres'|'kong'|'mailpit'|'postgrest'|'auth'|'realtime'|'storage')[];stage:'PULL'|'IMAGE_INSPECT'|'DAEMON'|'MIXED'|'UNKNOWN';response:'MANIFEST_UNKNOWN'|'DENIED'|'RATE_LIMIT'|'DNS'|'CONNECTION'|'TLS'|'TIMEOUT'|'MIXED'|'UNKNOWN'};
+type ServiceStartDiagnostic={exitCode:number|null;signal:'SIGTERM'|'SIGKILL'|'SIGINT'|'SIGHUP'|'OTHER'|null;timedOut:boolean|null;cliErrorCode:typeof cliStartErrorCodes[number]|'UNKNOWN';acquisition:AcquisitionDiagnostic|null};
+let serviceImageDiagnostic:ServiceImageDiagnostic|null=null;
+let serviceStartDiagnostic:ServiceStartDiagnostic|null=null;
 let producerPhase:ProducerPhase='SOURCE',phaseAt=Date.now();
 function phase(value:ProducerPhase){producerPhase=value;phaseAt=Date.now();console.log(JSON.stringify({check:'source-child144-producer-phase',phase:value}));}
-async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
-const exec=(file:string,args:string[],input?:Uint8Array)=>execFileSync(file,args,{input,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:120000,maxBuffer:32*1024*1024});
+async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,serviceImage:producerPhase==='SERVICE_IMAGE'?serviceImageDiagnostic:null,serviceStart:producerPhase==='SERVICE_START'?serviceStartDiagnostic:null,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
+const exec=(file:string,args:string[],input?:Uint8Array,env?:NodeJS.ProcessEnv)=>execFileSync(file,args,{input,env,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:120000,maxBuffer:32*1024*1024});
 function removeOwnedReference(rawId:string,label:string){
  const raw=JSON.parse(exec('docker',['inspect',rawId]).toString('utf8')) as {Id:string;Image:string;Config:{Labels:Record<string,string>}}[];
  if(raw.length!==1||raw[0].Id!==rawId||raw[0].Config.Labels['cuevo.reference']!==label)throw fail();verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',raw[0].Image]).toString('utf8'))[0]);
@@ -42,9 +48,46 @@ export async function produceHostedChildCatalogueReference(){
  // The normal database lane will subsequently reuse this same owned stack.
  try{exec('docker',['network','inspect','cuevo-local']);}catch{exec('docker',['network','create','--subnet','10.252.60.0/24','cuevo-local']);}
  try{exec('docker',['inspect','supabase_db_cuevo']);throw fail();}catch(error){if((error as {status?:number}).status!==1)throw fail();}
- phase('SERVICE_START');exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor']);
+ // Admit the exact ECR cache tag first; CLI 2.119 selects it before native auxiliary-service fallbacks.
+ phase('SERVICE_POSTGRES_PREPARATION');exec('docker',['pull','--platform','linux/amd64',image]);verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',image]).toString('utf8'))[0]);
+ phase('SERVICE_START');
+ try{exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor','--output-format','json'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'',SUPABASE_USE_SLIM_IMAGES:'false'});}catch(error){
+  const field=(key:string)=>error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,key)?.value:undefined,status=field('status'),signal=field('signal'),code=field('code'),exitCode=typeof status==='number'&&Number.isInteger(status)&&status>=0&&status<=255?status:null;
+  serviceStartDiagnostic={exitCode,signal:typeof signal!=='string'?null:signal==='SIGTERM'||signal==='SIGKILL'||signal==='SIGINT'||signal==='SIGHUP'?signal:'OTHER',timedOut:code==='ETIMEDOUT'?true:exitCode!==null?false:null,cliErrorCode:'UNKNOWN',acquisition:null};
+  // Native JSON errors carry a code beside private message/detail fields; retain only exact source-known codes.
+  try{const stdout=field('stdout');if(Buffer.isBuffer(stdout)&&stdout.length<=32*1024*1024){const parsed=JSON.parse(stdout.toString('utf8'));if(parsed?._tag==='Error'&&cliStartErrorCodes.includes(parsed.error?.code))serviceStartDiagnostic.cliErrorCode=parsed.error.code;
+   if(serviceStartDiagnostic.cliErrorCode==='ImagePrepullError'){
+    const acquisition:AcquisitionDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION',imageKeys:[],stage:'UNKNOWN',response:'UNKNOWN'};serviceStartDiagnostic.acquisition=acquisition;
+    const message=parsed.error?.message;
+    if(typeof message==='string'&&Buffer.byteLength(message,'utf8')<=64*1024){
+     const images=[['postgres','public.ecr.aws/supabase/postgres:17.11.0.002'],['kong','public.ecr.aws/supabase/kong:2.8.1'],['mailpit','public.ecr.aws/supabase/mailpit:v1.31.3'],['postgrest','public.ecr.aws/supabase/postgrest:v16.4'],['auth','public.ecr.aws/supabase/gotrue:v2.197.0'],['realtime','public.ecr.aws/supabase/realtime:v2.140.3'],['storage','public.ecr.aws/supabase/storage-api:v1.79.28']] as const;
+     const references:string[]=message.match(/(?:[a-z0-9.-]+(?::[0-9]+)?\/)?[a-z0-9._-]+\/[a-z0-9._/-]+:[a-z0-9._-]+(?:@sha256:[a-f0-9]+)?/gi)??[];
+     if(references.every(reference=>images.some(([,known])=>reference===known))){
+      acquisition.imageKeys=images.filter(([,reference])=>references.includes(reference)).map(([key])=>key);
+      const stages:AcquisitionDiagnostic['stage'][]=[];if(message.includes('failed to pull docker image from all registries:'))stages.push('PULL');if(message.includes('failed to inspect docker image:'))stages.push('IMAGE_INSPECT');if(/cannot connect to the docker daemon|is the docker daemon running\?/i.test(message))stages.push('DAEMON');acquisition.stage=stages.length===1?stages[0]:stages.length>1?'MIXED':'UNKNOWN';
+      const responses:AcquisitionDiagnostic['response'][]=[];
+      if(/manifest unknown|manifest[^\n;]*not found|\b404 not found\b/i.test(message))responses.push('MANIFEST_UNKNOWN');
+      if(/\bdenied\b|\bunauthorized\b|\b403 forbidden\b|\b401 unauthorized\b/i.test(message))responses.push('DENIED');
+      if(/toomanyrequests|too many requests|\b429\b/i.test(message))responses.push('RATE_LIMIT');
+      if(/lookup [^\n;]*no such host|temporary failure in name resolution|server misbehaving/i.test(message))responses.push('DNS');
+      if(/connection refused|connection reset|network is unreachable|cannot connect to the docker daemon/i.test(message))responses.push('CONNECTION');
+      if(/x509:|tls handshake|certificate signed by unknown authority|certificate has expired/i.test(message))responses.push('TLS');
+      if(/context deadline exceeded|i\/o timeout|client\.timeout exceeded|tls handshake timeout/i.test(message))responses.push('TIMEOUT');
+      acquisition.response=responses.length===1?responses[0]:responses.length>1?'MIXED':'UNKNOWN';
+     }
+    }
+   }
+  }}catch{/* Unstructured or truncated output cannot identify the startup failure. */}
+  throw error;
+ }
  phase('SERVICE_IMAGE');
- const db=JSON.parse(exec('docker',['inspect','supabase_db_cuevo']).toString('utf8')) as {Id:string;Config:{Image:string};Image:string}[];if(db.length!==1||db[0].Config.Image!==image)throw fail();verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',db[0].Image]).toString('utf8'))[0]);
+ serviceImageDiagnostic={tagMatches:null,idClass:'UNKNOWN',repositoryDigestPresent:null,osMatches:null,architectureMatches:null};
+ const db=JSON.parse(exec('docker',['inspect','supabase_db_cuevo']).toString('utf8')) as {Id:string;Config:{Image:string};Image:string}[];
+ if(db.length!==1)throw fail();serviceImageDiagnostic.tagMatches=typeof db[0]?.Config?.Image==='string'?db[0].Config.Image===image:null;if(db[0].Config.Image!==image)throw fail();
+ const serviceImage=JSON.parse(exec('docker',['image','inspect',db[0].Image]).toString('utf8'))[0] as {Id?:unknown;RepoDigests?:unknown;Os?:unknown;Architecture?:unknown}|undefined;
+ serviceImageDiagnostic.idClass=serviceImage?.Id===sourceChildCatalogueImage.indexDigest?'INDEX':serviceImage?.Id===sourceChildCatalogueImage.configDigest?'CONFIG':serviceImage?.Id===sourceChildCatalogueImage.manifestDigest?'MANIFEST':typeof serviceImage?.Id==='string'?'OTHER':'UNKNOWN';
+ serviceImageDiagnostic.repositoryDigestPresent=Array.isArray(serviceImage?.RepoDigests)?serviceImage.RepoDigests.includes(sourceChildCatalogueImage.pinnedReference):null;serviceImageDiagnostic.osMatches=typeof serviceImage?.Os==='string'?serviceImage.Os==='linux':null;serviceImageDiagnostic.architectureMatches=typeof serviceImage?.Architecture==='string'?serviceImage.Architecture==='amd64':null;
+ verifySourceChildCatalogueImage(serviceImage);
  const dump=(schema:string)=>exec('docker',['exec',db[0].Id,'pg_dump','--schema-only','--schema',schema,'--username','supabase_admin','--dbname','postgres']);
  phase('SERVICE_DUMPS');const dumps={auth:dump('auth'),storage:dump('storage'),realtime:dump('realtime')};
  const label=`cuevo-child144-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}`,password=randomBytes(32).toString('hex');
