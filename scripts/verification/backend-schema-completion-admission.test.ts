@@ -56,6 +56,50 @@ test('native-facing original metadata refresh uses only bounded official GETs an
 test('child144 official reader rejects foreign selector or malformed failed metadata before archive acquisition',async()=>{
  const module=await api(),t=(await import('../database/hosted-original-child-recovery.fixture')).originalChildRecoveryFixture();let reads=0,archives=0;const github=async()=>{reads++;return{};},archive=async()=>{archives++;return new Uint8Array([1]);};for(const patch of[{originalRunId:'38009133497'},{runAttempt:2},{ready:true},{originalOperationSha256:'f'.repeat(64)}])await assert.rejects(module.readOriginalChildRecoveryEvidence({...t.selection,...patch},github,archive,Date.parse('2026-10-10T06:30:00Z')));assert.equal(reads,0);assert.equal(archives,0);await assert.rejects(module.readOriginalChildRecoveryEvidence(t.selection,github,archive,Date.parse('2026-10-10T06:30:00Z')));assert.equal(reads,1);assert.equal(archives,0);
 });
+
+for(const kind of ['native','child144'] as const){
+ test(`${kind} native wrapper consumes an admitted recovery package above 2 MiB and still refuses synthetic archives`,async()=>{
+  const module=await api(),template=kind==='native'?(await import('../database/hosted-original-native-intent.fixture')).originalNativeIntentFixture():(await import('../database/hosted-original-child-recovery.fixture')).originalChildRecoveryFixture(),selection=template.selection;
+  const read=kind==='native'?module.readOriginalNativeIntentAdmission:module.readOriginalChildRecoveryAdmission;
+  const previousFetch=globalThis.fetch,previousNow=Date.now,token='original-package-private-canary',packageBytes=2862235,requests:string[]=[];let consumed=0,finished=false;
+  const run={id:Number(selection.originalRunId),run_attempt:1,head_sha:template.originalIdentity.sourceSha,head_branch:'main',repository:{full_name:repository},path:'.github/workflows/backend-release.yml',event:'workflow_dispatch',status:'completed',conclusion:'failure',created_at:'2026-10-10T00:00:00Z',updated_at:'2026-10-10T06:00:00Z'};
+  const step={name:'supplied original metadata',number:1,status:'completed',conclusion:'success',started_at:'2026-10-10T00:01:00Z',completed_at:'2026-10-10T00:02:00Z'},jobs={total_count:2,jobs:['prepare','schema'].map((name,index)=>({id:index+1,name,run_id:run.id,run_attempt:1,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:index===0?'success':'failure',started_at:run.created_at,completed_at:run.updated_at,steps:[step]}))};
+  Date.now=()=>Date.parse('2026-10-11T04:00:00Z');
+  globalThis.fetch=async(raw,options)=>{
+   const url=new URL(String(raw));requests.push(url.pathname);assert.equal(options?.method,'GET');assert.equal(options?.cache,'no-store');assert.equal(options?.credentials,'omit');
+   if(url.hostname==='productionresultssa1.blob.core.windows.net'){
+    assert.equal(new Headers(options?.headers).get('Authorization'),null);assert.equal(options?.redirect,'error');
+    if(url.pathname==='/result.zip')return new Response(new Uint8Array(3));
+    assert.equal(url.pathname,'/package.zip');
+    return new Response(new ReadableStream<Uint8Array>({pull(controller){if(consumed===packageBytes){finished=true;controller.close();return;}const chunk=new Uint8Array(Math.min(64*1024,packageBytes-consumed));consumed+=chunk.length;controller.enqueue(chunk);}}, {highWaterMark:0}),{headers:{'content-length':String(packageBytes)}});
+   }
+   assert.equal(url.origin,'https://api.github.com');assert.equal(new Headers(options?.headers).get('Authorization'),'Bearer '+token);
+   const path=url.pathname.slice(('/repos/'+repository+'/').length),isResult=path.includes(selection.resultArtifactId);
+   if(path.endsWith('/zip')){assert.equal(options?.redirect,'manual');return new Response(null,{status:302,headers:{location:'https://productionresultssa1.blob.core.windows.net/'+(isResult?'result':'package')+'.zip?signature=synthetic'}});}
+   if(path.startsWith('actions/artifacts/'))return Response.json({id:Number(path.split('/').at(-1)),name:'cuevo-backend-'+(isResult?'schema-result':'package')+'-'+selection.originalRunId+'-1',size_in_bytes:isResult?3:packageBytes,expired:false,digest:'sha256:'+(isResult?selection.resultArchiveSha256:selection.packageArchiveSha256),created_at:'2026-10-10T00:03:00Z',expires_at:'2026-10-24T00:00:00Z',workflow_run:{id:run.id,head_sha:run.head_sha,head_branch:'main'}});
+   if(path.endsWith('/approvals'))return Response.json([]);if(path.includes('/jobs?')||url.search&&path.endsWith('/jobs'))return Response.json(jobs);if(path==='actions/runs/'+selection.originalRunId)return Response.json(run);throw Error('Unexpected controlled original request');
+  };
+  try{
+   // Both synthetic archives keep the immutable original digests: both transports finish, then original archive validation refuses them.
+   await assert.rejects(read({...selection,githubToken:token}),error=>error instanceof Error&&error.message.includes('requires review')&&!error.message.includes(token));
+   assert.equal(consumed,2862235,'The selected package is fully acquired before unchanged original archive validation');assert.equal(finished,true,'The whole package stream is consumed');
+   assert.deepEqual(requests.filter(path=>path.endsWith('/zip')),['/repos/'+repository+'/actions/artifacts/'+selection.resultArtifactId+'/zip','/repos/'+repository+'/actions/artifacts/'+selection.packageArtifactId+'/zip']);
+   requests.length=0;await assert.rejects(read({...selection,githubToken:token,packageArtifactId:selection.resultArtifactId}));assert.equal(requests.length,0,'Swapped selectors are refused before either artifact transport');
+  }finally{globalThis.fetch=previousFetch;Date.now=previousNow;}
+ });
+
+ test(`${kind} native wrapper retains the 2 MiB result bound before requesting the package`,async()=>{
+  const module=await api(),template=kind==='native'?(await import('../database/hosted-original-native-intent.fixture')).originalNativeIntentFixture():(await import('../database/hosted-original-child-recovery.fixture')).originalChildRecoveryFixture(),selection=template.selection,read=kind==='native'?module.readOriginalNativeIntentAdmission:module.readOriginalChildRecoveryAdmission;
+  const previousFetch=globalThis.fetch,previousNow=Date.now,zipIds:string[]=[];let resultPulls=0;
+  const run={id:Number(selection.originalRunId),run_attempt:1,head_sha:template.originalIdentity.sourceSha,head_branch:'main',repository:{full_name:repository},path:'.github/workflows/backend-release.yml',event:'workflow_dispatch',status:'completed',conclusion:'failure',created_at:'2026-10-10T00:00:00Z',updated_at:'2026-10-10T06:00:00Z'},step={name:'supplied original metadata',number:1,status:'completed',conclusion:'success',started_at:run.created_at,completed_at:run.updated_at};
+  Date.now=()=>Date.parse('2026-10-11T04:00:00Z');globalThis.fetch=async(raw)=>{const url=new URL(String(raw)),path=url.pathname.slice(('/repos/'+repository+'/').length),isResult=path.includes(selection.resultArtifactId);
+   if(path.endsWith('/zip')){zipIds.push(path.split('/').at(-2)!);return new Response(new ReadableStream<Uint8Array>({pull(controller){resultPulls++;controller.enqueue(new Uint8Array(1));}}, {highWaterMark:0}),{headers:{'content-length':String(2*1024*1024+1)}});}
+   if(path.startsWith('actions/artifacts/'))return Response.json({id:Number(path.split('/').at(-1)),name:'cuevo-backend-'+(isResult?'schema-result':'package')+'-'+selection.originalRunId+'-1',size_in_bytes:isResult?2*1024*1024+1:3,expired:false,digest:'sha256:'+(isResult?selection.resultArchiveSha256:selection.packageArchiveSha256),created_at:'2026-10-10T00:03:00Z',expires_at:'2026-10-24T00:00:00Z',workflow_run:{id:run.id,head_sha:run.head_sha,head_branch:'main'}});
+   if(path.endsWith('/approvals'))return Response.json([]);if(path.endsWith('/jobs'))return Response.json({total_count:2,jobs:['prepare','schema'].map((name,index)=>({id:index+1,name,run_id:run.id,run_attempt:1,head_sha:run.head_sha,head_branch:'main',status:'completed',conclusion:index===0?'success':'failure',started_at:run.created_at,completed_at:run.updated_at,steps:[step]}))});return Response.json(run);
+  };
+  try{await assert.rejects(read({...selection,githubToken:'result-bound-canary'}));assert.deepEqual(zipIds,[selection.resultArtifactId]);assert.equal(resultPulls,0);}finally{globalThis.fetch=previousFetch;Date.now=previousNow;}
+ });
+}
 test('old source attempts generic approvals changed cleanup and mismatched package refuse historical completion',async()=>{const module=await api();for(const mode of ['run','attempt','source','approval','duplicate','expiry','scope','package','cleanup']){const value=fixture();if(mode==='run')value.run.status='in_progress';if(mode==='attempt')value.run.run_attempt=2;if(mode==='source')value.run.head_sha='0'.repeat(40);if(mode==='approval')value.approvals[0].comment='approved';if(mode==='duplicate')value.approvals.push(value.approvals[0]);if(mode==='expiry')value.exported.completion.completedAt=new Date(now+3600001).toISOString();if(mode==='scope')value.exported.originalExpected.executionScope='complete-backend';if(mode==='package')value.exported.preparedApproval.sha256='0'.repeat(64);if(mode==='cleanup')(value.exported.completion.cleanup as {kind:string}).kind='RELEASE_UNCONFIRMED';assert.throws(()=>module.validateCompletedSchemaRecoveryApproval(value.run,value.approvals,value.exported,value.expected));}});
 
 const {yazl}=createRequire(import.meta.url)('playwright-core/lib/utilsBundle') as{yazl:{ZipFile:new()=>{outputStream:Readable;addBuffer(bytes:Buffer,name:string):void;end():void}}};

@@ -135,8 +135,16 @@ export function readStagingSecurityContext(env: Record<string, string | undefine
   return { ...expected, token: env.GH_TOKEN,...(fullRun?{fullRun}:{}) };
 }
 
-/** Official bounded ZIP fetch; the reusable token is never forwarded to the signed artifact host. */
+/** Small security/result ZIPs retain their original transport bound. */
 export function createGithubCodeqlArtifactReader(repositoryName:string,token:string,parentSignal?:AbortSignal):GithubArtifactReader{
+  return boundedGithubArtifactReader(repositoryName,token,2*1024*1024,parentSignal);
+}
+/** Original recovery packages have a separate fixed bound; archive and original evidence validation remain with their owner. */
+export function createGithubOriginalRecoveryPackageArtifactReader(repositoryName:string,token:string,parentSignal?:AbortSignal):GithubArtifactReader{
+  return boundedGithubArtifactReader(repositoryName,token,16*1024*1024,parentSignal);
+}
+/** Official bounded ZIP fetch; the reusable token is never forwarded to the signed artifact host. */
+function boundedGithubArtifactReader(repositoryName:string,token:string,maximumBytes:number,parentSignal?:AbortSignal):GithubArtifactReader{
   repository.parse(repositoryName);z.string().min(1).max(24576).regex(/^[\x21-\x7e]+$/).parse(token);
   return async artifactId=>{
     positive.parse(artifactId);const signal=AbortSignal.any([...(parentSignal?[parentSignal]:[]),AbortSignal.timeout(20000)]);
@@ -144,9 +152,9 @@ export function createGithubCodeqlArtifactReader(repositoryName:string,token:str
     let response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},redirect:'manual',credentials:'omit',cache:'no-store',signal});
     if(response.url&&response.url!==url)throw unavailable();
     if(response.status===302){const target=new URL(response.headers.get('location')??'');void response.body?.cancel().catch(()=>undefined);if(target.protocol!=='https:'||target.username||target.password||target.port||target.hash||!(/^productionresultssa[a-z0-9]+\.blob\.core\.windows\.net$/.test(target.hostname)||/^[a-z0-9-]+\.actions\.githubusercontent\.com$/.test(target.hostname)))throw unavailable();response=await fetch(target,{method:'GET',redirect:'error',credentials:'omit',cache:'no-store',signal});}
-    if(response.status!==200||response.redirected||!response.body)throw unavailable();const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>2*1024*1024))throw unavailable();
+    if(response.status!==200||response.redirected||!response.body)throw unavailable();const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>maximumBytes))throw unavailable();
     const reader=response.body.getReader(),parts:Uint8Array[]=[];let bytes=0;
-    try{for(;;){const chunk=await new Promise<ReadableStreamReadResult<Uint8Array>>((done,reject)=>{const abort=()=>{signal.removeEventListener('abort',abort);reject(unavailable());};if(signal.aborted)return abort();signal.addEventListener('abort',abort,{once:true});void reader.read().then(value=>{signal.removeEventListener('abort',abort);if(signal.aborted)reject(unavailable());else done(value);},()=>{signal.removeEventListener('abort',abort);reject(unavailable());});});if(chunk.done)break;bytes+=chunk.value.byteLength;if(bytes>2*1024*1024)throw unavailable();parts.push(chunk.value);}return Buffer.concat(parts);}
+    try{for(;;){const chunk=await new Promise<ReadableStreamReadResult<Uint8Array>>((done,reject)=>{const abort=()=>{signal.removeEventListener('abort',abort);reject(unavailable());};if(signal.aborted)return abort();signal.addEventListener('abort',abort,{once:true});void reader.read().then(value=>{signal.removeEventListener('abort',abort);if(signal.aborted)reject(unavailable());else done(value);},()=>{signal.removeEventListener('abort',abort);reject(unavailable());});});if(chunk.done)break;bytes+=chunk.value.byteLength;if(bytes>maximumBytes)throw unavailable();parts.push(chunk.value);}return Buffer.concat(parts);}
     finally{void reader.cancel().catch(()=>undefined);try{reader.releaseLock();}catch{/* Active cancellation owns cleanup. */}}
   };
 }
