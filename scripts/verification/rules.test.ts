@@ -35,11 +35,14 @@ test('reviewed schema continuation fixtures run once in their required replay an
    'scripts/database/hosted-active-runtime-state.test.ts',
    'scripts/database/hosted-schema-recovery-completion.test.ts',
    'scripts/database/hosted-original-native-intent.test.ts',
+   'scripts/database/hosted-original-child-recovery.test.ts',
+   'scripts/database/hosted-child-catalogue-producer.test.ts',
+   'scripts/database/hosted-child-catalogue-reference.test.ts',
    'scripts/database/hosted-schema-continuation-native.test.ts',
    'scripts/database/hosted-schema-continuation-executor.test.ts',
    'scripts/database/hosted-migration-batch-receipt.test.ts',
   ] },
-  { script:'test:cicd', step:'cicd-fixtures', files:['scripts/verification/backend-schema-completion-admission.test.ts'] },
+  { script:'test:cicd', step:'cicd-fixtures', files:['scripts/verification/backend-schema-completion-admission.test.ts','scripts/verification/backend-child-catalogue-admission.test.ts'] },
  ];
  for (const owner of owners) {
   const direct = packageScripts[owner.script].split(/\s+/), required = [...verificationSteps.find(step => step.name === owner.step)!.args];

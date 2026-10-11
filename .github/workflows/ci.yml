@@ -186,6 +186,8 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
+      - name: Build exact source child144 catalogue reference
+        run: node --import tsx scripts/database/hosted-child-catalogue-producer.ts
       - name: Verify isolated database boundary
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=database
       - name: Retain exact safe database lane
@@ -197,6 +199,23 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
+      - name: Retain exact source child144 catalogue reference
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-child144-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/child144-catalogue/reference.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized source child144 failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-child144-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/child144-catalogue/failure.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
       - name: Stop owned local Supabase
         if: always()
         run: npx --no-install supabase stop --project-id cuevo

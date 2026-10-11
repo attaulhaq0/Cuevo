@@ -1,16 +1,20 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import {types} from 'node:util';
 import { z } from 'zod';
 import { readSingleJsonArchive } from './single-json-archive';
-import { readBackendReleaseSourceEvidence,readBackendReleaseSourceEvidenceAndGuard } from './backend-release-admission';
+import { readBackendReleaseSourceEvidenceAndGuard } from './backend-release-admission';
 import { readCanonicalMigrationSources } from '../database/hosted-migration-plan';
 import { validateCiRun, validateReleaseControls } from './cicd-contracts';
 import { canonicalReleaseExecutionJson } from './release-review';
 import { readBackendWebTransferFile, validateBackendWebTransfer,validateOperatingBackendWebTransfer } from './backend-web-transfer';
+import {type CompletedBackendPopulationEvidence} from './backend-web-transfer';
+import {installedPopulationVerificationV2Schema} from '../database/hosted-synthetic-population';
 import {validateOperatingStagingHandoff} from './operating-staging-handoff';
 import {readCanonicalRuntimeJobsAndGuard} from './canonical-runtime-jobs';
 import {createGithubCodeqlArtifactReader} from './staging-security';
 import {captureCanonicalSourceContext} from './canonical-source-jobs';
+import {requireStagingHostContract,stagingHostContractSha256} from './backend-staging-host-contract';
 
 const fail = () => Error('Completed backend web handover consumption requires review; contents withheld.');
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -80,16 +84,16 @@ export async function consumeCompletedBackendCanonical(token:CompletedBackendCan
  const held=completedCanonicalTokens.get(token);if(!held)throw fail();completedCanonicalTokens.delete(token);
  try{if(held.ci!==canonicalReleaseExecutionJson(rawCi))throw fail();await held.refresh();return held.proof;}catch{throw fail();}finally{held.dispose();}
 }
-export async function readCompletedBackendWebTransferAdmissionAndGuard(value: unknown) {
+async function readCompletedBackendCapture(value: unknown) {
   try {
-    const input: Input = inputSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value)));
+    const input: Input = inputSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value))),envNames=['GITHUB_REPOSITORY','GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_WORKSPACE','GITHUB_SHA','GITHUB_REF','GITHUB_EVENT_NAME','GITHUB_JOB','GITHUB_WORKFLOW_REF','RELEASE_ENVIRONMENT','NODE_OPTIONS'],envSnapshot=JSON.stringify(envNames.map(name=>process.env[name]??null));
     // Trusted manual main runner only. The caller's web-purpose/approval
     // admission remains a separate obligation of the existing release owner.
     if (process.platform !== 'linux' || process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_ENVIRONMENT !== 'github-hosted' || process.env.GITHUB_WORKSPACE !== input.repoRoot
       || !input.repoRoot.startsWith('/home/runner/work/') || process.env.GITHUB_SHA !== input.releaseSha || process.env.GITHUB_REF !== 'refs/heads/main' || process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || process.env.NODE_OPTIONS) throw fail();
     const context=captureCanonicalSourceContext(input.repoRoot,input.releaseSha,undefined);
     const repository = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).parse(process.env.GITHUB_REPOSITORY);
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 180000);let retained=false;
+    const controller = new AbortController(), deadlineAtMs=Date.now()+180000,timer = setTimeout(() => controller.abort(), 180000);let retained=false;
     const sourceArtifactReader=createGithubCodeqlArtifactReader(repository,input.githubToken,controller.signal);
     const urlFor = (path: string) => `https://api.github.com/repos/${repository}${path ? '/' + path : ''}`;
     const get = async (path: string) => {
@@ -116,7 +120,7 @@ export async function readCompletedBackendWebTransferAdmissionAndGuard(value: un
       const raw = await readBackendWebTransferArchive(archive, artifact.digest.slice(7), input.transferSha256), initial = validateSelectedBackendWebTransfer(raw, now,input.handoff);
       if (initial.body.repository !== repository || initial.body.releaseSha !== input.releaseSha || initial.body.ciRunId !== input.ciRunId || initial.body.releaseRunId !== input.backendRunId || initial.body.runAttempt !== input.backendRunAttempt
       || initial.body.targets.web.teamId !== input.web.teamId || initial.body.targets.web.projectId !== input.web.projectId || initial.body.targets.web.target !== input.web.target || officialBefore(artifact.created_at, initial.transfer.exportedAt)) throw fail();
-      await readBackendReleaseSourceEvidence(input.repoRoot, initial.expected);
+      const finalSource=await readBackendReleaseSourceEvidenceAndGuard(input.repoRoot, initial.expected);
       for (const row of initial.transfer.producers) if (hash(await readBackendWebTransferFile(input.repoRoot, join(input.repoRoot, row.path))) !== row.sha256) throw fail();
       const migrations = readCanonicalMigrationSources({ repoRoot: input.repoRoot, sourceSha: input.releaseSha, treeSha: initial.body.treeSha }).sources
         .map(row => ({ version: row.name.slice(0, 14), sha256: hash(row.bytes) })).sort((a, b) => a.version.localeCompare(b.version));
@@ -133,7 +137,7 @@ export async function readCompletedBackendWebTransferAdmissionAndGuard(value: un
       z.object({ sha: z.literal(input.releaseSha), tree: z.object({ sha: z.literal(initial.body.treeSha) }), verification: z.object({ verified: z.literal(true), reason: z.literal('valid'), signature: z.string().min(1), payload: z.string().min(1) }) }).parse(commit);
       validateCompletedBackendWebApproval(run, approvals, raw, Date.now(),input.handoff);
       const canonical=await readCanonicalRuntimeJobsAndGuard(ci,get,sourceArtifactReader);if(canonicalReleaseExecutionJson(canonical.proof)!==canonicalReleaseExecutionJson(initial.body.canonicalRuntimeVerification))throw fail();
-      const finalSource=await readBackendReleaseSourceEvidenceAndGuard(input.repoRoot, initial.expected); validateSelectedBackendWebTransfer(raw, Date.now(),input.handoff);
+      finalSource.finalPhysical(); validateSelectedBackendWebTransfer(raw, Date.now(),input.handoff);
       const finalRun = runSchema.parse(await get('actions/runs/' + input.backendRunId)), finalArtifact = artifactSchema.parse(await get('actions/artifacts/' + input.artifactId));
       if (canonicalReleaseExecutionJson(finalRun) !== canonicalReleaseExecutionJson(run) || canonicalReleaseExecutionJson(finalArtifact) !== canonicalReleaseExecutionJson(artifact)) throw fail();
       const [finalRepo,finalMain,finalCi,finalEnvironment,finalBranches,finalProtection,finalSignatures,finalCommit,finalApprovals]=await Promise.all([get(''),get('git/ref/heads/main'),get('actions/runs/'+input.ciRunId),get('environments/staging'),get('environments/staging/deployment-branch-policies'),get('branches/main/protection'),get('branches/main/protection/required_signatures'),get('git/commits/'+input.releaseSha),get('actions/runs/'+input.backendRunId+'/approvals')]);
@@ -143,29 +147,51 @@ export async function readCompletedBackendWebTransferAdmissionAndGuard(value: un
       await canonical.refreshOriginalMetadata();validateCompletedBackendWebApproval(finalRun,await get('actions/runs/'+input.backendRunId+'/approvals'),raw,Date.now(),input.handoff);
       validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);finalSource.finalPhysical();context.finalMetadata();canonical.assertOriginalValidity();
       if (controller.signal.aborted||Date.now()>=Date.parse(artifact.expires_at)) throw fail();
+      const stagingHostContract=admitted.body.stagingHostContract===undefined?undefined:requireStagingHostContract(admitted.expected);
       const admission={ purpose: input.handoff==='operating-staging'?'OPERATING_BACKEND_WEB_HANDOVER_CONSUMPTION' as const:'COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION' as const, provenance: 'OFFICIAL_COMPLETED_GITHUB_ARTIFACT_AND_VERIFIED_GIT_SOURCE' as const,
         manifest: admitted.manifest, publicConfig: admitted.publicConfig, reviewFacts: admitted.reviewFacts, assignments: admitted.assignments,
-        originalEvidence: admitted.transfer.evidence,
+        originalEvidence: admitted.transfer.evidence,populationEvidence:'populationEvidence'in admitted?admitted.populationEvidence:null,
         backendIdentity: { repository, sourceSha: input.releaseSha, treeSha: admitted.body.treeSha, baseSha: admitted.body.baseSha, ciRunId: input.ciRunId, runId: input.backendRunId, runAttempt: input.backendRunAttempt, artifactId: input.artifactId,
-          artifactSha256: artifact.digest.slice(7), transferSha256: input.transferSha256, manifestSha256: admitted.transfer.manifestSha256, packageSha256: admitted.prepared.sha256, web: admitted.body.targets.web, settingsSha256: admitted.transfer.settings.settingsSha256,
+          artifactSha256: artifact.digest.slice(7), transferSha256: input.transferSha256, manifestSha256: admitted.transfer.manifestSha256, packageSha256: admitted.prepared.sha256, web: admitted.body.targets.web, settingsSha256: admitted.transfer.settings.settingsSha256,...(stagingHostContract?{stagingHostContract,stagingHostContractSha256:stagingHostContractSha256(stagingHostContract)}:{}),
           earliestProofAt: admitted.transfer.earliestProofAt, exportedAt: admitted.transfer.exportedAt, consumptionExpiresAt: admitted.transfer.consumptionExpiresAt },
         observedAt: new Date().toISOString(), privateProofReexecuted: false as const, backendMutationAllowed: false as const, customerReady: false as const, hostedAcceptance: false as const };
-      const token=Object.freeze(Object.create(null))as CompletedBackendCanonicalToken,dispose=()=>{clearTimeout(timer);controller.abort();};
-      completedCanonicalTokens.set(token,{ci:canonicalReleaseExecutionJson(ci),proof:canonical.proof,dispose,refresh:async()=>{
-       if(controller.signal.aborted)throw fail();await canonical.refreshOriginalMetadata();
+      const dispose=()=>{clearTimeout(timer);controller.abort();};
+      const assertOriginalValidity=()=>{if(controller.signal.aborted||Date.now()>=Math.min(deadlineAtMs,Date.parse(artifact.expires_at))||JSON.stringify(envNames.map(name=>process.env[name]??null))!==envSnapshot)throw fail();validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);finalSource.finalPhysical();context.finalMetadata();canonical.assertOriginalValidity();validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);if(Date.now()>=Math.min(deadlineAtMs,Date.parse(artifact.expires_at)))throw fail();};const capture={ci:canonicalReleaseExecutionJson(ci),proof:canonical.proof,dispose,assertOriginalValidity,refresh:async()=>{
+       assertOriginalValidity();await canonical.refreshOriginalMetadata();
        const currentRun=runSchema.parse(await get('actions/runs/'+input.backendRunId)),currentArtifact=artifactSchema.parse(await get('actions/artifacts/'+input.artifactId));
        if(canonicalReleaseExecutionJson(currentRun)!==canonicalReleaseExecutionJson(finalRun)||canonicalReleaseExecutionJson(currentArtifact)!==canonicalReleaseExecutionJson(finalArtifact))throw fail();
-       const[currentRepo,currentMain,currentEnvironment,currentBranches,currentProtection,currentSignatures,currentCommit]=await Promise.all([get(''),get('git/ref/heads/main'),get('environments/staging'),get('environments/staging/deployment-branch-policies'),get('branches/main/protection'),get('branches/main/protection/required_signatures'),get('git/commits/'+input.releaseSha)]);
+       const settled=await Promise.allSettled(['','git/ref/heads/main','environments/staging','environments/staging/deployment-branch-policies','branches/main/protection','branches/main/protection/required_signatures','git/commits/'+input.releaseSha].map(path=>get(path).then(value=>JSON.parse(canonicalReleaseExecutionJson(value)))));if(settled.some(row=>row.status==='rejected'))throw fail();const[currentRepo,currentMain,currentEnvironment,currentBranches,currentProtection,currentSignatures,currentCommit]=settled.map(row=>{if(row.status!=='fulfilled')throw fail();return row.value;});
        validateReleaseControls({repository:currentRepo,environment:currentEnvironment,branches:currentBranches,main:currentProtection,signatures:currentSignatures},{repository,environment:'staging'});
        z.object({total_count:z.literal(1)}).parse(currentBranches);z.object({id:z.literal(initial.body.environmentId),name:z.literal('staging')}).parse(currentEnvironment);z.object({object:z.object({type:z.literal('commit'),sha:z.literal(input.releaseSha)})}).parse(currentMain);
        if(canonicalReleaseExecutionJson(currentCommit)!==canonicalReleaseExecutionJson(commit))throw fail();
-       validateCompletedBackendWebApproval(currentRun,await get('actions/runs/'+input.backendRunId+'/approvals'),raw,Date.now(),input.handoff);
+       validateCompletedBackendWebApproval(currentRun,await get('actions/runs/'+input.backendRunId+'/approvals'),raw,Date.now(),input.handoff);for(const row of initial.transfer.producers)if(hash(await readBackendWebTransferFile(input.repoRoot,join(input.repoRoot,row.path)))!==row.sha256)throw fail();
        validateSelectedBackendWebTransfer(raw,Date.now(),input.handoff);finalSource.finalPhysical();context.finalMetadata();canonical.assertOriginalValidity();
-       if(controller.signal.aborted||Date.now()>=Date.parse(artifact.expires_at))throw fail();
-      }});retained=true;return{admission,token};
+       assertOriginalValidity();
+      }};assertOriginalValidity();retained=true;return{admission,capture,input,repository,treeSha:initial.body.treeSha,deadlineAtMs};
     } finally { if(!retained){clearTimeout(timer); controller.abort();} }
   } catch { throw fail(); }
 }
 /** The original public facade retains its serializable evidence shape and
  * closes its reader immediately. Only a guarded same-invocation consumer owns it. */
 export async function readCompletedBackendWebTransferAdmission(value:unknown){const result=await readCompletedBackendWebTransferAdmissionAndGuard(value);try{return result.admission;}finally{disposeCompletedBackendCanonical(result.token);}}
+/** One admitted full-transfer proof file; never an alternate native authority. */
+export function requireCompletedBackendPopulationEvidence(admitted:Pick<Awaited<ReturnType<typeof readCompletedBackendWebTransferAdmission>>,'purpose'|'populationEvidence'|'originalEvidence'|'backendIdentity'>):CompletedBackendPopulationEvidence{
+ if(admitted.purpose!=='COMPLETED_BACKEND_WEB_HANDOVER_CONSUMPTION'||!admitted.populationEvidence)throw fail();const proof=admitted.populationEvidence,name=proof.kind==='INITIAL_POPULATION_RESULT'?'population-result.json':'web-handover-result.json',rows=admitted.originalEvidence.filter(row=>row.name===name&&row.sha256===proof.receiptSha256);if(rows.length!==1||admitted.originalEvidence.filter(row=>row.name===name).length!==1)throw fail();
+ if(proof.kind==='INSTALLED_POPULATION_REVALIDATION'){const verification=installedPopulationVerificationV2Schema.parse(proof.verification),identity=admitted.backendIdentity;if(verification.currentSourceSha!==identity.sourceSha||verification.currentTreeSha!==identity.treeSha||verification.ciRunId!==identity.ciRunId||verification.runId!==identity.runId||verification.runAttempt!==identity.runAttempt||verification.approvalDigest!==identity.packageSha256||Date.parse(verification.observedAt)<Date.parse(identity.earliestProofAt)||Date.parse(verification.observedAt)>Date.parse(identity.exportedAt))throw fail();}
+ return proof;
+}
+
+/** Existing web approval token remains single-use and owns only its requested capture. */
+export async function readCompletedBackendWebTransferAdmissionAndGuard(value:unknown){const held=await readCompletedBackendCapture(value),token=Object.freeze(Object.create(null)) as CompletedBackendCanonicalToken;completedCanonicalTokens.set(token,held.capture);return{admission:held.admission,token};}
+export type CompletedBackendWebTransferMetadataAdmission=Awaited<ReturnType<typeof readCompletedBackendCapture>>['admission'];
+declare const completedMetadataGuardBrand:unique symbol;
+export type CompletedBackendWebTransferMetadataGuard={admission:CompletedBackendWebTransferMetadataAdmission;refreshOriginalMetadata:()=>Promise<void>;assertOriginalValidity:()=>void;dispose:()=>void;readonly[completedMetadataGuardBrand]:true};
+const completedMetadataGuards=new WeakMap<object,{binding:string;assert:()=>void;invalidate:()=>void}>();
+export function consumeCompletedBackendWebTransferMetadataGuard(value:unknown,selection:unknown){if(!value||typeof value!=='object'||types.isProxy(value))throw fail();const registered=completedMetadataGuards.get(value);if(!registered)throw fail();try{const input=inputSchema.omit({githubToken:true}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(selection)));if(canonicalReleaseExecutionJson(input)!==registered.binding)throw fail();registered.assert();return value as CompletedBackendWebTransferMetadataGuard;}catch{registered.invalidate();throw fail();}}
+/** Read-only QA observation retains immutable transfer/CI archives, never web mutation approval. */
+export async function readCompletedBackendWebTransferMetadataAndGuard(value:unknown):Promise<CompletedBackendWebTransferMetadataGuard>{
+ const held=await readCompletedBackendCapture(value);try{const admission:CompletedBackendWebTransferMetadataAdmission=JSON.parse(canonicalReleaseExecutionJson(held.admission)),original=canonicalReleaseExecutionJson(admission),envNames=['GITHUB_REPOSITORY','GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_WORKSPACE','GITHUB_SHA','GITHUB_REF','GITHUB_EVENT_NAME','GITHUB_JOB','GITHUB_WORKFLOW_REF','RELEASE_ENVIRONMENT','NODE_OPTIONS'],envSnapshot=JSON.stringify(envNames.map(name=>process.env[name]??null));let invalid=false,active=false,disposed=false;
+ const assertOriginalValidity=()=>{try{if(invalid||disposed||Date.now()>=Math.min(held.deadlineAtMs,Date.parse(admission.backendIdentity.consumptionExpiresAt))||JSON.stringify(envNames.map(name=>process.env[name]??null))!==envSnapshot||canonicalReleaseExecutionJson(admission)!==original)throw fail();held.capture.assertOriginalValidity();if(Date.now()>=Math.min(held.deadlineAtMs,Date.parse(admission.backendIdentity.consumptionExpiresAt)))throw fail();}catch{invalid=true;throw fail();}};
+ const refreshOriginalMetadata=async()=>{if(invalid||disposed||active){invalid=true;throw fail();}active=true;try{assertOriginalValidity();await held.capture.refresh();assertOriginalValidity();}catch{invalid=true;throw fail();}finally{active=false;}};
+ assertOriginalValidity();const{githubToken:_token,...binding}=held.input;void _token;const guard=Object.freeze({admission,refreshOriginalMetadata,assertOriginalValidity,dispose:()=>{disposed=true;invalid=true;held.capture.dispose();}}) as CompletedBackendWebTransferMetadataGuard;completedMetadataGuards.set(guard,{binding:canonicalReleaseExecutionJson(binding),assert:()=>{if(active){invalid=true;throw fail();}assertOriginalValidity();},invalidate:()=>{invalid=true;}});return guard;}catch{held.capture.dispose();throw fail();}
+}

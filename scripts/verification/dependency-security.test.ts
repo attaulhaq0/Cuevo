@@ -19,3 +19,9 @@ test('low advisory counts are reported with threshold distinction and no raw rep
  const value=JSON.parse(report({low:1,total:1}));value.vulnerabilities={privatePackage:{name:'private package',via:['credential-string']}};
  const result=dependencyAuditResult('runtime',JSON.stringify(value),0);assert.equal(result.low,1);assert.equal(result.total,1);assert.ok(!JSON.stringify(result).includes('credential-string'));
 });
+
+test('the separately locked deployment CLI has its own fixed runtime advisory scope',()=>{
+ assert.deepEqual(auditArguments('provider-cli'),['audit','--prefix','scripts/verification/provider-cli','--omit=dev','--omit=optional','--json','--audit-level=moderate']);
+ assert.equal(dependencyAuditResult('provider-cli',report(),0).scope,'provider-cli');
+ for(const severity of ['moderate','high','critical'])assert.throws(()=>dependencyAuditResult('provider-cli',report({[severity]:1,total:1}),1));
+});

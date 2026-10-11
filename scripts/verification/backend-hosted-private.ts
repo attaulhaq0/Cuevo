@@ -6,7 +6,7 @@ import { Client } from 'pg';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { canonicalReleaseExecutionJson } from './release-review';
-import { readBackendReleaseAdmission } from './backend-release-admission';
+import {prepareNativeBackendReleaseAdmission,readNativeBackendReleaseAdmission,disposeNativeBackendReleaseAdmission,type NativeBackendAdmissionHandle} from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from './backend-release-contracts';
 import { prepareHostedRuntimeRecipients,prepareHostedOperatingRecipients } from './backend-provider-deploy';
 import { backendPreviewHeaders } from './backend-preview-transport';
@@ -51,7 +51,8 @@ async function privateJoin(authOrigin: string, publishable: string, token: strin
 }
 /** Synthetic source-backed asset/room probes use ordinary protected commands;
  * current authorization remains the application and database owners' authority. */
-export async function verifyHostedPrivateAccess(value: unknown): Promise<HostedPrivateVerificationResult> {
+export async function verifyHostedPrivateAccess(value: unknown,borrowedAdmission?:NativeBackendAdmissionHandle): Promise<HostedPrivateVerificationResult> {
+  let admissionHandle:NativeBackendAdmissionHandle|undefined;
   const result: HostedPrivateVerificationResult = { status: 'REQUIRES_REVIEW', freshProof: false, restrictedDatabaseGrants: null, privateStorage: null, privateRealtime: null, storageProbe: null, realtimeProbe: null, sessionsClosed: false, activationAllowed: false, hostedAcceptance: false }, sessions: { token: string; role: string }[] = [];
   let authOrigin = '', publishable = '', service = '', apiOrigin = '', source: { schoolId: string; denialSchoolId: string; actors: { actorId: string; schoolId: string; role: string; email: string }[] } | null = null;
   let journal:{directory:string;prefix:string;identitySha256:string;createdAt:string;purpose:'INITIAL'|'PRE_ACTIVATION'}|null=null;
@@ -65,7 +66,7 @@ export async function verifyHostedPrivateAccess(value: unknown): Promise<HostedP
     const api = new URL(input.apiDeployment.url); if (api.protocol !== 'https:' || !api.hostname.endsWith('.vercel.app') || api.pathname !== '/' || api.username || api.password || api.search || api.hash) throw failure(); apiOrigin = api.origin; authOrigin = expected.targets.supabase.authOrigin; publishable = runtime.api.SUPABASE_PUBLISHABLE_KEY; service = runtime.api.SUPABASE_SERVICE_ROLE_KEY;
     preview={repoRoot:input.repoRoot,expected,prepared,apiDeployment:input.apiDeployment,url:api.origin+'/'};
     const manifestBytes = await readFile(join(input.repoRoot, 'supabase/seed/identities.json')); if (hash(manifestBytes) !== '7464b3487adc3998d8f4ad4582ffd08ebafbdc8fd9a568433ddc687f4f03ac21') throw failure(); source = JSON.parse(manifestBytes.toString('utf8'));
-    if (!source) throw failure(); await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' });
+    if (!source) throw failure();const admissionBinding={repoRoot:input.repoRoot,expected,prepared,effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT' as const:'COMPLETE_BACKEND' as const};admissionHandle=borrowedAdmission===undefined?await prepareNativeBackendReleaseAdmission({...admissionBinding,githubToken:input.githubToken}):borrowedAdmission;const admission=()=>readNativeBackendReleaseAdmission(admissionHandle,admissionBinding);await admission();
     const deployment = await http(`https://api.vercel.com/v13/deployments/${input.apiDeployment.id}?teamId=${expected.targets.api.teamId}`, 'GET', { Authorization: 'Bearer ' + input.vercelToken }); z.object({ id: z.literal(input.apiDeployment.id), projectId: z.literal(expected.targets.api.projectId), ownerId: z.literal(expected.targets.api.teamId), url: z.literal(api.hostname), readyState: z.literal('READY'), meta: z.object({ cuevoCommitSha: z.literal(componentSha),...(active||expected.runtimeRollout?{cuevoArtifactSha256:z.literal(expected.fingerprints.apiArtifactSha256)}:{}) }) }).parse(deployment.value); if (deployment.status !== 200) throw failure();
     if(!isAbsolute(input.repoRoot)||resolve(input.repoRoot)!==input.repoRoot||await realpath(input.repoRoot)!==input.repoRoot||!/^dpl_[A-Za-z0-9_]+$/.test(input.apiDeployment.id))throw failure();
     let directory=input.repoRoot;for(const part of ['.local','hosted-release']){directory=join(directory,part);try{await mkdir(directory,{mode:0o700});}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw failure();}const stat=await lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink()||await realpath(directory)!==directory)throw failure();}
@@ -88,7 +89,7 @@ export async function verifyHostedPrivateAccess(value: unknown): Promise<HostedP
     const room = await requestApi(apiOrigin + '/v1/community/rooms', 'POST', { ...headers('admin'), 'Idempotency-Key': original + ':room' }, { classId: '30000000-0000-4000-8000-000000000001', name: 'Synthetic private update verification', type: 'GROUP', memberIds: [actor.actorId] }); if (room.status !== 200) throw failure(); const created = z.object({ id: z.uuid() }).parse(room.value); result.realtimeProbe = { roomId: created.id, closed: false }; const topic = 'cuevo:' + source.schoolId + ':room:' + created.id;
     await persist('-room',{identitySha256,roomId:created.id});
     if (await privateJoin(authOrigin, publishable, token('student'), topic) !== 'SUBSCRIBED' || await privateJoin(authOrigin, publishable, token('parent'), topic) !== 'DENIED' || await privateJoin(authOrigin, publishable, token('student'), 'cuevo:' + source.denialSchoolId + ':room:' + created.id) !== 'DENIED') throw failure(); result.privateRealtime = true;
-    await readBackendReleaseAdmission({ repoRoot: input.repoRoot, expected, prepared, githubToken: input.githubToken, effectScope:expected.executionScope==='runtime-rollout'?'RUNTIME_ROLLOUT':'COMPLETE_BACKEND' }); result.status = 'PRIVATE_PROBES_CONFIRMED';
+    await admission();result.status = 'PRIVATE_PROBES_CONFIRMED';
   } catch { result.status = 'REQUIRES_REVIEW'; }
   finally {
     let clean = true; const session = (role: string) => sessions.find(session => session.role === role)?.token;
@@ -97,6 +98,7 @@ export async function verifyHostedPrivateAccess(value: unknown): Promise<HostedP
     for (const session of sessions) { try { const logout = await http(authOrigin + '/auth/v1/logout?scope=local', 'POST', { apikey: publishable, Authorization: 'Bearer ' + session.token }, {}); clean &&= [200, 204].includes(logout.status); } catch { clean = false; } }
     result.sessionsClosed = clean; if (!clean) result.status = 'REQUIRES_REVIEW';
     if(journal){result.freshProof=result.status==='PRIVATE_PROBES_CONFIRMED';try{await persist('-result',{identitySha256:journal.identitySha256,createdAt:journal.createdAt,verifiedAt:new Date().toISOString(),result});}catch{result.status='REQUIRES_REVIEW';result.freshProof=false;}}
+    if(admissionHandle&&borrowedAdmission===undefined)disposeNativeBackendReleaseAdmission(admissionHandle);
   }
   return result;
 }

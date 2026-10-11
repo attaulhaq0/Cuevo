@@ -6,6 +6,8 @@ import { backendWebTransferFixture } from './backend-web-transfer-fixtures';
 import { validateBackendWebTransfer } from './backend-web-transfer';
 import { canonicalReleaseReviewJson } from './release-review';
 import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, bindWebReviewToBackend, readCanonicalWebOutput, type WebBackendBridge } from './web-backend-bridge';
+import {prepareBackendReleaseIntent}from'./backend-release-contracts';
+import {validateStagingHostContract,stagingHostContractSha256}from'./backend-staging-host-contract';
 
 test('web bridge binds only complete manual staging selection and faithful operator review facts', async () => {
   const api = await import(pathToFileURL(resolve(import.meta.dirname, 'web-backend-bridge.ts')).href).catch(() => ({}));
@@ -62,4 +64,14 @@ test('missing independent flags or altered tasks reports time assignments and so
 test('canonical job output decode refuses malformed base64/JSON and accepts exact bounded output', () => {
   const value = { status: 'safe' }, encoded = Buffer.from(canonicalReleaseReviewJson(value)).toString('base64'); assert.deepEqual(readCanonicalWebOutput(encoded), value);
   for (const text of ['@@', Buffer.from('{ "status": "safe" }').toString('base64'), encoded + '=', '']) assert.throws(() => readCanonicalWebOutput(text));
+});
+
+test('bridge canonical identity retains optional original host tuple while inconsistent or private projections deny',()=>{
+ const fixture=backendWebTransferFixture(),body=JSON.parse(fixture.transfer.preparedApproval.canonicalJson),settings=(rootDirectory:string|null,framework:string|null)=>({nodeVersion:'24.x',fluid:true,functionDefaultRegions:['sin1'],autoAssignCustomDomains:false,ssoDeploymentType:'all_except_custom_domains',rootDirectory,framework});
+ const host=validateStagingHostContract({version:1,purpose:'CUEVO_STAGING_HOST_CONTRACT',sourceSha:body.releaseSha,treeSha:body.treeSha,deploymentEnvironment:'synthetic-staging',targets:body.targets,settings:{api:settings(null,null),web:settings('apps/web','nextjs'),supabase:{region:'ap-southeast-1',postgresEngine:'17',applicationConnection:{kind:'session-pooler',host:'aws-0-ap-southeast-1.pooler.supabase.com',port:5432,database:'postgres'}}},sourceBounds:{api:{node:'24',maxDurationSeconds:60,poolMax:10,connectionTimeoutMs:3000,idleTimeoutMs:10000,statementTimeoutMs:5000},worker:{poolMax:1,connectionTimeoutMs:3000,statementTimeoutMs:5000,processingDeadlineMs:20000,claimReserveMs:15000,eventLeaseSeconds:30,invocationLeaseSeconds:60,deliveryTimeoutMs:30000,recoveryIntervalSeconds:60}},capacity:{postgres:{maxConnections:60,superuserReservedConnections:3},sessionPoolerClientCeiling:{state:'UNKNOWN',value:null}},exposure:{audience:'PRIVATE_SYNTHETIC_OPERATORS',roleScope:'FIVE_REFERENCE_ROLES',gatewayPolicy:'EXISTING_PROTECTED_PREVIEW_AND_RESERVED_ORIGIN',clientAddressPolicy:'HOSTED_VERIFICATION_PENDING',fleetProtection:'NOT_VERIFIED'}});
+ fixture.transfer.preparedApproval=prepareBackendReleaseIntent({...body,stagingHostContract:host},{...fixture.expected,stagingHostContract:host});
+ const {bridge,review,assignments}=reviewFixture(),identity={...bridge.backendIdentity,treeSha:body.treeSha,stagingHostContract:host,stagingHostContractSha256:stagingHostContractSha256(host)},current={...bridge,backendIdentity:identity};
+ assert.doesNotThrow(()=>bindWebReviewToBackend(review,assignments,current));const encoded=Buffer.from(canonicalReleaseReviewJson(current)).toString('base64');assert.deepEqual((readCanonicalWebOutput(encoded)as WebBackendBridge).backendIdentity.stagingHostContract,host);
+ assert.notEqual(canonicalReleaseReviewJson(current),canonicalReleaseReviewJson(bridge));
+ for(const patch of[{stagingHostContract:undefined},{stagingHostContractSha256:undefined},{stagingHostContract:'private-raw-canary'},{stagingHostContractSha256:'0'.repeat(64)},{stagingHostContract:{...host,sourceSha:'f'.repeat(40)}},{stagingHostContract:{...host,privateToken:'private-raw-canary'}}])assert.throws(()=>bindWebReviewToBackend(review,assignments,{...current,backendIdentity:{...identity,...patch}}as WebBackendBridge));
 });

@@ -14,6 +14,7 @@ import {canonicalReleaseExecutionJson} from './release-review';
 import {readCiPartitionCoverage} from './ci-partition-coverage';
 import {integrationIdentity,integrationPartitionSteps,integrationPartitionReceipt,integrationPartitionFailure,selectIntegrationPartition,integrationFileSchema,type IntegrationPartitionReceipt} from './integration-partitions';
 import {z} from 'zod';
+import {createFullVerificationInvocation,initialFullVerificationRows} from './full-verification-evidence';
 
 const request=readTechnicalRequest(process.argv.slice(2)),requestedProfile=request.profile;
 const selection=requestedProfile==='ci'?await readCiRuntimeSelection():{profile:requestedProfile,browserFiles:[...criticalBrowserFiles]};
@@ -23,7 +24,7 @@ if(request.partition&&(process.env.CI!=='true'||process.env.GITHUB_ACTIONS!=='tr
 const selectedSteps=request.partition?integrationPartitionSteps(profile as Exclude<typeof profile,'full'>,request.partition):request.lane?runtimeLaneSteps(profile as Exclude<typeof profile,'full'>,request.lane):verificationProfileSteps(profile),runId=randomUUID();
 const stopped=waitForStoppedBrowserPorts;
 await stopped();
-const directory=resolve('.local/verification',new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(directory,{recursive:true});
+const invocationStartedAtMs=Date.now(),invocationDirectory='.local/verification/'+new Date(invocationStartedAtMs).toISOString().replace(/[:.]/g,'-'),directory=resolve(invocationDirectory);await mkdir(directory,{recursive:true});
 const snapshot=async()=>{
  const sourceFiles=execFileSync('git',['ls-files','--cached','--others','--exclude-standard','-z'],{encoding:'utf8'}).split('\0').filter(Boolean);
  const manifest:{path:string;sha256:string}[]=[];
@@ -33,13 +34,17 @@ const snapshot=async()=>{
 const manifest=await snapshot(),sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 const sourceDigest=createHash('sha256').update(JSON.stringify([...manifest].sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0))).digest('hex');
 await writeFile(resolve(directory,'source.json'),JSON.stringify(manifest,null,2));
-const rows=[...selectedSteps.map(step=>({name:step.name,exitCode:null as number|null,required:true,durationMs:0})),...(request.partition?[{name:'owned-stack-stop',exitCode:null as number|null,required:true,durationMs:0}]:[]),{name:'source-freeze',exitCode:null as number|null,required:true,durationMs:0}];
+if(profile==='full'&&process.env.GITHUB_ACTIONS==='true'){
+ const context=createFullVerificationInvocation({env:{...process.env},sourceSha,treeSha:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceDigest,verificationRunId:runId,directory:invocationDirectory,startedAtMs:invocationStartedAtMs});
+ await writeFile(resolve(directory,'context.json'),canonicalReleaseExecutionJson(context),{flag:'wx',mode:0o600});await writeFile(resolve('.local/full-verification-input.json'),canonicalReleaseExecutionJson(context),{flag:'wx',mode:0o600});
+}
+const rows=profile==='full'?initialFullVerificationRows():[...selectedSteps.map(step=>({name:step.name,exitCode:null as number|null,required:true,durationMs:0 as number|null})),...(request.partition?[{name:'owned-stack-stop',exitCode:null as number|null,required:true,durationMs:0 as number|null}]:[]),{name:'source-freeze',exitCode:null as number|null,required:true,durationMs:0 as number|null}];
 const laneContext=request.lane?{repository:process.env.GITHUB_REPOSITORY,sourceSha,treeSha:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceDigest,githubRunId:process.env.GITHUB_RUN_ID,runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),profile,browserFiles:selection.browserFiles,lane:request.lane}:undefined;
 const partitionCoverage=request.partition?readCiPartitionCoverage(resolve('.')):undefined;
 const partitionSelection=request.partition?selectIntegrationPartition(partitionCoverage!,request.partition,profile):undefined;
 const partitionIdentity=request.partition?integrationIdentity({repository:process.env.GITHUB_REPOSITORY,sourceSha,treeSha:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceDigest,githubRunId:process.env.GITHUB_RUN_ID,runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),profile,browserFiles:selection.browserFiles,sourceLockSha256:createHash('sha256').update(await readFile('package-lock.json')).digest('hex'),partitionManifestSha256:partitionCoverage!.manifestSha256,nodeVersion:process.version,nodeBinarySha256:createHash('sha256').update(await readFile(process.execPath)).digest('hex'),platform:process.platform,arch:process.arch}):undefined;
 const partitionBody=request.partition?{identity:{...partitionIdentity!,job:request.partition},partition:request.partition,scope:partitionSelection!.scope,files:partitionSelection!.files.map(path=>({path,sha256:manifest.find(row=>row.path===path)!.sha256,cases:[]as IntegrationPartitionReceipt['files'][number]['cases'],durationMs:null as number|null})),inventorySha256:null as string|null,reportSha256:null as string|null,diagnosticsSha256:null as string|null,startedAtMs:Date.now(),completedAtMs:null as number|null,executionStartedAtMs:null as number|null,executionCompletedAtMs:null as number|null,exitCode:null as number|null,signal:null as IntegrationPartitionReceipt['signal'],rows,processesStopped:false,sourceUnchanged:false,cleanupBasis:'NOT_CONFIRMED' as IntegrationPartitionReceipt['cleanupBasis'],reasons:[]as IntegrationPartitionReceipt['reasons']}:undefined;
-const evidence=()=>partitionBody?partitionBody.reasons.includes('SOURCE_CHANGED')?integrationPartitionFailure(partitionBody,partitionSelection!):integrationPartitionReceipt(partitionBody,partitionCoverage!):laneContext?runtimeLaneEvidence({...laneContext,rows}):verificationEvidence(profile,rows);
+const evidence=()=>partitionBody?partitionBody.reasons.includes('SOURCE_CHANGED')?integrationPartitionFailure(partitionBody,partitionSelection!):integrationPartitionReceipt(partitionBody,partitionCoverage!):laneContext?runtimeLaneEvidence({...laneContext,rows}):profile==='full'?{status:verificationEvidence(profile,rows.map(row=>({...row,durationMs:row.durationMs??undefined}))).status,rows}:verificationEvidence(profile,rows.map(row=>({...row,durationMs:row.durationMs??undefined})));
 const markPartitionSourceChanged=()=>{if(!partitionBody)return;partitionBody.sourceUnchanged=false;partitionBody.exitCode=1;partitionBody.completedAtMs=Date.now();if(!partitionBody.reasons.includes('SOURCE_CHANGED'))partitionBody.reasons.push('SOURCE_CHANGED');Object.assign(rows.find(row=>row.name==='source-freeze')!,{exitCode:1});};
 const originalPartitionSource=async()=>{if(partitionBody&&(!sameSourceManifest(manifest,await snapshot())||execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()!==sourceSha))markPartitionSourceChanged();};
 const persist=()=>writeFile(resolve(directory,'evidence.json'),JSON.stringify(evidence(),null,2));await persist();

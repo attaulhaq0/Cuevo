@@ -10,6 +10,7 @@ const sha=z.string().regex(/^[a-f0-9]{40}$/),digest=z.string().regex(/^[a-f0-9]{
 const selectionSchema=z.object({repository:z.literal('attaulhaq0/Cuevo'),sourceSha:sha,originalRunId:id,runAttempt:positive,artifactId:id,exportJsonSha256:digest}).strict();
 export type OriginalWorkerActivationSelection=z.infer<typeof selectionSchema>;
 export type OriginalWorkerActivationExecutionEvidence=ValidatedOriginalWorkerActivationExecution&{evidence:'OFFICIAL_ORIGINAL_WORKER_EXECUTION_METADATA';artifactId:string;artifactSha256:string;exportJsonSha256:string;jobsSha256:string;artifactExpiresAt:string;originalFounderId:95836629;effectAuthority:false};
+export type OriginalWorkerActivationExecutionGuard={admitted:OriginalWorkerActivationExecutionEvidence;assertOriginalValidity:()=>void;refreshOriginalMetadata:()=>Promise<void>};
 const runSchema=z.object({id:positive,run_attempt:positive,head_sha:sha,head_branch:z.literal('main'),repository:z.object({full_name:z.literal('attaulhaq0/Cuevo')}),path:z.literal('.github/workflows/backend-release.yml'),event:z.literal('workflow_dispatch'),status:z.literal('completed'),conclusion:z.enum(['success','failure']),created_at:date,updated_at:date});
 const approvalSchema=z.object({environments:z.array(z.object({id:positive,name:z.string()})).min(1).max(20),state:z.enum(['approved','pending','rejected']),user:z.object({id:positive,login:z.string(),type:z.string()}),comment:z.string().max(2000)});
 const stepSchema=z.object({name:z.string().min(1).max(200),number:positive,status:z.literal('completed'),conclusion:z.string().nullable(),started_at:date.nullable(),completed_at:date.nullable()});
@@ -43,7 +44,7 @@ export function validateOriginalWorkerActivationExecutionApproval(rawRun:unknown
 type GithubReader=(path:string)=>Promise<unknown>;
 /** Supplied read-only transport does not establish a native permit. The exact
  * official metadata contract is identical for supplied and fixed GET readers. */
-export async function readOriginalWorkerActivationExecutionEvidence(value:OriginalWorkerActivationSelection&{now:number},github:GithubReader,artifactReader:(artifactId:number)=>Promise<Uint8Array>):Promise<OriginalWorkerActivationExecutionEvidence>{
+export async function readOriginalWorkerActivationExecutionEvidenceAndGuard(value:OriginalWorkerActivationSelection&{now:number},github:GithubReader,artifactReader:(artifactId:number)=>Promise<Uint8Array>):Promise<OriginalWorkerActivationExecutionGuard>{
  try{
   const selection=parse(selectionSchema.extend({now:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)}).strict(),value),runPath='actions/runs/'+selection.originalRunId,artifactPath='actions/artifacts/'+selection.artifactId,jobsPath=runPath+'/attempts/'+selection.runAttempt+'/jobs?per_page=100&page=1',approvalsPath=runPath+'/approvals';
   const rawRun=snapshot(await github(runPath)),run=parse(runSchema,rawRun);if(String(run.id)!==selection.originalRunId||run.run_attempt!==selection.runAttempt||run.head_sha!==selection.sourceSha||time(run.updated_at)>selection.now)throw fail();
@@ -63,21 +64,30 @@ export async function readOriginalWorkerActivationExecutionEvidence(value:Origin
   const rawApprovals=snapshot(await github(approvalsPath)),admitted=validateOriginalWorkerActivationExecutionApproval(rawRun,rawApprovals,archive.value,selection.now),envelope=admitted.envelope;
   if(admitted.original.sourceSha!==selection.sourceSha||admitted.original.originalRunId!==selection.originalRunId||admitted.original.originalRunAttempt!==selection.runAttempt||admitted.originalExportSha256!==selection.exportJsonSha256)throw fail();
   const prepared=JSON.parse(envelope.originalPreparedApproval.canonicalJson) as{preparedAt:string};beforeOfficial(prepared.preparedAt,selected[0].started_at!);before(selected[0].completed_at!,envelope.originalIdentity.createdAt);before(selected[1].started_at!,envelope.originalIdentity.createdAt);beforeOfficial(envelope.originalCleanup.observedAt,selected[1].completed_at!);before(selected[2].started_at!,envelope.exportedAt);beforeOfficial(envelope.exportedAt,selected[2].completed_at!);beforeOfficial(envelope.exportedAt,artifact.created_at);before(selected[3].started_at!,artifact.created_at);before(artifact.created_at,selected[3].completed_at!);
-  const second=await Promise.all([github(runPath),github(artifactPath),github(jobsPath),github(approvalsPath)]);for(const[index,first]of [rawRun,rawArtifact,rawJobs,rawApprovals].entries())if(!same(first,snapshot(second[index])))throw fail();
-  return{...admitted,evidence:'OFFICIAL_ORIGINAL_WORKER_EXECUTION_METADATA',artifactId:selection.artifactId,artifactSha256:artifact.digest.slice(7),exportJsonSha256:selection.exportJsonSha256,jobsSha256:hash(canonicalReleaseExecutionJson(rawJobs)),artifactExpiresAt:artifact.expires_at,effectAuthority:false};
+  const evidence:OriginalWorkerActivationExecutionEvidence={...admitted,evidence:'OFFICIAL_ORIGINAL_WORKER_EXECUTION_METADATA',artifactId:selection.artifactId,artifactSha256:artifact.digest.slice(7),exportJsonSha256:selection.exportJsonSha256,jobsSha256:hash(canonicalReleaseExecutionJson(rawJobs)),artifactExpiresAt:artifact.expires_at,effectAuthority:false},originalEvidence=canonicalReleaseExecutionJson(evidence),originalMetadata=[rawRun,rawArtifact,rawJobs,rawApprovals].map(row=>canonicalReleaseExecutionJson(row));let invalid=false,refreshing=false;
+  const assertOriginalValidity=()=>{try{if(invalid||Math.max(selection.now,Date.now())>=time(artifact.expires_at)||canonicalReleaseExecutionJson(evidence)!==originalEvidence)throw fail();}catch{invalid=true;throw fail();}};
+  const refreshOriginalMetadata=async()=>{
+   if(invalid||refreshing){invalid=true;throw fail();}refreshing=true;
+   try{assertOriginalValidity();const second=await Promise.allSettled([runPath,artifactPath,jobsPath,approvalsPath].map(path=>Promise.resolve().then(()=>github(path))));for(const[index,row]of second.entries())if(row.status!=='fulfilled'||canonicalReleaseExecutionJson(snapshot(row.value))!==originalMetadata[index])throw fail();assertOriginalValidity();}
+   catch{invalid=true;throw fail();}finally{refreshing=false;}
+  };
+  await refreshOriginalMetadata();return Object.freeze({admitted:evidence,assertOriginalValidity,refreshOriginalMetadata});
  }catch{throw fail();}
 }
+/** One-shot compatibility observation retains the original data-only shape. */
+export async function readOriginalWorkerActivationExecutionEvidence(value:OriginalWorkerActivationSelection&{now:number},github:GithubReader,artifactReader:(artifactId:number)=>Promise<Uint8Array>):Promise<OriginalWorkerActivationExecutionEvidence>{return(await readOriginalWorkerActivationExecutionEvidenceAndGuard(value,github,artifactReader)).admitted;}
 
 /** Fixed GitHub GET and safe bounded archive transport. No provider, SQL,
  * current package approval, private runtime or effect capability is returned. */
-export async function readOriginalWorkerActivationExecutionAdmission(value:OriginalWorkerActivationSelection&{githubToken:string}):Promise<OriginalWorkerActivationExecutionEvidence>{
+export async function readOriginalWorkerActivationExecutionAdmissionAndGuard(value:OriginalWorkerActivationSelection&{githubToken:string}):Promise<OriginalWorkerActivationExecutionGuard>{
  try{
   const input=parse(selectionSchema.extend({githubToken:z.string().min(1).max(24576).regex(/^[\x21-\x7e]+$/)}).strict(),value),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),180000);
-  const github:GithubReader=async path=>{
-   const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]),url='https://api.github.com/repos/'+input.repository+'/'+path,response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+input.githubToken,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},redirect:'error',credentials:'omit',cache:'no-store',signal});
+  let acquisition=true;const github:GithubReader=async path=>{
+   const signal=AbortSignal.any([...(acquisition?[controller.signal]:[]),AbortSignal.timeout(15000)]),url='https://api.github.com/repos/'+input.repository+'/'+path,response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+input.githubToken,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},redirect:'error',credentials:'omit',cache:'no-store',signal});
    if(response.status!==200||response.redirected||response.url&&response.url!==url||!response.body)throw fail();const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>512*1024))throw fail();
    const reader=response.body.getReader(),parts:Uint8Array[]=[];let size=0;try{for(;;){const chunk=await new Promise<ReadableStreamReadResult<Uint8Array>>((done,reject)=>{const abort=()=>{signal.removeEventListener('abort',abort);reject(fail());};if(signal.aborted)return abort();signal.addEventListener('abort',abort,{once:true});void reader.read().then(value=>{signal.removeEventListener('abort',abort);if(signal.aborted)reject(fail());else done(value);},()=>{signal.removeEventListener('abort',abort);reject(fail());});});if(chunk.done)break;size+=chunk.value.byteLength;if(size>512*1024)throw fail();parts.push(chunk.value);}return JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(parts))) as unknown;}finally{void reader.cancel().catch(()=>undefined);try{reader.releaseLock();}catch{/* Pending read cancellation owns cleanup. */}}
   };
-  try{const {githubToken,...selection}=input,admitted=await readOriginalWorkerActivationExecutionEvidence({...selection,now:Date.now()},github,createGithubCodeqlArtifactReader(input.repository,githubToken,controller.signal));if(controller.signal.aborted||Date.now()>=time(admitted.artifactExpiresAt))throw fail();return admitted;}finally{clearTimeout(timer);controller.abort();}
+  try{const {githubToken,...selection}=input,guard=await readOriginalWorkerActivationExecutionEvidenceAndGuard({...selection,now:Date.now()},github,createGithubCodeqlArtifactReader(input.repository,githubToken,controller.signal));if(controller.signal.aborted)throw fail();guard.assertOriginalValidity();return guard;}finally{acquisition=false;clearTimeout(timer);controller.abort();}
  }catch{throw fail();}
 }
+export async function readOriginalWorkerActivationExecutionAdmission(value:OriginalWorkerActivationSelection&{githubToken:string}):Promise<OriginalWorkerActivationExecutionEvidence>{return(await readOriginalWorkerActivationExecutionAdmissionAndGuard(value)).admitted;}

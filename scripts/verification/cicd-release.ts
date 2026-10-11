@@ -12,6 +12,7 @@ import { runtimeEnvironment } from '../runtime/environment';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, prepareReleaseReviewPackage, readPreparedReleaseReviewPackage, validateFounderReleaseApproval, type ReleaseReviewExpected } from './release-review';
 import { backendSelectionForWebEvent, encodeWebBackendSelection, readWebBackendSelection, readWebBackendBridgeAndGuard, bindWebReviewToBackend, readCanonicalWebOutput } from './web-backend-bridge';
 import {consumeCompletedBackendCanonical,disposeCompletedBackendCanonical,type CompletedBackendCanonicalToken}from'./backend-web-transfer-admission';
+import {requireCompletedBackendPopulationEvidence}from'./backend-web-transfer-admission';
 import { bindVerifiedStagingWebOrigin } from './web-staging-origin';
 import { verifyHostedBrowserAccess } from './backend-hosted-browser';
 import { readGitBinaryDiffDigest } from './git-source-digest';
@@ -20,6 +21,8 @@ import { createProtectedPreview, protectedPreviewHeaders, type ProtectedPreviewB
 import { readFullReleaseEvidence } from './full-release-evidence';
 import {readCanonicalRuntimeJobs} from './canonical-runtime-jobs';
 import {createGithubCodeqlArtifactReader} from './staging-security';
+import {validateStagingHostContract,stagingHostContractSha256,validateWebHostObservation} from './backend-staging-host-contract';
+import {readBoundedRuntimeResponse} from '../database/hosted-runtime-rollout-session';
 
 const directory = resolve('.local/cicd-release');
 const required = (key: string) => { const value = process.env[key]; if (!value) throw Error(`Required release setting missing: ${key}`); return value; };
@@ -60,6 +63,17 @@ async function prepareWebCli(args:string[]){
     if(!isDeepStrictEqual(identity,webIdentity())||required('VERCEL_TOKEN')!==token)throw Error('Prepared Vercel recipient changed before launch.');
     try{return execFileSync(process.execPath,[executable,...selectedArgs,'--scope',identity.teamId],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:{...environment,VERCEL_TOKEN:token,VERCEL_ORG_ID:identity.teamId,VERCEL_PROJECT_ID:identity.projectId},shell:false});}catch{throw Error('Vercel action failed; raw output and credentials withheld.');}
   };
+}
+/** The existing provider transport owns this fixed current settings read. */
+async function readWebHostProject(url:string){const signal=AbortSignal.timeout(15000),response=await fetch(url,{method:'GET',headers:{Authorization:'Bearer '+required('VERCEL_TOKEN')},redirect:'error',credentials:'omit',cache:'no-store',signal});if(response.status!==200||response.redirected||response.url&&response.url!==url)throw Error('Current staging web host settings require review.');return JSON.parse(await readBoundedRuntimeResponse(response,signal,131072)) as unknown;}
+/** Original approved settings are distinct from this fresh provider read. */
+async function prepareWebHostConsumption(admitted:unknown):Promise<()=>void>{
+ const context=z.object({prepared:z.object({canonicalJson:z.string()}),backend:z.object({backendIdentity:z.object({sourceSha:z.string(),treeSha:z.string(),stagingHostContract:z.unknown().optional(),stagingHostContractSha256:z.string().optional()})}).optional()}).parse(admitted);
+ if(required('RELEASE_ENVIRONMENT')!=='staging'||!context.backend)return()=>undefined;
+ const identity=webIdentity(),binding=context.backend.backendIdentity,contract=validateStagingHostContract(binding.stagingHostContract),contractSha256=stagingHostContractSha256(contract);
+ if(binding.stagingHostContractSha256!==contractSha256||binding.sourceSha!==required('RELEASE_SHA')||contract.sourceSha!==binding.sourceSha||contract.treeSha!==binding.treeSha||contract.targets.web.teamId!==identity.teamId||contract.targets.web.projectId!==identity.projectId||identity.target!=='preview')throw Error('Approved web host expectation requires exact backend identity.');
+ requireOriginalWebPackageClock(context.prepared);const originalExpiry=Date.parse(z.object({preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson(context.prepared.canonicalJson)).preparedAt)+86400000,url=`https://api.vercel.com/v9/projects/${identity.projectId}?teamId=${identity.teamId}`,startedAtMs=Date.now(),value=await readWebHostProject(url),proof=validateWebHostObservation(contract,{method:'GET',url,startedAtMs,completedAtMs:Date.now(),value},{sourceSha:binding.sourceSha,treeSha:binding.treeSha,now:Date.now(),notAfterMs:originalExpiry});
+ return()=>{requireOriginalWebPackageClock(context.prepared);const current=webIdentity();if(Date.now()<startedAtMs||Date.now()>=proof.notAfterMs||current.teamId!==identity.teamId||current.projectId!==identity.projectId||current.target!==identity.target||required('RELEASE_SHA')!==binding.sourceSha||required('RELEASE_ENVIRONMENT')!=='staging')throw Error('Current web host observation or target expired before execution.');};
 }
 function requireOriginalWebPackageClock(prepared:{canonicalJson:string}){
   const timestamp=z.object({preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson(prepared.canonicalJson)).preparedAt,recorded=Date.parse(timestamp),now=Date.now();if(!Number.isFinite(recorded)||recorded>now||now-recorded>24*60*60*1000)throw Error('Original web approval package expired before launch.');
@@ -285,12 +299,12 @@ if (mode === 'context') {
 } else if (mode === 'build') {
   const environment = required('RELEASE_ENVIRONMENT'); const target = vercelTarget(environment);
   const pull=await prepareWebCli(['pull', '--yes', `--environment=${target}`]),{publicConfig}=await readmitApproval();
-  await pull(async()=>{const admitted=await readmitApproval();return async()=>()=>{requireOriginalWebPackageClock(admitted.prepared);};});
+  await pull(async()=>{const admitted=await readmitApproval();return async()=>{const host=await prepareWebHostConsumption(admitted);return()=>{host();requireOriginalWebPackageClock(admitted.prepared);};};});
   const downloaded = parseEnv(await readFile(resolve(`.vercel/.env.${target}.local`), 'utf8'));
   const allowed = new Set(['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'VERCEL_ENV', 'VERCEL_TARGET_ENV', 'VERCEL_URL']);
   if (Object.keys(downloaded).some(key => !allowed.has(key))) throw Error('Web project environment contains unreviewed settings; remove server credentials before build.');
   if (downloaded.NEXT_PUBLIC_API_URL !== publicConfig.apiUrl || downloaded.NEXT_PUBLIC_SUPABASE_URL !== publicConfig.supabaseUrl || downloaded.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY !== publicConfig.supabasePublishableKey) throw Error('Vercel public build settings do not match approved dependency endpoints.');
-  const build=await prepareWebCli(['build', ...(target === 'production' ? ['--prod'] : ['--target=preview'])]);await build(async()=>{const admitted=await readmitApproval();return async()=>()=>{requireOriginalWebPackageClock(admitted.prepared);};});
+  const build=await prepareWebCli(['build', ...(target === 'production' ? ['--prod'] : ['--target=preview'])]);await build(async()=>{const admitted=await readmitApproval();return async()=>{const host=await prepareWebHostConsumption(admitted);return()=>{host();requireOriginalWebPackageClock(admitted.prepared);};};});
   await writeFile(join(directory, 'artifact.sha256'), await artifactDigest());
   console.log('Prebuilt web output verified against public-only environment and deployment credential exclusion.');
 } else if (mode === 'deploy') {
@@ -299,7 +313,7 @@ if (mode === 'context') {
   const args = ['deploy', '--prebuilt', '--yes', '--meta', `cuevoCommitSha=${sourceSha}`, ...(target === 'production' ? ['--prod', '--skip-domain'] : ['--target=preview'])];
   const deploy=await prepareWebCli(args);
   if (await artifactDigest() !== await readFile(join(directory, 'artifact.sha256'), 'utf8')) throw Error('Prebuilt artifact changed after verification.');
-  const result = (await deploy(async()=>{if(await artifactDigest()!==await readFile(join(directory,'artifact.sha256'),'utf8'))throw Error('Prebuilt artifact changed after verification.');const admitted=await readmitApproval();return async()=>{if(await artifactDigest()!==await readFile(join(directory,'artifact.sha256'),'utf8'))throw Error('Prebuilt artifact changed during approval.');return()=>{requireOriginalWebPackageClock(admitted.prepared);if(required('RELEASE_SHA')!==sourceSha||vercelTarget(required('RELEASE_ENVIRONMENT'))!==target)throw Error('Prepared Vercel source or environment changed.');};};})).trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/i.test(result)) throw Error('Deployment returned no verified Vercel URL.');
+  const result = (await deploy(async()=>{if(await artifactDigest()!==await readFile(join(directory,'artifact.sha256'),'utf8'))throw Error('Prebuilt artifact changed after verification.');const admitted=await readmitApproval();return async()=>{if(await artifactDigest()!==await readFile(join(directory,'artifact.sha256'),'utf8'))throw Error('Prebuilt artifact changed during approval.');const host=await prepareWebHostConsumption(admitted);return()=>{host();requireOriginalWebPackageClock(admitted.prepared);if(required('RELEASE_SHA')!==sourceSha||vercelTarget(required('RELEASE_ENVIRONMENT'))!==target)throw Error('Prepared Vercel source or environment changed.');};};})).trim(); if (!/^https:\/\/[a-z0-9.-]+\.vercel\.app\/?$/i.test(result)) throw Error('Deployment returned no verified Vercel URL.');
   await writeFile(join(directory, 'deployment.json'), JSON.stringify({ url: result, commitSha: required('RELEASE_SHA') }));
   await writeFile(required('GITHUB_OUTPUT'), `url=${result}\n`, { flag: 'a' });
   console.log('Verified prebuilt artifact uploaded; production domains remain unpromoted.');
@@ -357,15 +371,14 @@ if (mode === 'context') {
 } else if(mode==='verify-learning-loop'){
   const admitted=await readmitApproval(),receipt=await currentWebDeploymentReceipt(admitted),selection=readWebBackendSelection(required('BACKEND_SELECTION_BASE64'));
   if(!selection||!admitted.backend)throw Error('Hosted learning-loop verification requires the original completed backend.');
-  const population=admitted.backend.originalEvidence.filter(row=>row.name==='population-result.json');
-  if(population.length!==1)throw Error('Original synthetic population evidence is unavailable.');
+   const population=requireCompletedBackendPopulationEvidence(admitted.backend);
   const readmitWeb=async():Promise<HostedLearningLoopWebAdmission>=>{
     const current=await readmitApproval(),deployment=await currentWebDeploymentReceipt(current);
-    if(!current.backend||deployment.deploymentId!==receipt.deploymentId||deployment.artifactSha256!==receipt.artifactSha256||current.backend.originalEvidence.filter(row=>row.name==='population-result.json'&&row.sha256===population[0].sha256).length!==1)throw Error('Hosted learning-loop source or population evidence changed.');
+     if(!current.backend||deployment.deploymentId!==receipt.deploymentId||deployment.artifactSha256!==receipt.artifactSha256||canonicalReleaseReviewJson(requireCompletedBackendPopulationEvidence(current.backend))!==canonicalReleaseReviewJson(population))throw Error('Hosted learning-loop source or population evidence changed.');
     const publicConfig=z.object({publicConfig:z.object({apiUrl:z.string().url(),supabaseUrl:z.string().url()})}).parse(current.manifest).publicConfig;
-    return{purpose:'PREBUILD_RELEASE_ADMISSION',sourceSha:deployment.sourceSha,treeSha:current.backend.backendIdentity.treeSha,ciRunId:deployment.ciRunId,runId:deployment.runId,runAttempt:deployment.runAttempt,webDeploymentId:deployment.deploymentId,artifactSha256:deployment.artifactSha256,packageSha256:current.prepared.sha256,webPackageExpiresAt:new Date(Date.parse(z.object({preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson(current.prepared.canonicalJson)).preparedAt)+86400000).toISOString(),backendTransferSha256:current.backend.backendIdentity.transferSha256,populationReceiptSha256:population[0].sha256,apiOrigin:publicConfig.apiUrl,authOrigin:publicConfig.supabaseUrl,webOrigin:current.backend.backendIdentity.web.origin,observedAt:new Date().toISOString()};
+     return{purpose:'PREBUILD_RELEASE_ADMISSION',sourceSha:deployment.sourceSha,treeSha:current.backend.backendIdentity.treeSha,ciRunId:deployment.ciRunId,runId:deployment.runId,runAttempt:deployment.runAttempt,webDeploymentId:deployment.deploymentId,artifactSha256:deployment.artifactSha256,packageSha256:current.prepared.sha256,webPackageExpiresAt:new Date(Date.parse(z.object({preparedAt:z.iso.datetime({offset:true})}).parse(parseCanonicalReleaseReviewJson(current.prepared.canonicalJson)).preparedAt)+86400000).toISOString(),backendTransferSha256:current.backend.backendIdentity.transferSha256,populationReceiptSha256:population.receiptSha256,apiOrigin:publicConfig.apiUrl,authOrigin:publicConfig.supabaseUrl,webOrigin:current.backend.backendIdentity.web.origin,observedAt:new Date().toISOString()};
   };
-  const result=await verifyHostedLearningLoop({...selection,repoRoot:process.cwd(),releaseSha:receipt.sourceSha,ciRunId:receipt.ciRunId,web:{teamId:receipt.teamId,projectId:receipt.projectId,target:'preview'},webDeployment:{id:receipt.deploymentId,url:receipt.url},populationReceiptSha256:population[0].sha256,selectedActorIds:{admin:'20000000-0000-4000-8000-000000000001',coordinator:'20000000-0000-4000-8000-000000000002',teacher:'20000000-0000-4000-8000-000000000004',student:'20000000-0000-4000-8000-000000000012',parent:'20000000-0000-4000-8000-000000000072'},githubToken:required('GH_TOKEN'),vercelToken:required('VERCEL_TOKEN'),syntheticPassword:required('CUEVO_SYNTHETIC_PILOT_PASSWORD')},{readmitWeb});
+   const result=await verifyHostedLearningLoop({...selection,repoRoot:process.cwd(),releaseSha:receipt.sourceSha,ciRunId:receipt.ciRunId,web:{teamId:receipt.teamId,projectId:receipt.projectId,target:'preview'},webDeployment:{id:receipt.deploymentId,url:receipt.url},populationReceiptSha256:population.receiptSha256,selectedActorIds:{admin:'20000000-0000-4000-8000-000000000001',coordinator:'20000000-0000-4000-8000-000000000002',teacher:'20000000-0000-4000-8000-000000000004',student:'20000000-0000-4000-8000-000000000012',parent:'20000000-0000-4000-8000-000000000072'},githubToken:required('GH_TOKEN'),vercelToken:required('VERCEL_TOKEN'),syntheticPassword:required('CUEVO_SYNTHETIC_PILOT_PASSWORD')},{readmitWeb});
   if(result.status!=='UI_LOOP_VERIFIED'||!result.canonicalReceipt||!result.sessionsClosed)throw Error('Hosted learning-loop UI verification requires review; persisted native proof remains separate.');
   await readmitWeb();
 } else throw Error('Expected context, ci, controls, prepare, approval, manifest, build, deploy, verify, bind-staging-origin, verify-browser or verify-learning-loop release operation.');
