@@ -22,12 +22,14 @@ type ServiceImageDiagnostic={tagMatches:boolean|null;idClass:'INDEX'|'CONFIG'|'M
 const cliStartErrorCodes=['ImagePrepullError','StartWorkdirError','StartConfigLoadError','StartInvalidConfigError','NetworkCreateError','VolumeCreateError','ContainerCreateError','ContainerStartError','HealthCheckTimeoutError','DbSetupError'] as const;
 type AcquisitionDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION';imageKeys:('postgres'|'kong'|'mailpit'|'postgrest'|'auth'|'realtime'|'storage')[];stage:'PULL'|'IMAGE_INSPECT'|'DAEMON'|'MIXED'|'UNKNOWN';response:'MANIFEST_UNKNOWN'|'DENIED'|'RATE_LIMIT'|'DNS'|'CONNECTION'|'TLS'|'TIMEOUT'|'MIXED'|'UNKNOWN'};
 type ServiceStartDiagnostic={exitCode:number|null;signal:'SIGTERM'|'SIGKILL'|'SIGINT'|'SIGHUP'|'OTHER'|null;timedOut:boolean|null;cliErrorCode:typeof cliStartErrorCodes[number]|'UNKNOWN';acquisition:AcquisitionDiagnostic|null};
+type PreparationDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION';substep:'PULL'|'INSPECT'|'DECODE'|'ADMISSION';exitCode:ServiceStartDiagnostic['exitCode'];signal:ServiceStartDiagnostic['signal'];timedOut:boolean|null;response:AcquisitionDiagnostic['response'];image:Omit<ServiceImageDiagnostic,'tagMatches'>|null};
 let serviceImageDiagnostic:ServiceImageDiagnostic|null=null;
 let serviceStartDiagnostic:ServiceStartDiagnostic|null=null;
+let servicePreparationDiagnostic:PreparationDiagnostic|null=null;
 let producerPhase:ProducerPhase='SOURCE',phaseAt=Date.now();
 function phase(value:ProducerPhase){producerPhase=value;phaseAt=Date.now();console.log(JSON.stringify({check:'source-child144-producer-phase',phase:value}));}
-async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,serviceImage:producerPhase==='SERVICE_IMAGE'?serviceImageDiagnostic:null,serviceStart:producerPhase==='SERVICE_START'?serviceStartDiagnostic:null,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
-const exec=(file:string,args:string[],input?:Uint8Array,env?:NodeJS.ProcessEnv)=>execFileSync(file,args,{input,env,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:120000,maxBuffer:32*1024*1024});
+async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,serviceImage:producerPhase==='SERVICE_IMAGE'?serviceImageDiagnostic:null,serviceStart:producerPhase==='SERVICE_START'?serviceStartDiagnostic:null,servicePreparation:producerPhase==='SERVICE_POSTGRES_PREPARATION'?servicePreparationDiagnostic:null,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
+const exec=(file:string,args:string[],input?:Uint8Array,env?:NodeJS.ProcessEnv,captureStderr=false)=>execFileSync(file,args,{input,env,shell:false,windowsHide:true,stdio:['pipe','pipe',captureStderr?'pipe':'ignore'],timeout:120000,maxBuffer:32*1024*1024});
 function removeOwnedReference(rawId:string,label:string){
  const raw=JSON.parse(exec('docker',['inspect',rawId]).toString('utf8')) as {Id:string;Image:string;Config:{Labels:Record<string,string>}}[];
  if(raw.length!==1||raw[0].Id!==rawId||raw[0].Config.Labels['cuevo.reference']!==label)throw fail();verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',raw[0].Image]).toString('utf8'))[0]);
@@ -49,7 +51,30 @@ export async function produceHostedChildCatalogueReference(){
  try{exec('docker',['network','inspect','cuevo-local']);}catch{exec('docker',['network','create','--subnet','10.252.60.0/24','cuevo-local']);}
  try{exec('docker',['inspect','supabase_db_cuevo']);throw fail();}catch(error){if((error as {status?:number}).status!==1)throw fail();}
  // Admit the exact ECR cache tag first; CLI 2.119 selects it before native auxiliary-service fallbacks.
- phase('SERVICE_POSTGRES_PREPARATION');exec('docker',['pull','--platform','linux/amd64',image]);verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',image]).toString('utf8'))[0]);
+ phase('SERVICE_POSTGRES_PREPARATION');servicePreparationDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION',substep:'PULL',exitCode:null,signal:null,timedOut:null,response:'UNKNOWN',image:null};
+ try{
+  exec('docker',['pull','--platform','linux/amd64',image],undefined,undefined,true);
+  servicePreparationDiagnostic.substep='INSPECT';const inspected=exec('docker',['image','inspect',image],undefined,undefined,true);
+  servicePreparationDiagnostic.substep='DECODE';const prepared=JSON.parse(inspected.toString('utf8'))[0] as {Id?:unknown;RepoDigests?:unknown;Os?:unknown;Architecture?:unknown}|undefined;
+  servicePreparationDiagnostic.substep='ADMISSION';servicePreparationDiagnostic.image={idClass:prepared?.Id===sourceChildCatalogueImage.indexDigest?'INDEX':prepared?.Id===sourceChildCatalogueImage.configDigest?'CONFIG':prepared?.Id===sourceChildCatalogueImage.manifestDigest?'MANIFEST':typeof prepared?.Id==='string'?'OTHER':'UNKNOWN',repositoryDigestPresent:Array.isArray(prepared?.RepoDigests)?prepared.RepoDigests.includes(sourceChildCatalogueImage.pinnedReference):null,osMatches:typeof prepared?.Os==='string'?prepared.Os==='linux':null,architectureMatches:typeof prepared?.Architecture==='string'?prepared.Architecture==='amd64':null};
+  verifySourceChildCatalogueImage(prepared);
+ }catch(error){
+  if(servicePreparationDiagnostic.substep==='PULL'||servicePreparationDiagnostic.substep==='INSPECT'){
+   const field=(key:string)=>error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,key)?.value:undefined,status=field('status'),signal=field('signal'),code=field('code'),stderr=field('stderr'),exitCode=typeof status==='number'&&Number.isInteger(status)&&status>=0&&status<=255?status:null;
+   servicePreparationDiagnostic.exitCode=exitCode;servicePreparationDiagnostic.signal=typeof signal!=='string'?null:signal==='SIGTERM'||signal==='SIGKILL'||signal==='SIGINT'||signal==='SIGHUP'?signal:'OTHER';servicePreparationDiagnostic.timedOut=code==='ETIMEDOUT'?true:exitCode!==null?false:null;
+   if(Buffer.isBuffer(stderr)&&stderr.length<=64*1024){const message=stderr.toString('utf8'),responses:AcquisitionDiagnostic['response'][]=[];
+    if(/manifest unknown|manifest[^\n;]*not found|\b404 not found\b/i.test(message))responses.push('MANIFEST_UNKNOWN');
+    if(/\bdenied\b|\bunauthorized\b|\b403 forbidden\b|\b401 unauthorized\b/i.test(message))responses.push('DENIED');
+    if(/toomanyrequests|too many requests|\b429\b/i.test(message))responses.push('RATE_LIMIT');
+    if(/lookup [^\n;]*no such host|temporary failure in name resolution|server misbehaving/i.test(message))responses.push('DNS');
+    if(/connection refused|connection reset|network is unreachable|cannot connect to the docker daemon/i.test(message))responses.push('CONNECTION');
+    if(/x509:|tls handshake|certificate signed by unknown authority|certificate has expired/i.test(message))responses.push('TLS');
+    if(/context deadline exceeded|i\/o timeout|client\.timeout exceeded|tls handshake timeout/i.test(message))responses.push('TIMEOUT');
+    servicePreparationDiagnostic.response=responses.length===1?responses[0]:responses.length>1?'MIXED':'UNKNOWN';
+   }
+  }
+  throw error;
+ }
  phase('SERVICE_START');
  try{exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor','--output-format','json'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'',SUPABASE_USE_SLIM_IMAGES:'false'});}catch(error){
   const field=(key:string)=>error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,key)?.value:undefined,status=field('status'),signal=field('signal'),code=field('code'),exitCode=typeof status==='number'&&Number.isInteger(status)&&status>=0&&status<=255?status:null;
