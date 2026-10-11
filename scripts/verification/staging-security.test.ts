@@ -71,6 +71,61 @@ test('official artifact redirect strips the GitHub token and refuses foreign or 
  }finally{globalThis.fetch=previous;}
 });
 
+test('original recovery package transport accepts its fixed 16 MiB boundary while CodeQL remains at 2 MiB',async()=>{
+ const subject=await api(),previous=globalThis.fetch,token='package-limit-private-canary';
+ try{
+  const bytes=new Uint8Array(16*1024*1024);bytes[0]=7;bytes[bytes.length-1]=9;
+  globalThis.fetch=async()=>new Response(bytes,{headers:{'content-length':String(bytes.length)}});
+  const result=await subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72);assert.equal(result.length,16777216);assert.equal(result[0],7);assert.equal(result.at(-1),9);
+  globalThis.fetch=async()=>new Response(new Uint8Array(2097153),{headers:{'content-length':'2097153'}});
+  await assert.rejects(subject.createGithubCodeqlArtifactReader('owner/repo',token)(72));
+ }finally{globalThis.fetch=previous;}
+});
+
+test('recovery package declared and streamed oversize responses refuse and cancel the active reader',async()=>{
+ const subject=await api(),previous=globalThis.fetch,token='package-limit-private-canary';
+ try{
+  for(const declared of ['16777217','invalid']){let pulls=0;globalThis.fetch=async()=>new Response(new ReadableStream<Uint8Array>({pull(controller){pulls++;controller.enqueue(new Uint8Array(1));}}, {highWaterMark:0}),{headers:{'content-length':declared}});await assert.rejects(subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72));assert.equal(pulls,0,'Declared oversize refuses before reading any body');}
+  for(const declared of [undefined,'1']){
+   let pulls=0,cancelled=false;const stream=new ReadableStream<Uint8Array>({pull(controller){pulls++;controller.enqueue(new Uint8Array(pulls===1?16777216:1));},cancel(){cancelled=true;}}, {highWaterMark:0});
+   globalThis.fetch=async()=>new Response(stream,{headers:declared?{'content-length':declared}:{}});
+   await assert.rejects(subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72));assert.equal(pulls,2);assert.equal(cancelled,true);assert.equal(stream.locked,false);
+  }
+  let cancelled=false;globalThis.fetch=async()=>new Response(new ReadableStream<Uint8Array>({pull(controller){controller.enqueue(new Uint8Array(2097153));},cancel(){cancelled=true;}}, {highWaterMark:0}));await assert.rejects(subject.createGithubCodeqlArtifactReader('owner/repo',token)(72));assert.equal(cancelled,true,'CodeQL retains streamed2MiB denial without a header');
+ }finally{globalThis.fetch=previous;}
+});
+
+test('recovery package redirects retain fixed official GETs and exclude the token on both signed host families',async()=>{
+ const subject=await api(),previous=globalThis.fetch,token='redirect-private-canary';
+ try{
+  for(const host of ['productionresultssa123.blob.core.windows.net','results-123.actions.githubusercontent.com']){
+   let requests=0;globalThis.fetch=async(raw,init)=>{requests++;assert.equal(init?.method,'GET');assert.equal(init?.credentials,'omit');assert.equal(init?.cache,'no-store');assert.equal(init?.body,undefined);assert.ok(init?.signal);
+    if(requests===1){assert.equal(String(raw),'https://api.github.com/repos/owner/repo/actions/artifacts/72/zip');assert.equal(init?.redirect,'manual');assert.equal(new Headers(init?.headers).get('Authorization'),'Bearer '+token);return new Response(null,{status:302,headers:{location:'https://'+host+'/package.zip?signature=synthetic'}});}
+    assert.equal(new URL(String(raw)).hostname,host);assert.equal(init?.redirect,'error');assert.equal(init?.headers,undefined);return new Response(new Uint8Array([4,5,6]));
+   };
+   assert.deepEqual(await subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72),Buffer.from([4,5,6]));assert.equal(requests,2);
+  }
+  for(const target of ['http://productionresultssa1.blob.core.windows.net/package.zip','https://user@productionresultssa1.blob.core.windows.net/package.zip','https://productionresultssa1.blob.core.windows.net:444/package.zip','https://productionresultssa1.blob.core.windows.net/package.zip#fragment','https://productionresultssa1.blob.core.windows.net.evil.invalid/package.zip']){
+   let requests=0;globalThis.fetch=async()=>{requests++;return new Response(null,{status:302,headers:{location:target}});};await assert.rejects(subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72),error=>error instanceof Error&&!error.message.includes(token)&&!error.message.includes(target));assert.equal(requests,1);
+  }
+  let requests=0;globalThis.fetch=async()=>{requests++;return new Response(null,{status:302,headers:{location:'https://productionresultssa1.blob.core.windows.net/package.zip?signature=synthetic'}});};await assert.rejects(subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72));assert.equal(requests,2,'A second redirect is refused');
+  const response=new Response(new Uint8Array([1]));Object.defineProperty(response,'url',{value:'https://evil.invalid/package.zip'});globalThis.fetch=async()=>response;await assert.rejects(subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token)(72));
+ }finally{globalThis.fetch=previous;}
+});
+
+test('recovery package transport retains the 20 second deadline and aborts hanging streams with cleanup',async()=>{
+ const subject=await api(),previous=globalThis.fetch,previousTimeout=AbortSignal.timeout,token='abort-private-canary';
+ try{
+  for(const mode of ['parent','deadline'] as const){
+   const parent=new AbortController(),deadline=new AbortController();let cancelled=false,pulls=0;const timeouts:number[]=[];
+   AbortSignal.timeout=milliseconds=>{timeouts.push(milliseconds);return deadline.signal;};
+   const stream=new ReadableStream<Uint8Array>({pull(){pulls++;(mode==='parent'?parent:deadline).abort();},cancel(){cancelled=true;}}, {highWaterMark:0});
+   globalThis.fetch=async()=>new Response(stream);await assert.rejects(subject.createGithubOriginalRecoveryPackageArtifactReader('owner/repo',token,parent.signal)(72),error=>error instanceof Error&&!error.message.includes(token));
+   assert.deepEqual(timeouts,[20000]);assert.equal(pulls,1);assert.equal(cancelled,true);assert.equal(stream.locked,false);
+  }
+ }finally{globalThis.fetch=previous;AbortSignal.timeout=previousTimeout;}
+});
+
 test('frozen full regression consumes original security receipt after main advances but release admission remains current',async()=>{
   const subject=await api(); assert.equal(typeof subject.readFullRegressionSecurity,'function');
   const archive=await receiptZip(receipt());
