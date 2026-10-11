@@ -17,7 +17,7 @@ const fail=()=>Error('Source child144 catalogue producer requires review; conten
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
 const image=sourceChildCatalogueImage.tag,imageId=sourceChildCatalogueImage.indexDigest;
 const producerFiles=['scripts/database/hosted-child-catalogue-producer.ts','scripts/database/hosted-child-catalogue-reference.ts','scripts/database/hosted-schema-catalogue.ts','scripts/database/replay-plan.ts','scripts/database/unknown-prefix-catalogue-policy.json'];
-type ProducerPhase='SOURCE'|'SERVICE_START'|'SERVICE_IMAGE'|'SERVICE_DUMPS'|'RAW_START'|'RAW_IMAGE'|'RAW_READY'|'BOOTSTRAP'|'SERVICE_RESTORE'|'SOURCE_REPLAY'|'CATALOGUE'|'CLEANUP'|'RECEIPT';
+type ProducerPhase='SOURCE'|'SERVICE_POSTGRES_PREPARATION'|'SERVICE_START'|'SERVICE_IMAGE'|'SERVICE_DUMPS'|'RAW_START'|'RAW_IMAGE'|'RAW_READY'|'BOOTSTRAP'|'SERVICE_RESTORE'|'SOURCE_REPLAY'|'CATALOGUE'|'CLEANUP'|'RECEIPT';
 type ServiceImageDiagnostic={tagMatches:boolean|null;idClass:'INDEX'|'CONFIG'|'MANIFEST'|'OTHER'|'UNKNOWN';repositoryDigestPresent:boolean|null;osMatches:boolean|null;architectureMatches:boolean|null};
 const cliStartErrorCodes=['ImagePrepullError','StartWorkdirError','StartConfigLoadError','StartInvalidConfigError','NetworkCreateError','VolumeCreateError','ContainerCreateError','ContainerStartError','HealthCheckTimeoutError','DbSetupError'] as const;
 type AcquisitionDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION';imageKeys:('postgres'|'kong'|'mailpit'|'postgrest'|'auth'|'realtime'|'storage')[];stage:'PULL'|'IMAGE_INSPECT'|'DAEMON'|'MIXED'|'UNKNOWN';response:'MANIFEST_UNKNOWN'|'DENIED'|'RATE_LIMIT'|'DNS'|'CONNECTION'|'TLS'|'TIMEOUT'|'MIXED'|'UNKNOWN'};
@@ -48,9 +48,10 @@ export async function produceHostedChildCatalogueReference(){
  // The normal database lane will subsequently reuse this same owned stack.
  try{exec('docker',['network','inspect','cuevo-local']);}catch{exec('docker',['network','create','--subnet','10.252.60.0/24','cuevo-local']);}
  try{exec('docker',['inspect','supabase_db_cuevo']);throw fail();}catch(error){if((error as {status?:number}).status!==1)throw fail();}
- // CLI 2.119 otherwise resolves cached/pulled GHCR or Hub fallbacks, contrary to this owner's exact ECR admission.
+ // Admit the exact ECR cache tag first; CLI 2.119 selects it before native auxiliary-service fallbacks.
+ phase('SERVICE_POSTGRES_PREPARATION');exec('docker',['pull','--platform','linux/amd64',image]);verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',image]).toString('utf8'))[0]);
  phase('SERVICE_START');
- try{exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor','--output-format','json'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'public.ecr.aws'});}catch(error){
+ try{exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor','--output-format','json'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'',SUPABASE_USE_SLIM_IMAGES:'false'});}catch(error){
   const field=(key:string)=>error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,key)?.value:undefined,status=field('status'),signal=field('signal'),code=field('code'),exitCode=typeof status==='number'&&Number.isInteger(status)&&status>=0&&status<=255?status:null;
   serviceStartDiagnostic={exitCode,signal:typeof signal!=='string'?null:signal==='SIGTERM'||signal==='SIGKILL'||signal==='SIGINT'||signal==='SIGHUP'?signal:'OTHER',timedOut:code==='ETIMEDOUT'?true:exitCode!==null?false:null,cliErrorCode:'UNKNOWN',acquisition:null};
   // Native JSON errors carry a code beside private message/detail fields; retain only exact source-known codes.
