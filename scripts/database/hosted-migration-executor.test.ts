@@ -536,9 +536,11 @@ test('native preparation failure retains only original resource identity and exp
  });
 });
 
-test('metadata-only stage cannot allocate native consumers or migration execution',async()=>{
+test('metadata-only stage cannot allocate native consumers or migration execution',async context=>{
  const subject=await api();await fixture(async input=>{
+  await context.test('metadata-only preflight refuses native consumers after fixture setup',async()=>{
   const result=await subject.executeNativeHostedMigrationStage({...input,stage:{...(input.stage as object),materialization:'METADATA_ONLY'}});
   assert.equal(result.status,'REQUIRES_REVIEW');assert.equal(result.protocol,null);assert.equal(state.commands,0);assert.equal(state.seenIntent,false);assert.equal(state.events.length,0);
+  });
  });
 });
