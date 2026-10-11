@@ -18,10 +18,12 @@ const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest(
 const image=sourceChildCatalogueImage.tag,imageId=sourceChildCatalogueImage.indexDigest;
 const producerFiles=['scripts/database/hosted-child-catalogue-producer.ts','scripts/database/hosted-child-catalogue-reference.ts','scripts/database/hosted-schema-catalogue.ts','scripts/database/replay-plan.ts','scripts/database/unknown-prefix-catalogue-policy.json'];
 type ProducerPhase='SOURCE'|'SERVICE_START'|'SERVICE_IMAGE'|'SERVICE_DUMPS'|'RAW_START'|'RAW_IMAGE'|'RAW_READY'|'BOOTSTRAP'|'SERVICE_RESTORE'|'SOURCE_REPLAY'|'CATALOGUE'|'CLEANUP'|'RECEIPT';
+type ServiceImageDiagnostic={tagMatches:boolean|null;idClass:'INDEX'|'CONFIG'|'MANIFEST'|'OTHER'|'UNKNOWN';repositoryDigestPresent:boolean|null;osMatches:boolean|null;architectureMatches:boolean|null};
+let serviceImageDiagnostic:ServiceImageDiagnostic|null=null;
 let producerPhase:ProducerPhase='SOURCE',phaseAt=Date.now();
 function phase(value:ProducerPhase){producerPhase=value;phaseAt=Date.now();console.log(JSON.stringify({check:'source-child144-producer-phase',phase:value}));}
-async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
-const exec=(file:string,args:string[],input?:Uint8Array)=>execFileSync(file,args,{input,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:120000,maxBuffer:32*1024*1024});
+async function retainFailure(error:unknown){const candidate=error&&typeof error==='object'?Object.getOwnPropertyDescriptor(error,'code')?.value:undefined,code=typeof candidate==='string'&&/^[0-9A-Z]{5}$/.test(candidate)?candidate:null,directory=resolve('.local/child144-catalogue');await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_SOURCE_CHILD144_PRODUCER_FAILURE',status:'REQUIRES_REVIEW',phase:producerPhase,phaseDurationMs:Math.max(0,Date.now()-phaseAt),databaseCode:code,serviceImage:producerPhase==='SERVICE_IMAGE'?serviceImageDiagnostic:null,sourceSha:process.env.GITHUB_SHA??null,runId:process.env.GITHUB_RUN_ID??null,runAttempt:process.env.GITHUB_RUN_ATTEMPT??null,hostedAcceptance:false,effectAuthority:false}),{flag:'wx',mode:0o600});}
+const exec=(file:string,args:string[],input?:Uint8Array,env?:NodeJS.ProcessEnv)=>execFileSync(file,args,{input,env,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:120000,maxBuffer:32*1024*1024});
 function removeOwnedReference(rawId:string,label:string){
  const raw=JSON.parse(exec('docker',['inspect',rawId]).toString('utf8')) as {Id:string;Image:string;Config:{Labels:Record<string,string>}}[];
  if(raw.length!==1||raw[0].Id!==rawId||raw[0].Config.Labels['cuevo.reference']!==label)throw fail();verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',raw[0].Image]).toString('utf8'))[0]);
@@ -42,9 +44,16 @@ export async function produceHostedChildCatalogueReference(){
  // The normal database lane will subsequently reuse this same owned stack.
  try{exec('docker',['network','inspect','cuevo-local']);}catch{exec('docker',['network','create','--subnet','10.252.60.0/24','cuevo-local']);}
  try{exec('docker',['inspect','supabase_db_cuevo']);throw fail();}catch(error){if((error as {status?:number}).status!==1)throw fail();}
- phase('SERVICE_START');exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor']);
+ // CLI 2.119 otherwise resolves cached/pulled GHCR or Hub fallbacks, contrary to this owner's exact ECR admission.
+ phase('SERVICE_START');exec(process.execPath,[cli,'start','--workdir',workdir,'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor'],undefined,{...process.env,SUPABASE_INTERNAL_IMAGE_REGISTRY:'public.ecr.aws'});
  phase('SERVICE_IMAGE');
- const db=JSON.parse(exec('docker',['inspect','supabase_db_cuevo']).toString('utf8')) as {Id:string;Config:{Image:string};Image:string}[];if(db.length!==1||db[0].Config.Image!==image)throw fail();verifySourceChildCatalogueImage(JSON.parse(exec('docker',['image','inspect',db[0].Image]).toString('utf8'))[0]);
+ serviceImageDiagnostic={tagMatches:null,idClass:'UNKNOWN',repositoryDigestPresent:null,osMatches:null,architectureMatches:null};
+ const db=JSON.parse(exec('docker',['inspect','supabase_db_cuevo']).toString('utf8')) as {Id:string;Config:{Image:string};Image:string}[];
+ if(db.length!==1)throw fail();serviceImageDiagnostic.tagMatches=typeof db[0]?.Config?.Image==='string'?db[0].Config.Image===image:null;if(db[0].Config.Image!==image)throw fail();
+ const serviceImage=JSON.parse(exec('docker',['image','inspect',db[0].Image]).toString('utf8'))[0] as {Id?:unknown;RepoDigests?:unknown;Os?:unknown;Architecture?:unknown}|undefined;
+ serviceImageDiagnostic.idClass=serviceImage?.Id===sourceChildCatalogueImage.indexDigest?'INDEX':serviceImage?.Id===sourceChildCatalogueImage.configDigest?'CONFIG':serviceImage?.Id===sourceChildCatalogueImage.manifestDigest?'MANIFEST':typeof serviceImage?.Id==='string'?'OTHER':'UNKNOWN';
+ serviceImageDiagnostic.repositoryDigestPresent=Array.isArray(serviceImage?.RepoDigests)?serviceImage.RepoDigests.includes(sourceChildCatalogueImage.pinnedReference):null;serviceImageDiagnostic.osMatches=typeof serviceImage?.Os==='string'?serviceImage.Os==='linux':null;serviceImageDiagnostic.architectureMatches=typeof serviceImage?.Architecture==='string'?serviceImage.Architecture==='amd64':null;
+ verifySourceChildCatalogueImage(serviceImage);
  const dump=(schema:string)=>exec('docker',['exec',db[0].Id,'pg_dump','--schema-only','--schema',schema,'--username','supabase_admin','--dbname','postgres']);
  phase('SERVICE_DUMPS');const dumps={auth:dump('auth'),storage:dump('storage'),realtime:dump('realtime')};
  const label=`cuevo-child144-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}`,password=randomBytes(32).toString('hex');
