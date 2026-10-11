@@ -12,6 +12,8 @@ const reviewedLines = new Map([
   ['supabase/migrations/20261001095613_fixture_analytics_delivery.sql', 'f56c892569fa3468abce93a73cc7999018b6de7c58ffa29fc8826114241f56f5'],
   // Reviewed 11 October: public Supabase project ref and Vercel team/project IDs only, from 8c60031; no credential.
   ['scripts/verification/backend-staging-host-contract.test.ts', 'cd4729f7836f41c6cf954523a729453834a81879fcd3bb0e4fb5aa8392a60e03'],
+  // Reviewed 12 October: exact authenticated provenance line; the scanner match is the public GitHub git/ref/heads/main path, never a credential.
+  ['scripts/database/original231-provenance.json', 'd967ea83ca7bf7bc4a1486218c3d1af5662f2de6ac3f0bfeb55826abd5a866ab'],
 ]);
 export function reviewedNonCredential(scope: SecretScanScope, source: { file: string; rule: string; line: number; endLine: number; lineSha256: string; commit: string; ancestorVerified: boolean }): boolean {
   return source.rule === 'generic-api-key' && Number.isSafeInteger(source.line) && source.line > 0 && source.endLine === source.line
