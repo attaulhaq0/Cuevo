@@ -3,6 +3,11 @@ import {test} from 'node:test';
 import {runCanonicalJobFixture} from './canonical-source-job-fixtures';
 function denied(result:Awaited<ReturnType<typeof runCanonicalJobFixture>>,label='',marker?:string){assert.match(result.stderr,/FIXTURE_CANONICAL_READER_ENTERED/,label);assert.equal(result.stderr.includes('SyntaxError'),false,label);if(marker)assert.ok(result.stderr.includes(marker),label+': '+result.stderr);assert.notEqual(result.status,0,label);}
 
+test('retained schema verification binds the original source policies and archives after main advances',async()=>{
+ const positive=await runCanonicalJobFixture('schema',value=>{value.run.status='completed';value.run.conclusion='failure';},{historicalSchema:true,sourcePurpose:'ORIGINAL_RUNTIME_METADATA',advanceCheckout:true,guarded:true});assert.equal(positive.status,0,positive.stderr);assert.equal(JSON.parse(positive.stdout).archiveReads,6);
+ for(const mode of ['source','database','security','job','run']as const){const result=await runCanonicalJobFixture('schema',value=>{value.run.status='completed';value.run.conclusion='failure';},{historicalSchema:true,sourcePurpose:'ORIGINAL_RUNTIME_METADATA',advanceCheckout:true,guarded:true,guardMutation:{kind:'GUARDED_SCHEMA',mode}});denied(result,mode,'FIXTURE_METADATA_GUARDED_SCHEMA');}
+});
+
 test('schema metadata refresh preserves required original evidence without downloading or waiting for runtime',async()=>{
  const positive=await runCanonicalJobFixture('schema',undefined,{guarded:true,guardMutation:{kind:'REFRESH_UNRELATED_RUNTIME'}});assert.equal(positive.status,0,positive.stderr);assert.equal(JSON.parse(positive.stdout).archiveReads,6);assert.match(positive.stderr,/FIXTURE_METADATA_REFRESH_UNRELATED_RUNTIME/);
  for(const mode of ['source','database','security','job','run']as const){

@@ -108,6 +108,14 @@ async function readOriginalSecurity(value: unknown, github: GithubReader, artifa
 export function readCanonicalStagingSecurityAndGuard(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){
   return readOriginalSecurity(value,github,artifact,async expected=>{const main=z.object({object:z.object({type:z.literal('commit'),sha})}).parse(await github('git/ref/heads/main'));if(main.object.sha!==expected.sha)throw unavailable();});
 }
+/** An original completed canonical run retains its own processed security job.
+ * This is historical evidence only; it grants no current source admission. */
+export function readOriginalCanonicalStagingSecurityAndGuard(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){
+ const selected=runSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));if(selected.status!=='completed'||!['success','failure'].includes(selected.conclusion??'')||selected.event!=='push')throw unavailable();
+ const admit=async()=>{const current=runSchema.parse(JSON.parse(canonicalReleaseReviewJson(await github('actions/runs/'+selected.id))));if(canonicalReleaseReviewJson(current)!==canonicalReleaseReviewJson(selected))throw unavailable();};
+ const originalReader:GithubReader=path=>path.startsWith('actions/workflows/ci.yml/runs?')?Promise.resolve({total_count:1,workflow_runs:[selected]}):github(path);
+ return readOriginalSecurity({sha:selected.head_sha,repository:selected.repository.full_name},originalReader,artifact,admit);
+}
 
 /** Existing callers retain exactly the original public proof shape. */
 export async function readCanonicalStagingSecurity(value:unknown,github:GithubReader,artifact?:GithubArtifactReader){return(await readCanonicalStagingSecurityAndGuard(value,github,artifact)).proof;}

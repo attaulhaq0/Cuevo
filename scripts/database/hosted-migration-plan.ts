@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { types } from 'node:util';
 import { parseReconciliationTemplate, verifyReconciledPrefix, type ReconciliationTemplate } from './hosted-schema-reconciliation';
 import { replayPlan, nativeSourceMigration, posthogEnvironmentMigration, posthogIntelligenceMigration } from './replay-plan';
-import {originalChildRecoveryPlanContextSchema,validateOriginalChildRecoveryPlanContext,originalChildRecoveryFingerprint,originalChildReconciledPlanProjection,type OriginalChildRecoveryPlanContext} from './hosted-original-child-recovery';
+import {originalChildRecoveryPlanContextSchema,validateOriginalChildRecoveryPlanContext,originalChildRecoveryFingerprint,originalChildReconciledPlanProjection,type OriginalChildRecoveryPlanContext,originalNative180RecoveryPlanContextSchema,validateOriginalNative180RecoveryPlanContext,originalNative180RecoveryFingerprint,originalNative180ReconciledPlanProjection,type OriginalNative180RecoveryPlanContext} from './hosted-original-child-recovery';
 import {canonicalReleaseExecutionJson} from '../verification/release-review';
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
@@ -44,11 +44,13 @@ export type HostedMigrationPlanV1 = {
   runtimeOnly?:true;
   reconciliationTemplate?:ReconciliationTemplate;
   originalChildRecovery?:OriginalChildRecoveryPlanContext;
+  originalNative180Recovery?:OriginalNative180RecoveryPlanContext;
+  reconciledNative180?:{version:1;purpose:'CUEVO_RECONCILED_NATIVE180_PLAN';observedMigrationCount:180;historySha256:string;templateSha256:string;catalogueReferenceSha256:string};
   reconciledChild?:{version:1;purpose:'CUEVO_RECONCILED_CHILD144_PLAN';observedMigrationCount:144;historySha256:string;templateSha256:string;catalogueReferenceSha256:string};
 };
 
 /** Caller-supplied source/history is planning input, never execution admission or proof of Git review. */
-export function planHostedMigrations(input: { sources: MigrationSource[]; source: unknown; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; originalChildRecovery?:unknown; now: number }): HostedMigrationPlanV1 {
+export function planHostedMigrations(input: { sources: MigrationSource[]; source: unknown; target: unknown; priorReceipt?: unknown; reconciliationTemplate?:unknown; originalChildRecovery?:unknown;originalNative180Recovery?:unknown; now: number }): HostedMigrationPlanV1 {
   return planHostedMigrationsFromSources(input);
 }
 
@@ -67,6 +69,8 @@ function planHostedMigrationsFromSources(input:Parameters<typeof planHostedMigra
   if (order.length !== input.sources.length || new Set(order).size !== order.length) throw failure();
   const migrations = projection.rows.map(({version,sha256,name})=>({version,sha256,name}));
   const originalChildRecovery=input.originalChildRecovery===undefined?undefined:validateOriginalChildRecoveryPlanContext(input.originalChildRecovery,migrations,identity.data);
+  const originalNative180Recovery=input.originalNative180Recovery===undefined?undefined:validateOriginalNative180RecoveryPlanContext(input.originalNative180Recovery,migrations,identity.data);
+  if(originalNative180Recovery&&(originalChildRecovery||input.reconciliationTemplate!==undefined||current.population!=='SCHEMA_ONLY'||current.authUsers!==0||current.migrationVersions.length!==180))throw failure();
   if(originalChildRecovery&&(input.reconciliationTemplate!==undefined||current.population!=='SCHEMA_ONLY'||current.authUsers!==0||current.migrationVersions.length!==144))throw failure();
   let reconciliationTemplate:ReconciliationTemplate|undefined;
   if(input.reconciliationTemplate!==undefined){reconciliationTemplate=parseReconciliationTemplate(input.reconciliationTemplate);verifyReconciledPrefix(reconciliationTemplate,migrations);if(reconciliationTemplate.recoverySource.sourceSha!==identity.data.sha||reconciliationTemplate.recoverySource.treeSha!==identity.data.tree||reconciliationTemplate.originalIdentity.projectRef!==current.projectRef||current.population!=='SCHEMA_ONLY'||current.migrationVersions.length!==120)throw failure();}
@@ -82,10 +86,11 @@ function planHostedMigrationsFromSources(input:Parameters<typeof planHostedMigra
       || prior.data.projectRef !== current.projectRef || new Set(prior.data.migrations.map(row => row.version)).size !== prior.data.migrations.length
       || JSON.stringify(prefix.map(row => row.version).sort()) !== JSON.stringify(history)) throw failure();
     const canonicalRows = (rows: { version: string; sha256: string }[]) => JSON.stringify([...rows].sort((a, b) => a.version.localeCompare(b.version)));
-    if (canonicalRows(prior.data.migrations) !== canonicalRows((originalChildRecovery?prefix.slice(0,124):prefix).map(({ version, sha256 }) => ({ version, sha256 })))) throw failure();
+    if (canonicalRows(prior.data.migrations) !== canonicalRows((originalChildRecovery||originalNative180Recovery?prefix.slice(0,124):prefix).map(({ version, sha256 }) => ({ version, sha256 })))) throw failure();
     if(originalChildRecovery&&(prior.data.completedSourceMigrationCount!==undefined||prior.data.sourceSha!==originalChildRecovery.installedMarker.sourceSha||prior.data.treeSha!==originalChildRecovery.installedMarker.treeSha||canonicalRows(prior.data.migrations)!==canonicalRows(originalChildRecovery.installedMarker.migrations)))throw failure();
     const boundaries = [replay.before.length, replay.before.length + 1, replay.before.length + 1 + replay.remaining.indexOf(posthogIntelligenceMigration), migrations.length];
     const completedPrior = prior.data.completedSourceMigrationCount === prior.data.migrations.length && prior.data.completedSourceMigrationCount === history.length;
+    if(originalNative180Recovery&&(prior.data.completedSourceMigrationCount!==undefined||prior.data.sourceSha!==originalNative180Recovery.installedMarker.sourceSha||prior.data.treeSha!==originalNative180Recovery.installedMarker.treeSha||canonicalRows(prior.data.migrations)!==canonicalRows(originalNative180Recovery.installedMarker.migrations)))throw failure();
     let formerSchemaBoundary=false;
     if(current.population==='SCHEMA_ONLY'&&verifiedPriorSources&&!originalChildRecovery&&!reconciliationTemplate){
       const historical=priorProjection??migrationSourceProjection(verifiedPriorSources),names=historical.order;
@@ -109,8 +114,9 @@ function planHostedMigrationsFromSources(input:Parameters<typeof planHostedMigra
     sourceSetSha256: hash(JSON.stringify(migrations)), observedHistorySha256: hash(JSON.stringify(history)), dispatch: 'DISABLED', seed: 'DISABLED', vault: 'DISABLED',
     ...(reconciliationTemplate?{reconciliationTemplate}:{}),
     ...(originalChildRecovery?{originalChildRecovery,reconciledChild:originalChildReconciledPlanProjection(originalChildRecovery)}:{}),
+    ...(originalNative180Recovery?{originalNative180Recovery,reconciledNative180:originalNative180ReconciledPlanProjection(originalNative180Recovery)}:{}),
     ...(current.population!=='SCHEMA_ONLY'&&input.priorReceipt!==undefined&&priorSchema.parse(input.priorReceipt).completedSourceMigrationCount!==undefined?{priorCompletedRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:priorSchema.parse(input.priorReceipt).completedSourceMigrationCount!}}:{}),
-    ...(current.population==='SCHEMA_ONLY'?{priorSchemaRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:originalChildRecovery?124:applied.length}}:{}) };
+    ...(current.population==='SCHEMA_ONLY'?{priorSchemaRelease:{sourceSha:priorSchema.parse(input.priorReceipt).sourceSha,treeSha:priorSchema.parse(input.priorReceipt).treeSha,migrationCount:originalChildRecovery||originalNative180Recovery?124:applied.length}}:{}) };
 }
 
 const gitEnvironment = () => Object.fromEntries(['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'TMP', 'TEMP'].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]).concat([['GIT_NO_REPLACE_OBJECTS', '1'], ['GIT_CONFIG_NOSYSTEM', '1'], ['GIT_CONFIG_GLOBAL', process.platform === 'win32' ? 'NUL' : '/dev/null']]));
@@ -237,7 +243,7 @@ export function disposeCanonicalMigrationOperation(value:unknown):void{if(!value
 /** Closed original prior inventories selected only by the exact bound plan. */
 export function readCanonicalMigrationPriorSources(value:unknown,expected:CanonicalMigrationOperationInput,kind:CanonicalMigrationPriorKind):CanonicalMigrationSources|null{
  if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();if(held.invalid||held.busy){held.invalid=true;throw failure();}held.busy=true;
- try{const{input,binding}=migrationOperationInput(expected);if(binding!==held.binding||!['PRIOR_SCHEMA','PRIOR_COMPLETED'].includes(kind))throw failure();readCurrentMigrationSources(input,held.original);const prior=kind==='PRIOR_SCHEMA'?input.plan.priorSchemaRelease:input.plan.priorCompletedRelease;if(!prior){if(held.invalid)throw failure();return null;}const{git}=checkedRoot(input.repoRoot);if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==(kind==='PRIOR_SCHEMA'&&input.plan.originalChildRecovery?124:input.plan.applied.length))throw failure();git(['merge-base','--is-ancestor',prior.sourceSha,input.sourceSha]);const tree=git(['ls-tree','-r','-z',prior.sourceSha,'--','supabase/migrations']);let original=held.historical?.[kind];
+ try{const{input,binding}=migrationOperationInput(expected);if(binding!==held.binding||!['PRIOR_SCHEMA','PRIOR_COMPLETED'].includes(kind))throw failure();readCurrentMigrationSources(input,held.original);const prior=kind==='PRIOR_SCHEMA'?input.plan.priorSchemaRelease:input.plan.priorCompletedRelease;if(!prior){if(held.invalid)throw failure();return null;}const{git}=checkedRoot(input.repoRoot);if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==(kind==='PRIOR_SCHEMA'&&(input.plan.originalChildRecovery||input.plan.originalNative180Recovery)?124:input.plan.applied.length))throw failure();git(['merge-base','--is-ancestor',prior.sourceSha,input.sourceSha]);const tree=git(['ls-tree','-r','-z',prior.sourceSha,'--','supabase/migrations']);let original=held.historical?.[kind];
   if(!original){if(prior.sourceSha===held.original.provenance.sourceSha&&prior.treeSha===held.original.provenance.treeSha){if(!Buffer.from(tree).equals(Buffer.from(held.original.tree)))throw failure();original={sources:held.original.sources,tree:held.original.tree,provenance:held.original.provenance,...held.projection};verifyMigrationBlobMetadata(git,tree,original.sources);}else{const sources=readMigrationBlobBatches(git,tree).map(row=>({name:row.name,bytes:new Uint8Array(row.bytes)})),projection=migrationSourceProjection(sources);original={sources,tree:new Uint8Array(tree),provenance:{kind:'VERIFIED_GIT_BLOBS',sourceSha:prior.sourceSha,treeSha:prior.treeSha,migrationTreeSha:git(['rev-parse',`${prior.sourceSha}:supabase/migrations`]).toString().trim(),manifestSha256:hash(tree)},...projection};}held.historical??={};held.historical[kind]=original;}else{if(!Buffer.from(tree).equals(Buffer.from(original.tree))||git(['rev-parse',`${prior.sourceSha}:supabase/migrations`]).toString().trim()!==original.provenance.migrationTreeSha)throw failure();verifyMigrationBlobMetadata(git,tree,original.sources);}
   if(kind==='PRIOR_SCHEMA')validatePriorSchemaRows(input.plan,original.sources,original);else{if(original.sources.length!==prior.migrationCount||original.order.length!==prior.migrationCount||canonicalReleaseExecutionJson(original.rows)!==canonicalReleaseExecutionJson(input.plan.migrations.slice(0,prior.migrationCount)))throw failure();}
   if(held.invalid)throw failure();return structuredClone({sources:original.sources,provenance:original.provenance});
@@ -266,8 +272,9 @@ export function verifyCompletedMigrationPrefix(repoRoot:string,plan:HostedMigrat
 
 /** Internal rows come only from this owner's actual original Git acquisition. */
 function validatePriorSchemaRows(plan:HostedMigrationPlanV1,sources:MigrationSource[],retained?:RetainedHistoricalMigrationSource):void{
- const prior=plan.priorSchemaRelease;if(!prior||prior.migrationCount!==(plan.originalChildRecovery?124:plan.applied.length))throw failure();const replay=retained?.replay??replayPlan(sources);
+ const prior=plan.priorSchemaRelease;if(!prior||prior.migrationCount!==((plan.originalChildRecovery||plan.originalNative180Recovery)?124:plan.applied.length))throw failure();const replay=retained?.replay??replayPlan(sources);
  if(plan.originalChildRecovery){const context=validateOriginalChildRecoveryPlanContext(plan.originalChildRecovery,plan.migrations,plan.source),fingerprint=originalChildRecoveryFingerprint(context.template);if(plan.applied.length!==144||!plan.reconciledChild||plan.reconciledChild.templateSha256!==fingerprint.templateSha256||plan.reconciledChild.historySha256!==context.template.afterHistorySha256||prior.sourceSha!==context.installedMarker.sourceSha||prior.treeSha!==context.installedMarker.treeSha)throw failure();const historical=retained?.replay??replayPlan(sources),rows=retained?.rows??[...historical.before,historical.prerequisite,...historical.remaining].map(name=>({name,version:name.slice(0,14),sha256:hash(sources.find(source=>source.name===name)!.bytes)}));if(canonicalReleaseExecutionJson(rows.slice(0,180))!==canonicalReleaseExecutionJson(context.template.stageRows))throw failure();}
+ if(plan.originalNative180Recovery){const context=validateOriginalNative180RecoveryPlanContext(plan.originalNative180Recovery,plan.migrations,plan.source),fingerprint=originalNative180RecoveryFingerprint(context.template);if(plan.applied.length!==180||!plan.reconciledNative180||plan.reconciledNative180.templateSha256!==fingerprint.templateSha256||plan.reconciledNative180.historySha256!==context.template.afterHistorySha256||prior.sourceSha!==context.installedMarker.sourceSha||prior.treeSha!==context.installedMarker.treeSha)throw failure();const historical=retained?.replay??replayPlan(sources),rows=retained?.rows??[...historical.before,historical.prerequisite,...historical.remaining].map(name=>({name,version:name.slice(0,14),sha256:hash(sources.find(source=>source.name===name)!.bytes)}));if(canonicalReleaseExecutionJson(rows.slice(0,180))!==canonicalReleaseExecutionJson(context.template.stageRows))throw failure();}
  const order=[...replay.before,replay.prerequisite,...replay.remaining],boundaries=[replay.before.length,replay.before.length+1,replay.before.length+1+replay.remaining.indexOf(posthogIntelligenceMigration),order.length];
  if(!boundaries.includes(prior.migrationCount)){if(prior.migrationCount!==120||!plan.reconciliationTemplate)throw failure();const template=parseReconciliationTemplate(plan.reconciliationTemplate);verifyReconciledPrefix(template,plan.migrations);if(template.recoverySource.sourceSha!==plan.source.sha||template.recoverySource.treeSha!==plan.source.tree||template.originalIdentity.sourceSha!==prior.sourceSha||template.originalIdentity.treeSha!==prior.treeSha)throw failure();}
  else if(plan.reconciliationTemplate)throw failure();
@@ -278,7 +285,7 @@ export function readVerifiedPriorSchemaSources(repoRoot:string,plan:HostedMigrat
  if(operation!==undefined)return readOperationPriorFacade(operation,repoRoot,plan,'PRIOR_SCHEMA');
  if(!plan.priorSchemaRelease)return null;
  const{git}=checkedRoot(repoRoot),prior=plan.priorSchemaRelease;
- if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==(plan.originalChildRecovery?124:plan.applied.length))throw failure();
+ if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==((plan.originalChildRecovery||plan.originalNative180Recovery)?124:plan.applied.length))throw failure();
  git(['merge-base','--is-ancestor',prior.sourceSha,plan.source.sha]);
  const sources=readHistoricalMigrationSources(repoRoot,prior.sourceSha,prior.treeSha);validatePriorSchemaRows(plan,sources);return sources;
 }
@@ -288,7 +295,7 @@ export function verifyPriorSchemaPrefix(repoRoot:string,plan:HostedMigrationPlan
 }
 
 /** A release entry also requires all tracked and untracked authored source to match the admitted commit. */
-type CanonicalHostedPlanInput={repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt?:unknown;reconciliationTemplate?:unknown;originalChildRecovery?:unknown;now:number};
+type CanonicalHostedPlanInput={repoRoot:string;sourceSha:string;treeSha:string;target:unknown;priorReceipt?:unknown;reconciliationTemplate?:unknown;originalChildRecovery?:unknown;originalNative180Recovery?:unknown;now:number};
 function captureCanonicalHostedMigrationPlan(input:CanonicalHostedPlanInput){
   const loaded=readCurrentMigrationSources(input),projection=migrationSourceProjection(loaded.sources);
   const { git } = checkedRoot(input.repoRoot);
@@ -304,7 +311,7 @@ function captureCanonicalHostedMigrationPlan(input:CanonicalHostedPlanInput){
     const sameSource=prior.sourceSha===input.sourceSha&&prior.treeSha===input.treeSha;priorSources=sameSource?loaded.sources:readHistoricalMigrationSources(input.repoRoot,prior.sourceSha,prior.treeSha);
     const priorProjection=sameSource?projection:migrationSourceProjection(priorSources),tree=git(['ls-tree','-r','-z',prior.sourceSha,'--','supabase/migrations']),migrationTreeSha=git(['rev-parse',`${prior.sourceSha}:supabase/migrations`]).toString().trim();if(sameSource){if(!Buffer.from(tree).equals(Buffer.from(loaded.tree))||migrationTreeSha!==loaded.provenance.migrationTreeSha)throw failure();verifyMigrationBlobMetadata(git,tree,loaded.sources);}capturedPrior={sources:priorSources,tree:new Uint8Array(tree),provenance:{kind:'VERIFIED_GIT_BLOBS',sourceSha:prior.sourceSha,treeSha:prior.treeSha,migrationTreeSha,manifestSha256:hash(tree)},...priorProjection};
   }
-  const plan = planHostedMigrationsFromSources({ sources: loaded.sources, source: { sha: input.sourceSha, tree: input.treeSha }, target: input.target, priorReceipt: input.priorReceipt, reconciliationTemplate:input.reconciliationTemplate,originalChildRecovery:input.originalChildRecovery, now: input.now },priorSources,projection,capturedPrior);
+  const plan = planHostedMigrationsFromSources({ sources: loaded.sources, source: { sha: input.sourceSha, tree: input.treeSha }, target: input.target, priorReceipt: input.priorReceipt, reconciliationTemplate:input.reconciliationTemplate,originalChildRecovery:input.originalChildRecovery,originalNative180Recovery:input.originalNative180Recovery, now: input.now },priorSources,projection,capturedPrior);
   if (prior&&priorSources) {
     const priorByName=new Map(priorSources.map(source=>[source.name,source.bytes]));
     if (prior.completedSourceMigrationCount !== undefined) {
@@ -324,7 +331,7 @@ type RuntimePlanInput={repoRoot:string;sourceSha:string;treeSha:string;target:un
 type CanonicalMigrationPreparationMode='HOSTED_MIGRATIONS'|'INSTALLED_RUNTIME_READ_ONLY'|'PENDING_RUNTIME_CONFIRMATION'|'RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE';
 export type CanonicalMigrationPreparationInput=(CanonicalHostedPlanInput&{mode:'HOSTED_MIGRATIONS'})|(RuntimePlanInput&{mode:Exclude<CanonicalMigrationPreparationMode,'HOSTED_MIGRATIONS'>});
 function captureCanonicalMigrationPreparation(value:CanonicalMigrationPreparationInput){
- const common={repoRoot:z.string(),sourceSha:sha,treeSha:sha,target:z.unknown(),now:z.number().int().safe().nonnegative()},schema=z.union([z.object({...common,mode:z.literal('HOSTED_MIGRATIONS'),priorReceipt:z.unknown().optional(),reconciliationTemplate:z.unknown().optional(),originalChildRecovery:z.unknown().optional()}).strict(),z.object({...common,mode:z.enum(['INSTALLED_RUNTIME_READ_ONLY','PENDING_RUNTIME_CONFIRMATION','RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE']),priorReceipt:z.unknown()}).strict()]),input=schema.parse(jsonSnapshot(value));
+ const common={repoRoot:z.string(),sourceSha:sha,treeSha:sha,target:z.unknown(),now:z.number().int().safe().nonnegative()},schema=z.union([z.object({...common,mode:z.literal('HOSTED_MIGRATIONS'),priorReceipt:z.unknown().optional(),reconciliationTemplate:z.unknown().optional(),originalChildRecovery:z.unknown().optional(),originalNative180Recovery:z.unknown().optional()}).strict(),z.object({...common,mode:z.enum(['INSTALLED_RUNTIME_READ_ONLY','PENDING_RUNTIME_CONFIRMATION','RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE']),priorReceipt:z.unknown()}).strict()]),input=schema.parse(jsonSnapshot(value));
  let target=input.target;if(input.mode!=='HOSTED_MIGRATIONS'){const active=targetSchema.extend({population:z.literal('ACTIVE_SYNTHETIC'),dispatchDisabled:z.boolean()}).parse(input.target),prior=priorSchema.parse(input.priorReceipt);if(active.authUsers!==133||prior.completedSourceMigrationCount!==prior.migrations.length||active.migrationVersions.length!==prior.migrations.length||input.mode!=='RUNTIME_ROLLOUT_NO_SCHEMA_CHANGE'&&(prior.sourceSha!==input.sourceSha||prior.treeSha!==input.treeSha))throw failure();target={...active,population:'GUARDED_SYNTHETIC',dispatchDisabled:true};}
  const captured=captureCanonicalHostedMigrationPlan({...input,target});if(input.mode!=='HOSTED_MIGRATIONS'){if(captured.result.plan.pending.length||captured.result.plan.stages.some(stage=>stage.names.length)||captured.result.plan.migrations.length!==priorSchema.parse(input.priorReceipt).migrations.length)throw failure();captured.result.plan={...captured.result.plan,runtimeOnly:true};canonicalHostedMigrationPlan(captured.result.plan);}return{...captured,input};
 }
@@ -367,6 +374,8 @@ const planSchema = z.object({
   runtimeOnly:z.literal(true).optional(),
   reconciliationTemplate:z.unknown().optional(),
   originalChildRecovery:originalChildRecoveryPlanContextSchema.optional(),
+  originalNative180Recovery:originalNative180RecoveryPlanContextSchema.optional(),
+  reconciledNative180:z.object({version:z.literal(1),purpose:z.literal('CUEVO_RECONCILED_NATIVE180_PLAN'),observedMigrationCount:z.literal(180),historySha256:digest,templateSha256:digest,catalogueReferenceSha256:digest}).strict().optional(),
   reconciledChild:z.object({version:z.literal(1),purpose:z.literal('CUEVO_RECONCILED_CHILD144_PLAN'),observedMigrationCount:z.literal(144),historySha256:digest,templateSha256:digest,catalogueReferenceSha256:digest}).strict().optional(),
   sourceSetSha256: digest, observedHistorySha256: digest, dispatch: z.literal('DISABLED'), seed: z.literal('DISABLED'), vault: z.literal('DISABLED'),
 }).strict();
@@ -395,7 +404,8 @@ export function canonicalHostedMigrationPlan(plan: HostedMigrationPlanV1) {
     || value.stages.map(stage => stage.id).join('|') !== 'prefix|native|pre-observability|remaining'
     || JSON.stringify(value.stages.flatMap(stage => stage.names)) !== JSON.stringify(value.pending.map(row => row.name))) throw failure();
   if(value.priorCompletedRelease&&value.priorCompletedRelease.migrationCount!==value.applied.length)throw failure();
-  if(value.priorSchemaRelease&&(value.priorSchemaRelease.migrationCount!==(value.originalChildRecovery?124:value.applied.length)||value.priorCompletedRelease))throw failure();
+  if(value.priorSchemaRelease&&(value.priorSchemaRelease.migrationCount!==((value.originalChildRecovery||value.originalNative180Recovery)?124:value.applied.length)||value.priorCompletedRelease))throw failure();
+  if(value.originalNative180Recovery){const context=validateOriginalNative180RecoveryPlanContext(value.originalNative180Recovery,value.migrations,value.source);if(value.mode!=='INCREMENTAL'||value.applied.length!==180||value.runtimeOnly||value.reconciliationTemplate||value.originalChildRecovery||!value.priorSchemaRelease||value.priorSchemaRelease.migrationCount!==124||value.priorSchemaRelease.sourceSha!==context.installedMarker.sourceSha||value.priorSchemaRelease.treeSha!==context.installedMarker.treeSha||!value.reconciledNative180||canonicalReleaseExecutionJson(value.reconciledNative180)!==canonicalReleaseExecutionJson(originalNative180ReconciledPlanProjection(context)))throw failure();}else if(value.reconciledNative180)throw failure();
   if(value.originalChildRecovery){const context=validateOriginalChildRecoveryPlanContext(value.originalChildRecovery,value.migrations,value.source);if(value.mode!=='INCREMENTAL'||value.applied.length!==144||value.runtimeOnly||value.reconciliationTemplate||!value.priorSchemaRelease||value.priorSchemaRelease.sourceSha!==context.installedMarker.sourceSha||value.priorSchemaRelease.treeSha!==context.installedMarker.treeSha||!value.reconciledChild||canonicalReleaseExecutionJson(value.reconciledChild)!==canonicalReleaseExecutionJson(originalChildReconciledPlanProjection(context)))throw failure();}else if(value.reconciledChild||value.priorSchemaRelease?.migrationCount===144)throw failure();
   if(value.reconciliationTemplate!==undefined){const template=parseReconciliationTemplate(value.reconciliationTemplate);verifyReconciledPrefix(template,value.migrations);if(value.applied.length!==120||!value.priorSchemaRelease||template.recoverySource.sourceSha!==value.source.sha||template.recoverySource.treeSha!==value.source.tree||template.originalIdentity.sourceSha!==value.priorSchemaRelease.sourceSha||template.originalIdentity.treeSha!==value.priorSchemaRelease.treeSha||template.originalIdentity.projectRef!==value.projectRef||value.runtimeOnly)throw failure();value.reconciliationTemplate=template;}
   if(value.priorSchemaRelease?.migrationCount===120&&value.reconciliationTemplate===undefined)throw failure();

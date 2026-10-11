@@ -67,6 +67,13 @@ test('strict prepared manifest binds source graph/config/image and payload inste
  const api=await subject(),{createPreparedEdgeFixture}=await import('../verification/prepared-edge-artifact.fixture'),fixture=createPreparedEdgeFixture(),{manifestSha256,...body}=fixture.manifest;assert.equal(api.prepareEdgeManifest(body).manifestSha256,manifestSha256);
  for(const changed of [{...body,platform:'linux/arm64'},{...body,physicalGraphSha256:hash('different')},{...body,secret:'canary'},{...body,cleanup:'UNKNOWN'},{...body,runtimeVersion:'latest'}])assert.throws(()=>api.prepareEdgeManifest(changed));let reads=0;assert.throws(()=>api.prepareEdgeManifest({...body,get sourceSha(){reads++;return body.sourceSha;}}));assert.equal(reads,0);
 });
+test('current image transport admits only the exact content-pinned GHCR reference', async () => {
+ const api=await subject(),{createPreparedEdgeFixture}=await import('../verification/prepared-edge-artifact.fixture'),fixture=createPreparedEdgeFixture(),{manifestSha256,...body}=fixture.manifest;void manifestSha256;
+ const selected='ghcr.io/supabase/edge-runtime@sha256:645d0e45446181f3e9d87efeef637b494615f32365befff00e2d2b0fe8535fef';
+ assert.equal(api.prepareEdgeManifest({...body,baseImage:selected}).baseImage,selected);
+ assert.equal(fixture.manifest.baseImage,selected);
+ for(const baseImage of ['public.ecr.aws/supabase/edge-runtime@sha256:645d0e45446181f3e9d87efeef637b494615f32365befff00e2d2b0fe8535fef','foreign.invalid/supabase/edge-runtime@sha256:645d0e45446181f3e9d87efeef637b494615f32365befff00e2d2b0fe8535fef','ghcr.io/supabase/edge-runtime:1.77.1','ghcr.io/supabase/edge-runtime@sha256:'+'a'.repeat(64)])assert.throws(()=>api.prepareEdgeManifest({...body,baseImage}));
+});
 test('current prepared artifact binds one payload and native unbundle package inventory', async () => {
  const api = await subject(); const {createPreparedEdgeFixture} = await import('../verification/prepared-edge-artifact.fixture'); const value = createPreparedEdgeFixture();
  assert.equal(typeof (api as unknown as {readPreparedEdgeArtifactManifest?:unknown}).readPreparedEdgeArtifactManifest, 'function');

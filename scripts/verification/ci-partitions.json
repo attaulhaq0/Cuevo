@@ -1420,6 +1420,6 @@
   "sourceCohorts": {
     "version": 1,
     "file": "scripts/database/hosted-schema-continuation-executor.test.ts",
-    "policySha256": "50987b89854a2b153f2b201b4aa09ae723a5ce54e0b45b48b54cec5fce9dd345"
+    "policySha256": "a89ed95eef3a8b4f60ec565e4882e949b472c31be368ac8e615656bb26446b4d"
   }
 }
