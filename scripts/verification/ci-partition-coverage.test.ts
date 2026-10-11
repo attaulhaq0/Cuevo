@@ -29,6 +29,16 @@ test('one synchronous uncohorted source union uses one native coverage discovery
 });
 async function subject(){let value:Record<string,unknown>={};try{value=await import(pathToFileURL(resolve(import.meta.dirname,'ci-partition-coverage.ts')).href);}catch(error){if((error as NodeJS.ErrnoException).code!=='ERR_MODULE_NOT_FOUND')throw error;}assert.equal(typeof value.readCiPartitionCoverage,'function','fixed CI partition union guard must exist');return value as typeof import('./ci-partition-coverage');}
 
+test('serial continuation native and executor cohorts retain independent existing CI jobs',async()=>{
+ const coverage=(await subject()).readCiPartitionCoverage(root),owner=(file:string)=>coverage.source.find(part=>part.files.includes(file))?.id;
+ assert.equal(owner('scripts/database/hosted-schema-continuation-native.test.ts'),'source-native');
+ assert.equal(owner('scripts/database/hosted-schema-reconciliation-executor.test.ts'),'source-contracts');
+ assert.equal(owner('scripts/database/hosted-schema-continuation-executor.test.ts'),'source-contracts');
+ assert.equal(owner('scripts/verification/backend-release-prepare.test.ts'),'source-delivery');
+ assert.deepEqual(coverage.source.map(part=>[part.id,part.files.length]),[['source-native',15],['source-contracts',60],['source-delivery',85]]);
+ const files=coverage.source.flatMap(part=>part.files);assert.equal(files.length,160);assert.equal(new Set(files).size,160);
+});
+
 test('fixed conservative partitions cover every original source and integration file exactly once',async()=>{
  const api=await subject(),coverage=api.readCiPartitionCoverage(root);
  const source=statelessVerificationSteps.flatMap(step=>[...step.args].filter(path=>path.endsWith('.test.ts'))).sort(),integration=fullIntegrationFiles();

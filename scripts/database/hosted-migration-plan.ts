@@ -149,8 +149,10 @@ function checkedRoot(repoRoot: string) {
   try { actual = realpathSync(repoRoot); } catch { throw failure(); }
   if (resolve(repoRoot) !== actual || lstatSync(repoRoot).isSymbolicLink()) throw failure();
   const git = gitReader(actual);
-  if (realpathSync(git(['rev-parse', '--show-toplevel']).toString('utf8').trim()) !== actual || git(['rev-parse', '--is-shallow-repository']).toString('utf8').trim() !== 'false') throw failure();
-  const grafts = git(['rev-parse', '--git-path', 'info/grafts']).toString('utf8').trim();
+  const text=new TextDecoder('utf8',{fatal:true}).decode(git(['rev-parse','--show-toplevel','--is-shallow-repository','--git-path','info/grafts']));
+  if(!text.endsWith('\n')||/[\r\0]/.test(text))throw failure();const rows=text.slice(0,-1).split('\n');
+  if(rows.length!==3||rows.some(row=>!row)||realpathSync(rows[0])!==actual||rows[1]!=='false')throw failure();
+  const grafts = rows[2];
   try { if (readFileSync(isAbsolute(grafts) ? grafts : join(actual, grafts)).length) throw failure(); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw failure(); }
   if (git(['for-each-ref', '--format=%(refname)', 'refs/replace']).length) throw failure();
   return { root: actual, git };
