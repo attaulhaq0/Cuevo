@@ -7,7 +7,7 @@ import { prepareNativeBackendReleaseAdmission, readNativeBackendReleaseAdmission
 import { validatePreparedBackendReleaseIntent, type BackendReleaseExpected } from '../verification/backend-release-contracts';
 import { readHostedMigrationProvider, hostedMigrationEndpointSchema, requireCurrentHostedMigrationEndpoint } from './hosted-migration-provider';
 import { canonicalHostedMigrationPlan,prepareCanonicalMigrationOperation,readCanonicalMigrationOperation,disposeCanonicalMigrationOperation,type CanonicalMigrationOperation, type HostedMigrationPlanV1 } from './hosted-migration-plan';
-import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata } from './hosted-migration-stage-files';
+import { admitHostedMigrationStageFiles,admitInstalledMigrationStageMetadata,admitOriginal231ObservationStageMetadata } from './hosted-migration-stage-files';
 import { verifyHostedMigrationHistory } from './hosted-migration-history';
 import { assertNativeSchemaRecoveryConsumption, readNativeSchemaStageAdmission, requireCommittedSchemaRecoveryInventory, type NativeReconciliationPermit, type SchemaRecoveryConsumption } from './hosted-migration-database';
 import { createHostedMigrationDatabase, hostedSyntheticSeedSha256, readOriginalSyntheticSeed } from './hosted-migration-database';
@@ -79,7 +79,7 @@ export async function seedHostedSyntheticPopulation(value:unknown,borrowed?:Nati
  const revalidate=async(consumption:SchemaRecoveryConsumption)=>{
   // Immutable seed/source preparation precedes the owner’s renewed current facts.
   await readOriginalSyntheticSeed(root);
-  const admitFiles=stage.materialization==='METADATA_ONLY'&&expected.installedSource&&expected.executionScope==='complete-backend'?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
+  const admitFiles=plan.original231Recovery?admitOriginal231ObservationStageMetadata:stage.materialization==='METADATA_ONLY'&&expected.installedSource&&expected.executionScope==='complete-backend'?admitInstalledMigrationStageMetadata:admitHostedMigrationStageFiles;
   await admitFiles({repoRoot:root,sourceSha:expected.releaseSha,treeSha:expected.treeSha,plan,stage},sourceOperation);
   if(expected.schemaRecovery){
    if(!input.schemaRecoveryExport)throw failure();

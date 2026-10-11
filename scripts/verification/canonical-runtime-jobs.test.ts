@@ -8,9 +8,17 @@ import {resolve,join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {registerHooks} from 'node:module';
+import {transformSync} from 'esbuild';
 import type {Readable} from 'node:stream';
 import {createPreparedEdgeFixture} from './prepared-edge-artifact.fixture';
 function denied(result:Awaited<ReturnType<typeof runCanonicalJobFixture>>,label='',marker?:string){assert.match(result.stderr,/FIXTURE_CANONICAL_READER_ENTERED/,label);assert.equal(result.stderr.includes('SyntaxError'),false,label);if(marker)assert.ok(result.stderr.includes(marker),label+': '+result.stderr);assert.notEqual(result.status,0,label);}
+
+test('historical database policy accepts only exact source-bound pre231 jobs and current sources require the231 artifact',async()=>{
+ const url=pathToFileURL(resolve('scripts/verification/canonical-runtime-jobs.ts')).href+'?historical-database-policy',hook=registerHooks({load(selected,context,next){if(selected===url)return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(selected),'utf8')+'\nexport {historicalDatabaseContract as fixtureHistoricalDatabaseContract};',{loader:'ts',format:'esm'}).code};return next(selected,context);}});try{const api:Record<string,unknown>=await import(url);assert.equal(typeof api.fixtureHistoricalDatabaseContract,'function');const select=api.fixtureHistoricalDatabaseContract as(job:unknown,source:string,purpose:string,git:(args:string[])=>Buffer)=>unknown,git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:32*1024*1024}),sha='239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37',yaml=createRequire(import.meta.url)('js-yaml')as{load(value:string):{jobs:Record<string,unknown>}},old=yaml.load(git(['show',sha+':.github/workflows/ci.yml']).toString()).jobs['database-checks'];assert.deepEqual(select(old,sha,'ORIGINAL_RUNTIME_METADATA',git),old);assert.throws(()=>select(old,sha,'CURRENT_SOURCE',git));assert.throws(()=>select({...old as object,'continue-on-error':true},sha,'ORIGINAL_RUNTIME_METADATA',git));assert.throws(()=>select(old,'0'.repeat(40),'ORIGINAL_RUNTIME_METADATA',git));}finally{hook.deregister();}
+});
 
 test('canonical runtime admission binds original run attempt and every successful isolated lane and source artifact',async()=>{
  const positive=await runCanonicalJobFixture('runtime');assert.equal(positive.status,0,positive.stderr);assert.equal(JSON.parse(positive.stdout).runAttempt,2);assert.match(JSON.parse(positive.stdout).jobsSha256,/^[a-f0-9]{64}$/);

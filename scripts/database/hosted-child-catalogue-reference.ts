@@ -62,3 +62,15 @@ export function parseHostedNative180CatalogueReceipt(value:unknown):HostedNative
  }catch{throw fail();}
 }
 export const sourceNative180CatalogueReceiptSha256=(value:unknown)=>hash(canonicalReleaseExecutionJson(parseHostedNative180CatalogueReceipt(value)));
+
+/** Complete source231 baseline for one original failed outcome; never hosted posture or SQL authority. */
+export function deriveSourceOriginal231CatalogueBaseline(prefix231:unknown){try{return{scratch231:summarizeSourceChildCatalogue(prefix231),provider231:summarizeSourceChildCatalogue(applySourceChildCatalogueProviderDeltas(prefix231).rows)};}catch{throw fail();}}
+export const hostedOriginal231CatalogueReceiptSchema=hostedNative180CatalogueReceiptSchema.omit({version:true,purpose:true,baselineSourceSha:true,baselineTreeSha:true,migrationCount:true,migrationRowsSha256:true}).extend({version:z.literal(4),purpose:z.literal('CUEVO_SOURCE_ORIGINAL231_CATALOGUE'),baselineSourceSha:z.literal('239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37'),baselineTreeSha:z.literal('a58fa0bef6f6c0ea9cc57d12156b6c3464ac5559'),migrationCount:z.literal(231),migrationRowsSha256:z.literal('46b7ac8b3a4f1bdcb1f2f0a83a5df7f1594c8ea37d841c8b1be495653df0f6ab'),provider180:hostedChildCatalogueSummarySchema,scratch231:hostedChildCatalogueSummarySchema,sourceNative180ReceiptSha256:digest}).strict();
+export type HostedOriginal231CatalogueReceipt=z.infer<typeof hostedOriginal231CatalogueReceiptSchema>;
+export function parseHostedOriginal231CatalogueReceipt(value:unknown):HostedOriginal231CatalogueReceipt{
+ try{if(Buffer.byteLength(canonicalReleaseExecutionJson(value))>49152)throw fail();const r=hostedOriginal231CatalogueReceiptSchema.parse(JSON.parse(canonicalReleaseExecutionJson(value))),p=policy.completedPrefix;
+  if(r.querySha256!==hostedSchemaCatalogueQuerySha256||r.policySha256!==unknownPrefixCataloguePolicySha256||Date.parse(r.startedAt)>Date.parse(r.capturedAt)||Date.parse(r.capturedAt)>Date.parse(r.cleanupCompletedAt)||r.sourceSha===r.baselineSourceSha)throw fail();
+  for(const[actual,expected]of [[r.scratch123,p.scratch],[r.provider123,p.expected]]as const)if(actual.sha256!==expected.catalogueSha256||actual.rows!==expected.rows||actual.bytes!==expected.bytes||!same(actual.categories,expected.categories))throw fail();return r;
+ }catch{throw fail();}
+}
+export const sourceOriginal231CatalogueReceiptSha256=(value:unknown)=>hash(canonicalReleaseExecutionJson(parseHostedOriginal231CatalogueReceipt(value)));

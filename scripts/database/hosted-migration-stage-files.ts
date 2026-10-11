@@ -29,7 +29,7 @@ async function physical(root:string,path:string,kind:'directory'|'file'){
 export async function admitHostedMigrationStageFiles(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;stage:HostedMigrationWorkdirs['stages'][number]},borrowed?:CanonicalMigrationOperation){
  let operation:CanonicalMigrationOperation|undefined;try{
   const text=JSON.stringify(plain(value));if(Buffer.byteLength(text)>2*1024*1024)throw failure();const input=JSON.parse(text) as typeof value,root=input.repoRoot;
-  if(input.stage.materialization!==undefined&&input.stage.materialization!=='SQL_FILES')throw failure();
+  if(input.plan.original231Recovery||input.stage.materialization!==undefined&&input.stage.materialization!=='SQL_FILES')throw failure();
   if(!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
   const plan=JSON.parse(canonicalHostedMigrationPlan(input.plan).json) as HostedMigrationPlanV1,binding={repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,plan};operation=borrowed===undefined?prepareCanonicalMigrationOperation(binding):borrowed;const loaded=readCanonicalMigrationOperation(operation,binding);
   if(plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();const replay=loaded.replay;
@@ -46,17 +46,19 @@ export async function admitHostedMigrationStageFiles(value:{repoRoot:string;sour
   readCanonicalMigrationOperation(operation,binding);return{evidence:'VERIFIED_GIT_AND_PHYSICAL_STAGE' as const,sources:loaded.sources,stageSha256:hash(JSON.stringify({included:included.map(row=>({name:row.name,version:row.version,sha256:row.sha256})),configSha256:input.stage.configSha256})),planSha256:canonicalHostedMigrationPlan(plan).sha256};
  }catch{throw failure();}finally{if(operation&&borrowed===undefined)disposeCanonicalMigrationOperation(operation);}
 }
-/** Shared structural proof only; the public surfaces keep inactive and runtime-only plans distinct. */
-async function admitInstalledStageMetadata(value:Parameters<typeof admitHostedMigrationStageFiles>[0],runtimeOnly:boolean,borrowed?:CanonicalMigrationOperation){
+/** Shared structural proof; the public surfaces preserve each exact metadata plan boundary. */
+async function admitInstalledStageMetadata(value:Parameters<typeof admitHostedMigrationStageFiles>[0],mode:'INSTALLED'|'RUNTIME'|'ORIGINAL231',borrowed?:CanonicalMigrationOperation){
  let operation:CanonicalMigrationOperation|undefined;try{
   const text=JSON.stringify(plain(value));if(Buffer.byteLength(text)>2*1024*1024)throw failure();const input=JSON.parse(text) as typeof value,root=input.repoRoot,plan=JSON.parse(canonicalHostedMigrationPlan(input.plan).json) as HostedMigrationPlanV1,stage=input.stage;
-  if(stage.materialization!=='METADATA_ONLY'||(runtimeOnly?plan.runtimeOnly!==true:!!plan.runtimeOnly)||plan.reconciliationTemplate||plan.priorSchemaRelease||!plan.priorCompletedRelease||plan.pending.length||plan.applied.length!==plan.migrations.length||plan.stages.some(stage=>stage.names.length)||plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha||!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
-  const binding={repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,plan};operation=borrowed===undefined?prepareCanonicalMigrationOperation(binding):borrowed;const loaded=readCanonicalMigrationOperation(operation,binding);if(!verifyCompletedMigrationPrefix(root,plan,operation))throw failure();
+  const original231=mode==='ORIGINAL231';
+  if(original231&&(JSON.stringify(Object.keys(input).sort())!==JSON.stringify(['repoRoot','sourceSha','treeSha','plan','stage'].sort())||JSON.stringify(Object.keys(stage).sort())!==JSON.stringify(['id','workdir','included','pending','expectedBeforeVersions','expectedAfterVersions','configSha256','commandArgs','materialization'].sort())))throw failure();
+  if(stage.materialization!=='METADATA_ONLY'||(mode==='RUNTIME'?plan.runtimeOnly!==true:!!plan.runtimeOnly)||plan.reconciliationTemplate||(original231?!plan.original231Recovery||!plan.priorSchemaRelease||!!plan.priorCompletedRelease:!!plan.original231Recovery||!!plan.priorSchemaRelease||!plan.priorCompletedRelease)||plan.pending.length||plan.applied.length!==plan.migrations.length||plan.stages.some(stage=>stage.names.length)||plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha||!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
+  const binding={repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,plan};operation=borrowed===undefined?prepareCanonicalMigrationOperation(binding):borrowed;const loaded=readCanonicalMigrationOperation(operation,binding);if(!(original231?verifyPriorSchemaPrefix(root,plan,operation):verifyCompletedMigrationPrefix(root,plan,operation)))throw failure();
   const rows=loaded.rows,versions=rows.map(row=>row.version).sort();
   if(canonicalReleaseExecutionJson(rows)!==canonicalReleaseExecutionJson(plan.migrations)||canonicalReleaseExecutionJson(plan.applied)!==canonicalReleaseExecutionJson(rows.map(({version,sha256})=>({version,sha256})))||!plan.stages.some(current=>current.id===stage.id)||canonicalReleaseExecutionJson(stage.included)!==canonicalReleaseExecutionJson(rows)||stage.pending.length||JSON.stringify(stage.expectedBeforeVersions)!==JSON.stringify(versions)||JSON.stringify(stage.expectedAfterVersions)!==JSON.stringify(versions)||stage.configSha256!==hash(config))throw failure();
   const releaseRoot=join(root,'.local/hosted-release'),directory=join(stage.workdir,'..'),part=relative(releaseRoot,directory);
   if(!isAbsolute(stage.workdir)||resolve(stage.workdir)!==stage.workdir||!part||isAbsolute(part)||part.split(/[\\/]/).some(piece=>!piece||piece==='.'||piece==='..')||stage.workdir!==join(directory,stage.id))throw failure();
-  const args=['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',stage.workdir,'--yes','--output-format','json'];if(JSON.stringify(stage.commandArgs)!==JSON.stringify(args))throw failure();
+  const args=original231?[]:['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',stage.workdir,'--yes','--output-format','json'];if(JSON.stringify(stage.commandArgs)!==JSON.stringify(args))throw failure();
   await physical(root,directory,'directory');await physical(root,join(directory,'builder-state.json'),'file');
   if(JSON.stringify((await readdir(directory)).sort())!==JSON.stringify(['builder-state.json']))throw failure();
   const statePath=join(directory,'builder-state.json'),before=await lstat(statePath);if(before.size>49152)throw failure();
@@ -75,11 +77,15 @@ async function admitInstalledStageMetadata(value:Parameters<typeof admitHostedMi
 }
 /** Complete inactive installed source metadata only. Cannot admit SQL or runtime-only plans. */
 export async function admitInstalledMigrationStageMetadata(value:Parameters<typeof admitHostedMigrationStageFiles>[0],borrowed?:CanonicalMigrationOperation){
- return{...await admitInstalledStageMetadata(value,false,borrowed),evidence:'VERIFIED_GIT_AND_INSTALLED_STAGE_METADATA' as const};
+ return{...await admitInstalledStageMetadata(value,'INSTALLED',borrowed),evidence:'VERIFIED_GIT_AND_INSTALLED_STAGE_METADATA' as const};
 }
 /** Exact runtime-only installed metadata. No SQL files, provider reads or native effect authority. */
 export async function admitInstalledRuntimeStageMetadata(value:Parameters<typeof admitHostedMigrationStageFiles>[0],borrowed?:CanonicalMigrationOperation){
- return{...await admitInstalledStageMetadata(value,true,borrowed),evidence:'VERIFIED_GIT_AND_INSTALLED_RUNTIME_STAGE_METADATA' as const};
+ return{...await admitInstalledStageMetadata(value,'RUNTIME',borrowed),evidence:'VERIFIED_GIT_AND_INSTALLED_RUNTIME_STAGE_METADATA' as const};
+}
+/** Closed original231 observation input only; no SQL, CLI or native effect admission. */
+export async function admitOriginal231ObservationStageMetadata(value:Parameters<typeof admitHostedMigrationStageFiles>[0],borrowed?:CanonicalMigrationOperation){
+ return{...await admitInstalledStageMetadata(value,'ORIGINAL231',borrowed),evidence:'VERIFIED_GIT_AND_ORIGINAL231_OBSERVATION_METADATA' as const};
 }
 /** Re-admit a source-derived child without granting an intermediate prefix execution authority. */
 export async function admitHostedMigrationBatchFiles(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;stage:HostedMigrationWorkdirs['stages'][number];batch:HostedMigrationBatchWorkdir},borrowed?:CanonicalMigrationOperation){
