@@ -13,6 +13,23 @@ const sourceSha = 'a'.repeat(40), treeSha = 'b'.repeat(40), before = [{ path: 's
 const env = { GITHUB_SHA: sourceSha, GITHUB_WORKFLOW_SHA: sourceSha, GITHUB_REF: 'refs/heads/main', GITHUB_JOB: 'technical-mvp', GITHUB_ACTIONS: 'true', CI: 'true', GITHUB_REPOSITORY: 'owner/repo', GITHUB_WORKFLOW_REF: 'owner/repo/.github/workflows/full-regression.yml@refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', CUEVO_FULL_VERIFICATION_PURPOSE: 'customer-candidate', GITHUB_RUN_ID: '42', GITHUB_RUN_ATTEMPT: '1' };
 const input = () => ({ env: { ...env }, sourceSha, treeSha, before, after: structuredClone(before), evidence: { status: 'VERIFIED', rows: [...verificationSteps.map(step => ({ name: step.name, exitCode: 0, required: true as const, durationMs: 1 })), { name: 'source-freeze', exitCode: 0, required: true as const, durationMs: 1 }] } });
 function diagnosticOwner(value:unknown){assert.equal(typeof fullEvidenceOwner.fullVerificationDiagnostic,'function','full owner must export failed-run diagnostics');return fullEvidenceOwner.fullVerificationDiagnostic(value);}
+
+test('full diagnostics hash the complete source inventory beyond review-package bounds', () => {
+  const manifest = Array.from({ length: 3000 }, (_, index) => ({ path: 'source/' + String(index).padStart(5, '0') + '.ts', sha256: createHash('sha256').update(String(index)).digest('hex') }));
+  const raw = input(), request = { ...raw, before: manifest, after: [...manifest].reverse(), acceptanceOutcome: 'failure' as const };
+  const diagnostic = diagnosticOwner(request);
+  const canonical = '[' + manifest.map(row => JSON.stringify({ path: row.path, sha256: row.sha256 })).join(',') + ']';
+  const expected = createHash('sha256').update(canonical).digest('hex');
+  assert.equal(diagnostic.sourceFileCount, manifest.length); assert.equal(diagnostic.sourceUnchanged, true);
+  assert.equal(diagnostic.initialSourceSha256, expected); assert.equal(diagnostic.finalSourceSha256, expected);
+  assert.doesNotMatch(JSON.stringify(diagnostic), /source\/00000\.ts/);
+  const changed = manifest.map(row => ({ ...row })); changed[2999].sha256 = 'd'.repeat(64);
+  const drift = diagnosticOwner({ ...request, after: changed }); assert.equal(drift.sourceUnchanged, false); assert.notEqual(drift.initialSourceSha256, drift.finalSourceSha256);
+  assert.throws(() => diagnosticOwner({ ...request, before: [...manifest, manifest[0]] }));
+  const maximum = Array.from({ length: 50000 }, (_, index) => ({ path: 'source/' + String(index).padStart(5, '0') + '.ts', sha256: 'c'.repeat(64) }));
+  assert.equal(diagnosticOwner({ ...request, before: maximum, after: null }).sourceFileCount, 50000);
+  assert.throws(() => diagnosticOwner({ ...request, before: [...maximum, { path: 'source/overflow.ts', sha256: 'c'.repeat(64) }], after: null }));
+});
 test('full source receipt distinguishes scheduled regression from an explicit customer candidate', () => {
   assert.equal(fullVerificationSummary(input()).profile, 'CUSTOMER_CANDIDATE');
   assert.equal(fullVerificationSummary({ ...input(), env: { ...env, GITHUB_EVENT_NAME: 'schedule', CUEVO_FULL_VERIFICATION_PURPOSE: 'regression' } }).profile, 'FULL_REGRESSION');
@@ -75,9 +92,9 @@ test('actual full exporter keeps failed cancelled and dirty receipts separate fr
   try{
     await writeFile(join(root,'.gitignore'),'.local/\n');await writeFile(join(root,'source.txt'),'Original source\n');git('init','--quiet');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Diagnostic fixture');
     const current=git('rev-parse','HEAD'),manifest=[{path:'source.txt',sha256:createHash('sha256').update('Original source\n').digest('hex')}],folder='.local/verification/2026-10-10T00-00-00-000Z',directory=join(root,folder),context={version:1,purpose:'CUEVO_FULL_VERIFICATION_INVOCATION',profile:'full',repository:'owner/repo',sourceSha:current,treeSha:git('rev-parse','HEAD^{tree}'),workflowSha:current,workflowRef:'owner/repo/.github/workflows/full-regression.yml@refs/heads/main',ref:'refs/heads/main',event:'workflow_dispatch',job:'technical-mvp',runId:'42',runAttempt:1,verificationPurpose:'customer-candidate',verificationRunId:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',directory:folder,startedAtMs:Date.parse('2026-10-10T00:00:00Z'),sourceDigest:createHash('sha256').update(JSON.stringify(manifest)).digest('hex')};await mkdir(directory,{recursive:true});await writeFile(join(directory,'context.json'),JSON.stringify(context));await writeFile(join(root,'.local/full-verification-input.json'),JSON.stringify(context));
-    const run=async(outcome:'success'|'failure'|'cancelled',final:unknown,dirty=false)=>{
+    const run=async(outcome:'success'|'failure'|'cancelled',final:unknown,dirty=false,initial=manifest)=>{
       const raw=input().evidence; if(outcome!=='success'){raw.status='NOT_VERIFIED';raw.rows[0].exitCode=1;raw.rows[1].exitCode=null as unknown as number;}
-      await writeFile(join(directory,'evidence.json'),JSON.stringify(raw));await writeFile(join(directory,'source.json'),JSON.stringify(manifest));
+      await writeFile(join(directory,'evidence.json'),JSON.stringify(raw));await writeFile(join(directory,'source.json'),JSON.stringify(initial));
       if(final!==null)await writeFile(join(directory,'source-final.json'),JSON.stringify(final));else await rm(join(directory,'source-final.json'),{force:true});
       if(dirty)await writeFile(join(root,'source.txt'),'Changed source\n');
       const result=spawnSync(process.execPath,['--import',loader,owner],{cwd:root,encoding:'utf8',windowsHide:true,env:{...process.env,...env,GITHUB_SHA:current,GITHUB_WORKFLOW_SHA:current,CUEVO_FULL_ACCEPTANCE_OUTCOME:outcome}}),output=join(root,'.local/full-verification');
@@ -91,6 +108,10 @@ test('actual full exporter keeps failed cancelled and dirty receipts separate fr
     assert.equal((await run('failure',manifest)).status,'FAILED');
     assert.equal((await run('cancelled',null)).sourceUnchanged,null);
     assert.equal((await run('failure',[{...manifest[0],sha256:'d'.repeat(64)}],true)).sourceUnchanged,false);
+    const largeManifest=Array.from({length:3000},(_,index)=>({path:'source/'+String(index).padStart(5,'0')+'.ts',sha256:createHash('sha256').update(String(index)).digest('hex')}));
+    const largeContext={...context,sourceDigest:createHash('sha256').update(JSON.stringify(largeManifest)).digest('hex')};
+    await writeFile(join(root,'.local/full-verification-input.json'),JSON.stringify(largeContext));await writeFile(join(directory,'context.json'),JSON.stringify(largeContext));
+    const large=await run('failure',[...largeManifest].reverse(),false,largeManifest);assert.equal(large.sourceFileCount,3000);assert.equal(large.sourceUnchanged,true);assert.equal(large.initialSourceSha256,largeContext.sourceDigest);assert.equal(large.finalSourceSha256,largeContext.sourceDigest);
     await writeFile(join(root,'.local/full-verification-input.json'),JSON.stringify({...context,verificationPurpose:'regression'}));await writeFile(join(directory,'context.json'),JSON.stringify({...context,verificationPurpose:'regression'}));
     const relabeled=spawnSync(process.execPath,['--import',loader,owner],{cwd:root,encoding:'utf8',windowsHide:true,env:{...process.env,...env,GITHUB_SHA:current,GITHUB_WORKFLOW_SHA:current,CUEVO_FULL_ACCEPTANCE_OUTCOME:'failure'}});assert.equal(relabeled.status,1);await assert.rejects(readFile(join(root,'.local/full-verification/diagnostic.json'),'utf8'),{code:'ENOENT'});
     await writeFile(join(directory,'context.json'),JSON.stringify(context));

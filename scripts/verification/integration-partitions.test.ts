@@ -94,13 +94,29 @@ test('actual integration runner exports its nonzero original failed phase withou
   const ownerPath='scripts/verification/integration-partitions.ts';await mkdir(join(root,'scripts/verification'),{recursive:true});await writeFile(join(root,ownerPath),"const owner=await import(process.env.CUEVO_FAILURE_FIXTURE_REPORTER);export default owner.default;");
   const file='apps/api/test/integration/failure.test.ts';await writeFile(join(root,file),"import{it,expect}from'vitest';it('private phase failure',()=>expect(false,'private provider credential').toBe(true));");
   git(['init','--quiet']);git(['add','.']);assert.equal(git(['ls-files','--','node_modules']).trim(),'','The dependency link must remain outside original source inventory on every platform.');git(['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','fixture']);
-  const subject=resolve('scripts/test-integration.ts'),hook=join(root,'.local/runner-hook.mjs'),phasePath=join(root,'.local/phase.json');
+  const subject=resolve('scripts/test-integration.ts'),hook=join(root,'.local/runner-hook.mjs'),sourceSha=git(['rev-parse','HEAD']).trim(),sourceDigest=hash(JSON.stringify(git(['ls-files','-z']).split('\0').filter(Boolean).map(path=>({path,sha256:hash(readFileSync(join(root,path)))})).sort((left,right)=>left.path<right.path?-1:left.path>right.path?1:0)));
   await writeFile(hook,`import{registerHooks}from'node:module';registerHooks({load(url,context,next){if(url.endsWith('/ci-partition-coverage.ts'))return{format:'module',shortCircuit:true,source:'export const readCiPartitionCoverage=()=>({});export const ciPartitionFiles=()=>["apps/api/test/integration/failure.test.ts"];export const ciPartitionFileSelections=()=>{throw Error("Unexpected source aggregate in integration fixture");};'};return next(url,context);}});`);
   // Only Vitest source/runner location is adapted; the real runner, lifecycle
   // reporter, nonzero outcome and phase projection remain production code.
-  const run=spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--import',pathToFileURL(hook).href,subject,'--ci-partition=integration-learning'],{cwd:root,encoding:'utf8',timeout:30000,env:{...process.env,CI:'true',GITHUB_ACTIONS:'true',GITHUB_JOB:'integration-learning',GITHUB_EVENT_NAME:'pull_request',CUEVO_INTEGRATION_PHASE_RECEIPT_FILE:phasePath,CUEVO_FAILURE_FIXTURE_REPORTER:pathToFileURL(resolve(ownerPath)).href}});
-  assert.notEqual(run.status,0);let phaseBytes:string;try{phaseBytes=await readFile(phasePath,'utf8');}catch{assert.fail(run.stderr+'\n'+run.stdout);}const phase=JSON.parse(phaseBytes)as{exitCode:number;files:{cases:{outcome:string;definitionSha256:string}[]}[];reportSha256:string;diagnosticsSha256:string};
-  assert.notEqual(phase.exitCode,0);assert.equal(phase.files[0].cases[0].outcome,'FAILED');assert.equal(phase.files[0].cases[0].definitionSha256,hash('private phase failure'));assert.match(phase.reportSha256,/^[a-f0-9]{64}$/);assert.match(phase.diagnosticsSha256,/^[a-f0-9]{64}$/);assert.doesNotMatch(canonicalReleaseExecutionJson(phase),/private phase failure|private provider credential/);
+  const verificationContext=['CUEVO_VERIFICATION_RUN_ID','CUEVO_VERIFICATION_SOURCE_SHA','CUEVO_VERIFICATION_SOURCE_DIGEST','CUEVO_VERIFICATION_SCOPE','CUEVO_VERIFICATION_BROWSER_RECEIPT_FILE','CUEVO_INTEGRATION_PHASE_RECEIPT_FILE']as const;
+  const ordinaryEnv={...process.env};for(const key of verificationContext)delete ordinaryEnv[key];
+  for(const mode of ['ordinary','inherited-parent']as const){
+   const phasePath=join(root,'.local',mode+'-phase.json'),parentBrowser=join(root,'.local',mode+'-parent-browser.json'),parentPhase=join(root,'.local',mode+'-parent-phase.json');
+   const inherited=mode==='ordinary'?ordinaryEnv:{...ordinaryEnv,CUEVO_VERIFICATION_RUN_ID:'parent-verification',CUEVO_VERIFICATION_SOURCE_SHA:'a'.repeat(40),CUEVO_VERIFICATION_SOURCE_DIGEST:'b'.repeat(64),CUEVO_VERIFICATION_SCOPE:'verification-rules',CUEVO_VERIFICATION_BROWSER_RECEIPT_FILE:parentBrowser,CUEVO_INTEGRATION_PHASE_RECEIPT_FILE:parentPhase};
+   // This scratch repository owns its execution identity and destinations;
+   // the complete parent acceptance context cannot authorize a different Git tree.
+   const fixtureEnv={...inherited};for(const key of verificationContext)delete fixtureEnv[key];
+   const env={...fixtureEnv,CI:'true',GITHUB_ACTIONS:'true',GITHUB_JOB:'integration-learning',GITHUB_EVENT_NAME:'pull_request',CUEVO_VERIFICATION_SOURCE_SHA:sourceSha,CUEVO_VERIFICATION_SOURCE_DIGEST:sourceDigest,CUEVO_INTEGRATION_PHASE_RECEIPT_FILE:phasePath,CUEVO_FAILURE_FIXTURE_REPORTER:pathToFileURL(resolve(ownerPath)).href};
+   const args=['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--import',pathToFileURL(hook).href,subject,'--ci-partition=integration-learning'];
+   if(mode==='inherited-parent')for(const [key,value,message]of [['CUEVO_VERIFICATION_SOURCE_SHA','a'.repeat(40),'Integration original source identity changed.'],['CUEVO_VERIFICATION_SOURCE_DIGEST','b'.repeat(64),'Integration original source digest changed.']]as const){
+    const denied=spawnSync(process.execPath,args,{cwd:root,encoding:'utf8',timeout:30000,env:{...env,[key]:value}});assert.notEqual(denied.status,0);assert.ok(denied.stderr.includes(message),denied.stderr);await assert.rejects(readFile(phasePath,'utf8'),{code:'ENOENT'});
+   }
+   const run=spawnSync(process.execPath,args,{cwd:root,encoding:'utf8',timeout:30000,env});
+   assert.notEqual(run.status,0);let phaseBytes:string;try{phaseBytes=await readFile(phasePath,'utf8');}catch{assert.fail(run.stderr+'\n'+run.stdout);}const phase=JSON.parse(phaseBytes)as{runId:string;sourceSha:string;sourceDigest:string;scope:string;exitCode:number;files:{cases:{outcome:string;definitionSha256:string}[]}[];reportSha256:string;diagnosticsSha256:string};
+   assert.equal(phase.sourceSha,sourceSha);assert.equal(phase.sourceDigest,sourceDigest);assert.notEqual(phase.runId,'parent-verification');assert.equal(phase.scope,'integration');
+   assert.notEqual(phase.exitCode,0);assert.equal(phase.files[0].cases[0].outcome,'FAILED');assert.equal(phase.files[0].cases[0].definitionSha256,hash('private phase failure'));assert.match(phase.reportSha256,/^[a-f0-9]{64}$/);assert.match(phase.diagnosticsSha256,/^[a-f0-9]{64}$/);assert.doesNotMatch(canonicalReleaseExecutionJson(phase),/private phase failure|private provider credential/);
+   await assert.rejects(readFile(parentBrowser,'utf8'),{code:'ENOENT'});await assert.rejects(readFile(parentPhase,'utf8'),{code:'ENOENT'});
+  }
  }finally{await rm(root,{recursive:true,force:true});}
 });
 

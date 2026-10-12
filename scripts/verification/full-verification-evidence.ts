@@ -48,7 +48,13 @@ export function fullVerificationDiagnostic(value:unknown){
   const original=verificationEvidence('full',raw.rows.map(row=>({...row,durationMs:row.durationMs??undefined})));if(original.status!==raw.status)throw Error('Full diagnostic rows contradict their original status.');
   const sources=z.array(z.object({path:z.string().min(1),sha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).min(1).max(50000),before=sources.parse(input.before),after=input.after===null?null:sources.parse(input.after);
   for(const manifest of [before,after])if(manifest&&new Set(manifest.map(row=>row.path)).size!==manifest.length)throw Error('Full diagnostic source inventory contains duplicate paths.');
-  const sourceUnchanged=after===null?null:sameSourceManifest(before,after),digest=(manifest:typeof before)=>createHash('sha256').update(canonicalReleaseReviewJson([...manifest].sort((left,right)=>left.path<right.path?-1:left.path>right.path?1:0))).digest('hex');
+  // The parsed full inventory has its own 50,000-row bound. Hash its canonical
+  // rows incrementally; the small review/approval encoder is not its owner.
+  const sourceUnchanged=after===null?null:sameSourceManifest(before,after),digest=(manifest:typeof before)=>{
+    const hash=createHash('sha256');hash.update('[');
+    [...manifest].sort((left,right)=>left.path<right.path?-1:left.path>right.path?1:0).forEach((row,index)=>{if(index)hash.update(',');hash.update(canonicalReleaseReviewJson(row));});
+    return hash.update(']').digest('hex');
+  };
   if(input.acceptanceOutcome==='success'&&(raw.status!=='VERIFIED'||sourceUnchanged!==true))throw Error('A successful acceptance outcome requires complete unchanged-source evidence.');
   return{version:1 as const,purpose:'CUEVO_FULL_VERIFICATION_DIAGNOSTIC' as const,repository:z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/).parse(env.GITHUB_REPOSITORY),sourceSha:input.sourceSha,treeSha:input.treeSha,runId:id.parse(env.GITHUB_RUN_ID),runAttempt:z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).parse(env.GITHUB_RUN_ATTEMPT),verificationPurpose:purpose,status:input.acceptanceOutcome==='cancelled'?'CANCELLED' as const:input.acceptanceOutcome==='skipped'?'NOT_ATTEMPTED' as const:input.acceptanceOutcome==='failure'?'FAILED' as const:'COMPLETED' as const,acceptanceOutcome:input.acceptanceOutcome,originalStatus:raw.status,sourceUnchanged,initialSourceSha256:digest(before),finalSourceSha256:after===null?null:digest(after),sourceFileCount:before.length,phases:raw.rows.map(row=>({name:row.name,status:row.exitCode===0?'PASSED' as const:row.exitCode===null?'UNCONFIRMED' as const:'FAILED' as const,exitCode:row.exitCode,durationMs:row.durationMs})),effectAuthority:false as const,hostedAcceptance:false as const,customerAcceptance:false as const};
 }
