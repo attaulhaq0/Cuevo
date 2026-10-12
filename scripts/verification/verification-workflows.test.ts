@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { validateFullRegressionWorkflow,validateCiSourceJobs } from './verification-workflows';
+
+test('one existing database producer retains exact original231 source proof without a second replay',async()=>{
+ const api:Record<string,unknown>=await import('./verification-workflows');assert.ok(api.ciOriginal231CatalogueArtifactStep,'source231 requires its own exact retained artifact');const step=api.ciOriginal231CatalogueArtifactStep as Record<string,unknown>,job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.deepEqual(step,{name:'Retain exact source original231 catalogue reference',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source231.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);const source=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(source)as{jobs:Record<string,{steps:Record<string,unknown>[]}>};assert.deepEqual(flow.jobs['database-checks'],job);assert.ok(flow.jobs['database-checks'].steps.some(row=>row.name===step.name));
+});
 import { statelessVerificationSteps } from './steps';
 import { createRequire } from 'node:module';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): Record<string, unknown>; dump(value: unknown): string };
@@ -66,14 +70,14 @@ test('isolated source contracts execute each stateless owner once while fast che
   assert.ok(source, 'Stateless source contracts need their own isolated required runner.');
   assert.equal(source['timeout-minutes'], 10);
   assert.equal(fast['timeout-minutes'], 20);
-  assert.deepEqual(source.needs,['source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery']); assert.equal(fast.needs, undefined);
+  assert.deepEqual(source.needs,['source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery',...['continuation-1','continuation-2','continuation-3','continuation-4','continuation-5','reconciliation-1','reconciliation-2'].map(id=>'source-cohort-'+id)]); assert.equal(fast.needs, undefined);
   assert.equal(source.steps.filter(step => step.run?.includes('node --import tsx scripts/verification/stateless-source-aggregate.ts')).length, 1);
   assert.equal(fast.steps.some(step => step.run?.includes('stateless-checks.ts')), false);
   assert.equal(fast.steps.filter(step => step.run === 'npm run lint && npm run typecheck && npm test').length, 1);
   assert.equal(source.steps.some(step => step.run?.includes('npm run lint')), false);
   assert.ok(jobs.required.needs?.includes('source-contracts'));
-  assert.equal(ci.split('node --import tsx scripts/verification/stateless-checks.ts --partition=').length-1,3);
-  for(const partition of ['native','contracts','delivery'])assert.equal(jobs['source-fixtures-'+partition].steps.filter(step=>step.run==='node --import tsx scripts/verification/stateless-checks.ts --partition=source-'+partition).length,1);
+  assert.equal(ci.split('node --import tsx scripts/verification/stateless-checks.ts --partition=').length-1,2);assert.equal(ci.split('--cohort-producer=').length-1,7);
+  for(const partition of ['native','contracts','delivery'])assert.equal(jobs['source-fixtures-'+partition].steps.filter(step=>step.run==='node --import tsx scripts/verification/stateless-checks.ts '+(partition==='contracts'?'--ordinary-contracts':'--partition=source-'+partition)).length,1);
   assert.ok(runner.includes('statelessVerificationSteps'));
   const stateless=statelessVerificationSteps;
   for(const name of ['verification-rules','local-runtime','migration-replay-rules','cicd-fixtures']) assert.ok(stateless.some(step=>step.name===name));

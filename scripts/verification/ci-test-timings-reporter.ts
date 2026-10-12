@@ -1,5 +1,6 @@
-import { createHash } from 'node:crypto';
-import { lstat, readFile, realpath } from 'node:fs/promises';
+import { createHash,randomUUID } from 'node:crypto';
+import{types}from'node:util';
+import { lstat, readFile, realpath,writeFile,rename } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { createCiTestTimingCollector } from './ci-test-timings';
@@ -45,7 +46,8 @@ export default async function* ciTestTimingsReporter(events: AsyncIterable<unkno
   }
   const before = await confirmFileBytes(options!).catch(() => false);
   let streamFailed = false;
-  try { for await (const event of events) collector.consume(event); }
+  const progress=async()=>{const id=process.env.GITHUB_JOB?.replace(/^source-cohort-/,''),ids=['continuation-1','continuation-2','continuation-3','continuation-4','continuation-5','reconciliation-1','reconciliation-2'];if(!id||!ids.includes(id)||!options||process.env.GITHUB_WORKSPACE!==options.repoRoot||process.env.CI!=='true'||process.env.GITHUB_ACTIONS!=='true'||options.identity.scope!=='source-contracts'||options.identity.runId!==process.env.GITHUB_RUN_ID||options.identity.runAttempt!==Number(process.env.GITHUB_RUN_ATTEMPT)||options.files.length!==1||options.files[0].path!==(id.startsWith('continuation-')?'scripts/database/hosted-schema-continuation-executor.test.ts':'scripts/database/hosted-schema-reconciliation-executor.test.ts'))return;let parent=options.repoRoot;for(const piece of ['.local','verification','source-cohort-producers',id]){parent=join(parent,piece);const stat=await lstat(parent);if(!stat.isDirectory()||stat.isSymbolicLink()||await realpath(parent)!==parent)return;}const folder=parent;const path=join(folder,'progress.json'),bytes=JSON.stringify(collector!.progress());if(Buffer.byteLength(bytes)>256*1024)return;const temporary=path+'.'+randomUUID()+'.tmp';await writeFile(temporary,bytes,{flag:'wx',mode:0o600});await rename(temporary,path);};
+  try { for await (const event of events){collector.consume(event);const type=typeof event==='object'&&event!==null&&!types.isProxy(event)?Object.getOwnPropertyDescriptor(event,'type')?.value:null;if(type==='test:complete'||type==='test:dequeue')await progress().catch(()=>undefined);} }
   catch { streamFailed = true; }
   const report = collector.finish();
   const after = await confirmFileBytes(options!).catch(() => false);

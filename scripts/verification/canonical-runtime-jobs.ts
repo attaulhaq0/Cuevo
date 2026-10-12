@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import {ciRuntimeJobs,ciSourceJobs,ciDatabaseJob} from './verification-workflows';
+import {ciRuntimeJobs,ciSourceJobs,ciSourceJobsBeforeIsolation,ciDatabaseJob,ciDatabaseJobBeforeOriginal231} from './verification-workflows';
 import {canonicalReleaseExecutionJson,canonicalReleaseReviewJson} from './release-review';
 import {captureCanonicalSourceContext,readCanonicalSourceArtifactsAndInputs} from './canonical-source-jobs';
 import type {GithubArtifactReader} from './staging-security';
@@ -45,7 +45,10 @@ function canonicalArtifactConsumer(value:unknown){if(!value||typeof value!=='obj
 export async function refreshCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);try{await registered.context.refresh();}catch{registered.context.invalidate();throw fail();}}
 export function completeCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);try{registered.context.assertCompletion();registered.completed=true;registered.context.lease=undefined;}catch{registered.context.invalidate();throw fail();}}
 export function abortCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);registered.context.invalidate();registered.completed=true;registered.context.lease=undefined;}
-const ciCanonicalJobs={...ciRuntimeJobs,...ciSourceJobs,'database-checks':ciDatabaseJob};
+function historicalDatabaseContract(job:unknown,sourceSha:string,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',git:ReturnType<typeof captureCanonicalSourceContext>['git']){
+ if(canonicalReleaseExecutionJson(job)===canonicalReleaseExecutionJson(ciDatabaseJob))return ciDatabaseJob;
+ if(purpose!=='ORIGINAL_RUNTIME_METADATA'||canonicalReleaseExecutionJson(job)!==canonicalReleaseExecutionJson(ciDatabaseJobBeforeOriginal231)||git(['rev-parse','239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37^{tree}']).toString().trim()!=='a58fa0bef6f6c0ea9cc57d12156b6c3464ac5559')throw fail();git(['merge-base','--is-ancestor',sourceSha,'239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37']);return ciDatabaseJobBeforeOriginal231;
+}
 async function runtimeArtifacts(run:z.infer<typeof runSchema>,treeSha:string,jobs:z.infer<typeof jobSchema>[],github:(path:string)=>Promise<unknown>,artifact:GithubArtifactReader|undefined,inputs:Awaited<ReturnType<typeof readCanonicalSourceArtifactsAndInputs>>,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',git:ReturnType<typeof captureCanonicalSourceContext>['git']){
  if(!artifact)throw fail();
  const targets=[{job:'runtime-backend',name:`cuevo-runtime-backend-${run.id}-${run.run_attempt}`,file:'lane.json'},{job:'runtime-browser',name:`cuevo-runtime-browser-${run.id}-${run.run_attempt}`,file:'lane.json'},{job:'database-checks',name:`cuevo-runtime-database-${run.id}-${run.run_attempt}`,file:'lane.json'},{job:'integration-learning',name:`cuevo-integration-integration-learning-${run.id}-${run.run_attempt}`,file:'result.json'},{job:'integration-state',name:`cuevo-integration-integration-state-${run.id}-${run.run_attempt}`,file:'result.json'},{job:'technical-mvp',name:`cuevo-runtime-aggregate-${run.id}-${run.run_attempt}`,file:'result.json'}];
@@ -58,7 +61,7 @@ async function runtimeArtifacts(run:z.infer<typeof runSchema>,treeSha:string,job
  if(purpose==='ORIGINAL_RUNTIME_METADATA'){
   for(const path of ['scripts/verification/runtime-lanes.ts','scripts/verification/integration-partitions.ts','scripts/verification/verification-profiles.ts','scripts/verification/steps.ts'])if(descriptor.files.find(row=>row.path===path)?.sha256!==createHash('sha256').update(readFileSync(resolve(path))).digest('hex'))throw fail();
   const yaml=createRequire(import.meta.url)('js-yaml')as{load(value:string):unknown},workflow=z.object({jobs:z.record(z.string(),z.unknown())}).parse(yaml.load(git(['show',run.head_sha+':.github/workflows/ci.yml']).toString('utf8')));
-  for(const[name,job]of Object.entries({...ciRuntimeJobs,'database-checks':ciDatabaseJob}))if(canonicalReleaseExecutionJson(workflow.jobs[name])!==canonicalReleaseExecutionJson(job))throw fail();
+  for(const[name,job]of Object.entries({...ciRuntimeJobs,'database-checks':ciDatabaseJob}))if(name==='database-checks'){historicalDatabaseContract(workflow.jobs[name],run.head_sha,purpose,git);}else if(canonicalReleaseExecutionJson(workflow.jobs[name])!==canonicalReleaseExecutionJson(job))throw fail();
  }
  const lanes=receipts.slice(0,3).map(row=>row.value),integration=receipts.slice(3,5).map(row=>row.value),verified=purpose==='CURRENT_SOURCE'?validateTechnicalAggregateReceipt(receipts[5].value,lanes,integration,identity,descriptor.coverage):validateCommittedTechnicalAggregateReceipt(receipts[5].value,lanes,integration,identity,{integration:descriptor.coverage.integration,files:descriptor.files});
  for(const[index,row]of receipts.slice(3,5).entries()){const value=z.object({startedAtMs:z.number().int(),completedAtMs:z.number().int()}).passthrough().parse(row.value),job=jobs.find(job=>job.name===targets[index+3].job)!;if(value.startedAtMs<Date.parse(job.started_at!)||Math.floor(value.completedAtMs/1000)>Math.floor(Date.parse(job.completed_at!)/1000)||Math.floor(value.completedAtMs/1000)>Math.floor(Date.parse(jobs.find(job=>job.name==='technical-mvp')!.started_at!)/1000))throw fail();}
@@ -80,13 +83,14 @@ export async function readCanonicalRuntimeJobsAndGuard(value:unknown,github:(pat
   if(jobs.length!==total||new Set(jobs.map(job=>job.id)).size!==jobs.length||new Set(jobs.map(job=>job.name)).size!==jobs.length)throw fail();return jobs;};const jobs=await readJobs();
   const binding={repoRoot:context.root,repository:run.repository.full_name,sourceSha:run.head_sha,treeSha:context.treeSha,runId:String(run.id),runAttempt:run.run_attempt,purpose};
   if(purpose==='ORIGINAL_RUNTIME_METADATA'&&run.head_sha==='752c2e1fc5c244222a5df9f86dfb085b1a777894'&&run.id===37928686446&&run.run_attempt===1){if(!artifact)throw fail();const legacy=await readLegacy752RuntimeMetadataAndGuard({...run,purpose},jobs,github,artifact);context.finalMetadata();legacy.assertOriginalValidity();return registerCanonicalRuntimeContext(binding,legacy.proof,{assertOriginalValidity:legacy.assertOriginalValidity,refreshOriginalMetadata:async()=>{await legacy.refreshOriginalMetadata();await current();context.finalMetadata();legacy.assertOriginalValidity();}},context);}
-  const required=[...Object.keys(ciCanonicalJobs),'codeql','secret-scan','required'];
+  const yaml=createRequire(import.meta.url)('js-yaml')as{load(value:string):unknown},sourceWorkflow=z.object({jobs:z.record(z.string(),z.unknown())}).parse(yaml.load(context.git(['show',run.head_sha+':.github/workflows/ci.yml']).toString('utf8'))),databaseContract=historicalDatabaseContract(sourceWorkflow.jobs['database-checks'],run.head_sha,purpose,context.git),canonicalJobs={...ciRuntimeJobs,...(purpose==='ORIGINAL_RUNTIME_METADATA'&&!Object.keys(sourceWorkflow.jobs).some(name=>name.startsWith('source-cohort-'))?ciSourceJobsBeforeIsolation:ciSourceJobs),'database-checks':databaseContract};
+  const required=[...Object.keys(canonicalJobs),'codeql','secret-scan','required'];
   if(jobs.length<required.length||jobs.length>required.length+1||required.some(name=>!jobs.some(job=>job.name===name))||jobs.some(job=>!required.includes(job.name)&&job.name!=='dependency-review'))throw fail();
   for(const job of jobs){if(job.run_id!==run.id||job.run_attempt!==run.run_attempt||job.head_sha!==run.head_sha)throw fail();if(job.name==='dependency-review'){if(job.conclusion!=='skipped'||job.steps.length)throw fail();}else if(job.conclusion!=='success'||!job.steps.length||job.steps.some(step=>step.conclusion!=='success'&&!step.name.startsWith('Post ')))throw fail();}
-  const selected=jobs.filter(job=>Object.hasOwn(ciCanonicalJobs,job.name));if(selected.length!==Object.keys(ciCanonicalJobs).length)throw fail();
+  const selected=jobs.filter(job=>Object.hasOwn(canonicalJobs,job.name));if(selected.length!==Object.keys(canonicalJobs).length)throw fail();
   for(const job of selected){
    if(job.run_id!==run.id||job.run_attempt!==run.run_attempt||job.head_sha!==run.head_sha)throw fail();
-   const contract=ciCanonicalJobs[job.name as keyof typeof ciCanonicalJobs],required=contract.steps.map(step=>'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`),actions=contract.steps.filter(step=>'uses' in step).map(step=>'name' in step?step.name:`Run ${'uses' in step?step.uses:''}`);
+   const contract=canonicalJobs[job.name as keyof typeof canonicalJobs],required=contract.steps.map(step=>'name' in step?step.name:`Run ${'uses' in step?step.uses:step.run}`),actions=contract.steps.filter(step=>'uses' in step).map(step=>'name' in step?step.name:`Run ${'uses' in step?step.uses:''}`);
    const authored:string[]=[],names=new Set<string>(),numbers=new Set<number>();
    for(const[index,step]of job.steps.entries()){
     if(names.has(step.name)||numbers.has(step.number)||index>0&&step.number<=job.steps[index-1].number)throw fail();names.add(step.name);numbers.add(step.number);

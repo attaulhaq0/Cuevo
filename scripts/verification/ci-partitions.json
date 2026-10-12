@@ -1420,6 +1420,28 @@
   "sourceCohorts": {
     "version": 1,
     "file": "scripts/database/hosted-schema-continuation-executor.test.ts",
-    "policySha256": "a89ed95eef3a8b4f60ec565e4882e949b472c31be368ac8e615656bb26446b4d"
+    "policySha256": "07ea5929bc07c62ae26eaf69d75b807ccbc40f603359b8ddd155e8848572f157"
+  },
+  "sourceNativeCohorts": {
+    "version": 1,
+    "file": "scripts/database/hosted-schema-continuation-native.test.ts",
+    "policySha256": "bd3300c5a78cb2104145841482cb8f595c2894a0cabd0bf0161f56d63a40aeb4"
+  },
+  "sourceReconciliationCohorts": {
+    "version": 1,
+    "file": "scripts/database/hosted-schema-reconciliation-executor.test.ts",
+    "policySha256": "71e9ef6cc05ff8960c4d8a9b058f0991bb630692f092d00c9e8bd21c56de5ec5"
+  },
+  "isolatedContractCohorts": {
+    "version": 1,
+    "producers": [
+      "continuation-1",
+      "continuation-2",
+      "continuation-3",
+      "continuation-4",
+      "continuation-5",
+      "reconciliation-1",
+      "reconciliation-2"
+    ]
   }
 }

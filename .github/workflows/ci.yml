@@ -79,12 +79,12 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - name: Verify exact source-contracts fixtures
-        run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-contracts
+        run: node --import tsx scripts/verification/stateless-checks.ts --ordinary-contracts
       - name: Retain exact source-contracts fixture receipt
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          name: cuevo-source-contracts-ordinary-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-partitions/source-contracts/result.json
           include-hidden-files: true
           if-no-files-found: error
@@ -119,12 +119,278 @@ jobs:
           retention-days: 90
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-continuation-1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact continuation-1 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-1
+      - name: Retain exact continuation-1 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-continuation-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-1/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized continuation-1 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-continuation-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-1/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-continuation-2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact continuation-2 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-2
+      - name: Retain exact continuation-2 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-continuation-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-2/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized continuation-2 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-continuation-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-2/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-continuation-3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact continuation-3 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-3
+      - name: Retain exact continuation-3 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-continuation-3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-3/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized continuation-3 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-continuation-3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-3/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-continuation-4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact continuation-4 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-4
+      - name: Retain exact continuation-4 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-continuation-4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-4/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized continuation-4 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-continuation-4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-4/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-continuation-5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact continuation-5 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-5
+      - name: Retain exact continuation-5 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-continuation-5-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-5/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized continuation-5 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-continuation-5-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/continuation-5/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-reconciliation-1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact reconciliation-1 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=reconciliation-1
+      - name: Retain exact reconciliation-1 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-reconciliation-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/reconciliation-1/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized reconciliation-1 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-reconciliation-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/reconciliation-1/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
+  source-cohort-reconciliation-2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.16.0
+          cache: npm
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/esbuild/install.js
+      - name: Verify exact reconciliation-2 cohort
+        run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=reconciliation-2
+      - name: Retain exact reconciliation-2 producer
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-reconciliation-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/reconciliation-2/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized reconciliation-2 progress
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-cohort-progress-reconciliation-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-cohort-producers/reconciliation-2/progress.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Confirm frozen authored source
+        run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
   source-contracts:
     if: always()
     needs:
       - source-fixtures-native
       - source-fixtures-contracts
       - source-fixtures-delivery
+      - source-cohort-continuation-1
+      - source-cohort-continuation-2
+      - source-cohort-continuation-3
+      - source-cohort-continuation-4
+      - source-cohort-continuation-5
+      - source-cohort-reconciliation-1
+      - source-cohort-reconciliation-2
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -147,19 +413,63 @@ jobs:
       - name: Read exact source-contracts fixtures from this run attempt
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
         with:
-          name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          name: cuevo-source-contracts-ordinary-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-contracts
       - name: Read exact source-delivery fixtures from this run attempt
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
         with:
           name: cuevo-source-partition-source-delivery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-delivery
+      - name: Read exact continuation-1 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-continuation-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/continuation-1
+      - name: Read exact continuation-2 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-continuation-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/continuation-2
+      - name: Read exact continuation-3 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-continuation-3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/continuation-3
+      - name: Read exact continuation-4 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-continuation-4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/continuation-4
+      - name: Read exact continuation-5 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-continuation-5-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/continuation-5
+      - name: Read exact reconciliation-1 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-reconciliation-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/reconciliation-1
+      - name: Read exact reconciliation-2 producer from this run attempt
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: cuevo-source-cohort-reconciliation-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/source-cohort-inputs/reconciliation-2
       - name: Combine exact source fixture and non-test boundaries
         env:
           NATIVE: ${{ needs.source-fixtures-native.result }}
           CONTRACTS: ${{ needs.source-fixtures-contracts.result }}
           DELIVERY: ${{ needs.source-fixtures-delivery.result }}
-        run: test "$NATIVE" = success && test "$CONTRACTS" = success && test "$DELIVERY" = success && node --import tsx scripts/verification/stateless-source-aggregate.ts
+        run: test "$NATIVE" = success && test "$CONTRACTS" = success && test "$DELIVERY" = success && test '${{ needs.source-cohort-continuation-1.result }}' = success && test '${{ needs.source-cohort-continuation-2.result }}' = success && test '${{ needs.source-cohort-continuation-3.result }}' = success && test '${{ needs.source-cohort-continuation-4.result }}' = success && test '${{ needs.source-cohort-continuation-5.result }}' = success && test '${{ needs.source-cohort-reconciliation-1.result }}' = success && test '${{ needs.source-cohort-reconciliation-2.result }}' = success && node --import tsx scripts/verification/stateless-source-aggregate.ts
+      - name: Retain complete logical contract partition
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/source-partitions/source-contracts/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
       - name: Retain exact safe source contracts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -212,6 +522,14 @@ jobs:
         with:
           name: cuevo-native180-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/source180.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain exact source original231 catalogue reference
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/child144-catalogue/source231.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90

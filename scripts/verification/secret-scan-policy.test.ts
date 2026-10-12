@@ -47,6 +47,12 @@ test('reviewed public host target IDs require their exact owner line and retaine
   assert.equal(reviewedNonCredential('worktree', { ...source, lineSha256: hash(line + '\n') }), false);
 });
 
+test('reviewed original231 provenance public GitHub endpoint requires the exact complete captured line',()=>{
+ const file='scripts/database/original231-provenance.json',text=readFileSync(new URL('../database/original231-provenance.json',import.meta.url),'utf8'),line=text.split(/\r?\n/)[0],data=JSON.parse(text),hash=(value:string)=>createHash('sha256').update(value).digest('hex');assert.deepEqual(data.metadata[37].apiPath.split('/'),['git','ref','heads','main']);assert.equal(hash(line),'d967ea83ca7bf7bc4a1486218c3d1af5662f2de6ac3f0bfeb55826abd5a866ab');
+ const source={file,rule:'generic-api-key',line:1,endLine:1,lineSha256:hash(line),commit:'613fb79244376c4d2c9e2a60b3c6fcb1af7eeff4',ancestorVerified:true};assert.equal(reviewedNonCredential('worktree',{...source,commit:'',ancestorVerified:false}),true);assert.equal(reviewedNonCredential('history',source),true);
+ for(const patch of[{file:'scripts/database/other.json'},{rule:'private-key'},{lineSha256:hash(line+' ')},{lineSha256:hash(line.replace(['git','ref','heads','main'].join('/'),'synthetic-private-canary'))},{lineSha256:hash(line.slice(0,-1)+',"token":"synthetic-private-canary"}')},{endLine:2},{line:0},{commit:''},{ancestorVerified:false}])assert.equal(reviewedNonCredential('history',{...source,...patch}),false);
+});
+
 test('secret scan emits fixed fileless categories and refuses unknown/missing or inconsistent scanner results', () => {
   const report = [
     { RuleID: 'github-pat', Secret: 'private-canary', Match: 'private-answer', File: '.env', Commit: 'sensitive', Author: 'private-person' },
