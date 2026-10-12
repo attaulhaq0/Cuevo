@@ -93,5 +93,5 @@ function CurrentParentTrailHome({onNavigate,headingRef}:{onNavigate:(destination
  }:null;
  const availability:ParentTrailContext['availability']=!app.online?'offline':!ready?'denied':childContext.query.error?'error':loading||partial?'partial':'ready';
  const context:ParentTrailContext={availability,child:childState,snapshot,selector:<ChildSelector context={childContext}/>,notice:loading?t.loading:partial?t.partial:undefined,recovery:{label:c.refresh,onClick:refreshAction}};
- return <div><ParentTrailHomeView context={context} locale={locale} headingRef={headingRef}/>{ready ? <div className="home-overview-controls"><Button type="button" variant="quiet" onClick={refreshAction}>{c.refresh}</Button></div> : null}</div>;
+ return <div><ParentTrailHomeView context={context} locale={locale} headingRef={headingRef}/>{ready && child && snapshot && availability !== 'error' ? <div className="home-overview-controls"><Button type="button" variant="quiet" onClick={refreshAction}>{c.refresh}</Button></div> : null}</div>;
 }

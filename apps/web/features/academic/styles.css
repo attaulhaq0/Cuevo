@@ -48,6 +48,7 @@
 .marking-workspace--selected .marking-queue > header { display: block; }
 .marking-workspace--selected .marking-queue > header p { margin-block-start: var(--space-2); }
 .marking-queue { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); padding: var(--space-5); border-radius: var(--radius-xl); border: 1px solid var(--color-border); background: var(--color-material-reading); }
+.marking-queue.marking-queue--unselected { display:block; padding:0; border:0; background:transparent; }
 .marking-queue > h2 { grid-column: 1 / -1; font-size: var(--type-xl); margin-block-end: var(--space-3); }
 .marking-workspace--exact .marking-queue { display: block; padding: 0; border: 0; background: transparent; }
 .marking-queue__item { text-align: start; display: flex; flex-direction: column; gap: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--color-surface); cursor: pointer; color: var(--color-text); font-size: var(--type-sm); }

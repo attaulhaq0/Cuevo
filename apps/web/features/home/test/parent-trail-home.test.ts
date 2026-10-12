@@ -20,11 +20,25 @@ test('compact upcoming context has one heading while retaining its honest unavai
 
 test('child resolving does not turn disabled content queries into empty approved records', () => {
   const value = context(); value.child = { status: 'resolving' }; const html = render(value);
-  assert.match(html, /Checking current child relationships/); assert.match(html, /Current child selector/);
+  assert.match(html, /Current child selector/);
   assert.doesNotMatch(html, /Latest approved feedback|Samira|No feedback|XP|habit|AI proposal/);
 });
 test('required selection and matching identities remain explicit without ID labels', () => {
-  for (const status of ['selection-required', 'requires-review'] as const) { const value = context(); value.child = { status }; const html = render(value); assert.doesNotMatch(html, /child-a|Latest approved feedback/); assert.match(html, status === 'selection-required' ? /Choose a child/ : /distinguish matching child records/); }
+  for (const status of ['selection-required', 'requires-review'] as const) { const value = context(); value.child = { status }; value.selector = undefined; const html = render(value); assert.doesNotMatch(html, /child-a|Latest approved feedback/); assert.match(html, status === 'selection-required' ? /Choose a child/ : /distinguish matching child records/); }
+});
+
+test('supplied current child prerequisite renders once with one recovery action and preserves its alerts', () => {
+  for (const locale of ['en', 'ar'] as const) for (const status of ['unavailable', 'resolving', 'requires-review', 'selection-required'] as const) {
+    const value = context(); value.child = { status }; value.snapshot = null;
+    const message = locale === 'en' ? 'Current child relationship requires review.' : 'تتطلب علاقة الطفل الحالية المراجعة.';
+    value.selector = createElement('section', { 'data-current-child-prerequisite': true }, createElement('p', { role: 'alert' }, message));
+    value.recovery = { label: locale === 'en' ? 'Refresh current relationships' : 'تحديث العلاقات الحالية', onClick() {} };
+    const html = render(value, locale);
+    assert.equal(html.split(message).length - 1, 1); assert.equal((html.match(/data-current-child-prerequisite/g) ?? []).length, 1);
+    assert.equal((html.match(/<button/g) ?? []).length, 1); assert.match(html, /role="alert"/);
+    assert.doesNotMatch(html, /No child is available|Checking current child relationships|لا يتاح طفل|جارٍ التحقّق من علاقات الأطفال/);
+    assert.equal((html.match(/<h1[ >]/g) ?? []).length, 1); assert.doesNotMatch(html, /Latest approved feedback|Samira/);
+  }
 });
 test('a late prior-child snapshot never renders under the selected child heading', () => {
   const value = context(); value.snapshot = { ...value.snapshot!, childKey: 'child-b', status: 'ready', feedback: { publication: 'approved', title: 'Other child source', text: 'Private feedback', teacherName: 'Private teacher', dateLabel: 'Yesterday', description: 'Private context', nativeResultView: createElement('strong', null, '9 / 10'), action: { label: 'Read private source', onClick() {} } } };
