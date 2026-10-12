@@ -27,6 +27,7 @@ import { runCustomerCommunityJourney, type CustomerCommunityJourneyPorts, type C
 import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import {observeCommunityView}from'./community-view-observation';
 import {hostedCommunityViewStages,validateHostedCommunityViewCompletion}from'../../scripts/verification/hosted-community-view';
+import { communityEn, communityAr } from '../../apps/web/features/community/messages';
 
 // Browser plugin unavailable. The actual private wrapper is loaded by its AST,
 // without changing its body. Only launch, network forwarding and cleanup ports
@@ -116,11 +117,15 @@ type Mode = 'normal' | 'multiple-invalidations' | 'wrong-second-post' | 'wrong-p
 type Forwarded = { path: string; method: string; actorId: string | null; tokenIndex: number; school: string | undefined; key: string | undefined; request: Request };
 
 async function protocol(mode: Mode, testInfo: TestInfo) {
-  const source = wrapperCode(), script = await bundle(api), css = await styles, result = fixtureResult();
   const fullJourney = mode === 'normal'||mode==='multiple-invalidations';
+  const ordinalFault=mode==='wrong-second-post'||mode==='wrong-peer-mute';
+  // Complete recipes include original commands, ten sessions and twelve view
+  // observations. This outer fixture limit does not extend any live read,
+  // command or native admission deadline. Early refusal cases retain 30s.
+  test.setTimeout(fullJourney || ordinalFault || mode==='native-prefix-refused' || mode==='cleanup-not-revoked' ? 120_000 : 30_000);
+  const source = wrapperCode(), script = await bundle(api), css = await styles, result = fixtureResult();
   const auxiliaryFault=['denial-not-forbidden','denial-wrong-reason','denial-joined','auxiliary-wrong-actor'].includes(mode);
   const viewFault=mode==='view-record-refused'||mode==='view-source-changed';
-  const ordinalFault=mode==='wrong-second-post'||mode==='wrong-peer-mute';
   const actualControls = fullJourney || viewFault || ordinalFault || mode==='cleanup-not-revoked' || mode === 'auth-during-dispatch' || mode === 'native-prefix-refused' || auxiliaryFault;
   let viewSourceChanged=false,viewRestoration:unknown=null;
   const ordinalBoundary:{value:{states:string;companions:string;head:string|null;count:number;posts:number;muted:boolean}|null}={value:null};
@@ -429,3 +434,37 @@ async function protocol(mode: Mode, testInfo: TestInfo) {
 test('actual hosted Community wrapper: normal Auth and all18 visible original commands across seven current sessions', async ({ browserName }, testInfo) => { assert.equal(browserName, 'chromium'); await protocol('normal', testInfo); });
 test('actual hosted Community multiple original post invalidations retain current controls and full recipe',async({browserName},testInfo)=>{assert.equal(browserName,'chromium');await protocol('multiple-invalidations',testInfo);});
 for (const mode of ['wrong-second-post','wrong-peer-mute','view-record-refused','view-source-changed','native-prefix-refused','cleanup-not-revoked', 'malformed-user', 'read-before-membership', 'unexpected-post', 'foreign-route', 'signed-out-read', 'old-token', 'refresh-before-membership', 'refresh-late-source', 'pending-auth', 'pending-next-session', 'membership-during-command', 'auth-during-dispatch', 'held-auth-body','denial-not-forbidden','denial-wrong-reason','denial-joined','auxiliary-wrong-actor'] as const) test('actual hosted Community protocol refusal: ' + mode, async ({ browserName }, testInfo) => { assert.equal(browserName, 'chromium'); await protocol(mode, testInfo); });
+
+for (const change of ['none', 'draft', 'consent'] as const) test('Community view baseline waits for the current roster and preserves ' + change, async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 }); await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Only the DOM/source completion port is controlled. The real view observer,
+  // keyboard traversal, bilingual checks, axe and restoration assertion run.
+  await page.setContent(`<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8"><title>Current Community view</title><style>
+    *{box-sizing:border-box}body{font:16px Arial;margin:12px}button{font:inherit;margin:3px}button:focus-visible,a:focus-visible{outline:3px solid black}main{max-width:100%;overflow-wrap:anywhere}input,textarea{max-width:100%}
+    </style></head><body><div class="workspace-chrome" data-navigation-mode="home" lang="en">
+    <a href="#main" data-copy="skip">Skip to main content</a><header class="workspace-chrome__header">
+    <div class="workspace-chrome__school"><bdi>Fictional school</bdi></div><div class="workspace-chrome__person"><button><strong>Fictional learner</strong><small>Student</small></button></div>
+    <button id="english">English</button><button id="arabic">العربية</button></header><nav class="workspace-chrome__navigation"><button data-workspace-destination="community" aria-current="page">Community</button></nav>
+    <main id="main"><h1></h1><button data-copy="refresh"></button><button data-copy="back"></button><p data-copy="connected"></p><p data-copy="readonly"></p>
+    <article data-post-id="${ids(1)}"><p class="community-message"></p></article><article data-post-id="${ids(2)}"><p class="community-message"></p></article>
+    <fieldset id="roster" disabled><legend>Current members</legend><p role="status">Loading current member records…</p></fieldset>
+    <label>Retained draft<textarea name="retained-draft">A retained fictional draft</textarea></label><label><input type="checkbox" name="retained-consent">I approve this fictional observation</label></main></div>
+    <script>const messages=${JSON.stringify({ en: communityEn, ar: communityAr })},text=${JSON.stringify(hostedCommunityRecipeText)};
+    function render(locale){document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';document.querySelector('.workspace-chrome').lang=locale;document.querySelector('.workspace-chrome__person small').textContent=locale==='ar'?'الطالب':'Student';document.querySelector('[data-copy=skip]').textContent=locale==='ar'?'انتقل إلى المحتوى الرئيسي':'Skip to main content';document.querySelector('h1').textContent=text.groupName;for(const node of document.querySelectorAll('[data-copy]'))if(node.dataset.copy!=='skip')node.textContent=messages[locale][node.dataset.copy];document.querySelectorAll('.community-message')[0].textContent=text.postBody;document.querySelectorAll('.community-message')[1].textContent=text.secondPostBody}
+    document.querySelector('#english').onclick=()=>render('en');document.querySelector('#arabic').onclick=()=>render('ar');render('en');</script></body></html>`);
+  const checkpoint = { stage: 'READ_ONLY_DISCUSSION' as const, role: 'student' as const, groupId: ids(100), postIds: [ids(1), ids(2)], announcementId: '', scopeGeneration: 7 };
+  let currentReads = 0; const receipts: unknown[] = [];
+  const observe = () => observeCommunityView(page, checkpoint, { identity, journalHeadSha256: 'd'.repeat(64), assertCurrent: async () => {
+    if (++currentReads === 1) await page.locator('#roster').evaluate(node => { node.innerHTML = '<legend>Current members</legend><label><input type="checkbox">Fictional peer one</label><label><input type="checkbox">Fictional peer two</label>'; });
+  } }, { record: async receipt => {
+    receipts.push(receipt); if (receipts.length !== 2) return;
+    if (change === 'draft') await page.locator('[name="retained-draft"]').fill('Changed fictional draft');
+    if (change === 'consent') await page.locator('[name="retained-consent"]').check();
+  } });
+  if (change === 'none') {
+    await observe(); await expect(page.locator('#roster input')).toHaveCount(2);
+    await expect(page.locator('[name="retained-draft"]')).toHaveValue('A retained fictional draft'); await expect(page.locator('[name="retained-consent"]')).not.toBeChecked();
+  } else await expect(observe()).rejects.toThrow(/toEqual/);
+  expect(receipts).toHaveLength(2); await expect(page.locator('html')).toHaveAttribute('lang', 'en'); await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  expect(page.viewportSize()).toEqual({ width: 1366, height: 900 });
+});

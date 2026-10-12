@@ -159,6 +159,9 @@ export async function observeCommunityView(page: Page, checkpoint: CustomerCommu
   original: { identity: HostedCommandJournalIdentity; journalHeadSha256: string; assertCurrent: () => Promise<void> },
   ports: { record: (receipt: CommunityViewReceipt) => Promise<void> }): Promise<void> {
   const originalViewport = page.viewportSize(); if (!originalViewport) throw Error('The current Community viewport is unavailable.');
+  // Capture the baseline only after the original current reads and their DOM
+  // have committed; a loading roster is not an empty consent/input inventory.
+  await original.assertCurrent(); await settled(page); await sourceView(page, checkpoint, 'en'); await original.assertCurrent();
   const savedInputs = await inputSnapshot(page);
   let failure: unknown, restorationFailure: unknown;
   try {
