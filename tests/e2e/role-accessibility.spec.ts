@@ -5,6 +5,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
+import { z } from 'zod';
 
 type Role = 'admin' | 'coordinator' | 'teacher' | 'student' | 'parent';
 type Account = { role: Role; email: string; password: string };
@@ -16,6 +17,15 @@ const viewports = [
 const evidence = resolve('.local/technical-mvp-visuals/accessibility');
 const skipNames = /^(Skip to main content|انتقل إلى المحتوى الرئيسي)$/;
 
+const nativeKeyboardDiagnostic = z.object({
+  schemaVersion: z.literal('1'), code: z.literal('NATIVE_KEYBOARD_POPOVER_UNVERIFIED'),
+  panel: z.enum(['PROFILE', 'SWITCHER', 'OTHER']), role: z.enum(['admin', 'coordinator', 'teacher', 'student', 'parent', 'UNKNOWN']),
+  destination: z.enum(['overview', 'school', 'community', 'portfolio', 'development', 'curriculum', 'restricted', 'learning', 'academic', 'progress', 'improvement', 'account', 'access', 'UNKNOWN']),
+  connected: z.boolean(), open: z.boolean(), focusInside: z.boolean(), openerGeometryUnchanged: z.boolean().nullable(),
+  lastEvent: z.enum(['SCROLL_INSIDE', 'SCROLL_OUTSIDE', 'RESIZE', 'TOGGLE_OPEN', 'TOGGLE_CLOSED']).nullable(), eventCount: z.number().int().min(0).max(1000),
+}).strict();
+function serializeNativeKeyboardDiagnostic(value: unknown) { return JSON.stringify(nativeKeyboardDiagnostic.parse(value)); }
+
 async function keyboardActivate(page: Page, target: Locator) {
   await expect(target).toHaveCount(1); await expect(target).toBeVisible(); await expect(target).toBeEnabled();
   const sources = await target.elementHandles();
@@ -26,8 +36,28 @@ async function keyboardActivate(page: Page, target: Locator) {
   const source = sources[0];
   try {
     const panel = await source.evaluateHandle(element => element instanceof Element ? element.closest('[popover]') : null);
+    let diagnostic: import('@playwright/test').JSHandle | undefined;
     try {
       const inPopover = await panel.evaluate(element => element !== null);
+      if (inPopover) diagnostic = await panel.evaluateHandle((element, control) => {
+        const popup = element as HTMLElement, target = control as HTMLElement;
+        const opener = [...document.querySelectorAll<HTMLButtonElement>('button[popovertarget]')].find(button => button.popoverTargetElement === popup);
+        const geometry = () => { const box = opener?.getBoundingClientRect(); return box ? JSON.stringify([box.top, box.left, box.width, box.height, innerWidth, innerHeight]) : null; };
+        const originalGeometry = geometry();
+        const roleLabel = popup.closest('.workspace-chrome')?.querySelector('.workspace-chrome__person small')?.textContent?.trim();
+        const role = ({ Administrator: 'admin', Coordinator: 'coordinator', Teacher: 'teacher', Student: 'student', 'Parent / guardian': 'parent', 'مسؤول المدرسة': 'admin', 'المنسّق': 'coordinator', 'المعلّم': 'teacher', 'الطالب': 'student', 'وليّ الأمر': 'parent' } as Record<string, string>)[roleLabel ?? ''] ?? 'UNKNOWN';
+        const destinationValue = target.getAttribute('data-workspace-destination') ?? ({ Account: 'account', 'Access settings': 'access', 'الحساب': 'account', 'إعدادات الوصول': 'access' } as Record<string, string>)[target.textContent?.trim() ?? ''];
+        const destination = ['overview', 'school', 'community', 'portfolio', 'development', 'curriculum', 'restricted', 'learning', 'academic', 'progress', 'improvement', 'account', 'access'].includes(destinationValue) ? destinationValue : 'UNKNOWN';
+        let lastEvent: string | null = null, eventCount = 0, snapshot: unknown = null;
+        const scroll = (event: Event) => { eventCount++; lastEvent = event.target instanceof Node && popup.contains(event.target) ? 'SCROLL_INSIDE' : 'SCROLL_OUTSIDE'; };
+        const resize = () => { eventCount++; lastEvent = 'RESIZE'; };
+        const toggle = () => { eventCount++; lastEvent = popup.matches(':popover-open') ? 'TOGGLE_OPEN' : 'TOGGLE_CLOSED'; };
+        document.addEventListener('scroll', scroll, true); window.addEventListener('resize', resize); popup.addEventListener('toggle', toggle);
+        return {
+          capture() { snapshot ??= { schemaVersion: '1', code: 'NATIVE_KEYBOARD_POPOVER_UNVERIFIED', panel: popup.classList.contains('workspace-chrome__profile') ? 'PROFILE' : popup.classList.contains('workspace-chrome__switcher') ? 'SWITCHER' : 'OTHER', role, destination, connected: popup.isConnected, open: popup.matches(':popover-open'), focusInside: popup.contains(document.activeElement), openerGeometryUnchanged: originalGeometry === null ? null : originalGeometry === geometry(), lastEvent, eventCount }; },
+          finish() { document.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', resize); popup.removeEventListener('toggle', toggle); return snapshot; },
+        };
+      }, source).catch(() => undefined);
       const sample = async () => {
         const state = await target.evaluateAll((elements, original) => {
           const element = elements[0];
@@ -45,10 +75,10 @@ async function keyboardActivate(page: Page, target: Locator) {
       if (inPopover) {
         // The native toggle focuses this panel's first control. Restarting at
         // the global skip link can scroll outside it and legitimately dismiss it.
-        await expect.poll(() => panel.evaluate(element => {
-          if (!element?.isConnected || !element.matches(':popover-open')) throw new Error('Native popover keyboard scope was lost.');
+        await expect.poll(() => panel.evaluate((element, observation) => {
+          if (!element?.isConnected || !element.matches(':popover-open')) { observation?.capture(); throw new Error('Native popover keyboard scope was lost.'); }
           return element.contains(document.activeElement);
-        })).toBe(true);
+        }, diagnostic)).toBe(true);
       } else {
         // Ordinary controls retain the full real keyboard tab-order traversal.
         await page.getByRole('link', { name: skipNames }).focus();
@@ -64,6 +94,11 @@ async function keyboardActivate(page: Page, target: Locator) {
       }
       throw new Error('Named control was not reachable through the current keyboard tab order.');
     } finally {
+      if (diagnostic) {
+        try { const snapshot = await diagnostic.evaluate(value => value.finish()); if (snapshot !== null) console.error(serializeNativeKeyboardDiagnostic(snapshot)); }
+        catch { /* Diagnostic delivery must preserve the original keyboard outcome. */ }
+        finally { await diagnostic.dispose().catch(() => undefined); }
+      }
       await panel.dispose();
     }
   } finally {
@@ -498,4 +533,45 @@ for (const change of ['closed', 'removed', 'replaced', 'ambiguous', 'disabled'] 
   await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=progress');
   if (change === 'closed') await expect(page.locator('.workspace-chrome__switcher')).toBeHidden();
   expect(blocked).toEqual([]);
+});
+
+for (const delivery of ['delivered', 'failed', 'not-needed'] as const) test(`adapter: native keyboard diagnostics preserve the outcome when delivery is ${delivery}`, async ({ page }) => {
+  const blocked = await mountKeyboardChrome(page), captured: string[] = [];
+  const target = await keyboardWorkspaceAction(page, 'Next steps');
+  await expect(page.locator('.workspace-chrome__switcher').getByRole('button', { name: 'Overview', exact: true })).toBeFocused();
+  await page.evaluate(() => {
+    const state = { added: 0, removed: 0, entered: 0 };
+    (globalThis as typeof globalThis & { keyboardDiagnosticProbe: typeof state }).keyboardDiagnosticProbe = state;
+    const add = document.addEventListener.bind(document), remove = document.removeEventListener.bind(document), windowAdd = window.addEventListener.bind(window), windowRemove = window.removeEventListener.bind(window);
+    const popup = document.querySelector<HTMLElement>('.workspace-chrome__switcher')!, popupAdd = popup.addEventListener.bind(popup), popupRemove = popup.removeEventListener.bind(popup);
+    document.addEventListener = ((...args: Parameters<typeof document.addEventListener>) => { if (args[0] === 'scroll') state.added++; return add(...args); }) as typeof document.addEventListener;
+    document.removeEventListener = ((...args: Parameters<typeof document.removeEventListener>) => { if (args[0] === 'scroll') state.removed++; return remove(...args); }) as typeof document.removeEventListener;
+    window.addEventListener = ((...args: Parameters<typeof window.addEventListener>) => { if (args[0] === 'resize') state.added++; return windowAdd(...args); }) as typeof window.addEventListener;
+    window.removeEventListener = ((...args: Parameters<typeof window.removeEventListener>) => { if (args[0] === 'resize') state.removed++; return windowRemove(...args); }) as typeof window.removeEventListener;
+    popup.addEventListener = ((...args: Parameters<typeof popup.addEventListener>) => { if (args[0] === 'toggle') state.added++; return popupAdd(...args); }) as typeof popup.addEventListener;
+    popup.removeEventListener = ((...args: Parameters<typeof popup.removeEventListener>) => { if (args[0] === 'toggle') state.removed++; return popupRemove(...args); }) as typeof popup.removeEventListener;
+    document.addEventListener('keydown', event => { if ((event as KeyboardEvent).key === 'Enter') state.entered++; });
+  });
+  const originalHandles = target.elementHandles.bind(target);
+  if (delivery !== 'not-needed') target.elementHandles = async () => { const handles = await originalHandles(); await page.locator('.workspace-chrome__switcher').evaluate(element => (element as HTMLElement).hidePopover()); return handles; };
+  const originalError = console.error;
+  console.error = value => { captured.push(String(value)); if (delivery === 'failed') throw new Error('Deliberate diagnostic delivery failure'); };
+  try { if (delivery === 'not-needed') await keyboardActivate(page, target); else await expect(keyboardActivate(page, target)).rejects.toThrow('Native popover keyboard scope was lost.'); }
+  finally { console.error = originalError; }
+  expect(captured).toHaveLength(delivery === 'not-needed' ? 0 : 1);
+  if (delivery !== 'not-needed') {
+    const diagnostic = JSON.parse(captured[0]);
+    expect(diagnostic).toMatchObject({ schemaVersion: '1', code: 'NATIVE_KEYBOARD_POPOVER_UNVERIFIED', panel: 'SWITCHER', role: 'teacher', destination: 'improvement', connected: true, open: false, focusInside: false });
+    expect(JSON.stringify(diagnostic)).not.toMatch(/Current teacher|Current reference school|chooser\.fixture|https:|rawError|token|popover-[\w-]+/);
+  }
+  const counts = await page.evaluate(() => (globalThis as typeof globalThis & { keyboardDiagnosticProbe: { added: number; removed: number; entered: number } }).keyboardDiagnosticProbe);
+  expect(counts.added).toBe(3); expect(counts.removed).toBe(counts.added); expect(counts.entered).toBe(delivery === 'not-needed' ? 1 : 0);
+  await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=' + (delivery === 'not-needed' ? 'improvement' : 'progress')); expect(blocked).toEqual([]);
+});
+
+test('adapter: native keyboard diagnostics reject private fields and unbounded facts', () => {
+  const value = { schemaVersion: '1', code: 'NATIVE_KEYBOARD_POPOVER_UNVERIFIED', panel: 'SWITCHER', role: 'teacher', destination: 'improvement', connected: true, open: false, focusInside: false, openerGeometryUnchanged: true, lastEvent: null, eventCount: 0 };
+  expect(JSON.parse(serializeNativeKeyboardDiagnostic(value))).toEqual(value);
+  for (const field of ['url', 'recordId', 'personName', 'schoolId', 'error', 'token']) expect(() => serializeNativeKeyboardDiagnostic({ ...value, [field]: 'private-canary' })).toThrow();
+  for (const change of [{ panel: 'raw-panel-id' }, { role: 'private-person' }, { destination: 'private-title' }, { lastEvent: 'raw-message' }, { eventCount: 1001 }, { eventCount: -1 }]) expect(() => serializeNativeKeyboardDiagnostic({ ...value, ...change })).toThrow();
 });
