@@ -32,6 +32,14 @@ export type CustomerCommunityHeldReaction = {
 export type CustomerCommunityPeerMembershipMilestone = Readonly<{ groupId: string; memberChangeId: string; peerActorId: string }>;
 export type CustomerCommunityViewStage='GROUP_READY'|'DISCUSSION_READY'|'READ_ONLY_DISCUSSION'|'MODERATION_RESTORED'|'FAMILY_NOTIFICATION_READ'|'RETIREMENT_CONFIRMED';
 export type CustomerCommunityViewCheckpoint=Readonly<{stage:CustomerCommunityViewStage;role:CustomerCommunityRole;groupId:string;postIds:readonly string[];announcementId:string;scopeGeneration:number}>;
+/** Closed diagnostic metadata only; it never supplies source or effect authority. */
+export type CustomerCommunityReadFailureDiagnostic = Readonly<{
+  reason: 'UNSETTLED' | 'REQUEST_FAILED' | 'RESPONSE_UNVERIFIED';
+  source: 'ME' | 'ROOM_DIRECTORY' | 'ANNOUNCEMENT_DIRECTORY' | 'CLASS_ROSTER' | 'GROUP_ROSTER' | 'OTHER_ROSTER';
+  role: CustomerCommunityRole; generation: number; confirmedWriteCount: number;
+  cancelled: boolean; parsed: boolean; hasCursor: boolean; elapsedMs: number; pendingReadCount: number;
+}>;
+export type CustomerCommunityFailureDiagnostic = Readonly<{ schemaVersion: '1'; code: 'COMMUNITY_CURRENT_SOURCE_UNVERIFIED'; confirmedWriteCount: number; read: CustomerCommunityReadFailureDiagnostic | null }>;
 export type CustomerCommunityJourneyPorts = {
   step?: (name: string, work: () => Promise<void>) => Promise<void>;
   capture?: (name: string) => Promise<void>;
@@ -53,6 +61,8 @@ export type CustomerCommunityJourneyPorts = {
   beforeRetirement?: (observation: Readonly<CustomerCommunityJourneyObservation>) => Promise<void>;
   verifyQuality?: () => Promise<void>;
   cleanup?: (observation: Readonly<CustomerCommunityJourneyObservation>) => Promise<void>;
+  /** A failed journey may export only this minimized snapshot after cleanup. */
+  captureFailure?: (diagnostic: CustomerCommunityFailureDiagnostic) => Promise<void>;
 };
 export type CustomerCommunityJourneyObservation = {
   groupId: string; postIds: string[]; replyId: string; reportId: string; membershipChangeIds: string[]; announcementId: string;
@@ -85,11 +95,13 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   const content=input.content??{postBody:'I checked the example by explaining each step.',secondPostBody:'A second example checks each step in another order.',replyBody:'My checking step uses the same school example.',replyDraftOther:'This reply belongs to the second example.',reportReason:'Please review this school example.',muteReason:'Temporary moderated practice pause.',unmuteReason:'Staff restored normal group participation.',hideReason:'Staff hides the example during review.',restoreReason:'Staff completes review and restores the source.',announcementTitle:title+' family update',announcementBody:'School-reviewed class practice is ready.'};
   const writes = observation.writes;
   let currentActor: Readonly<CustomerCommunityActor> | null = null, scopeGeneration = 0, scopeFailure: unknown;
+  let admittedClassRoomId = input.context.classRoom?.id;
+  let failedRead: CustomerCommunityReadFailureDiagnostic | null = null;
   let roomFacts = new Map<string, Room>();
   let announcementFacts=new Map<string,Announcement>();let confirmedMainRestriction:string|undefined;
   const rosterFacts = new Map<string, {id:string;displayName:string;role:string}[]>();
   const pendingReads = new Set<Promise<void>>();
-  type ReadSnapshot={actor:Readonly<CustomerCommunityActor>;generation:number;authorization:string|undefined;school:string|undefined;key:string;path:string;cursor:string|null;nextCursor:string|null|undefined;retired:boolean;parsed:boolean;settled:Promise<void>;resolve:()=>void;timer:ReturnType<typeof setTimeout>};
+  type ReadSnapshot={actor:Readonly<CustomerCommunityActor>;generation:number;authorization:string|undefined;school:string|undefined;key:string;path:string;cursor:string|null;nextCursor:string|null|undefined;retired:boolean;parsed:boolean;startedAt:number;cancelled:boolean;settled:Promise<void>;resolve:()=>void;timer:ReturnType<typeof setTimeout>};
   const readRequests=new WeakMap<import('@playwright/test').Request,ReadSnapshot>(),latestReads=new Map<string,ReadSnapshot>();
   const pageFacts=new Map<string,{path:string;cursor:string|null;rooms?:Room[];announcements?:Announcement[];roster?:{id:string;displayName:string;role:string}[]}>();
   const observedPath=(path:string)=>['/v1/me','/v1/community/rooms','/v1/community/announcements'].includes(path)||/^\/v1\/community\/rooms\/[^/]+\/roster$/.test(path);
@@ -98,11 +110,15 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   const resetReads=()=>{for(const snapshot of latestReads.values())retire(snapshot);latestReads.clear();pageFacts.clear();};
   const sameEpoch=(snapshot:ReadSnapshot)=>currentActor===snapshot.actor&&scopeGeneration===snapshot.generation;
   const currentSnapshot=(snapshot:ReadSnapshot)=>sameEpoch(snapshot)&&!snapshot.retired&&latestReads.get(snapshot.key)===snapshot;
-  const readFailure=(snapshot:ReadSnapshot,error:unknown)=>{if(currentSnapshot(snapshot)){scopeFailure=error;scopeGeneration++;}clearTimeout(snapshot.timer);snapshot.resolve();};
+  const readFailure=(snapshot:ReadSnapshot,error:unknown,reason:CustomerCommunityReadFailureDiagnostic['reason'])=>{if(currentSnapshot(snapshot)){
+    const source: CustomerCommunityReadFailureDiagnostic['source'] = snapshot.path === '/v1/me' ? 'ME' : snapshot.path === '/v1/community/rooms' ? 'ROOM_DIRECTORY' : snapshot.path === '/v1/community/announcements' ? 'ANNOUNCEMENT_DIRECTORY' : admittedClassRoomId && snapshot.path === `/v1/community/rooms/${admittedClassRoomId}/roster` ? 'CLASS_ROSTER' : observation.groupId && snapshot.path === `/v1/community/rooms/${observation.groupId}/roster` ? 'GROUP_ROSTER' : 'OTHER_ROSTER';
+    failedRead ??= Object.freeze({reason,source,role:snapshot.actor.role,generation:snapshot.generation,confirmedWriteCount:writes.length,cancelled:snapshot.cancelled,parsed:snapshot.parsed,hasCursor:snapshot.cursor!==null,elapsedMs:Math.max(0,Date.now()-snapshot.startedAt),pendingReadCount:pendingReads.size});
+    scopeFailure=error;scopeGeneration++;
+  }clearTimeout(snapshot.timer);snapshot.resolve();};
   const requestObserver=(request:import('@playwright/test').Request)=>{
     if(!currentActor||!currentReadRequest(request))return;const url=new URL(request.url());if(!observedPath(url.pathname))return;
     const headers=request.headers(),key=url.pathname+url.search;let resolve!:()=>void;const settledRead=new Promise<void>(done=>resolve=done);
-    const snapshot:ReadSnapshot={actor:currentActor,generation:scopeGeneration,authorization:headers.authorization,school:headers['x-school-id'],key,path:url.pathname,cursor:url.searchParams.get('cursor'),nextCursor:undefined,retired:false,parsed:false,settled:settledRead,resolve,timer:setTimeout(()=>readFailure(snapshot,Error('The current Community source did not settle.')),15000)};
+    const snapshot:ReadSnapshot={actor:currentActor,generation:scopeGeneration,authorization:headers.authorization,school:headers['x-school-id'],key,path:url.pathname,cursor:url.searchParams.get('cursor'),nextCursor:undefined,retired:false,parsed:false,startedAt:Date.now(),cancelled:false,settled:settledRead,resolve,timer:setTimeout(()=>readFailure(snapshot,Error('The current Community source did not settle.'),'UNSETTLED'),15000)};
     const previous=latestReads.get(key);if(previous)retire(previous);
     pageFacts.delete(key);
     if(snapshot.cursor===null&&snapshot.path!=='/v1/me'){
@@ -112,12 +128,12 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
     latestReads.set(key,snapshot);readRequests.set(request,snapshot);pendingReads.add(settledRead);void settledRead.finally(()=>pendingReads.delete(settledRead));
   };
   const requestFailedObserver=(request:import('@playwright/test').Request)=>{
-    const snapshot=readRequests.get(request);if(!snapshot)return;
+    const snapshot=readRequests.get(request);if(!snapshot)return;snapshot.cancelled=request.failure()?.errorText==='net::ERR_ABORTED';
     // A real browser cancellation can precede its replacement request event.
     // Keep this query unknown within its original deadline; only a new exact
     // query or session retirement settles it without a positive observation.
     if(currentSnapshot(snapshot)&&request.failure()?.errorText==='net::ERR_ABORTED')return;
-    readFailure(snapshot,Error('The current Community source request failed.'));
+    readFailure(snapshot,Error('The current Community source request failed.'),'REQUEST_FAILED');
   };
   page.on('request',requestObserver);
   page.on('requestfailed',requestFailedObserver);
@@ -144,7 +160,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
         else roomFacts=new Map(pages.flatMap(page=>page.rooms??[]).map(row=>[row.id,row]));
       }
       snapshot.parsed=true;
-    })().catch(error=>{readFailure(snapshot,error);}).finally(()=>{clearTimeout(snapshot.timer);snapshot.resolve();});
+    })().catch(error=>{readFailure(snapshot,error,'RESPONSE_UNVERIFIED');}).finally(()=>{clearTimeout(snapshot.timer);snapshot.resolve();});
     void read;
   };
   page.on('response',responseObserver);
@@ -172,7 +188,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   }
   async function target(locator: Locator, owner: Locator) { await settled(page);const more=owner.locator(':scope > .pagination-actions').getByRole('button',{name:'Load more',exact:true});for(let count=0;count<30&&!await locator.count();count++){if(!await more.count())break;await expect(more).toHaveCount(1);await expect(more).toBeEnabled();await more.click();await expect(owner.getByRole('button',{name:'Loading more…',exact:true})).toHaveCount(0);await currentReads();}await expect(locator).toHaveCount(1);await expect(locator).toBeVisible(); }
   async function completeRoomDirectory() { const owner=page.locator('.community-workspace'),more=owner.locator(':scope > .pagination-actions').getByRole('button',{name:'Load more',exact:true});await settled(page);for(let count=0;count<30&&await more.count();count++){await expect(more).toHaveCount(1);await expect(more).toBeEnabled();const cursor=await more.getAttribute('data-page-cursor');const source=page.waitForResponse(response=>new URL(response.url()).origin===apiOrigin&&new URL(response.url()).pathname==='/v1/community/rooms'&&new URL(response.url()).searchParams.get('cursor')===cursor&&response.request().method()==='GET');await more.click();expect((await source).ok()).toBe(true);await settled(page);await currentReads();}await expect(more,'Complete the admitted room directory before selecting a class discussion').toHaveCount(0);await currentReads(); }
-  async function currentClassRoom() { await completeRoomDirectory();const rooms=[...roomFacts.values()].filter(room=>room.type==='CLASS'&&room.classId===input.context.classId);if(rooms.length>1)throw Error('The admitted class has ambiguous current discussion sources.');if(rooms[0]&&rooms[0].status!=='ACTIVE')throw Error('The admitted class discussion is closed.');return rooms[0]??null; }
+  async function currentClassRoom() { await completeRoomDirectory();const rooms=[...roomFacts.values()].filter(room=>room.type==='CLASS'&&room.classId===input.context.classId);if(rooms.length>1)throw Error('The admitted class has ambiguous current discussion sources.');if(rooms[0]&&rooms[0].status!=='ACTIVE')throw Error('The admitted class discussion is closed.');if(rooms[0])admittedClassRoomId=rooms[0].id;return rooms[0]??null; }
   async function openGroup() { const row=page.locator(`.community-room[data-room-id="${observation.groupId}"]`).filter({has:page.getByRole('heading',{name:title,exact:true})});await target(row,page.locator('.community-workspace'));await row.getByRole('button',{name:'Open discussion',exact:true}).click();await settled(page);await currentReads(); }
   async function exitRoom() {
     const actor=currentActor,generation=scopeGeneration,group=roomFacts.get(observation.groupId);
@@ -319,7 +335,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   if(currentActor&&!page.isClosed())try{await signOut();}catch(error){cleanupFailures.push(error);}
   page.off('response',responseObserver);page.off('request',requestObserver);page.off('requestfailed',requestFailedObserver);resetReads();await Promise.all([...pendingReads]);
   if(ports.cleanup)try{observation.cleanupCount++;await ports.cleanup(observation);}catch(error){cleanupFailures.push(error);}
-  if(failure){if(cleanupFailures.length)throw new AggregateError([failure,...cleanupFailures],'Community verification and cleanup failed.',{cause:failure});throw failure;}
+  if(failure){try{await ports.captureFailure?.(Object.freeze({schemaVersion:'1',code:'COMMUNITY_CURRENT_SOURCE_UNVERIFIED',confirmedWriteCount:writes.length,read:failedRead}));}catch{/* Diagnostic delivery cannot replace the original failure. */}if(cleanupFailures.length)throw new AggregateError([failure,...cleanupFailures],'Community verification and cleanup failed.',{cause:failure});throw failure;}
   if(cleanupFailures.length)throw new AggregateError(cleanupFailures,'Community cleanup failed.');
   return observation;
 }

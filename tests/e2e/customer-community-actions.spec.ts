@@ -3,8 +3,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
-import { runCustomerCommunityJourney, type CustomerCommunityAccount } from './customer-community-journey';
+import { runCustomerCommunityJourney, type CustomerCommunityAccount, type CustomerCommunityFailureDiagnostic } from './customer-community-journey';
 import { selectHumanChoice } from './human-choice';
+import { attachDiagnosticPreservingFailure, serializeFailureDiagnostic } from './course-objective-diagnostics';
 
 type Account = { role: string; email: string; password: string };
 test('teacher-led group membership, peer replies, moderation and family notification receipts work through UI controls', async ({ page, baseURL }) => {
@@ -18,10 +19,11 @@ test('teacher-led group membership, peer replies, moderation and family notifica
   const directory = resolve('.local/customer-readiness/community-actions', new Date().toISOString().replace(/[:.]/g, '-'));
   await mkdir(directory, { recursive: true });
   const configuredApi=new URL(process.env.NEXT_PUBLIC_API_URL??'');expect(configuredApi.protocol).toBe('http:');expect(['localhost','127.0.0.1']).toContain(configuredApi.hostname);expect(configuredApi.username||configuredApi.password||configuredApi.search||configuredApi.hash).toBe('');expect(configuredApi.pathname).toBe('/');const apiOrigin=configuredApi.origin;
-  const classId='30000000-0000-4000-8000-000000000001',classLabel='Year 1 · Cedar · Year 1 · 2026–2027';let confirmedWriteCount=0;
+  const classId='30000000-0000-4000-8000-000000000001',classLabel='Year 1 · Cedar · Year 1 · 2026–2027';let confirmedWriteCount=0,diagnostic:CustomerCommunityFailureDiagnostic|undefined;
   try {
     const observation=await runCustomerCommunityJourney(page,{webOrigin:new URL(baseURL??'http://localhost:3000').origin,apiOrigin,title,actors:{teacher,student,parent},peer:{...peers[0],role:'student'},context:{schoolId:identity.schoolId,classId,classLabel,classRoom:null}},{
       onCommand:async()=>{confirmedWriteCount++;},
+      captureFailure:async value=>{const serialized=serializeFailureDiagnostic(value);diagnostic=JSON.parse(serialized) as CustomerCommunityFailureDiagnostic;console.error(serialized);},
       capture:async name=>{await page.screenshot({path:resolve(directory,name+'.png')});},
       prepareClassRoom:async controls=>{const current=await controls.currentClassRoom();if(current)return{id:current.id,name:current.name};await page.getByRole('button',{name:'Create teacher-led room',exact:true}).click();const form=page.getByRole('region',{name:'Create teacher-led room',exact:true});await selectHumanChoice(form.getByLabel('Class',{exact:true}),classLabel,classId,page.locator('.community-workspace'));await form.getByLabel('Room name',{exact:true}).fill('Cedar class discussion');await form.getByLabel('Room type',{exact:true}).selectOption({label:'Class discussion'});const receipt=await controls.visibleMutation('class discussion created','/v1/community/rooms',()=>form.getByRole('button',{name:'Save',exact:true}).click());return{id:receipt.id,name:'Cedar class discussion'};},
       holdReaction:async path=>{
@@ -31,7 +33,7 @@ test('teacher-led group membership, peer replies, moderation and family notifica
       }
     });
     await writeFile(resolve(directory,'evidence.json'),JSON.stringify({status:'VERIFIED',mutationMode:'VISIBLE_UI_ONLY',group:observation.groupId,...observation,limitations:['Group post attachments are not implemented.','UI evidence does not establish native or hosted acceptance.']},null,2));
-  } catch(failure){if(!page.isClosed())await page.screenshot({path:resolve(directory,'failure.png')}).catch(()=>undefined);await writeFile(resolve(directory,'failure.json'),JSON.stringify({status:'FAILED',confirmedWriteCount},null,2));throw failure;}
+  } catch(failure){await attachDiagnosticPreservingFailure(async()=>{throw failure;},async()=>{if(!page.isClosed())await page.screenshot({path:resolve(directory,'failure.png')}).catch(()=>undefined);await writeFile(resolve(directory,'failure.json'),JSON.stringify({status:'FAILED',confirmedWriteCount,...(diagnostic?{diagnostic}:{})},null,2));});}
 });
 
 async function settled(page: Page) { await expect(page.locator('main [role="status"]').filter({ hasText: /^(Loading|جارٍ تحميل)/ })).toHaveCount(0); }

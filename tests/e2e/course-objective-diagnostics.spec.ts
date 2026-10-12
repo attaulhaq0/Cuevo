@@ -2,6 +2,17 @@ import { test, expect } from '@playwright/test';
 import { attachDiagnosticPreservingFailure, diagnosticSource, observeCourseObjectiveTransport, serializeFailureDiagnostic } from './course-objective-diagnostics';
 import { observeProgressFocus } from './progress-focus-diagnostics';
 
+test('Community read failure diagnostics retain only bounded source state and reject private fields', () => {
+  const read={reason:'UNSETTLED',source:'CLASS_ROSTER',role:'teacher',generation:1,confirmedWriteCount:1,cancelled:true,parsed:false,hasCursor:false,elapsedMs:15000,pendingReadCount:1};
+  const value={schemaVersion:'1',code:'COMMUNITY_CURRENT_SOURCE_UNVERIFIED',confirmedWriteCount:1,read};
+  expect(JSON.parse(serializeFailureDiagnostic(value))).toEqual(value);
+  expect(JSON.parse(serializeFailureDiagnostic({...value,read:null}))).toEqual({...value,read:null});
+  for(const extra of ['url','actorId','authorization','body','error','schoolId','token'])expect(()=>serializeFailureDiagnostic({...value,read:{...read,[extra]:'private-pupil-content-canary'}})).toThrow();
+  expect(()=>serializeFailureDiagnostic({...value,privateDiagnostic:'private-pupil-content-canary'})).toThrow();
+  for(const changed of [{source:'/v1/community/rooms/private/roster'},{role:'foreign'},{reason:'Raw driver failure'},{generation:0},{elapsedMs:3600001},{pendingReadCount:1001},{confirmedWriteCount:1001}])expect(()=>serializeFailureDiagnostic({...value,read:{...read,...changed}})).toThrow();
+  expect(()=>serializeFailureDiagnostic({...value,confirmedWriteCount:1001})).toThrow();
+});
+
 test('course objective diagnostics preserve endpoint class while excluding keys, credentials and queries', () => {
   const origins={api:'https://api.fixture.invalid',auth:'https://auth.fixture.invalid',web:'https://web.fixture.invalid'};
   expect(diagnosticSource('https://api.fixture.invalid/v1/assessments/a1000000-0000-4000-8000-000000000001/preparation?token=private&answer=pupil',origins)).toEqual({origin:'api',path:'/v1/assessments/{record}/preparation'});
