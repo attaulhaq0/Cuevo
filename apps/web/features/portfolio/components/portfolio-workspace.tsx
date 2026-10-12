@@ -1,7 +1,7 @@
 'use client';
 import { IconButton } from '@cuevo/ui';
 import { WorkspaceState } from '@cuevo/ui';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FocusEvent } from 'react';
 import { Button, CuevoIcon, Status, WorkspacePageHeading } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
@@ -140,11 +140,14 @@ function CurrentPortfolioWorkspace({pendingSources}:{pendingSources:Map<string,P
   function closeReading(){if(portfolioNavigationLocked(commandJournal.pending()))return;returnToDirectory.current=true;setReading(null);formDrafts.remove(readingSlot);setAction(null);setEvidenceId(null);setHistoryId(null);setWorkRevision(null);}
   function focusItem(id: string) { focusTarget.current = id; }
 
-  return <div ref={root} onFocusCapture={event => {
+  const captureFocusedControl = (event: FocusEvent<HTMLDivElement>) => {
     const element = event.target as HTMLElement;
     focusedControl.current = element.matches('input, textarea, select, button') ? { context: selectionContext, element, form: element.closest('section[aria-label]')?.getAttribute('aria-label') ?? undefined, name: element.getAttribute('name') ?? undefined, button: element.tagName === 'BUTTON' ? element.getAttribute('aria-label') || element.textContent?.trim() : undefined } : null;
-  }} className={`portfolio-workspace portfolio-workspace--${student ? 'student' : parent ? 'parent' : 'staff'}`}>
-    <ChildSelector context={childContext} />
+  };
+  if (parent && !childContext.child) return <div ref={root} onFocusCapture={captureFocusedControl} className="portfolio-workspace portfolio-workspace--parent"><WorkspacePageHeading title={t.portfolio} /><ChildSelector key="child-context" context={childContext} /><div className="portfolio-toolbar"><IconButton icon="refresh" label={t.refresh} type="button" onClick={() => setRefresh(value => value + 1)} /></div></div>;
+
+  return <div ref={root} onFocusCapture={captureFocusedControl} className={`portfolio-workspace portfolio-workspace--${student ? 'student' : parent ? 'parent' : 'staff'}`}>
+    <ChildSelector key="child-context" context={childContext} />
     <header className="portfolio-journey-heading">
       <img src={creating ? trailAssets.owl : trailAssets.portfolio} width={88} height={88} alt="" aria-hidden="true" />
       <WorkspacePageHeading title={creating ? trail.reflectionTitle : student ? trail.journeyTitle : parent ? trail.parentTitle : trail.reviewTitle} caption={parent ? childContext.child?.displayName : undefined} description={creating ? trail.reflectionSubtitle : student ? trail.journeyBody : parent ? trail.parentBody : coordinator ? trail.coordinatorBody : trail.reviewBody}/>

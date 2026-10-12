@@ -53,7 +53,7 @@
 .teacher-trail__section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-3); }
 .teacher-trail__section-heading h2 { font-size: var(--type-lead); margin: 0; }
 .teacher-trail__section-heading .button { padding-inline: var(--space-2); }
-.teacher-trail__workspace-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.teacher-trail__workspace-list { display: grid; grid-template-columns: repeat(var(--teacher-workspace-wide-columns, 5), minmax(0, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 .teacher-trail__workspace-list li { min-inline-size: 0; }
 .teacher-trail__workspace-list button { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); inline-size: 100%; block-size:100%; min-block-size: 8.25rem; padding: var(--space-3) var(--space-2); font: inherit; color: var(--color-text); border: 1px solid transparent; border-radius: var(--radius-lg); background: var(--color-surface-muted); cursor: pointer; }
 .teacher-trail__workspace-list button[aria-current="page"] { border:2px solid var(--color-selection-border); background: var(--color-selection-surface); color:var(--color-selection-text); box-shadow:inset 0 -3px var(--color-selection-border);}
@@ -113,12 +113,13 @@
   .teacher-trail__state { padding-inline-start: var(--space-2); gap: var(--space-2); }
   .teacher-trail__state-icon { inline-size: 2.5rem; block-size: 2.5rem; }
   .teacher-trail__queue-row > .button:not(.teacher-trail__toggle) { padding-inline: var(--space-3); }
+  .teacher-trail__workspace-list { grid-template-columns: repeat(var(--teacher-workspace-columns, 4), minmax(0, 1fr)); }
 }
 @media (max-width: 1100px) {
   .teacher-trail__layout { grid-template-columns: minmax(0, 1fr); }
   .teacher-trail__aside { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .teacher-trail__intro { align-items: start; }
-  .teacher-trail__workspace-list { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+  .teacher-trail__workspace-list { grid-template-columns: repeat(var(--teacher-workspace-columns, 4), minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
   .teacher-trail__layout { padding: var(--space-2) 0 var(--space-3); gap: var(--space-3); }

@@ -8,12 +8,12 @@ import { FormDrafts } from '../../../shared/session/form-drafts.ts';
 import { getDictionary } from '../../../shared/i18n/locale.ts';
 import { commonEn, commonAr } from '../../../shared/i18n/common.ts';
 
-const fixture={app:{} as Record<string,unknown>,loading:false,continued:false};
+const fixture={app:{} as Record<string,unknown>,loading:false,continued:false,children:[] as unknown[]};
 Object.assign(globalThis,{React,remainingPortfolioFixture:fixture,remainingPortfolioEn:commonEn,remainingPortfolioAr:commonAr});
 registerHooks({load(url,context,next){const path=url.replaceAll('\\','/');
  if(path.endsWith('/shared/session/providers.tsx'))return{format:'module',shortCircuit:true,source:'export function useApp(){return globalThis.remainingPortfolioFixture.app}'};
  if(path.endsWith('/shared/hooks/use-api.ts'))return{format:'module',shortCircuit:true,source:'export function useApiQuery(){return{data:null,loading:globalThis.remainingPortfolioFixture.loading,error:null}}export function useApi(){return{journal:globalThis.remainingPortfolioFixture.app.commandJournal,t:globalThis.remainingPortfolioFixture.app.locale==="ar"?globalThis.remainingPortfolioAr:globalThis.remainingPortfolioEn}}'};
- if(path.endsWith('/shared/hooks/use-paginated-query.ts'))return{format:'module',shortCircuit:true,source:'export function usePaginatedLearningQuery(path){return{data:[],loaded:!!path,loading:globalThis.remainingPortfolioFixture.loading,loadingMore:false,error:null,moreError:null,nextCursor:globalThis.remainingPortfolioFixture.continued&&(path?.includes("feedback-requests")||path?.startsWith("/v1/assets?"))?"next-page":null,loadMore(){}}}'};
+ if(path.endsWith('/shared/hooks/use-paginated-query.ts'))return{format:'module',shortCircuit:true,source:'export function usePaginatedLearningQuery(path,parse){const f=globalThis.remainingPortfolioFixture;return{data:path==="/v1/people?limit=100"?f.children.map(parse):[],loaded:!!path,loading:f.loading,loadingMore:false,error:null,moreError:null,nextCursor:f.continued&&(path?.includes("feedback-requests")||path?.startsWith("/v1/assets?"))?"next-page":null,loadMore(){}}}'};
  return next(url,context);
 }});
 const {PortfolioWorkspace}=await import('../components/portfolio-workspace.tsx');
@@ -23,8 +23,22 @@ const {PortfolioSourceWork}=await import('../components/source-work.tsx');
 const {PortfolioDocumentSelection}=await import('../components/document-selection.tsx');
 const {PortfolioOrganization}=await import('../components/organization.tsx');
 const {PrivateFiles}=await import('../components/private-files.tsx');
-function app(locale:'en'|'ar') {fixture.app={locale,dictionary:getDictionary(locale),online:true,status:'ready',accessGeneration:1,accessToken:'fixture',apiUrl:'https://fixture.invalid',commandJournal:new CommandJournal(),formDrafts:new FormDrafts(),refreshAccess(){},reportDiagnostic(){},membership:{role:'student',schoolId:'school',userId:'learner',entitlements:['portfolio','assessment'],school:{name:'Current school'}}};fixture.loading=false;fixture.continued=false;}
+function app(locale:'en'|'ar') {fixture.app={locale,dictionary:getDictionary(locale),online:true,status:'ready',accessGeneration:1,accessToken:'fixture',apiUrl:'https://fixture.invalid',commandJournal:new CommandJournal(),formDrafts:new FormDrafts(),refreshAccess(){},reportDiagnostic(){},membership:{role:'student',schoolId:'school',userId:'learner',entitlements:['portfolio','assessment'],school:{name:'Current school'}}};fixture.loading=false;fixture.continued=false;fixture.children=[];}
 for(const locale of ['en','ar'] as const){
+ test(`${locale} Parent without a current child keeps one prerequisite and no work-selection plane`,()=>{
+  app(locale); fixture.app={...fixture.app,selectedChildId:'',selectChild(){},membership:{role:'parent',schoolId:'school',userId:'parent',displayName:'Current guardian',entitlements:['portfolio','assessment','learning','curriculum'],school:{name:'Current school'}}};
+  const html=renderToStaticMarkup(createElement(PortfolioWorkspace));
+  assert.equal((html.match(/<h1[ >]/g)??[]).length,1);
+  assert.match(html,locale==='en'?/No child is available through your current approved relationships/:/لا يتاح طفل ضمن العلاقات الحالية المعتمدة/);
+  assert.doesNotMatch(html,/parent-portfolio-reading|Approved selected work|Choose an approved item|الأعمال المختارة المعتمدة/);
+  assert.equal((html.match(/data-state="empty"/g)??[]).length,1);
+  assert.equal((html.match(/<button/g)??[]).length,1);
+ });
+ test(`${locale} a current sole child retains the approved-work empty state instead of the prerequisite fallback`,()=>{
+  app(locale);fixture.children=[{userId:'00000000-0000-4000-8000-000000000002',displayName:'Current child',role:'student',classLabels:['Current class']}];fixture.app={...fixture.app,selectedChildId:'',selectChild(){},membership:{role:'parent',schoolId:'school',userId:'parent',displayName:'Current guardian',entitlements:['portfolio','assessment','learning','curriculum'],school:{name:'Current school'}}};
+  const html=renderToStaticMarkup(createElement(PortfolioWorkspace));assert.match(html,/parent-portfolio-reading/);assert.match(html,/Current child/);assert.doesNotMatch(html,/No child is available|لا يتاح طفل/);
+  assert.equal((html.match(/<h1[ >]/g)??[]).length,1);assert.match(html,/data-state="empty"/);
+ });
  test(`${locale} complete Portfolio directory uses the state card while source checking stays loading`,()=>{
   app(locale);let html=renderToStaticMarkup(createElement(PortfolioWorkspace));assert.match(html,/data-state="empty"/);assert.doesNotMatch(html,/<p[^>]*>\s*<div/);
   fixture.loading=true;html=renderToStaticMarkup(createElement(PortfolioWorkspace));assert.match(html,/data-state="loading"/);assert.doesNotMatch(html,/data-state="empty"/);

@@ -74,7 +74,7 @@
 .development-ledger__points strong { display: block; font-size: var(--type-xl); font-weight: 900; }
 .development-ledger__points span { display: block; font-size: var(--type-xs); }
 .development-ledger details { margin-block-start: var(--space-3); font-size: var(--type-sm); }
-.development-ledger summary { color: var(--color-accent); cursor: pointer; min-height: var(--control-min-height); align-content: center; }
+.development-ledger summary { color: var(--color-accent); cursor: pointer; min-height: var(--control-min-size); align-content: center; }
 .development-ledger details p { margin-block-start: var(--space-3); color: var(--color-text-secondary); }
 .development-ledger details dd { margin-inline-start: 0; overflow-wrap: anywhere; }
 .development-companion { background: var(--color-surface-accent); }

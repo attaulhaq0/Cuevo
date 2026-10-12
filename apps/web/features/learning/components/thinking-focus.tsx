@@ -8,6 +8,7 @@ import { useApp } from '../../../shared/session/providers';
 import { useApiQuery } from '../../../shared/hooks/use-api';
 import { CommandForm, type FormField } from '../../../shared/components/command-form';
 import { LearningError } from '../../../shared/components/feedback';
+import { fetchVerifiedDownload, deliverVerifiedDownload } from '../../../shared/api/verified-download';
 import { buildThinkingFocusDraft, currentThinkingFocusRead, parseThinkingFocusCatalogue, parseThinkingFocusQueue, parseThinkingFocusRead, parseThinkingFocusSnapshot, parseThinkingFocusRubric, parseThinkingFocusMaterials, thinkingFocusMaterialsPath, thinkingFocusActionAvailable, thinkingFocusPath, thinkingFocusTarget, validateThinkingFocusReceipt, parseThinkingFocusSelection, currentThinkingFocusSelection, type ThinkingFocusSelection, type ThinkingFocusKind } from '../thinking-focus-model';
 import type { Assessment } from '../model';
 import { LearningApiError,type Command,type CommandJournal } from '../../../shared/api/client';
@@ -31,22 +32,24 @@ function ThinkingFocusMaterials({ source, readScope, onReady,onLockedChange,head
   const manifest = query.data?.scope === scope ? query.data.value : null;
   const [pending, setPending] = useState<string | null>(null), [error, setError] = useState<LearningApiError | null>(null);
   const controller = useRef<AbortController | null>(null), mounted = useRef(false);
+  const currentDownload = useRef({scope,manifest,loading:query.loading,error:query.error,lifecycle:app.readLifecycle}); currentDownload.current={scope,manifest,loading:query.loading,error:query.error,lifecycle:app.readLifecycle};
+  const downloadAdmitted=useRef<(() => boolean)|null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); }; }, []);
+  useEffect(() => { setPending(null); return () => controller.current?.abort(); }, [scope]);
+  useEffect(()=>{if(downloadAdmitted.current&&!downloadAdmitted.current())controller.current?.abort();});
   useEffect(() => { onReady(manifest && !query.error && !error ? readScope : null); return () => onReady(null); }, [manifest, query.error, error, readScope, onReady]);
   useEffect(()=>{onLockedChange?.(!!pending);return()=>onLockedChange?.(false);},[pending,onLockedChange]);
   async function download(resource: LearningResource) {
-    if (!manifest || !app.accessToken || !app.membership || pending) return;
+    if (!manifest || !app.accessToken || !app.membership || pending || resource.assetState !== 'AVAILABLE' || resource.state === 'REMOVED') return;
     const abort = new AbortController(); controller.current?.abort(); controller.current = abort; setPending(resource.id); setError(null);
+    const expected=scope,metadata=JSON.stringify(resource),readFrame=app.readLifecycle?.capture();
+    const isCurrent=()=>{const current=currentDownload.current;return mounted.current&&!abort.signal.aborted&&controller.current===abort&&current.scope===expected&&current.lifecycle===app.readLifecycle&&!current.loading&&!current.error&&!!current.manifest&&current.manifest.items.filter(row=>JSON.stringify(row)===metadata).length===1&&(!readFrame||!!app.readLifecycle?.isCurrent(readFrame));};
+    downloadAdmitted.current=isCurrent;
     try {
-      const response = await fetch(`${app.apiUrl}${thinkingFocusMaterialsPath(source.target, source.sourceVersion, resource)}`, { headers: { Authorization: `Bearer ${app.accessToken}`, 'X-School-Id': app.membership.schoolId }, cache: 'no-store', credentials: 'omit', signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) });
-      if (!response.ok) throw new LearningApiError(response.status === 403 ? 'denied' : response.status === 409 ? 'conflict' : 'unavailable');
-      const bytes = await response.arrayBuffer();
-      const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
-      if (bytes.byteLength !== resource.byteSize || sha256 !== resource.sha256 || response.headers.get('content-type')?.split(';')[0] !== resource.contentType) throw new LearningApiError('invalid');
-      if (!mounted.current || abort.signal.aborted) return;
-      const url = URL.createObjectURL(new Blob([bytes], { type: resource.contentType })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = resource.name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (failure) { if (mounted.current && !abort.signal.aborted) setError(failure instanceof LearningApiError ? failure : new LearningApiError('unavailable')); }
-    finally { if (mounted.current && !abort.signal.aborted) setPending(null); }
+      const result=await fetchVerifiedDownload({config:{apiUrl:app.apiUrl,accessToken:app.accessToken,schoolId:app.membership.schoolId},path:thinkingFocusMaterialsPath(source.target,source.sourceVersion,resource),metadata:resource,signal:abort.signal,isCurrent,readLifecycle:app.readLifecycle,statusError:status=>new LearningApiError(status===403?'denied':status===409?'conflict':'unavailable'),responseValid:headers=>headers.get('content-type')?.split(';')[0]===resource.contentType});
+      deliverVerifiedDownload(result);
+    } catch (failure) { if (isCurrent()) setError(failure instanceof LearningApiError ? failure : new LearningApiError('unavailable')); }
+    finally { if (mounted.current && controller.current===abort) setPending(null); }
   }
   const Heading=headingLevel===3?'h3':'h4';
   return <section className="thinking-focus-materials"><Heading>{t.materials}</Heading>{query.loading ? <WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/> : query.error ? <LearningError error={query.error}/> : manifest ? manifest.items.length ? <ul>{manifest.items.map(resource => <li key={`${resource.id}:${resource.revisionId}`}><div><p>{resource.title}</p><small><bdi>{resource.name}</bdi></small></div><Button type="button" variant="quiet" disabled={!!pending} onClick={() => void download(resource)}>{pending === resource.id ? t.openingMaterial : t.openMaterial}</Button></li>)}</ul> : <WorkspaceState kind="empty" icon="portfolio" description={t.noMaterials}/> : <WorkspaceState kind="unknown" icon="help" description={t.materialUnknown} role="status"/>}{error ? <LearningError error={error}/> : null}{query.error || error ? <Button type="button" variant="quiet" onClick={() => { setError(null); setRefresh(value => value + 1); }}>{t.retry}</Button> : null}</section>;
