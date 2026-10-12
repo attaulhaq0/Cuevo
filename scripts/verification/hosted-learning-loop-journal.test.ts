@@ -279,3 +279,23 @@ test('the multi-command learning loop retains every original metadata transition
     assert.equal((await journal.read()).commands.filter(row => row.state === 'NATIVE_CONFIRMED').length, 12);
   });
 });
+
+test('version one learning owner intent and paired head retain the exact historical JSON bytes', async context => {
+  const { createHostedLearningLoopJournal } = await api();
+  await fixture(context, async root => {
+    const journal = await createHostedLearningLoopJournal({ repoRoot: root, identity }); await journal.intent(command);
+    // Fixed historical field order and bytes, independent of the current schema
+    // or canonical serializer. These are the original version-one wire records.
+    const commandBytes = '{"actorId":"' + command.actorId + '","key":"original-course-command","operation":"course.create","path":"/v1/courses","requestBodySha256":"' + 'd'.repeat(64) + '","role":"teacher","schoolId":"' + identity.schoolId + '","sourceIds":["' + command.sourceIds[0] + '"],"sourceRevision":null,"step":"create-course"}';
+    const identityBytes = '{"backendTransferSha256":"' + 'c'.repeat(64) + '","ciRunId":"31","projectRef":"mqxdjvsyckzocokuikmx","runAttempt":2,"runId":"81","schoolId":"' + identity.schoolId + '","sourceSha":"' + 'a'.repeat(40) + '","treeSha":"' + 'b'.repeat(40) + '","webDeploymentId":"dpl_Web"}';
+    const first = '{"command":' + commandBytes + ',"httpReceiptSha256":null,"identity":' + identityBytes + ',"intentRecordSha256":null,"intentSequence":1,"localDurabilityOnly":true,"nativeProof":null,"nativeReceiptSha256":null,"previousRecordSha256":null,"purpose":"CUEVO_HOSTED_LEARNING_LOOP_COMMAND_JOURNAL",';
+    const last = '"sequence":1,"state":"INTENT","version":1}';
+    const recordSha256 = createHash('sha256').update(first + last).digest('hex');
+    const recordBytes = first + '"recordSha256":"' + recordSha256 + '",' + last + '\n';
+    const ownerBytes = '{"projectRef":"mqxdjvsyckzocokuikmx","purpose":"CUEVO_HOSTED_LEARNING_LOOP_COMMAND_JOURNAL","schoolId":"' + identity.schoolId + '","version":1}\n';
+    const headBytes = '{"previousRecordSha256":null,"purpose":"CUEVO_HOSTED_LEARNING_LOOP_COMMAND_JOURNAL","recordSha256":"' + recordSha256 + '","sequence":1,"version":1}\n';
+    assert.equal(await readFile(join(scope(root), 'owner.json'), 'utf8'), ownerBytes);
+    assert.equal(await readFile(join(scope(root), '000001.record.json'), 'utf8'), recordBytes);
+    assert.equal(await readFile(join(scope(root), '000001.head.json'), 'utf8'), headBytes);
+  });
+});

@@ -7,6 +7,11 @@ import * as owner from './backend-hosted-learning-loop';
 import type { CustomerLearningLoopCommandObservation, CustomerLearningLoopMutationIntent } from '../../tests/e2e/customer-learning-loop';
 import type { HostedLearningLoopJournal, HostedLearningLoopJournalOriginal } from './hosted-learning-loop-journal';
 import type { Request } from '@playwright/test';
+import ts from 'typescript';
+import { runInNewContext } from 'node:vm';
+import { z } from 'zod';
+import { canonicalReleaseExecutionJson } from './release-review';
+import { hostedAcceptanceInputSchema } from './hosted-acceptance-context';
 
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const seed=JSON.parse(readFileSync(resolve(import.meta.dirname,'../../supabase/seed/identities.json'),'utf8'));
@@ -16,6 +21,25 @@ const context={schoolId:seed.schoolId,classId:'30000000-0000-4000-8000-000000000
 const identity={projectRef:'mqxdjvsyckzocokuikmx',schoolId:seed.schoolId,sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),ciRunId:'31',runId:'81',runAttempt:2,backendTransferSha256:'d'.repeat(64),webDeploymentId:'dpl_Web'};
 const courseId='e8000000-0000-4000-8000-000000000001';
 const body={classId:context.classId,subjectId:context.subjectId,title:'Checking work',description:'Reviewed synthetic explanation'};
+
+test('actual hosted producer gives its browser one human UTC creation title while keeping original technical identity private',async()=>{
+ const file=resolve(import.meta.dirname,'backend-hosted-learning-loop.ts'),source=ts.createSourceFile(file,readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true),names=new Set(['inputSchema','selectedSchema','canonicalActorIds']);
+ const declarations=source.statements.filter(node=>ts.isFunctionDeclaration(node)&&['empty','verifyHostedLearningLoop'].includes(node.name?.text??'')||ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>ts.isIdentifier(item.name)&&names.has(item.name.text)));
+ const script=ts.transpileModule(declarations.map(node=>node.getText(source).replace(/^export\s+/, '')).join('\n')+'\nverifyHostedLearningLoop;',{compilerOptions:{target:ts.ScriptTarget.ES2023,module:ts.ModuleKind.None}}).outputText;
+ const titles:string[]=[];
+ for(const [at,want]of [['2026-10-12T09:14:22.000Z','Explain and check — fictional practice · 12 October 2026 at 09:14:22 UTC'],['2026-10-13T00:00:01.000Z','Explain and check — fictional practice · 13 October 2026 at 00:00:01 UTC']]){
+  let clock=Date.parse(at)-60000,creationReads=0,browserCalls=0,disposed=0;const browserChecks:{title:string;observedAt:string;gate:unknown;actorIds:string[]}[]=[];const observedIdentity={...identity,runId:'38188792270',runAttempt:7},backend={...observedIdentity,web:{origin:'https://web.fixture.invalid'}},originalWeb={webOrigin:'https://web.fixture.invalid',observedAt:'2026-10-01T00:00:00.000Z',webPackageExpiresAt:'2026-10-31T00:00:00.000Z',artifactSha256:'e'.repeat(64),packageSha256:'f'.repeat(64)},journalBefore={records:[],commands:[],lastRecordSha256:null,evidence:'LOCAL_DURABLE_METADATA_ONLY',hostedAcceptance:false,runnerLossRecoveryVerified:false},companions:{name:string;value:unknown}[]=[];
+  const writer=async(name:string,value:unknown)=>{const plain=JSON.parse(JSON.stringify(value));companions.push({name,value:plain});return hash(canonicalReleaseExecutionJson(plain));};
+  const gate={confirmedCount:()=>0,read:async()=>journalBefore,executionManifest:()=>undefined,companions:()=>[],receipts:()=>[],fail:async()=>{}};
+  const admitted={backendIdentity:backend,publicConfig:{apiUrl:'https://api.fixture.invalid',supabaseUrl:'https://auth.fixture.invalid',supabasePublishableKey:'sb_publishable_fixture'},runner:{repository:'owner/repo',runId:observedIdentity.runId,runAttempt:observedIdentity.runAttempt},identity:observedIdentity,originalWeb,readmit:async()=>{},readSource:async(path:string)=>Buffer.from(path==='supabase/seed/identities.json'?JSON.stringify(seed):'Actual current producer bytes'),createCompanions:async()=>writer,dispose:()=>{disposed++;}};
+  class CreationDate extends Date{constructor(value?:string|number){super(value??clock);}static now(){creationReads++;return clock;}}
+  const invoke=runInNewContext(script,{z,uuid:z.uuid(),hostedAcceptanceInputSchema,Buffer,Date:CreationDate,Intl,canonicalReleaseExecutionJson,hash,failure:()=>Error('Controlled production refusal'),same:(left:unknown,right:unknown)=>canonicalReleaseExecutionJson(left)===canonicalReleaseExecutionJson(right),selectHostedLearningLoopActors:owner.selectHostedLearningLoopActors,prepareHostedAcceptanceContext:async()=>{clock=Date.parse(at);return admitted;},createHostedLearningLoopJournal:async()=>({read:async()=>journalBefore}),createHostedLearningLoopCommandGate:(options:{identity:unknown;context:unknown})=>{assert.deepEqual(JSON.parse(JSON.stringify(options.identity)),observedIdentity);assert.deepEqual(JSON.parse(JSON.stringify(options.context)),{...context,classLabel:'Year 1 · Cedar · Year 1 · 2026–2027',className:'Year 1 · Cedar',yearGroupName:'Year 1',classShortName:'Cedar',subjectName:'Mathematics',referenceTitle:'Synthetic school-authored explanation objective'});return gate;},runHostedLearningLoopBrowser:async(options:{loop:{title:string;accounts:unknown[];context:unknown};result:{observedAt:string};gate:unknown})=>{browserCalls++;titles.push(options.loop.title);browserChecks.push({title:options.loop.title,observedAt:options.result.observedAt,gate:options.gate,actorIds:options.loop.accounts.map((row:unknown)=>(row as {actorId:string}).actorId)});return null;}})as typeof owner.verifyHostedLearningLoop;
+  const input={repoRoot:resolve(import.meta.dirname,'../..'),releaseSha:identity.sourceSha,ciRunId:identity.ciRunId,backendRunId:'51',backendRunAttempt:1,artifactId:'71',transferSha256:identity.backendTransferSha256,populationReceiptSha256:'c'.repeat(64),web:{teamId:'team_Cuevo',projectId:'prj_Web',target:'preview'},webDeployment:{id:identity.webDeploymentId,url:'https://exact.vercel.app'},githubToken:'private-github-canary',vercelToken:'private-vercel-canary-12345',selectedActorIds:selection,syntheticPassword:'private-password-canary'};
+  const result=await invoke(input,{readmitWeb:async()=>{throw Error('Unexpected provider callback');}});assert.equal(browserCalls,1,'The actual producer reaches the one original browser recipe');assert.equal(titles.at(-1),want);assert.equal(creationReads,1);assert.equal(disposed,1);assert.deepEqual(journalBefore.commands,[]);assert.equal(result.runId,observedIdentity.runId);const originalIntent=companions.find(row=>row.name==='run-intent.json')!.value as {identity:unknown};assert.deepEqual(originalIntent.identity,observedIdentity);assert.equal(originalWeb.observedAt,'2026-10-01T00:00:00.000Z');
+  assert.equal(browserChecks[0].observedAt,new Date(Date.parse(at)-60000).toISOString(),'Original result observation clock is not replaced by title creation');assert.equal(browserChecks[0].gate,gate);assert.deepEqual(browserChecks[0].actorIds,Object.values(selection));assert.doesNotMatch(browserChecks[0].title,/38188792270|attempt|private-password-canary|private-github-canary|private-vercel-canary/);
+ }
+ assert.notEqual(titles[0],titles[1],'Actual different creation times provide human context without opaque suffixes');
+});
 
 test('selects exactly the five source-locked related fictional actors and rejects school, duplicate and unrelated selections',()=>{
  assert.equal(typeof owner.selectHostedLearningLoopActors,'function');

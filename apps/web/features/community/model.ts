@@ -1,4 +1,4 @@
-import { LearningApiError, type Command } from '../../shared/api/client.ts';
+import { LearningApiError, type Command } from '../../shared/api/client';
 import { communityRoomSchema, communityMembershipSchema, communityPostSchema, communityReactionSchema, communityReportSchema, communityModerationSchema, communityRestrictionSchema, communityAnnouncementSchema, communityExactReadSchema, communityGroupLifecycleSchema, communityReportReviewSchema, communityAnnouncementRevisionSchema, communityAnnouncementWithdrawSchema, communityMentionReadSchema } from '@cuevo/contracts';
 export type Room = { id: string; classId: string; name: string; type: 'CLASS' | 'GROUP'; ownerId: string; status: 'ACTIVE'|'CLOSED';revision?:number; canModerate: boolean; canPost: boolean; privateTopic: string };
 export type RosterPerson = { id: string; displayName: string; role: 'admin' | 'coordinator' | 'teacher' | 'student' };

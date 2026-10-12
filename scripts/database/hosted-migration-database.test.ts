@@ -16,6 +16,8 @@ import { installedPopulationCommand, installedPopulationFingerprint, type Instal
 import { replayPlan } from './replay-plan';
 import { providerStateSha256, type ProviderDeploymentState } from './hosted-provider-state';
 import {readCanonicalMigrationSources,planHostedMigrations,prepareCanonicalMigrationOperation,readCanonicalMigrationOperation,disposeCanonicalMigrationOperation} from './hosted-migration-plan';
+import { hostedCommunityRecipeText, parseHostedCommunityCommand, reduceHostedCommunityReceipt, type HostedCommunityScope } from '../verification/hosted-community-command';
+import type { HostedCommunityLivePrefixSelection, HostedCommunityNativeSelection } from '../verification/hosted-community-native';
 
 test('supplied reconciliation booleans and receipt-shaped objects cannot grant native journal authority',async()=>{
  const module=await api();assert.equal(typeof module.assertNativeReconciliationPermit,'function');
@@ -226,6 +228,118 @@ test('missing supplied API evidence never becomes an operator-created API projec
 test('fixed native source caps query errors wrong current scope and ambiguity rollback and close',async()=>{const{createHostedMigrationDatabase}=await api();for(const mode of ['scope','duplicate','cap','failure']as const)await fixture(async input=>{const request=fullNativeReadFixture();state.readOnly=true;state.loopScope=mode!=='scope';if(mode==='duplicate')state.loopRows.SUPPORT.push(state.loopRows.SUPPORT[0]);if(mode==='cap')state.loopRows.PROCESSED=Array.from({length:129},()=>state.loopRows.PROCESSED[0]);if(mode==='failure')delete state.loopRows.OUTCOME;const db=await createHostedMigrationDatabase(input);await assert.rejects(db.readLearningLoopNativeEvidence(request),/requires review; contents withheld/);assert.equal(state.queries.at(-1)?.sql,'ROLLBACK');assert.equal(db.signal.aborted,true);state.loopRows={};state.loopOriginals=[];state.loopScope=true;});});
 test('uncertain original school policy reads its stored version and separate execution binding without a new approval',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const full=fullNativeReadFixture(),selected=nativeReadSelection();selected.originals[0].original.command={...selected.originals[0].original.command,step:'policy.approve',actorId:selected.scope.adminId,role:'admin',operation:'intelligence.policy.approve',path:'/v1/intelligence/policy'} as typeof selected.originals[number]['original']['command'];state.loopOriginals=[{school_id:selected.scope.schoolId,actor_id:selected.scope.adminId,key:'original-ui-command',command:'intelligence.policy.approve',fingerprint:'c'.repeat(64),state:'COMPLETED',response:{id:selected.scope.schoolId,version:1},created_at:'2026-10-06T08:00:00Z',completed_at:'2026-10-06T08:00:01Z'}];state.loopRows.POLICY_BINDING=state.loopRows.EXECUTION_POLICY;state.loopRows.EXECUTION_AUDIT=[{...state.loopRows.ORIGINAL_AUDIT[0],action:'intelligence.execution.approved'}];state.loopRows.EXECUTION_OUTBOX=[{...state.loopRows.ORIGINAL_OUTBOX[0],type:'intelligence.execution.approved'}];state.readOnly=true;state.loopScope=true;const db=await createHostedMigrationDatabase(input),result=await db.readLearningLoopNativeEvidence({selection:selected,apiProjection:null,expectedExecutionManifest:full.expectedExecutionManifest});assert.equal(result.chain,null);assert.equal(result.policy?.binding_id,chainId(35));assert(result.outbox.some(row=>row.type==='intelligence.execution.approved'));assert(!state.queries.some(row=>/approve_school_intelligence_policy|approve_intelligence_execution/.test(row.sql)));state.loopRows={};state.loopOriginals=[];});});
 test('separate QA refusal cannot close an already held migration session',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{await assert.rejects(db.readLearningLoopNativeEvidence({selection:nativeReadSelection(),apiProjection:null,expectedExecutionManifest:null}));assert.equal(db.signal.aborted,false);await db.observe();});});});
+
+test('finite community native facade refuses an open selector before opening or closing any operator session',async()=>{
+ const{createHostedMigrationDatabase}=await api();await fixture(async input=>{
+  const db=await createHostedMigrationDatabase(input);
+  assert.equal(typeof (db as unknown as Record<string,unknown>).readCommunityNativeEvidence,'function','finite community native reader is missing');
+  const read=(db as unknown as {readCommunityNativeEvidence(value:unknown):Promise<unknown>}).readCommunityNativeEvidence;
+  for(const value of [{sql:'select 1'}, {table:'app.community_posts'}, {selection:{nativeVerified:true}}, new Proxy({},{})])await assert.rejects(read(value));
+  assert.equal(state.clients.length,0);assert.equal(state.queries.length,0);assert.equal(db.signal.aborted,false);
+  await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{await assert.rejects(read({}));assert.equal(db.signal.aborted,false);await db.observe();});
+ });
+});
+
+function communityReadSelection():HostedCommunityNativeSelection{
+ const schoolId='10000000-0000-4000-8000-000000000001',scope:HostedCommunityScope={synthetic:true,schoolId,classId:'30000000-0000-4000-8000-000000000001',teacherActorId:'20000000-0000-4000-8000-000000000004',studentActorId:'20000000-0000-4000-8000-000000000012',peerActorId:'20000000-0000-4000-8000-000000000018',parentActorId:'20000000-0000-4000-8000-000000000072',group:null,postIds:[],announcement:null};
+ const identity={projectRef:ref,schoolId,sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),ciRunId:'123',runId:'456',runAttempt:1,backendTransferSha256:'c'.repeat(64),webDeploymentId:'dpl_community'},input={classId:scope.classId,name:'Checking our learning together',type:'GROUP',memberIds:[scope.studentActorId]},command=parseHostedCommunityCommand('/v1/community/rooms',JSON.stringify(input),{actorId:scope.teacherActorId,schoolId,role:'teacher'},scope),id=chainId(901),response={id,command:'room.create',roomId:id};
+ return{identity:{...identity,uiArtifactSha256:'d'.repeat(64),journalSha256:'e'.repeat(64),companionManifestSha256:'f'.repeat(64)},scope:{...scope,group:{id,revision:1}},mode:'ORIGINAL_RECONCILIATION',originals:[{original:{identity,command:{step:'room.create',actorId:scope.teacherActorId,role:'teacher',schoolId,path:'/v1/community/rooms',operation:'room.create',sourceIds:command.sourceIds,sourceRevision:null,key:'community-native-original-1',requestBodySha256:command.requestBodySha256},intentSequence:1,intentRecordSha256:'1'.repeat(64)},targetId:null,nativeFingerprint:command.nativeFingerprint,requestBodySha256:command.requestBodySha256,input:command.input,http:{status:200,requestId:'req-community-native-1',receiptSha256:hash(canonicalReleaseExecutionJson(response)),receiptIdentity:{operation:'room.create',owner:'normal',ledgerCommand:'community.room.create',receiptId:id,sourceId:id,changeId:null,revision:null,status:null}}}]};
+}
+function communityQueryFixture(input:HostedCommunityNativeSelection,sql:string):Record<string,unknown>[]{
+ const scope=input.scope,item=input.originals[0],id=scope.group!.id,at='2026-10-12T01:00:00Z';
+ if(sql.includes('READ_ONLY'))return[{readOnly:true,operator:'postgres',role:'postgres',database:'postgres'}];
+ if(sql.includes('CURRENT_SCOPE'))return[{synthetic:true,school_id:scope.schoolId,class_id:scope.classId,school_active:true,class_active:true,community_enabled:true,teacher_role:'teacher',student_role:'student',peer_role:'student',parent_role:'parent',teacher_assigned:true,student_enrolled:true,peer_enrolled:true,parent_linked:true}];
+ if(sql.includes('ORIGINAL'))return[{school_id:scope.schoolId,actor_id:scope.teacherActorId,key:item.original.command.key,command:'community.room.create',fingerprint:item.nativeFingerprint,state:'COMPLETED',response:{id,command:'room.create',roomId:id},created_at:at,completed_at:at}];
+ if(sql.includes('CLEANUP'))return[{room_id:id,base_status:'ACTIVE',group_state:'ACTIVE',group_revision:1,announcement_id:null,announcement_state:null,announcement_revision:null,student_member_status:'active',peer_member_status:null,student_configured_by:scope.teacherActorId,peer_configured_by:null,student_member_change_id:null,peer_member_change_id:null,reaction_active:null,student_restriction_id:null,post_moderation_id:null,student_restriction:'NONE',post_hidden:false}];
+ return[];
+}
+const fakeCommunityQuery=FakeClient.prototype.query;
+function communityLivePrefixSelection():HostedCommunityLivePrefixSelection{
+ const artifact=communityReadSelection(),scope:HostedCommunityScope={...artifact.scope,group:null,postIds:[],announcement:null};
+ const originalIdentity=artifact.originals[0].original.identity;
+ const selected:HostedCommunityLivePrefixSelection={identity:{...originalIdentity,evidenceSource:'LIVE_PREFIX',prefixSnapshotSha256:'1'.repeat(64),journalHeadSha256:'2'.repeat(64),companionInventorySha256:'3'.repeat(64)},scope,mode:'LIVE_PREFIX',originals:[]};
+ const text=hostedCommunityRecipeText;
+ for(let index=0;index<15;index++){
+  const room=scope.group?.id,post=scope.postIds[0],announcement=scope.announcement?.id;
+  const recipes:readonly(readonly[string,Record<string,unknown>])[]=[
+   ['/v1/community/rooms',{classId:scope.classId,name:text.groupName,type:'GROUP',memberIds:[scope.studentActorId]}],
+   [`/v1/community/rooms/${room}/members`,{actorId:scope.peerActorId,status:'active',confirmAccessChange:true}],
+   [`/v1/community/rooms/${room}/members`,{actorId:scope.peerActorId,status:'revoked',confirmAccessChange:true}],
+   [`/v1/community/rooms/${room}/posts`,{body:text.postBody,replyToId:null}],
+   [`/v1/community/rooms/${room}/posts`,{body:text.secondPostBody,replyToId:null}],
+   [`/v1/community/posts/${post}/reactions`,{reaction:'HELPFUL',active:true}],
+   [`/v1/community/posts/${post}/reactions`,{reaction:'HELPFUL',active:false}],
+   [`/v1/community/rooms/${room}/posts`,{body:text.replyBody,replyToId:post}],
+   [`/v1/community/posts/${post}/report`,{reason:text.reportReason}],
+   [`/v1/community/rooms/${room}/restrict`,{actorId:scope.studentActorId,restriction:'MUTED',reason:text.restrictionReason,confirmModeration:true}],
+   [`/v1/community/rooms/${room}/restrict`,{actorId:scope.studentActorId,restriction:'NONE',reason:text.restrictionReason,confirmModeration:true}],
+   [`/v1/community/posts/${post}/moderate`,{action:'HIDE',reason:text.moderationReason,confirmModeration:true}],
+   [`/v1/community/posts/${post}/moderate`,{action:'RESTORE',reason:text.moderationReason,confirmModeration:true}],
+   ['/v1/community/announcements',{classId:scope.classId,title:text.announcementTitle,body:text.announcementBody,parentVisible:true}],
+   [`/v1/community/notifications/${announcement}/read`,{expectedRevision:1}],
+  ];
+  const[path,body]=recipes[index],actorId=index===14?scope.parentActorId:[3,4,5,6,7,8].includes(index)?scope.studentActorId:scope.teacherActorId;
+  const role=index===14?'parent':actorId===scope.studentActorId?'student':'teacher',actor={actorId,schoolId:scope.schoolId,role} as const;
+  const raw=JSON.stringify(body),command=parseHostedCommunityCommand(path,raw,actor,scope),key='live-community-original-'+index;
+  const id=index===5||index===6?post!:index===14?announcement!:chainId(1000+index);
+  const response:Record<string,unknown>=index===14?{id,status:'READ',revision:1}:{id,command:command.owner==='normal'?command.nativeCommand:''};
+  if(index===0)response.roomId=id;
+  if(command.operation==='post.create')Object.assign(response,{roomId:room,body:body.body,replyToId:body.replyToId,actorId,createdAt:'2026-10-12T01:00:00Z',status:'VISIBLE'});
+  selected.originals.push({original:{identity:originalIdentity,command:{step:command.operation,actorId,role,schoolId:scope.schoolId,path,operation:command.operation,sourceIds:command.sourceIds,sourceRevision:command.sourceRevision,key,requestBodySha256:command.requestBodySha256},intentSequence:index*3+1,intentRecordSha256:hash(key)},targetId:command.targetId,nativeFingerprint:command.nativeFingerprint,requestBodySha256:command.requestBodySha256,input:command.input,http:{status:200,requestId:'live-request-'+index,receiptSha256:hash(canonicalReleaseExecutionJson(response)),receiptIdentity:reduceHostedCommunityReceipt(response,{path,rawBytes:raw,key,requestBodySha256:command.requestBodySha256,nativeFingerprint:command.nativeFingerprint},actor,scope)}});
+  if(index===0)scope.group={id,revision:1};else if(command.operation==='post.create')scope.postIds.push(id);else if(index===13)scope.announcement={id,revision:1};
+ }
+ return selected;
+}
+test('LIVE_PREFIX facade preserves separate actual read-only session without accepting fake artifact digests',async()=>{
+ const{createHostedMigrationDatabase}=await api();await fixture(async input=>{
+  const selected=communityLivePrefixSelection();
+  FakeClient.prototype.query=async function(query,values=[]){const sql=typeof query==='string'?query:query.text;if(!sql.includes('CUEVO_COMMUNITY_'))return fakeCommunityQuery.call(this,query,values);state.queries.push({sql,values});
+   if(sql.includes('READ_ONLY'))return{rows:[{readOnly:true,operator:'postgres',role:'postgres',database:'postgres'}]};
+   if(sql.includes('CURRENT_SCOPE'))return{rows:communityQueryFixture(communityReadSelection(),sql).map(row=>({...row,class_room_id:chainId(900),outside_role:'student',outside_enrolled:false,foreign_school_active:true,foreign_role:'student',foreign_current_main_membership:false,foreign_community_enabled:true}))};
+   if(sql.includes('ORIGINAL')){const item=selected.originals.find(row=>row.original.command.key===values[2])!;assert(item);const command={operation:item.original.command.operation,ledgerCommand:item.http.receiptIdentity.ledgerCommand,owner:item.http.receiptIdentity.owner,nativeCommand:item.http.receiptIdentity.ledgerCommand.slice('community.'.length)};
+    const response:Record<string,unknown>=item.original.command.operation==='notification.read'?{id:item.http.receiptIdentity.receiptId,status:'READ',revision:1}:{id:item.http.receiptIdentity.receiptId,command:command.owner==='normal'?command.nativeCommand:''};
+    if(command.operation==='room.create')response.roomId=item.http.receiptIdentity.receiptId;
+    if(command.operation==='post.create')Object.assign(response,{roomId:item.targetId,body:item.input.body,replyToId:item.input.replyToId,actorId:item.original.command.actorId,createdAt:'2026-10-12T01:00:00Z',status:'VISIBLE'});
+    return{rows:[{school_id:selected.scope.schoolId,actor_id:item.original.command.actorId,key:item.original.command.key,command:command.ledgerCommand,fingerprint:item.nativeFingerprint,state:'COMPLETED',response,created_at:'2026-10-12T01:00:00Z',completed_at:'2026-10-12T01:00:00Z'}]};}
+   if(sql.includes('CLEANUP'))return{rows:[{...communityQueryFixture(communityReadSelection(),sql)[0],room_id:selected.scope.group!.id,announcement_id:selected.scope.announcement!.id,announcement_state:'PUBLISHED',announcement_revision:1,peer_member_status:'revoked',peer_configured_by:selected.scope.teacherActorId,peer_member_change_id:selected.originals[2].http.receiptIdentity.receiptId,student_restriction_id:selected.originals[10].http.receiptIdentity.receiptId,post_moderation_id:selected.originals[12].http.receiptIdentity.receiptId,reaction_active:false}]};
+   return{rows:[]};
+  };
+  try{const db=await createHostedMigrationDatabase(input),evidence=await db.readCommunityNativeEvidence(selected);assert.equal(evidence.commands.length,15);assert.equal('uiArtifactSha256'in evidence.identity,false);assert.equal(state.clients.length,1);assert.equal(state.queries.filter(row=>row.sql==='BEGIN READ ONLY').length,1);assert.equal(state.queries.at(-1)?.sql,'ROLLBACK');assert.equal(db.getDiagnostics().session,'CLOSED_CONFIRMED');assert(!JSON.stringify(evidence).includes(input.password));assert.equal(evidence.commands[0].source.length,0,'absent source evidence remains absent');}
+  finally{FakeClient.prototype.query=fakeCommunityQuery;}
+ });
+});
+test('LIVE_PREFIX facade refuses incomplete mixed or displaced checkpoint identities before opening an operator session',async()=>{
+ const{createHostedMigrationDatabase}=await api();await fixture(async input=>{
+  const selected=communityLivePrefixSelection(),db=await createHostedMigrationDatabase(input);
+  const wrongIdentity={...selected.identity,projectRef:'abcdefghijklmnopqrst'};
+  for(const value of[
+   {...selected,originals:selected.originals.slice(0,14)},
+   {...selected,originals:[...selected.originals,selected.originals[14]]},
+   {...selected,identity:{...selected.identity,uiArtifactSha256:'4'.repeat(64)}},
+   {...selected,mode:'ORIGINAL_RECONCILIATION'},
+   {...selected,identity:wrongIdentity},
+  ])await assert.rejects(db.readCommunityNativeEvidence(value));
+  assert.equal(state.clients.length,0);assert.equal(state.queries.length,0);assert.equal(db.signal.aborted,false);
+  await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{await assert.rejects(db.readCommunityNativeEvidence(selected));assert.equal(db.signal.aborted,false);await db.observe();});
+ });
+});
+test('community facade uses one verified TLS read-only session and confirms rollback/closure without acquiring migration lease',async()=>{
+ const{createHostedMigrationDatabase}=await api();await fixture(async input=>{
+  const selection=communityReadSelection();FakeClient.prototype.query=async function(query,values=[]){const sql=typeof query==='string'?query:query.text;if(sql.includes('CUEVO_COMMUNITY_')){state.queries.push({sql,values});return{rows:communityQueryFixture(selection,sql)};}return fakeCommunityQuery.call(this,query,values);};
+  try{const db=await createHostedMigrationDatabase(input),evidence=await db.readCommunityNativeEvidence(selection);assert.equal(evidence.commands[0].ledger[0].response_sha256,selection.originals[0].http.receiptSha256);assert.equal(state.clients.length,1);assert.equal(state.configs[0].application_name,'cuevo-hosted-community-native');assert.equal(state.configs[0].statement_timeout,5000);assert.equal(state.configs[0].query_timeout,7000);assert.equal(state.configs[0].password,input.password);assert(!JSON.stringify(evidence).includes(input.password));assert(!state.queries.some(row=>/pg_try_advisory_lock|pg_advisory_unlock/.test(row.sql)));assert.equal(state.queries.filter(row=>row.sql==='BEGIN READ ONLY').length,1);assert.equal(state.queries.at(-1)?.sql,'ROLLBACK');assert.equal(db.getDiagnostics().session,'CLOSED_CONFIRMED');assert.equal(db.signal.aborted,true);await assert.rejects(db.readCommunityNativeEvidence(selection));}
+  finally{FakeClient.prototype.query=fakeCommunityQuery;}
+ });
+});
+test('community read-only scope row bounds read failures and unconfirmed closure refuse evidence with actual cleanup attempts',async()=>{
+ const{createHostedMigrationDatabase}=await api();for(const mode of['read-only','scope','rows','bytes','query','rollback','close','tls','elapsed']as const)await fixture(async input=>{
+  const selection=communityReadSelection();let began=false,rollbackAttempts=0;
+  FakeClient.prototype.query=async function(query,values=[]){const sql=typeof query==='string'?query:query.text;if(sql==='BEGIN READ ONLY')began=true;if(sql==='ROLLBACK'){rollbackAttempts++;if(mode==='rollback')throw Error('Private rollback canary');}if(sql.includes('CUEVO_COMMUNITY_')){state.queries.push({sql,values});if(mode==='query'&&sql.includes('ORIGINAL'))throw Error('Private read canary');const rows=communityQueryFixture(selection,sql);if(sql.includes('READ_ONLY')&&mode==='read-only')rows[0].readOnly=false;if(sql.includes('CURRENT_SCOPE')&&mode==='scope')rows[0].parent_linked=false;if(sql.includes('ORIGINAL')&&mode==='rows')rows.push(rows[0]);if(sql.includes('ORIGINAL')&&mode==='bytes')rows[0].response={content:'private'.repeat(10000)};return{rows};}return fakeCommunityQuery.call(this,query,values);};
+  state.closeFails=mode==='close';state.authorized=mode!=='tls';
+  const realNow=Date.now;let timeReads=0;if(mode==='elapsed')Date.now=()=>{timeReads++;return realNow()+(timeReads>1?30000:0);};
+  try{const db=await createHostedMigrationDatabase(input);await assert.rejects(db.readCommunityNativeEvidence(selection),/requires review; contents withheld/);assert.equal(state.clients.length,1);assert.equal(db.signal.aborted,true);if(began)assert(rollbackAttempts>=1);assert.equal(db.getDiagnostics().session,mode==='close'?'CLOSE_UNCONFIRMED':'CLOSED_CONFIRMED');}
+  finally{FakeClient.prototype.query=fakeCommunityQuery;Date.now=realNow;}
+ });
+});
 
 test('the separate database facade output composes with the strict native validator for a complete synthetic loop',async()=>{const{createHostedMigrationDatabase}=await api();await fixture(async input=>{
  const f=fullNativeReadFixture(),selection=f.selection,{schoolId:school,teacherId:teacher,studentId:student,referenceId:reference}=selection.scope,at='2026-10-06T08:00:00Z',end='2026-10-06T08:00:25Z';selection.originals=[];state.loopOriginals=[];const auditRows:Record<string,unknown>[]=[],events:Record<string,unknown>[]=[],processed:Record<string,unknown>[]=[],owners:Record<string,unknown>[]=[];
