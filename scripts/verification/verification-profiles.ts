@@ -51,7 +51,7 @@ export const criticalIntegrationFiles = [
 /** Current all-role bilingual/mobile/axe plus full visible learning loop, immutable feedback and original actor command scope. */
 export const criticalBrowserFiles = ['foundation.spec.ts', 'role-home.spec.ts', 'role-accessibility.spec.ts', 'hydration-diagnostics.spec.ts', 'learning-lifecycle.spec.ts', 'customer-browser-learning-loop.spec.ts', 'customer-command-scope.spec.ts'] as const;
 const ownerBrowserFiles: Record<string, readonly string[]> = {
-  academic: ['academic-truth.spec.ts','academic-report.spec.ts','result-parent-publication.spec.ts','frontend-compact-layout.spec.ts','gradebook-course-context.spec.ts'],
+  academic: ['academic-truth.spec.ts','academic-report.spec.ts','result-parent-publication.spec.ts','frontend-compact-layout.spec.ts','gradebook-course-context.spec.ts','gradebook-focus-clearance.spec.ts'],
   community: ['community-safety.spec.ts','community-member-source-pagination.spec.ts','customer-community-actions.spec.ts','customer-community-journey.spec.ts','hosted-community-consumer.spec.ts','shared-control-affordances.spec.ts'],
   curriculum: ['curriculum-lifecycle-review.spec.ts','curriculum-runtime-behavior.spec.ts','curriculum-record-context.spec.ts'],
   development: ['development-source-state.spec.ts','development-learner-context.spec.ts','recognition-actions.spec.ts','shared-control-affordances.spec.ts'],
