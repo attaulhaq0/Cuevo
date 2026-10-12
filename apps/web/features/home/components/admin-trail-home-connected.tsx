@@ -77,6 +77,6 @@ function CurrentAdminHome({ onNavigate, headingRef }: { onNavigate: (destination
   };
   return <div className="admin-home-connected">
     <AdminTrailHomeView context={view} locale={locale} headingRef={currentHeadingRef} />
-    <div className="home-overview-controls"><Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button>{queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}{!denied && sourceScope ? [{query: people,label:t.people},{query:enrollments,label:t.learner},{query:assignments,label:t.teacher},{query:guardians,label:t.guardian},{query:audit,label:t.audit}].map(({query,label}) => query.nextCursor || query.moreError ? <LoadMore key={label} query={query} label={label} /> : null) : null}</div>
+    <div className="home-overview-controls">{view.availability === 'ready' || view.availability === 'partial' ? <Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button> : null}{queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}{!denied && sourceScope ? [{query: people,label:t.people},{query:enrollments,label:t.learner},{query:assignments,label:t.teacher},{query:guardians,label:t.guardian},{query:audit,label:t.audit}].map(({query,label}) => query.nextCursor || query.moreError ? <LoadMore key={label} query={query} label={label} /> : null) : null}</div>
   </div>;
 }

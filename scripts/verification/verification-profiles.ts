@@ -51,17 +51,17 @@ export const criticalIntegrationFiles = [
 /** Current all-role bilingual/mobile/axe plus full visible learning loop, immutable feedback and original actor command scope. */
 export const criticalBrowserFiles = ['foundation.spec.ts', 'role-home.spec.ts', 'role-accessibility.spec.ts', 'hydration-diagnostics.spec.ts', 'learning-lifecycle.spec.ts', 'customer-browser-learning-loop.spec.ts', 'customer-command-scope.spec.ts'] as const;
 const ownerBrowserFiles: Record<string, readonly string[]> = {
-  academic: ['academic-truth.spec.ts','academic-report.spec.ts','result-parent-publication.spec.ts','frontend-compact-layout.spec.ts'],
-  community: ['community-safety.spec.ts','community-member-source-pagination.spec.ts','customer-community-actions.spec.ts','customer-community-journey.spec.ts','hosted-community-consumer.spec.ts'],
+  academic: ['academic-truth.spec.ts','academic-report.spec.ts','result-parent-publication.spec.ts','frontend-compact-layout.spec.ts','gradebook-course-context.spec.ts'],
+  community: ['community-safety.spec.ts','community-member-source-pagination.spec.ts','customer-community-actions.spec.ts','customer-community-journey.spec.ts','hosted-community-consumer.spec.ts','shared-control-affordances.spec.ts'],
   curriculum: ['curriculum-lifecycle-review.spec.ts','curriculum-runtime-behavior.spec.ts','curriculum-record-context.spec.ts'],
-  development: ['development-source-state.spec.ts','development-learner-context.spec.ts','recognition-actions.spec.ts'],
+  development: ['development-source-state.spec.ts','development-learner-context.spec.ts','recognition-actions.spec.ts','shared-control-affordances.spec.ts'],
   home: ['exact-home-destinations.spec.ts','customer-arabic-home.spec.ts','frontend-compact-layout.spec.ts','parent-home-heading-identity.spec.ts'],
   improvement: ['improvement-loop.spec.ts','improvement-current-list-state.spec.ts'],
   learning: ['learning-content-lifecycle.spec.ts','learning-source-navigation.spec.ts','learning-completion-receipt.spec.ts'],
   portfolio: ['portfolio-sharing-recovery.spec.ts','portfolio-history-source-refusal.spec.ts','customer-private-file.spec.ts','frontend-compact-layout.spec.ts'],
   progress: ['progress-current-context.spec.ts','progress-run-source-states.spec.ts'],
   'restricted-records': ['restricted-records.spec.ts','restricted-create-recovery-state.spec.ts'],
-  school: ['school-current-sources.spec.ts','school-daily-source-refusal.spec.ts','school-access-revision.spec.ts'],
+  school: ['school-current-sources.spec.ts','school-daily-source-refusal.spec.ts','school-access-revision.spec.ts','shared-control-affordances.spec.ts'],
 };
 export const routineBrowserFiles = [...new Set([...criticalBrowserFiles,...Object.values(ownerBrowserFiles).flat()])].sort();
 export function criticalBrowserFilesForChanges(files:readonly string[]):string[]{return classifyRuntimeChanges(files,true).browserFiles;}
