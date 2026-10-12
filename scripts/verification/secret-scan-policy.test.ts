@@ -29,6 +29,13 @@ test('reviewed noncredentials require exact rule path whole-line hash and histor
   assert.equal(reviewedNonCredential('worktree', { ...source, file: 'tests/new-secret.ts' }), false);
   assert.equal(reviewedNonCredential('worktree', { ...source, lineSha256: 'b'.repeat(64) }), false);
 });
+test('three exact Community acceptance fixture lines contain only noncredential canaries and require their full original bytes',()=>{
+ const rows=[['scripts/verification/backend-hosted-learning-loop.test.ts',37,'23cbbf31175c9efcf1e05b85d99c817643fc46fd228c66718dc3deabc23055ba'],['scripts/verification/backend-hosted-community.test.ts',105,'cfa9a50c78eab2a1d7e6eea4eeffe3e9daf50bf71814ee120ddd7a5cc9299f40'],['scripts/verification/hosted-acceptance-context.test.ts',30,'79e0dbded5df89fd961405f6e2445231cc07c0b96c99ce30fe12a9b2d3c647f2']] as const;
+ for(const[file,lineNumber,expectedHash]of rows){const line=readFileSync(new URL('../../'+file,import.meta.url),'utf8').split(/\r?\n/)[lineNumber-1],hash=(text:string)=>createHash('sha256').update(text).digest('hex');assert.equal(hash(line),expectedHash);assert.match(line,/private-(?:github|vercel|password)-canary|sb_publishable_fixture/);
+  const source={file,rule:'generic-api-key',line:lineNumber,endLine:lineNumber,lineSha256:expectedHash,commit:'2354a323fb06581e44e270b96fddb2c5454ea6d3',ancestorVerified:true};assert.equal(reviewedNonCredential('history',source),true);assert.equal(reviewedNonCredential('worktree',{...source,commit:'',ancestorVerified:false}),true);
+  for(const change of[{file:'scripts/verification/other.test.ts'},{rule:'private-key'},{lineSha256:hash(line+' ')},{lineSha256:hash(line.replace(/fixture|canary/g,'real-secret'))},{endLine:lineNumber+1},{ancestorVerified:false},{commit:''}])assert.equal(reviewedNonCredential('history',{...source,...change}),false);
+ }
+});
 
 test('reviewed public host target IDs require their exact owner line and retained history authority', () => {
   const line = readFileSync(new URL('./backend-staging-host-contract.test.ts', import.meta.url), 'utf8').split(/\r?\n/).find(value => value.startsWith('const ref = '));

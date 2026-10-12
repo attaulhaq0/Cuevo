@@ -136,7 +136,7 @@ test('malformed duplicate-key unknown-field and invalid UTF8 input cannot become
 
 test('unsupported routes URL query encoding maintenance kind and academic operations refuse', () => {
   const run = parser();
-  for (const path of [`https://cuevo.test/v1/community/rooms/${groupId}/posts`, `/v1/community/rooms/${groupId}/posts?new=true`, `/v1/community/rooms/${groupId}/posts/`, `/v1/community/rooms/${groupId.replace('-', '%2d')}/posts`, `/v1/community/reports/${postId}/review`, `/v1/community/announcements/${announcementId}/revision`, `/v1/community/mentions/${postId}/read`, '/v1/courses', '/v1/community/rooms/../../posts']) {
+  for (const path of [`https://cuevo.test/v1/community/rooms/${groupId}/posts`, `/v1/community/rooms/${groupId}/posts?new=true`, `/v1/community/rooms/${groupId}/posts/`, `/v1/community/rooms/${groupId.replaceAll('-', '%2d')}/posts`, `/v1/community/reports/${postId}/review`, `/v1/community/announcements/${announcementId}/revision`, `/v1/community/mentions/${postId}/read`, '/v1/courses', '/v1/community/rooms/../../posts']) {
     assert.throws(() => run(path, JSON.stringify({ body: text.postBody }), student, scope()), /requires review; private contents withheld/);
   }
 });

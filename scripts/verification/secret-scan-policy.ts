@@ -14,6 +14,11 @@ const reviewedLines = new Map([
   ['scripts/verification/backend-staging-host-contract.test.ts', 'cd4729f7836f41c6cf954523a729453834a81879fcd3bb0e4fb5aa8392a60e03'],
   // Reviewed 12 October: exact authenticated provenance line; the scanner match is the public GitHub git/ref/heads/main path, never a credential.
   ['scripts/database/original231-provenance.json', 'd967ea83ca7bf7bc4a1486218c3d1af5662f2de6ac3f0bfeb55826abd5a866ab'],
+  // Reviewed 12 October at signed 2354a323: controlled acceptance fixtures only.
+  // Literal canaries and fabricated publishable keys never authorize provider calls.
+  ['scripts/verification/backend-hosted-learning-loop.test.ts', '23cbbf31175c9efcf1e05b85d99c817643fc46fd228c66718dc3deabc23055ba'],
+  ['scripts/verification/backend-hosted-community.test.ts', 'cfa9a50c78eab2a1d7e6eea4eeffe3e9daf50bf71814ee120ddd7a5cc9299f40'],
+  ['scripts/verification/hosted-acceptance-context.test.ts', '79e0dbded5df89fd961405f6e2445231cc07c0b96c99ce30fe12a9b2d3c647f2'],
 ]);
 export function reviewedNonCredential(scope: SecretScanScope, source: { file: string; rule: string; line: number; endLine: number; lineSha256: string; commit: string; ancestorVerified: boolean }): boolean {
   return source.rule === 'generic-api-key' && Number.isSafeInteger(source.line) && source.line > 0 && source.endLine === source.line
