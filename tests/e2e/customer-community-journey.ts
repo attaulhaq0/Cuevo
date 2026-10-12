@@ -102,6 +102,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   const rosterFacts = new Map<string, {id:string;displayName:string;role:string}[]>();
   const pendingReads = new Set<Promise<void>>();
   type ReadSnapshot={actor:Readonly<CustomerCommunityActor>;generation:number;authorization:string|undefined;school:string|undefined;key:string;path:string;cursor:string|null;nextCursor:string|null|undefined;retired:boolean;parsed:boolean;startedAt:number;cancelled:boolean;settled:Promise<void>;resolve:()=>void;timer:ReturnType<typeof setTimeout>};
+  let enteringHome: {actor:Readonly<CustomerCommunityActor>;generation:number;homeReads:Set<ReadSnapshot>;expected:Set<string>;fresh:Map<string,ReadSnapshot>;ready:()=>void}|null=null;
   const readRequests=new WeakMap<import('@playwright/test').Request,ReadSnapshot>(),latestReads=new Map<string,ReadSnapshot>();
   const pageFacts=new Map<string,{path:string;cursor:string|null;rooms?:Room[];announcements?:Announcement[];roster?:{id:string;displayName:string;role:string}[]}>();
   const observedPath=(path:string)=>['/v1/me','/v1/community/rooms','/v1/community/announcements'].includes(path)||/^\/v1\/community\/rooms\/[^/]+\/roster$/.test(path);
@@ -126,6 +127,10 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
       for(const[key,page]of pageFacts)if(page.path===snapshot.path)pageFacts.delete(key);
     }
     latestReads.set(key,snapshot);readRequests.set(request,snapshot);pendingReads.add(settledRead);void settledRead.finally(()=>pendingReads.delete(settledRead));
+    if(enteringHome&&sameEpoch(snapshot)&&snapshot.actor===enteringHome.actor&&snapshot.generation===enteringHome.generation){
+      if(key==='/v1/community/announcements?limit=25')enteringHome.homeReads.add(snapshot);
+      if(enteringHome.expected.has(key)){enteringHome.fresh.set(key,snapshot);if([...enteringHome.expected].every(key=>enteringHome!.fresh.has(key)))enteringHome.ready();}
+    }
   };
   const requestFailedObserver=(request:import('@playwright/test').Request)=>{
     const snapshot=readRequests.get(request);if(!snapshot)return;snapshot.cancelled=request.failure()?.errorText==='net::ERR_ABORTED';
@@ -142,10 +147,12 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
     const original=response.request(),snapshot=readRequests.get(original);if(!snapshot||!currentSnapshot(snapshot)||snapshot.parsed)return;
     const path = new URL(original.url()).pathname, actor = snapshot.actor;
     if ( !['/v1/me','/v1/community/rooms','/v1/community/announcements'].includes(path)&&!/^\/v1\/community\/rooms\/[^/]+\/roster$/.test(path)) return;
+    let cancelledBodyPending=false;
     const read = (async()=>{
       const validHeaders=()=>{const headers=original.headers();if(original.url()!==apiOrigin+snapshot.key||headers.authorization!==snapshot.authorization||headers['x-school-id']!==snapshot.school||snapshot.school!==undefined&&snapshot.school!==actor.schoolId)throw Error('The original Community read identity changed.');};validHeaders();
       if (response.status() !== 200) throw Error('The current Community source could not be confirmed.');
-      const value: unknown = await response.json();
+      let value:unknown;
+      try{value=await response.json();}catch(error){if(currentSnapshot(snapshot)&&snapshot.cancelled){cancelledBodyPending=true;return;}throw error;}
       if (!currentSnapshot(snapshot)) return;validHeaders();
       if (path === '/v1/me') { const membership = membershipSchema.parse(value); expect(membership).toMatchObject({ userId:actor.actorId,schoolId:actor.schoolId,role:actor.role,displayName:actor.displayName }); expect(membership.school.id).toBe(actor.schoolId); }
       else {
@@ -160,7 +167,12 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
         else roomFacts=new Map(pages.flatMap(page=>page.rooms??[]).map(row=>[row.id,row]));
       }
       snapshot.parsed=true;
-    })().catch(error=>{readFailure(snapshot,error,'RESPONSE_UNVERIFIED');}).finally(()=>{clearTimeout(snapshot.timer);snapshot.resolve();});
+    })().catch(error=>{readFailure(snapshot,error,'RESPONSE_UNVERIFIED');}).finally(()=>{
+      // A cancelled current body supplies no source proof. Keep its original
+      // deadline until an exact replacement or session retirement settles it.
+      if(currentSnapshot(snapshot)&&cancelledBodyPending&&!snapshot.parsed)return;
+      clearTimeout(snapshot.timer);snapshot.resolve();
+    });
     void read;
   };
   page.on('response',responseObserver);
@@ -175,7 +187,26 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
       await page.goto(input.webOrigin+'/');await page.getByRole('button',{name:'English',exact:true}).click();await page.getByLabel('School email',{exact:true}).fill(account.email);await page.getByLabel('Password',{exact:true}).fill(account.password);
       const source=page.waitForResponse(response=>response.url()===apiOrigin+'/v1/me'&&response.request().method()==='GET');await page.getByRole('button',{name:'Sign in',exact:true}).click();const response=await source;expect(response.status()).toBe(200);membership=membershipSchema.parse(await response.json());
     }
-    expect(membership).toMatchObject({userId:actor.actorId,schoolId:actor.schoolId,role:actor.role,displayName:actor.displayName});expect(membership.school.id).toBe(actor.schoolId);expect(membership.entitlements).toContain('community');await expectTrailWorkspace(page,role);await expect(page.locator('.workspace-chrome__person > button strong')).toHaveText(actor.displayName);await ports.sessionStarted?.(actor,membership);observation.sessionStartedCount++;await openTrailWorkspace(page,'Community');await settled(page);await currentReads();
+    expect(membership).toMatchObject({userId:actor.actorId,schoolId:actor.schoolId,role:actor.role,displayName:actor.displayName});expect(membership.school.id).toBe(actor.schoolId);expect(membership.entitlements).toContain('community');await expectTrailWorkspace(page,role);await expect(page.locator('.workspace-chrome__person > button strong')).toHaveText(actor.displayName);await ports.sessionStarted?.(actor,membership);observation.sessionStartedCount++;
+    const home=page.locator('.workspace-chrome__navigation [data-workspace-destination="overview"][aria-current="page"]');
+    if(await home.count()){
+      await expect(home).toHaveCount(1);await expect(page.locator('.workspace-chrome')).toHaveAttribute('data-navigation-mode','home');const generation=scopeGeneration;
+      const homeReads=new Set([...latestReads.values()].filter(snapshot=>currentSnapshot(snapshot)&&snapshot.key==='/v1/community/announcements?limit=25'));
+      let complete!:(value:boolean)=>void;const ready=new Promise<boolean>(done=>complete=done),timer=setTimeout(()=>complete(false),15000);
+      const transition={actor,generation,homeReads,expected:new Set(role==='parent'?['/v1/community/announcements?limit=100']:['/v1/community/announcements?limit=100','/v1/community/rooms?limit=100']),fresh:new Map<string,ReadSnapshot>(),ready:()=>complete(true)};
+      enteringHome=transition;
+      try{
+        await openTrailWorkspace(page,'Community');await expect(page.locator('.community-workspace')).toHaveCount(1);await expect(page.locator('.workspace-chrome')).toHaveAttribute('data-navigation-mode','focused');await expect(page.locator('[data-workspace-destination="community"][aria-current="page"]')).toHaveCount(1);await expect(home).toHaveCount(0);
+        if(!await ready)throw Error('The fresh Community navigation sources are unavailable.');
+        for(const key of transition.expected){let snapshot=transition.fresh.get(key)!;for(;;){await snapshot.settled;if(scopeFailure)throw scopeFailure;const latest=latestReads.get(key);if(latest&&latest!==snapshot){snapshot=latest;continue;}if(currentActor!==actor||scopeGeneration!==generation||!currentSnapshot(snapshot)||!snapshot.parsed||snapshot.cursor!==null||snapshot.nextCursor===undefined)throw Error('The fresh Community navigation source could not be confirmed.');break;}}
+        await settled(page);await expect(page.locator('.community-workspace')).toBeVisible();await expect(page.locator('.workspace-chrome')).toHaveAttribute('data-navigation-mode','focused');await expect(page.locator('[data-workspace-destination="community"][aria-current="page"]')).toHaveCount(1);await expect(home).toHaveCount(0);if(currentActor!==actor||scopeGeneration!==generation||scopeFailure||[...transition.expected].some(key=>{const snapshot=latestReads.get(key);return !snapshot||!currentSnapshot(snapshot)||!snapshot.parsed;}))throw Error('The current Community navigation scope changed.');
+        // Explicit Home unmount and independent current Community reads retire
+        // only the old Home query. Different limits are never replacements.
+        for(const snapshot of homeReads){retire(snapshot);if(latestReads.get(snapshot.key)===snapshot){latestReads.delete(snapshot.key);pageFacts.delete(snapshot.key);}}
+        announcementFacts=new Map([...pageFacts.values()].flatMap(page=>page.announcements??[]).map(row=>[row.id,row]));
+      }finally{clearTimeout(timer);complete(false);if(enteringHome===transition)enteringHome=null;}
+    }else await openTrailWorkspace(page,'Community');
+    await settled(page);await currentReads();
   }
   async function signOut() { const actor=currentActor;if(!actor)throw Error('The current Community session is unavailable.');await signOutTrailWorkspace(page);await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();resetReads();currentActor=null;scopeGeneration++;await ports.sessionEnded?.(actor);observation.sessionEndedCount++; }
   async function mutate(action: string, path: string, activate: () => Promise<void>, expectedBody?: Record<string,unknown>) {
