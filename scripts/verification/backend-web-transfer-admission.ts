@@ -77,6 +77,7 @@ async function boundedBytes(response: Response, signal: AbortSignal, maximum: nu
 declare const completedCanonicalTokenBrand:unique symbol;
 export type CompletedBackendCanonicalToken={readonly[completedCanonicalTokenBrand]:never};
 const completedCanonicalTokens=new WeakMap<object,{ci:string;proof:{runAttempt:number;jobsSha256:string};refresh:()=>Promise<void>;dispose:()=>void}>();
+export type CompletedBackendMetadataCanonicalProof={runAttempt:number;jobsSha256:string};
 /** One invocation owns the original bounded native reader. No caller-supplied
  * proof or callback can enter this process-local handoff. */
 export function disposeCompletedBackendCanonical(token:CompletedBackendCanonicalToken){const held=completedCanonicalTokens.get(token);if(held){completedCanonicalTokens.delete(token);held.dispose();}}
@@ -186,12 +187,38 @@ export async function readCompletedBackendWebTransferAdmissionAndGuard(value:unk
 export type CompletedBackendWebTransferMetadataAdmission=Awaited<ReturnType<typeof readCompletedBackendCapture>>['admission'];
 declare const completedMetadataGuardBrand:unique symbol;
 export type CompletedBackendWebTransferMetadataGuard={admission:CompletedBackendWebTransferMetadataAdmission;refreshOriginalMetadata:()=>Promise<void>;assertOriginalValidity:()=>void;dispose:()=>void;readonly[completedMetadataGuardBrand]:true};
-const completedMetadataGuards=new WeakMap<object,{binding:string;assert:()=>void;invalidate:()=>void}>();
+type MetadataRegistration={binding:string;assert:()=>void;invalidate:()=>void;readCanonical:(rawCi:unknown)=>Promise<CompletedBackendMetadataCanonicalProof>;revision:()=>number;refresh:()=>Promise<void>};
+const completedMetadataGuards=new WeakMap<object,MetadataRegistration>();
+const metadataRegistration=(value:unknown,selection:unknown)=>{consumeCompletedBackendWebTransferMetadataGuard(value,selection);const registered=completedMetadataGuards.get(value as object);if(!registered)throw fail();return registered;};
 export function consumeCompletedBackendWebTransferMetadataGuard(value:unknown,selection:unknown){if(!value||typeof value!=='object'||types.isProxy(value))throw fail();const registered=completedMetadataGuards.get(value);if(!registered)throw fail();try{const input=inputSchema.omit({githubToken:true}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(selection)));if(canonicalReleaseExecutionJson(input)!==registered.binding)throw fail();registered.assert();return value as CompletedBackendWebTransferMetadataGuard;}catch{registered.invalidate();throw fail();}}
+/** Returns only the original detached proof after current metadata refresh. It
+ * neither consumes the ordinary canonical token nor acquires another capture. */
+export async function readCompletedBackendMetadataCanonicalProof(value:unknown,selection:unknown,rawCi:unknown):Promise<CompletedBackendMetadataCanonicalProof>{
+ const registered=metadataRegistration(value,selection);return registered.readCanonical(rawCi);
+}
+declare const metadataRefreshMarkerBrand:unique symbol;
+export type CompletedBackendMetadataRefreshMarker={readonly[metadataRefreshMarkerBrand]:true};
+const metadataRefreshMarkers=new WeakMap<object,{guard:object;registration:MetadataRegistration;revision:number}>();
+/** Captures the genuine guard's refresh revision without adding freshness. */
+export function captureCompletedBackendMetadataRefresh(value:unknown,selection:unknown):CompletedBackendMetadataRefreshMarker{
+ const registration=metadataRegistration(value,selection),marker=Object.freeze({}) as CompletedBackendMetadataRefreshMarker;metadataRefreshMarkers.set(marker,{guard:value as object,registration,revision:registration.revision()});return marker;
+}
+/** One-use marker skips only a successful refresh already performed by this
+ * same live guard; an unchanged revision runs its original metadata refresh. */
+export async function ensureCompletedBackendMetadataRefresh(value:unknown,selection:unknown,marker:unknown):Promise<void>{
+ const registration=metadataRegistration(value,selection);
+ try{
+  if(!marker||typeof marker!=='object'||types.isProxy(marker))throw fail();const retained=metadataRefreshMarkers.get(marker);if(!retained)throw fail();metadataRefreshMarkers.delete(marker);
+  if(retained.guard!==value||retained.registration!==registration||registration.revision()<retained.revision)throw fail();
+  if(registration.revision()===retained.revision)await registration.refresh();registration.assert();
+ }catch{registration.invalidate();throw fail();}
+}
 /** Read-only QA observation retains immutable transfer/CI archives, never web mutation approval. */
 export async function readCompletedBackendWebTransferMetadataAndGuard(value:unknown):Promise<CompletedBackendWebTransferMetadataGuard>{
- const held=await readCompletedBackendCapture(value);try{const admission:CompletedBackendWebTransferMetadataAdmission=JSON.parse(canonicalReleaseExecutionJson(held.admission)),original=canonicalReleaseExecutionJson(admission),envNames=['GITHUB_REPOSITORY','GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_WORKSPACE','GITHUB_SHA','GITHUB_REF','GITHUB_EVENT_NAME','GITHUB_JOB','GITHUB_WORKFLOW_REF','RELEASE_ENVIRONMENT','NODE_OPTIONS'],envSnapshot=JSON.stringify(envNames.map(name=>process.env[name]??null));let invalid=false,active=false,disposed=false;
+ const held=await readCompletedBackendCapture(value);try{const admission:CompletedBackendWebTransferMetadataAdmission=JSON.parse(canonicalReleaseExecutionJson(held.admission)),original=canonicalReleaseExecutionJson(admission),envNames=['GITHUB_REPOSITORY','GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_WORKSPACE','GITHUB_SHA','GITHUB_REF','GITHUB_EVENT_NAME','GITHUB_JOB','GITHUB_WORKFLOW_REF','RELEASE_ENVIRONMENT','NODE_OPTIONS'],envSnapshot=JSON.stringify(envNames.map(name=>process.env[name]??null));let invalid=false,active=false,disposed=false,refreshRevision=0;
  const assertOriginalValidity=()=>{try{if(invalid||disposed||Date.now()>=Math.min(held.deadlineAtMs,Date.parse(admission.backendIdentity.consumptionExpiresAt))||JSON.stringify(envNames.map(name=>process.env[name]??null))!==envSnapshot||canonicalReleaseExecutionJson(admission)!==original)throw fail();held.capture.assertOriginalValidity();if(Date.now()>=Math.min(held.deadlineAtMs,Date.parse(admission.backendIdentity.consumptionExpiresAt)))throw fail();}catch{invalid=true;throw fail();}};
- const refreshOriginalMetadata=async()=>{if(invalid||disposed||active){invalid=true;throw fail();}active=true;try{assertOriginalValidity();await held.capture.refresh();assertOriginalValidity();}catch{invalid=true;throw fail();}finally{active=false;}};
- assertOriginalValidity();const{githubToken:_token,...binding}=held.input;void _token;const guard=Object.freeze({admission,refreshOriginalMetadata,assertOriginalValidity,dispose:()=>{disposed=true;invalid=true;held.capture.dispose();}}) as CompletedBackendWebTransferMetadataGuard;completedMetadataGuards.set(guard,{binding:canonicalReleaseExecutionJson(binding),assert:()=>{if(active){invalid=true;throw fail();}assertOriginalValidity();},invalidate:()=>{invalid=true;}});return guard;}catch{held.capture.dispose();throw fail();}
+ const refresh=async(rawCi?:unknown,canonical=false)=>{if(invalid||disposed||active){invalid=true;throw fail();}active=true;try{assertOriginalValidity();if(canonical&&held.capture.ci!==canonicalReleaseExecutionJson(rawCi))throw fail();await held.capture.refresh();assertOriginalValidity();refreshRevision++;}catch{invalid=true;throw fail();}finally{active=false;}};
+ const refreshOriginalMetadata=()=>refresh();
+ const readCanonical=async(rawCi:unknown)=>{await refresh(rawCi,true);assertOriginalValidity();return JSON.parse(canonicalReleaseExecutionJson(held.capture.proof)) as CompletedBackendMetadataCanonicalProof;};
+ assertOriginalValidity();const{githubToken:_token,...binding}=held.input;void _token;const guard=Object.freeze({admission,refreshOriginalMetadata,assertOriginalValidity,dispose:()=>{disposed=true;invalid=true;held.capture.dispose();}}) as CompletedBackendWebTransferMetadataGuard;completedMetadataGuards.set(guard,{binding:canonicalReleaseExecutionJson(binding),assert:()=>{if(active){invalid=true;throw fail();}assertOriginalValidity();},invalidate:()=>{invalid=true;},readCanonical,revision:()=>refreshRevision,refresh:refreshOriginalMetadata});return guard;}catch{held.capture.dispose();throw fail();}
 }

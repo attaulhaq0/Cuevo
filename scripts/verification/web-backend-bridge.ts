@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { readCompletedBackendWebTransferAdmission,readCompletedBackendWebTransferAdmissionAndGuard,disposeCompletedBackendCanonical,type CompletedBackendCanonicalToken } from './backend-web-transfer-admission';
+import { readCompletedBackendWebTransferAdmission,readCompletedBackendWebTransferAdmissionAndGuard,disposeCompletedBackendCanonical,consumeCompletedBackendWebTransferMetadataGuard,type CompletedBackendCanonicalToken } from './backend-web-transfer-admission';
 import { canonicalReleaseReviewJson, parseCanonicalReleaseReviewJson, type ReleaseReviewInput } from './release-review';
 import {validateStagingHostContract,stagingHostContractSha256}from'./backend-staging-host-contract';
 
@@ -43,7 +43,7 @@ export function readWebBackendSelection(encoded: string): WebBackendSelection | 
 }
 export function encodeWebBackendSelection(selection: WebBackendSelection | null) { return selection ? Buffer.from(canonicalReleaseReviewJson(selection)).toString('base64') : ''; }
 
-type WebBackendBridgeInput={ selection: WebBackendSelection; repoRoot: string; githubToken: string; releaseSha: string; ciRunId: string; environment: string; web: { teamId: string; projectId: string; target: 'preview' | 'production' } };
+export type WebBackendBridgeInput={ selection: WebBackendSelection; repoRoot: string; githubToken: string; releaseSha: string; ciRunId: string; environment: string; web: { teamId: string; projectId: string; target: 'preview' | 'production' } };
 const bridgeFromAdmission=(result:Admission):WebBackendBridge=>{hostIdentity(result.backendIdentity);return{ purpose: result.purpose, provenance: result.provenance, manifest: result.manifest, publicConfig: result.publicConfig, reviewFacts: result.reviewFacts, assignments: result.assignments, originalEvidence: result.originalEvidence,populationEvidence:result.populationEvidence,
  backendIdentity: result.backendIdentity, privateProofReexecuted: false, backendMutationAllowed: false, customerReady: false, hostedAcceptance: false };};
 export async function readWebBackendBridge(input:WebBackendBridgeInput):Promise<WebBackendBridge>{
@@ -60,6 +60,16 @@ export async function readWebBackendBridgeAndGuard(input:WebBackendBridgeInput):
  if(input.environment!=='staging'||input.web.target!=='preview')throw fail();
  const result=await readCompletedBackendWebTransferAdmissionAndGuard({...selectionSchema.parse(input.selection),repoRoot:input.repoRoot,githubToken:input.githubToken,releaseSha:input.releaseSha,ciRunId:input.ciRunId,web:input.web});
  try{return{bridge:bridgeFromAdmission(result.admission),token:result.token};}catch{disposeCompletedBackendCanonical(result.token);throw fail();}
+}
+
+/** Borrow the exact authenticated metadata capture synchronously. Its owner
+ * retains current refresh and disposal; this bridge creates no new token. */
+export function readWebBackendBridgeFromMetadataGuard(value:unknown,input:WebBackendBridgeInput):WebBackendBridge{
+ try{
+  if(input.environment!=='staging'||input.web.target!=='preview')throw fail();
+  const selection=selectionSchema.parse(input.selection),guard=consumeCompletedBackendWebTransferMetadataGuard(value,{handoff:selection.handoff??'customer-candidate',...selection,repoRoot:input.repoRoot,releaseSha:input.releaseSha,ciRunId:input.ciRunId,web:input.web});
+  return structuredClone(bridgeFromAdmission(guard.admission));
+ }catch{throw fail();}
 }
 
 /** Only actual operator web review supplies independent-attestation flags.

@@ -11,6 +11,10 @@ import {transformSync}from'esbuild';
 import {statelessVerificationSteps} from './steps';
 import {criticalIntegrationFiles, fullIntegrationFiles} from './verification-profiles';
 const root=resolve(import.meta.dirname,'../..');
+test('the public CICD command discovers the complete source-owned fixture inventory exactly once',()=>{
+ const packageFile=JSON.parse(readFileSync(join(root,'package.json'),'utf8')),actual=String(packageFile.scripts['test:cicd']).split(/\s+/),fixture=statelessVerificationSteps.find(step=>step.name==='cicd-fixtures');assert(fixture);
+ assert.equal(actual[0],'node');assert.deepEqual(actual.slice(1),[...fixture.args]);assert.equal(new Set(actual.filter(arg=>arg.endsWith('.test.ts'))).size,actual.filter(arg=>arg.endsWith('.test.ts')).length);
+});
 test('one synchronous uncohorted source union uses one native coverage discovery and still rejects changed assignments',async()=>{
  const fs=await import('node:fs'),reads={count:0};
  const hook=registerHooks({load(url,context,next){if(url.includes('/steps.ts?coverage-count')){const raw=readFileSync(new URL(url.split('?')[0]),'utf8');return{format:'module',shortCircuit:true,source:transformSync(raw,{loader:'ts',format:'esm'}).code+";for(const step of statelessVerificationSteps)step.args=step.args.filter(path=>!['scripts/database/hosted-schema-continuation-native.test.ts','scripts/database/hosted-schema-reconciliation-executor.test.ts'].includes(path));"};}if(url.includes('/ci-partition-coverage.ts?coverage-count')){const raw=readFileSync(new URL(url.split('?')[0]),'utf8').replace("from './steps';","from './steps.ts?coverage-count';").replace("export function validateCiPartitionDiscovery(repoRoot:string,value:unknown,expected:CiPartitionInventory):CiPartitionManifest{","function validateCiPartitionDiscovery(repoRoot:string,value:unknown,expected:CiPartitionInventory):CiPartitionManifest{return validateCiPartitionCoverage(value,expected);}function fixtureOriginalDiscovery(repoRoot:string,value:unknown,expected:CiPartitionInventory):CiPartitionManifest{").replace("import {lstatSync,readFileSync,readdirSync,realpathSync} from 'node:fs';","import {lstatSync,readdirSync,realpathSync} from 'node:fs';const readFileSync=globalThis.cuevoCoverageRead;");return{format:'module',shortCircuit:true,source:transformSync(raw,{loader:'ts',format:'esm'}).code};}if(url.includes('/stateless-checks.ts?coverage-count')){const raw=readFileSync(new URL(url.split('?')[0]),'utf8').replace("from './ci-partition-coverage';","from './ci-partition-coverage.ts?coverage-count';").replace("from './steps';","from './steps.ts?coverage-count';");return{format:'module',shortCircuit:true,source:transformSync(raw,{loader:'ts',format:'esm'}).code};}return next(url,context);}});
@@ -35,8 +39,9 @@ test('native continuation two cohorts and executor five cohorts retain independe
  assert.equal(owner('scripts/database/hosted-schema-reconciliation-executor.test.ts'),'source-contracts');
  assert.equal(owner('scripts/database/hosted-schema-continuation-executor.test.ts'),'source-contracts');
  assert.equal(owner('scripts/verification/backend-release-prepare.test.ts'),'source-delivery');
- assert.deepEqual(coverage.source.map(part=>[part.id,part.files.length]),[['source-native',15],['source-contracts',60],['source-delivery',85]]);
- const files=coverage.source.flatMap(part=>part.files);assert.equal(files.length,160);assert.equal(new Set(files).size,160);
+ assert.deepEqual(coverage.source.map(part=>[part.id,part.files.length]),[['source-native',15],['source-contracts',60],['source-delivery',104]]);
+ const files=coverage.source.flatMap(part=>part.files);assert.equal(files.length,179);assert.equal(new Set(files).size,179);
+ for(const file of ['hosted-community-journal','hosted-community-command','hosted-community-command-gate','hosted-community-live-prefix','hosted-native-ca','hosted-community-auxiliary','hosted-community-delivery','hosted-community-view'])assert.equal(owner(`scripts/verification/${file}.test.ts`),'source-delivery');
 });
 
 test('fixed conservative partitions cover every original source and integration file exactly once',async()=>{

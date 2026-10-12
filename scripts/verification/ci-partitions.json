@@ -94,6 +94,7 @@
         "scripts/architecture/synthetic-runtime.test.ts",
         "scripts/database/browser-pilot-volume-rules.test.ts",
         "scripts/database/hosted-active-runtime-state.test.ts",
+        "scripts/database/hosted-community-native-read.test.ts",
         "scripts/database/hosted-installed-state.test.ts",
         "scripts/database/hosted-migration-batch-receipt.test.ts",
         "scripts/database/hosted-migration-batches.test.ts",
@@ -147,6 +148,8 @@
         "scripts/verification/backend-hosted-activation-pending-native.test.ts",
         "scripts/verification/backend-hosted-activation.test.ts",
         "scripts/verification/backend-hosted-browser.test.ts",
+        "scripts/verification/backend-hosted-community-artifact.test.ts",
+        "scripts/verification/backend-hosted-community.test.ts",
         "scripts/verification/backend-hosted-database-restore.test.ts",
         "scripts/verification/backend-hosted-fault-recovery-native.test.ts",
         "scripts/verification/backend-hosted-learning-loop-admission.test.ts",
@@ -166,10 +169,26 @@
         "scripts/verification/backend-web-settings.test.ts",
         "scripts/verification/backend-web-transfer-admission.test.ts",
         "scripts/verification/backend-web-transfer.test.ts",
+        "scripts/verification/hosted-acceptance-context.test.ts",
+        "scripts/verification/hosted-browser-evidence.test.ts",
+        "scripts/verification/hosted-community-auxiliary.test.ts",
+        "scripts/verification/hosted-community-command-gate.test.ts",
+        "scripts/verification/hosted-community-command.test.ts",
+        "scripts/verification/hosted-community-delivery.test.ts",
+        "scripts/verification/hosted-community-journal.test.ts",
+        "scripts/verification/hosted-community-live-prefix.test.ts",
+        "scripts/verification/hosted-community-native-admission.test.ts",
+        "scripts/verification/hosted-community-native.test.ts",
+        "scripts/verification/hosted-community-qa-workflow.test.ts",
+        "scripts/verification/hosted-community-qa.test.ts",
+        "scripts/verification/hosted-community-socket.test.ts",
+        "scripts/verification/hosted-community-transport.test.ts",
+        "scripts/verification/hosted-community-view.test.ts",
         "scripts/verification/hosted-learning-loop-journal.test.ts",
         "scripts/verification/hosted-learning-qa-adapter.test.ts",
         "scripts/verification/hosted-learning-qa-workflow.test.ts",
         "scripts/verification/hosted-learning-qa.test.ts",
+        "scripts/verification/hosted-native-ca.test.ts",
         "scripts/verification/protected-preview.test.ts",
         "scripts/verification/runtime-rollout-compatibility.test.ts",
         "scripts/verification/web-backend-bridge.test.ts",
@@ -353,6 +372,10 @@
       },
       {
         "path": "scripts/database/hosted-child-catalogue-reference.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-community-native-read.test.ts",
         "durationMs": null
       },
       {
@@ -644,6 +667,14 @@
         "durationMs": null
       },
       {
+        "path": "scripts/verification/backend-hosted-community-artifact.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/backend-hosted-community.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/verification/backend-hosted-database-restore.test.ts",
         "durationMs": null
       },
@@ -840,6 +871,66 @@
         "durationMs": null
       },
       {
+        "path": "scripts/verification/hosted-acceptance-context.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-browser-evidence.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-auxiliary.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-command-gate.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-command.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-delivery.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-journal.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-live-prefix.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-native-admission.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-native.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-qa-workflow.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-qa.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-socket.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-transport.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-community-view.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/verification/hosted-learning-loop-journal.test.ts",
         "durationMs": null
       },
@@ -853,6 +944,10 @@
       },
       {
         "path": "scripts/verification/hosted-learning-qa.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/verification/hosted-native-ca.test.ts",
         "durationMs": null
       },
       {

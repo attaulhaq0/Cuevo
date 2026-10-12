@@ -126,3 +126,12 @@ test('native QA approval has a distinct fixed purpose workflow and package comme
  assert.throws(()=>subject.validateOfficialFounderApproval(nativeRun,approvals(binding.comment),{...binding,environmentName:'production'}));
  assert.throws(()=>subject.validateOfficialFounderApproval(nativeRun,approvals(prepared.comment),{...binding,comment:prepared.comment}));
 });
+
+test('Community native approval binds its own workflow and cannot borrow learning or production approval',()=>{
+ const prepared=subject.prepareReleaseReviewPackage(input(),expected()),binding={purpose:'CUEVO_HOSTED_COMMUNITY_NATIVE',repository:expected().repository,releaseSha:sha,releaseRunId:'51',runAttempt:1,environmentId:123,environmentName:'staging',packageSha256:prepared.sha256,comment:`Cuevo hosted community native QA approved: sha=${sha}; run=51; attempt=1; package=sha256:${prepared.sha256}`};
+ const communityRun={...run(),path:'.github/workflows/hosted-community-qa.yml',event:'workflow_dispatch'};
+ assert.equal(subject.validateOfficialFounderApproval(communityRun,approvals(binding.comment),binding).packageSha256,prepared.sha256);
+ for(const patch of [{path:'.github/workflows/hosted-learning-qa.yml'},{path:'.github/workflows/release.yml'},{event:'workflow_run'},{run_attempt:2}])assert.throws(()=>subject.validateOfficialFounderApproval({...communityRun,...patch},approvals(binding.comment),binding));
+ assert.throws(()=>subject.validateOfficialFounderApproval(communityRun,approvals(binding.comment),{...binding,environmentName:'production'}));
+ assert.throws(()=>subject.validateOfficialFounderApproval(communityRun,approvals(binding.comment),{...binding,purpose:'CUEVO_HOSTED_LEARNING_LOOP_NATIVE'}));
+});

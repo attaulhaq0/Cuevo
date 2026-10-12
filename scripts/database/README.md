@@ -1,5 +1,7 @@
 # Local migration replay
 
+`hosted-community-native-read.ts` is a finite read-only evidence owner used by `HostedMigrationDatabase.readCommunityNativeEvidence`. It queries only the original community command ledger, its derived source/audit/outbox/processor records and fixed fictional relationships. The facade retains operator TLS/certificate identity, read-only transaction guards, bounded native time/rows/bytes, rollback and confirmed session closure; it takes no arbitrary SQL or resource selector. Source text is hashed before export, and current membership and cleanup sources are verified separately from historical commands. The matching supplied-evidence validator lives in verification; neither parser nor injected query ports certify hosted execution. Actual hosted approval/artifact binding, private reconnect, native acceptance and clean reference restoration remain pending.
+
 The finite original231 historical provenance is sealed in `original231-provenance.json` and owned by `hosted-original231-provenance.ts`. Its independently authenticated eighteen-archive chain supplies historical truth only; current approval/source/catalogue/package and native private/history/lease checks still govern metadata completion. The strict source descriptor replaces old archive copies/deadlines for this route and rejects an old recovery selector.
 
 
