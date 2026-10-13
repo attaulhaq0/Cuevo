@@ -179,7 +179,7 @@
 .school-day-time { font-weight: 800; font-size: var(--type-sm); color: var(--color-accent); border-inline-end: 3px solid var(--color-brand); padding-inline-end: var(--space-3); }
 .school-day-timeline p { font-size: var(--type-sm); color: var(--color-text-secondary); }
 .school-day-timeline details { font-size: var(--type-sm); margin-block-start: var(--space-3); }
-.school-day-timeline summary { color: var(--color-link); cursor: pointer; min-height: var(--control-min-height); align-content: center; }
+.school-day-timeline summary { color: var(--color-link); cursor: pointer; min-height: var(--control-min-size); align-content: center; }
 .school-calendar-list > li { padding-block: var(--space-4); border-block-end: 1px solid var(--color-border); }
 .school-calendar-list p { color: var(--color-text-secondary); font-size: var(--type-sm); }
 .school-attendance-list > li { display: flex; align-items: start; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); padding-block: var(--space-4); border-block-end: 1px solid var(--color-border); }
@@ -210,7 +210,7 @@
 .school-staff-day-layout { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(18rem,1fr); gap:var(--space-5); align-items:start; }
 .school-staff-day .school-day-panel { padding:var(--space-5); }
 .school-staff-day .school-day-panel > h2 { margin-block-end:var(--space-3); }
-.school-staff-day summary { min-block-size:var(--control-min-height); align-content:center; cursor:pointer; color:var(--color-link); }
+.school-staff-day summary { min-block-size:var(--control-min-size); align-content:center; cursor:pointer; color:var(--color-link); }
 .school-staff-day .school-attendance-list > li { gap:var(--space-4); }
 .school-staff-day .school-attendance-list > li > div { flex:1; min-inline-size:0; }
 .school-staff-day :is(p,h2,h3,dd,bdi) { overflow-wrap:anywhere; }
@@ -245,7 +245,7 @@
 .parent-calendar .school-day-panel { padding:var(--space-5); }
 .parent-calendar-month { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; margin-block-end:var(--space-4); }
 .parent-calendar-month h3 { flex:1; min-inline-size:0; font-size:var(--type-subheading); overflow-wrap:anywhere; }
-.parent-calendar-month > .button { min-block-size:var(--control-min-height); min-inline-size:var(--control-min-height); }
+.parent-calendar-month > .button { min-block-size:var(--control-min-size); min-inline-size:var(--control-min-size); }
 .parent-calendar-previous { rotate:180deg; }
 [dir="rtl"] .parent-calendar-previous { rotate:0deg; }
 [dir="rtl"] .parent-calendar-next { rotate:180deg; }
@@ -273,7 +273,7 @@
 .parent-calendar-detail h5 { font-size:var(--type-body); }
 .parent-calendar :is(h2,h3,h4,p,time,bdi,dd) { overflow-wrap:anywhere; }
 .parent-school-day-context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-5); align-items:start; }
-.parent-school-day-context summary { min-block-size:var(--control-min-height); align-content:center; cursor:pointer; }
+.parent-school-day-context summary { min-block-size:var(--control-min-size); align-content:center; cursor:pointer; }
 @media(max-width:1023px) { .parent-calendar-layout { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:767px) {
  .parent-calendar-grid { display:none; }

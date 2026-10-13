@@ -1,5 +1,7 @@
 # Recorded learning recognition
 
+Ledger source disclosures use the existing `--control-min-size` minimum target; the undefined legacy height token is removed. Current ledger facts, period/source authority, native details and point meaning remain unchanged.
+
 Goal creation's existing course query uses the same record-source classifier for its zero-choice state. A continued or unsettled page shows incomplete-course guidance, and only explicitly confirmed terminal emptiness uses the no-courses text. Current failure/loading and the existing More control remain separate; no course is inferred or selected. `tests/e2e/goal-course-source-state.spec.ts` verifies English/Arabic current course certainty without changing creation, receipt, journal or source authority.
 
 Source states use `@cuevo/ui` WorkspaceState with existing bilingual owner copy and canonical icons. Missing learner/period remains unknown, incomplete pages remain review, failed/unavailable sources keep recovery, and only complete successful zero records are empty. Recorded XP, policy values, dates, approval context and original command receipts stay in their existing native/inline owners. Goals/policy/learner state rendering tests preserve these distinctions and controls; shared state material never awards XP, changes source selection or grants authority.

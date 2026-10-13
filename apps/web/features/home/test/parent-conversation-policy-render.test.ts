@@ -15,7 +15,7 @@ const policy = { id: school, version: 1, enabled: true, approvedAt: '2026-10-05T
 const thread = { id: school, learnerId: child, parentId: parent, teacherId: teacher, classId: school, subjectId: school, title: 'Discuss the explanation', learnerName: 'Alex Reed', parentName: 'Sam Reed', teacherName: 'Maya', className: 'Cedar', academicYearName: '2026–2027', subjectName: 'Reasoning', createdAt: '2026-10-05T00:00:00Z', state: 'OPEN', stateVersion: 0, canModerate: false };
 const portfolio = { id: school, revisionId: school, revision: 1, learnerId: child, sourceModel: 'numeric', title: 'My checked explanation', reflection: 'I checked every step.', createdAt: '2026-10-05T00:00:00Z', feedback: 'Explain the check.', featured: false, approvalState: 'REVIEWED', parentVisible: true, reviewedAt: '2026-10-05T01:00:00Z', evidenceId: school, resultId: school, submissionId: school, referenceId: school, referenceVersion: 'school-v1', policyVersion: 1, nativeResult: { type: 'numeric', score: 0, maxScore: 4, policyVersion: 1 }, assessmentTitle: 'Explain a method', referenceTitle: 'Checking reasons' };
 const base = { loaded: true, loading: false, loadingMore: false, error: null, moreError: null, nextCursor: null, loadMore() {} };
-const fixture = { app: {} as Record<string, unknown>, policy: policy as unknown, policyState: {} as Record<string, unknown>, policyEnvelope: undefined as unknown, retainedPolicy: undefined as unknown, threadEnvelopes: [] as unknown[], retainedThreads: undefined as unknown[] | undefined, directoryState: {} as Record<string, unknown>, directoryPaths: [] as string[], policyPaths: [] as string[] };
+const fixture = { app: {} as Record<string, unknown>, childMissing: false, policy: policy as unknown, policyState: {} as Record<string, unknown>, policyEnvelope: undefined as unknown, retainedPolicy: undefined as unknown, threadEnvelopes: [] as unknown[], retainedThreads: undefined as unknown[] | undefined, directoryState: {} as Record<string, unknown>, directoryPaths: [] as string[], policyPaths: [] as string[] };
 Object.assign(globalThis, { React, parentPolicyReadingFixture: fixture });
 // Replace only current session and read inputs. Render the real Home adapter,
 // child selector, strict source parsers, Trail view and shared error surfaces.
@@ -23,13 +23,14 @@ registerHooks({ load(url, context, nextLoad) {
   const path = url.replaceAll('\\', '/');
   if (path.endsWith('/shared/session/providers.tsx')) return { format: 'module', shortCircuit: true, source: 'export function useApp(){return globalThis.parentPolicyReadingFixture.app}' };
   if (path.endsWith('/shared/hooks/use-api.ts')) return { format: 'module', shortCircuit: true, source: `export function useApi(){const f=globalThis.parentPolicyReadingFixture;return {request:async()=>{throw new Error("No report request is run by this server render")},t:f.app.locale==='ar'?globalThis.parentPolicyCommonAr:globalThis.parentPolicyCommonEn}};export function useApiQuery(path,parse){const f=globalThis.parentPolicyReadingFixture;if(path!=='/v1/community/conversations/policy')return {data:null,loading:false,error:null};f.policyPaths.push(path);const data=f.retainedPolicy??(f.policy?parse(f.policy):null);f.policyEnvelope=data;return {data,loading:false,error:null,...f.policyState}}` };
-  if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: `export function usePaginatedLearningQuery(path,parse){const f=globalThis.parentPolicyReadingFixture;const base={loaded:!!path,loading:false,loadingMore:false,error:null,moreError:null,nextCursor:null,loadMore(){}};if(path==='/v1/people?limit=100')return {...base,data:[{userId:'${child}',displayName:'Alex Reed',role:'student',classLabels:['Cedar']}].map(parse)};if(path?.startsWith('/v1/portfolio/items?'))return {...base,data:[globalThis.parentPolicyPortfolio].map(parse)};if(path?.startsWith('/v1/community/conversations?')){f.directoryPaths.push(path);const data=f.retainedThreads??[globalThis.parentPolicyThread].map(parse);f.threadEnvelopes=data;return {...base,data,...f.directoryState}};return {...base,data:f.retainedThreads&&path===null?f.retainedThreads:[]}}` };
+  if (path.endsWith('/shared/hooks/use-paginated-query.ts')) return { format: 'module', shortCircuit: true, source: `export function usePaginatedLearningQuery(path,parse){const f=globalThis.parentPolicyReadingFixture;const base={loaded:!!path,loading:false,loadingMore:false,error:null,moreError:null,nextCursor:null,loadMore(){}};if(path==='/v1/people?limit=100')return {...base,data:f.childMissing?[]:[{userId:'${child}',displayName:'Alex Reed',role:'student',classLabels:['Cedar']}].map(parse)};if(path?.startsWith('/v1/portfolio/items?'))return {...base,data:[globalThis.parentPolicyPortfolio].map(parse)};if(path?.startsWith('/v1/community/conversations?')){f.directoryPaths.push(path);const data=f.retainedThreads??[globalThis.parentPolicyThread].map(parse);f.threadEnvelopes=data;return {...base,data,...f.directoryState}};return {...base,data:f.retainedThreads&&path===null?f.retainedThreads:[]}}` };
   return nextLoad(url, context);
 } });
 Object.assign(globalThis, { parentPolicyCommonEn: commonEn, parentPolicyCommonAr: commonAr, parentPolicyThread: thread, parentPolicyPortfolio: portfolio });
 const { ParentTrailHomeConnected } = await import('../components/parent-trail-home-connected.tsx');
 
-function render(options: { locale?: 'en' | 'ar'; policy?: unknown; policyState?: Record<string, unknown>; retainedPolicy?: unknown; retainedThreads?: unknown[]; directoryState?: Record<string, unknown>; accessToken?: string; selectedChildId?: string; entitlements?: string[] } = {}) {
+function render(options: { locale?: 'en' | 'ar'; childMissing?: boolean; policy?: unknown; policyState?: Record<string, unknown>; retainedPolicy?: unknown; retainedThreads?: unknown[]; directoryState?: Record<string, unknown>; accessToken?: string; selectedChildId?: string; entitlements?: string[] } = {}) {
+  fixture.childMissing = options.childMissing ?? false;
   fixture.policy = options.policy === undefined ? policy : options.policy;
   fixture.policyState = options.policyState ?? {}; fixture.retainedPolicy = options.retainedPolicy;
   fixture.retainedThreads = options.retainedThreads; fixture.directoryState = options.directoryState ?? {};
@@ -37,6 +38,17 @@ function render(options: { locale?: 'en' | 'ar'; policy?: unknown; policyState?:
   fixture.app = { locale: options.locale ?? 'en', online: true, status: 'ready', accessGeneration: 1, selectedChildId: options.selectedChildId ?? child, selectChild() {}, accessToken: options.accessToken ?? 'current-token', apiUrl: 'https://fixture.invalid', commandJournal: new CommandJournal(), formDrafts: new FormDrafts(), refreshAccess() {}, reportDiagnostic() {}, membership: { role: 'parent', schoolId: school, userId: parent, entitlements: options.entitlements ?? ['learning', 'assessment', 'curriculum', 'portfolio', 'school.operations', 'community'], school: { name: 'Reference school' } } };
   return renderToStaticMarkup(createElement(ParentTrailHomeConnected, { onNavigate() {} }));
 }
+
+test('connected Parent Home has one child prerequisite and one refresh until a current child is selected', () => {
+  for (const locale of ['en', 'ar'] as const) {
+    const html = render({ locale, childMissing: true });
+    const message = locale === 'en' ? 'No child is available through your current approved relationships.' : 'لا يتاح طفل ضمن العلاقات الحالية المعتمدة.';
+    const action = locale === 'en' ? 'Refresh approved child records' : 'تحديث سجلات الطفل المعتمدة';
+    assert.equal(html.split(message).length - 1, 1); assert.equal(html.split(action).length - 1, 1);
+    assert.equal((html.match(/<h1[ >]/g) ?? []).length, 1); assert.doesNotMatch(html, /My checked explanation|Discuss the explanation|Alex Reed/);
+    assert.deepEqual(fixture.directoryPaths, []); assert.deepEqual(fixture.policyPaths, []);
+  }
+});
 
 test('disabled school policy prevents a Home directory read and leaves approved child work visible in both languages', () => {
   for (const locale of ['en', 'ar'] as const) {

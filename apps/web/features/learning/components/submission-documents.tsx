@@ -8,6 +8,7 @@ import { useApi, useApiQuery } from '../../../shared/hooks/use-api';
 import { CommandForm } from '../../../shared/components/command-form';
 import { LearningError } from '../../../shared/components/feedback';
 import { LearningApiError } from '../../../shared/api/client';
+import { fetchVerifiedDownload, deliverVerifiedDownload } from '../../../shared/api/verified-download';
 import { currentSubmissionWorkDraft, currentSubmissionWorkReceipt, currentWorkArtifact, type Submission } from '../model';
 import { SubmissionHistory } from './submission-lifecycle';
 import { useLearningApi } from '../api';
@@ -82,18 +83,20 @@ export function SubmittedDocumentWork({ submissionId }: { submissionId: string }
   return <section aria-label={locale === 'ar' ? 'العمل المسلّم' : 'Submitted work'}>{query.loading ? <WorkspaceState kind="loading" icon="refresh" description={locale === 'ar' ? 'جارٍ تحميل العمل…' : 'Loading work…'} role="status"/> : query.error ? <LearningError error={query.error} /> : query.data ? <><LearningSourceContext type="submission" sourceId={submissionId} />{query.data.responseKind === 'TEXT' ? <p className="lesson-content" dir="auto">{query.data.content}</p> : null}{query.data.artifacts.map(asset => <div className="submitted-document" key={asset.id}><ArtifactDownload asset={asset} path={`/v1/submissions/${submissionId}/artifacts/${asset.id}/download`} />{membership?.role === 'student' && query.data?.learnerId === membership.userId && asset.state === 'AVAILABLE' ? <><Button type="button" variant="quiet" onClick={() => setRetiring(asset.id)}>{locale === 'ar' ? 'إيقاف مستند العمل المسلّم' : 'Retire submitted document'}</Button>{retiring === asset.id ? <CommandForm title={locale === 'ar' ? 'إيقاف مستند العمل المسلّم' : 'Retire submitted document'} path={`/v1/assessments/${query.data.assessmentId}/work-assets/${asset.id}/retire`} fields={[{name:'reason',label:locale==='ar'?'السبب':'Reason',type:'textarea',required:true,maxLength:1000},{name:'confirmRetirement',label:locale==='ar'?'أؤكد إيقاف هذا المستند وإلغاء تنزيله مستقبلًا':'I confirm this document should no longer be available',type:'checkbox',required:true}]} body={values=>({reason:String(values.get('reason')),confirmRetirement:values.get('confirmRetirement')==='on'})} validateReceipt={result=>{const receipt=submissionArtifactSchema.safeParse(result);if(!receipt.success||receipt.data.id!==asset.id||receipt.data.state!=='RETIRED')throw new LearningApiError('invalid',true);}} onSaved={()=>{setRetiring(null);setRefresh(value=>value+1);}} onCancel={()=>setRetiring(null)}/> : null}</> : null}</div>)}</> : <WorkspaceState kind="unknown" icon="portfolio" description={t.unavailable} role="status" actions={<Button type="button" variant="secondary" onClick={()=>setRefresh(value=>value+1)}>{t.refresh}</Button>}/>}</section>;
 }
 export function ArtifactDownload({ asset, path }: { asset: SubmissionArtifact; path: string }) {
-  const { membership, locale, apiUrl, accessToken, online, accessGeneration } = useApp(); const [error, setError] = useState<LearningApiError | null>(null);
-  const scope = `${membership?.schoolId}:${membership?.userId}:${accessToken ?? ''}:${online}:${accessGeneration}:${path}:${asset.id}:${asset.sha256}`; const current = useRef(scope); current.current = scope; const controller = useRef<AbortController | null>(null); const mounted = useRef(false);
+  const { membership, locale, apiUrl, accessToken, online, accessGeneration, status, readLifecycle } = useApp(); const [failure, setFailure] = useState<{scope:string;error:LearningApiError} | null>(null);
+  const scope = JSON.stringify([apiUrl,membership?.schoolId,membership?.userId,membership?.role,status,accessToken,online,accessGeneration,path,asset.id,asset.sha256,asset.name,asset.contentType,asset.byteSize,asset.state]); const current = useRef(scope); current.current = scope; const controller = useRef<AbortController | null>(null); const mounted = useRef(false);
+  const error = failure?.scope === scope ? failure.error : null;
+  const currentLifecycle=useRef(readLifecycle);currentLifecycle.current=readLifecycle;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); }; }, []);
-  useEffect(() => () => controller.current?.abort(), [scope]);
+  useEffect(() => () => controller.current?.abort(), [scope, readLifecycle]);
   async function download() {
-    if (!membership || !accessToken || !online) return; const expected = scope; const active = new AbortController(); controller.current?.abort(); controller.current = active; setError(null);
+    if (!membership || !accessToken || !online || status !== 'ready' || asset.state !== 'AVAILABLE') return; const expected = scope; const active = new AbortController(); controller.current?.abort(); controller.current = active; setFailure(null);
+    const readFrame = readLifecycle?.capture();
+    const isCurrent = () => mounted.current && !active.signal.aborted && controller.current===active && current.current === expected && currentLifecycle.current===readLifecycle && (!readFrame || !!readLifecycle?.isCurrent(readFrame));
     try {
-      const response = await fetch(apiUrl + path, { headers: { Authorization: `Bearer ${accessToken}`, 'X-School-Id': membership.schoolId }, cache: 'no-store', credentials: 'omit', signal: AbortSignal.any([active.signal, AbortSignal.timeout(15000)]) }); if (!response.ok) throw new LearningApiError(response.status === 403 ? 'denied' : 'unavailable');
-      const bytes = await response.arrayBuffer(); const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join(''); if (bytes.byteLength !== asset.byteSize || hash !== asset.sha256) throw new LearningApiError('invalid');
-      if (!mounted.current || active.signal.aborted || current.current !== expected) return;
-      const url = URL.createObjectURL(new Blob([bytes], { type: asset.contentType })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = asset.name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (failure) { if (mounted.current && !active.signal.aborted && current.current === expected) setError(failure instanceof LearningApiError ? failure : new LearningApiError('unavailable')); }
+      const result = await fetchVerifiedDownload({config:{apiUrl,accessToken,schoolId:membership.schoolId},path,metadata:asset,signal:active.signal,isCurrent,readLifecycle});
+      deliverVerifiedDownload(result);
+    } catch (error) { if (isCurrent() && (readLifecycle?.enabled ?? true)) setFailure({scope:expected,error:error instanceof LearningApiError ? error : new LearningApiError('unavailable')}); }
   }
   return <div className="submission-document-download"><CuevoIcon name="portfolio" size={20} /><bdi>{asset.name}</bdi>{asset.state === 'AVAILABLE' ? <Button type="button" variant="quiet" onClick={() => void download()}>{locale === 'ar' ? 'تنزيل مستند العمل' : 'Download work document'}</Button> : <WorkspaceState kind="unavailable" icon="portfolio" description={locale === 'ar' ? 'المستند غير متاح' : 'Document unavailable'}/>}{error ? <LearningError error={error} /> : null}</div>;
 }
