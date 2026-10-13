@@ -406,52 +406,52 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - name: Read exact source-native fixtures from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-partition-source-native-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-native
       - name: Read exact source-contracts fixtures from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-contracts-ordinary-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-contracts
       - name: Read exact source-delivery fixtures from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-partition-source-delivery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-partition-inputs/source-delivery
       - name: Read exact continuation-1 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-continuation-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/continuation-1
       - name: Read exact continuation-2 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-continuation-2-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/continuation-2
       - name: Read exact continuation-3 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-continuation-3-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/continuation-3
       - name: Read exact continuation-4 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-continuation-4-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/continuation-4
       - name: Read exact continuation-5 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-continuation-5-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/continuation-5
       - name: Read exact reconciliation-1 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-reconciliation-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/reconciliation-1
       - name: Read exact reconciliation-2 producer from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-source-cohort-reconciliation-2-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/source-cohort-inputs/reconciliation-2
@@ -643,27 +643,27 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - name: Read exact backend lane from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-runtime-backend-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/backend
       - name: Read exact browser lane from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/browser
       - name: Read exact database lane from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-runtime-database-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lane-inputs/database
       - name: Read exact integration-learning partition from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-integration-integration-learning-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/integration-partition-inputs/integration-learning
       - name: Read exact integration-state partition from this run attempt
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/integration-partition-inputs/integration-state
