@@ -1,5 +1,5 @@
 import { openCurrentProposal, currentProposalChoice } from './proposal-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator, type Request } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -233,7 +233,7 @@ test('customer performance: production browser navigation, private bytes, fixtur
     } finally { await receiverContext.close(); }
     gaps.push({ scenario: 'isolated-worker-processing-duration', status: 'NOT_MEASURED', reason: 'Browser observes saved-source notification/private invalidation end to end; processing-only SQL/worker duration is not observable from this boundary.' });
     gaps.push({ scenario: 'browser-pilot-scale-and-concurrent-auth-users', status: 'NOT_MEASURED', reason: 'This run uses the 133-person reference school and two authenticated browsers; separate 500-record API fixture is not a browser-load result.' });
-    await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await settled(page);
+    await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar'); await settled(page);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect(page.locator('.workspace-main > .notice[role="status"]')).toHaveCount(0);
     await capture('10-student-community-ar-mobile');

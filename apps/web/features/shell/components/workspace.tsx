@@ -29,7 +29,7 @@ import { ImprovementWorkspace } from '../../improvement/ui';
 import { improvementAr, improvementEn } from '../../improvement/copy';
 import { SchoolWorkspace,LearnerProfile } from '../../school/ui';
 import { schoolAr,schoolEn } from '../../school/copy';
-import { CommunityWorkspace } from '../../community/ui';
+import { CommunityWorkspace, NotificationPreview } from '../../community/ui';
 import { communityAr,communityEn } from '../../community/copy';
 import { PortfolioWorkspace } from '../../portfolio/ui';
 import { portfolioAr,portfolioEn } from '../../portfolio/copy';
@@ -117,7 +117,7 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     settingsAction: navigation.some(item => item.id === 'access') ? { label: (locale === 'ar' ? chromeAr : chromeEn).settings, onClick: () => selectView('access') } : undefined,
     signOutAction: { label: signingOut ? t.signingOut : t.signOut, onClick: () => void onSignOut(), pending: signingOut },
     searchAction,
-    notificationAction: navigation.some(item=>item.id==='community') ? {label:community.notifications,onClick:()=>{setNotificationActivation(value=>value+1);selectView({view:'community',section:'notifications'});}} : undefined,
+    notificationControl: navigation.some(item=>item.id==='community') ? <NotificationPreview onSeeAll={()=>{setNotificationActivation(value=>value+1);selectView({view:'community',section:'notifications'});}}/> : undefined,
   }}>
       <TrailBackground className="workspace-chrome__background" src={trailAssets.background} />
       <main ref={main} id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}${view === 'learning' && membership.role === 'student' ? ' workspace-main--student-learning' : ''}${view === 'community' ? ' workspace-main--community' : ''}${view === 'academic' ? ' workspace-main--academic' : ''}`} tabIndex={composedHome ? -1 : 0}>

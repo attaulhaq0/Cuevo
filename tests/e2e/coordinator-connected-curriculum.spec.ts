@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -248,12 +249,12 @@ test.describe('connected Coordinator curriculum source acceptance', () => {
       expect(teacherReferences.find(row => row.id === lost!.academicReferenceId)).toMatchObject({ title: secondTitle, parentTitle: subjectTitle, version, status: 'APPROVED' });
       await healthy(page); await objectives.scrollIntoViewIfNeeded(); await page.screenshot({ path: info.outputPath('objective-confirmed-en1366.png') });
       for (const width of [390, 320]) {
-        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await setTrailWorkspaceLanguage(page, 'ar');
         const arabicCandidate = page.locator('.curriculum-course-review article').filter({ has: page.getByRole('heading', { name: secondTitle, exact: true }) });
         await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); await expect(arabicCandidate).toContainText('معتمد لتقييمات المقرر'); await healthy(page);
         await arabicCandidate.scrollIntoViewIfNeeded(); await page.screenshot({ path: info.outputPath(`objective-confirmed-ar${width}.png`) });
       }
-      await page.getByRole('button', { name: 'English', exact: true }).click(); await page.setViewportSize({ width: 1366, height: 768 });
+      await setTrailWorkspaceLanguage(page, 'en'); await page.setViewportSize({ width: 1366, height: 768 });
       await page.locator('.curriculum-workspace__editor-heading').getByRole('button', { name: 'Close planning action', exact: true }).click();
       await page.locator('.curriculum-workspace__navigation').getByRole('button', { name: 'School programmes', exact: true }).click();
       const programmeRecord = page.locator('.curriculum-record').filter({ has: page.getByRole('heading', { name: programmeTitle, exact: true }) });
@@ -265,7 +266,7 @@ test.describe('connected Coordinator curriculum source acceptance', () => {
       expect(programmeLearnerPageSchema.parse(await source('teacher', `/v1/curriculum/programmes/${programmeId}/learners?limit=25`)).items.find(row => row.learnerId === learner.actorId)).toMatchObject({ status: 'revoked', programmeId });
       await healthy(page); await assignments.scrollIntoViewIfNeeded(); await page.screenshot({ path: info.outputPath('assignment-revoked-en1366.png') });
       for (const width of [390, 320]) {
-        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await setTrailWorkspaceLanguage(page, 'ar');
         const currentAssignment = page.locator('.curriculum-programme-learners article').filter({ has: page.getByRole('heading', { name: learnerName!, exact: true }) });
         await expect(currentAssignment).toContainText('ملغى'); await healthy(page); await currentAssignment.scrollIntoViewIfNeeded(); await page.screenshot({ path: info.outputPath(`assignment-revoked-ar${width}.png`) });
       }
@@ -301,7 +302,7 @@ test.describe('connected Coordinator curriculum source acceptance', () => {
       await healthy(teacherPage); await choice.scrollIntoViewIfNeeded(); await teacherPage.screenshot({ path: info.outputPath('teacher-approved-objective-en1366.png') });
       await expect(planning.getByLabel('I confirm this approved objective is planned for this period', { exact: true })).not.toBeChecked();
       for (const width of [390, 320]) {
-        await teacherPage.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await teacherPage.getByRole('button', { name: 'العربية', exact: true }).click();
+        await teacherPage.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await setTrailWorkspaceLanguage(teacherPage, 'ar');
         const currentChoice = teacherPage.locator('.curriculum-planning select[name="referenceId"]'); await expect(currentChoice).toHaveValue(lost!.academicReferenceId);
         await expect(teacherPage.locator('html')).toHaveAttribute('dir', 'rtl'); await healthy(teacherPage); await currentChoice.scrollIntoViewIfNeeded(); await teacherPage.screenshot({ path: info.outputPath(`teacher-approved-objective-ar${width}.png`) });
       }

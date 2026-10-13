@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -17,7 +17,7 @@ async function signIn(page: Page, account: Account) {
   await page.locator('.workspace-chrome__navigation').getByRole('button', { name: 'Portfolio', exact: true }).click();
 }
 async function signOut(page: Page) {
-  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'en');
   await signOutTrailWorkspace(page);
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 }
@@ -126,12 +126,12 @@ test('revoked selected work explains learner recovery and requires a fresh exact
   row = await selectTrailPortfolioRecord(page,original.id,title);
   await expect(row.getByText('Family sharing is off for this reflection. Create a new reflection, then ask your teacher to review it before sharing.', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await expect(row.getByText('مشاركة هذا التأمل مع الأسرة متوقفة. أنشئ تأملاً جديدًا ثم اطلب من معلّمك مراجعته قبل المشاركة.', { exact: true })).toBeVisible();
   await expect(row.getByRole('button', { name: 'إنشاء مراجعة للتأمّل', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
-  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'en');
   await row.getByRole('button', { name: 'Create reflection revision', exact: true }).click();
   form = row.getByRole('region', { name: 'Create reflection revision', exact: true });
   await form.getByLabel('What I learned').fill('I checked my explanation again and added what helped me.');

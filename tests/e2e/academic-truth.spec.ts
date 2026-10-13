@@ -1,5 +1,5 @@
 import { openCurrentResult } from './result-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -39,6 +39,6 @@ test('teacher reviews and releases native result; student follows source evidenc
   await signOutTrailWorkspace(page); await signIn(student);
   const result = await openCurrentResult(page,releasedReceipt.id); await expect(result.locator('.native-score strong')).toHaveText('0'); await result.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(result.locator('.evidence-provenance')).toContainText('Submission');
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); expect(axe.violations).toEqual([]);
 });

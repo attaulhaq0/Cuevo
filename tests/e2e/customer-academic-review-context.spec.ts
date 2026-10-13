@@ -1,5 +1,5 @@
 import { openCurrentReference } from './result-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -87,7 +87,7 @@ test('coordinator reads the exact saved objective description before approving t
   await expect(row).toContainText('Approved');
   await expect(row.getByText(description, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(row.getByText(description, { exact: true })).toBeVisible();
   await row.scrollIntoViewIfNeeded();

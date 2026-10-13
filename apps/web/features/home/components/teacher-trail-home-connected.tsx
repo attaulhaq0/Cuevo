@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type Ref } from 'react';
-import { Button } from '@cuevo/ui';
+import { IconButton } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { canOpenWorkspace } from '../../../shared/session/capabilities';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
@@ -18,6 +18,8 @@ import { teacherHomeAr, teacherHomeEn } from '../teacher-home-binding-messages';
 import { parentHomeSourceDenial, parentHomeSourceUsable, type ParentHomeSourceDenial } from '../parent-home-binding-model';
 import type { TeacherTrailContext } from '../teacher-trail-model';
 import { TeacherTrailHomeView } from './teacher-trail-home';
+import { HomeSourceDisclosure } from './home-disclosure';
+import { homeAr, homeEn } from '../messages';
 
 export function TeacherTrailHome({ onNavigate, headingRef }: { onNavigate: (target: HomeDestination) => void; headingRef?: Ref<HTMLHeadingElement> }) {
   const { membership } = useApp();
@@ -107,5 +109,8 @@ function CurrentTeacherHome({ onNavigate, headingRef }: { onNavigate: (target: H
       continuation: <>{announcements.error ? <LearningError error={announcements.error} /> : null}<LoadMore query={announcements} label={t.updates} /></>,
     } } : {}),
   };
-  return <div className="teacher-home-connected"><TeacherTrailHomeView context={context} locale={locale} headingRef={headingRef} /><div className="home-overview-controls">{context.availability === 'ready' ? <Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.reload}</Button> : null}{[{ query: marking, label: t.submissions }, { query: practices, label: t.practiceRecords }, { query: portfolio, label: t.portfolioRecords }, { query: proposals, label: t.proposals }, { query: calendar, label: t.school }].map(({ query, label }) => query.error || query.moreError || query.nextCursor ? <section key={label} aria-label={label}><p>{label}</p>{query.error ? <LearningError error={query.error} /> : null}<LoadMore query={query} label={label} /></section> : null)}</div></div>;
+  const pagingSources = [{ query: marking, label: t.submissions }, { query: practices, label: t.practiceRecords }, { query: portfolio, label: t.portfolioRecords }, { query: proposals, label: t.proposals }, { query: calendar, label: t.school }];
+  const failedPages = pagingSources.filter(({query}) => query.error || query.moreError);
+  const healthyPages = pagingSources.filter(({query}) => query.nextCursor && !query.error && !query.moreError);
+  return <div className="teacher-home-connected"><TeacherTrailHomeView context={context} locale={locale} headingRef={headingRef} /><div className="home-overview-controls">{failedPages.map(({ query, label }) => <section key={label} aria-label={label}><p>{label}</p>{query.error ? <LearningError error={query.error} /> : null}<LoadMore query={query} label={label} /></section>)}{healthyPages.length ? <HomeSourceDisclosure label={(locale === 'ar' ? homeAr : homeEn).overviewRecords}>{healthyPages.map(({query,label}) => <LoadMore key={label} query={query} label={label} />)}</HomeSourceDisclosure> : null}{context.availability === 'ready' ? <IconButton icon="refresh" label={t.reload} type="button" className="home-overview-refresh" onClick={() => setRefresh(value => value + 1)} /> : null}</div></div>;
 }

@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { openCurrentPractice, currentPracticeChoice } from './practice-reader';
 import { test, expect, type Page } from '@playwright/test';
 import { currentProposalChoice, openCurrentProposal } from './proposal-reader';
@@ -71,7 +72,7 @@ test.describe('isolated current Coordinator review', () => {
     const response = page.waitForResponse(row => new URL(row.url()).pathname === `/v1/classes/${classId}/learning-summary` && row.request().method() === 'GET');
     await selector.selectOption(classId); const summary = classLearningSummarySchema.parse(await (await response).json()); expect(summary.schoolId).toBe(account.schoolId); expect(summary.coverage).toBe('NOT_ESTABLISHED');
     const sourceLearner = summary.items.find(row => row.academic.sources.length); if (!sourceLearner) throw new Error('Current native class source required.');
-    if (viewport.locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    if (viewport.locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
     const chooser = page.locator('.coordinator-class-chooser'); await expect(chooser).toHaveAttribute('open', '');
     const currentRow = panel.locator(`[data-class-learner-id="${sourceLearner.learnerId}"]`); await expect(currentRow).toContainText(sourceLearner.learnerName);
     const openLabel = viewport.locale === 'en' ? 'Review this learner' : 'مراجعة هذا الطالب';

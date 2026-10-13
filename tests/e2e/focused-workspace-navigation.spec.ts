@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 
 // Intercepted presentation only: real source/API/relationship acceptance is
 // verified separately. No fixture record or command reaches a remote service.
@@ -81,7 +81,7 @@ test('focused chooser follows reflow and scroll with reachable Arabic context in
   await page.evaluate(() => window.scrollTo(0, 400));
   await expect(chooser).toBeHidden();
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await page.setViewportSize({ width: 820, height: 500 });
   await expect(page.locator('main h1')).toBeVisible();
   expect(await page.locator('main h1').evaluate(element => { const rect = element.getBoundingClientRect(); return rect.top >= 0 && rect.bottom <= innerHeight; })).toBe(true);
@@ -93,8 +93,8 @@ test('narrow focused sections keep the whole selected label reachable beside wor
   await focusedCommunity(page);
   await page.locator('[data-workspace-section="announcements"]').click();
   await expect(page.locator('.community-post')).toHaveCount(30);
-  for (const locale of ['en', 'ar']) {
-    await page.getByRole('button', { name: locale === 'en' ? 'English' : 'العربية', exact: true }).click();
+  for (const locale of ['en', 'ar'] as const) {
+    await setTrailWorkspaceLanguage(page, locale);
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       const selected = page.locator('[data-workspace-sections] button[aria-pressed="true"]');

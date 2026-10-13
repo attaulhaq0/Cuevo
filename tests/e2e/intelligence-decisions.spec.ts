@@ -1,6 +1,6 @@
 import { openCurrentPractice } from './practice-reader';
 import { openCurrentProposal } from './proposal-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -73,7 +73,8 @@ test('teacher rejects one proposal and approves exact edited instructions throug
 
   const signIn = async (account: Account) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    if (await page.locator('.workspace-chrome').isVisible()) await setTrailWorkspaceLanguage(page, 'en');
+    else await page.getByRole('button', { name: 'English', exact: true }).click();
     const signOut = page.locator('.workspace-chrome__person > button');
     if (await signOut.isVisible()) await signOutTrailWorkspace(page);
     await page.getByLabel('School email', { exact: true }).fill(account.email);
@@ -215,7 +216,7 @@ test('teacher rejects one proposal and approves exact edited instructions throug
     await expect(task).not.toContainText(privateReason);
     await expect(task.getByRole('button', { name: 'Complete practice', exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(task.getByText(editedInstructions, { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

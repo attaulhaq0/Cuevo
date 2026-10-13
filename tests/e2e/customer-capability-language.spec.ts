@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
@@ -14,16 +14,16 @@ test('account access and school policy lists use human feature names in English 
   await expect(page.locator('.workspace-access__capabilities > ul')).toContainText('Learning progress');
   await expect(page.locator('.workspace-access__capabilities > ul')).toContainText('School operations');
   expect(await page.locator('.workspace-access__capabilities > ul').innerText()).not.toContain('learner.state');
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('.workspace-access__capabilities > ul')).toContainText('تقدّم التعلّم');
   await expect(page.locator('.workspace-access__capabilities > ul')).toContainText('إدارة المدرسة');
-  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'en');
   await openTrailWorkspace(page, 'School');
   await page.getByRole('button', { name: 'Policies', exact: true }).click(); await page.getByRole('button', { name: 'Approve school policy', exact: true }).click();
   const table = page.getByRole('table').filter({ hasText: 'Learning progress' });
   await expect(table).toContainText('Learning progress');
   expect(await table.innerText()).not.toContain('school.operations');
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.getByRole('table').filter({ hasText: 'تقدّم التعلّم' })).toContainText('إدارة المدرسة');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);

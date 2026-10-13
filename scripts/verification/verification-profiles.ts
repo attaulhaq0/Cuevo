@@ -52,7 +52,7 @@ export const criticalIntegrationFiles = [
 export const criticalBrowserFiles = ['foundation.spec.ts', 'role-home.spec.ts', 'role-accessibility.spec.ts', 'hydration-diagnostics.spec.ts', 'learning-lifecycle.spec.ts', 'customer-browser-learning-loop.spec.ts', 'customer-command-scope.spec.ts'] as const;
 const ownerBrowserFiles: Record<string, readonly string[]> = {
   academic: ['academic-truth.spec.ts','academic-report.spec.ts','result-parent-publication.spec.ts','frontend-compact-layout.spec.ts','gradebook-course-context.spec.ts','gradebook-focus-clearance.spec.ts'],
-  community: ['community-safety.spec.ts','community-member-source-pagination.spec.ts','customer-community-actions.spec.ts','customer-community-journey.spec.ts','hosted-community-consumer.spec.ts','shared-control-affordances.spec.ts'],
+  community: ['community-safety.spec.ts','community-member-source-pagination.spec.ts','customer-community-actions.spec.ts','customer-community-journey.spec.ts','hosted-community-consumer.spec.ts','shared-control-affordances.spec.ts','notification-preview.spec.ts'],
   curriculum: ['curriculum-lifecycle-review.spec.ts','curriculum-runtime-behavior.spec.ts','curriculum-record-context.spec.ts'],
   development: ['development-source-state.spec.ts','development-learner-context.spec.ts','recognition-actions.spec.ts','shared-control-affordances.spec.ts'],
   home: ['exact-home-destinations.spec.ts','customer-arabic-home.spec.ts','frontend-compact-layout.spec.ts','parent-home-heading-identity.spec.ts','home-compact-actions.spec.ts'],

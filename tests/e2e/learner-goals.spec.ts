@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { selectHumanChoice } from './human-choice';
 import { test, expect, type Page, type Locator, type Response } from '@playwright/test';
 import { learnerGoalSchema } from '@cuevo/contracts';
@@ -121,7 +121,7 @@ test('student records reviews and closes an own learning goal in English and Ara
   expect(closedGoal.revisionId).not.toBe(goal.revisionId); expect(closedGoal.reviewedAt).not.toBeNull();
   await openCurrentGoal(page, section, closedGoal, closedRead);
   await expect(row).toContainText('Closed'); await expect(row.getByRole('button', { name: 'Review my goal', exact: true })).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
 });

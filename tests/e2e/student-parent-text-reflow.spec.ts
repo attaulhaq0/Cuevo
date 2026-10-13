@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -42,7 +43,7 @@ test.describe('isolated actual Student/Parent narrow text reflow', () => {
       await expect(page.getByRole('button', { name: 'Open task', exact: true }).first()).toBeVisible(); await page.getByRole('button', { name: 'Open task', exact: true }).first().click();
       await expect(page.locator('.assessment-task-layout')).toBeVisible();
     }
-    await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('main [role="status"]').filter({ hasText: /^(Loading|Checking|جارٍ تحميل|جارٍ التحقق)/ })).toHaveCount(0);
     if (scenario.view === 'learning') {
       const title = await page.getByRole('main').getByRole('heading', { level: 1 }).evaluate(element => ({ client: element.clientWidth, scroll: element.scrollWidth })); expect(title.scroll).toBeLessThanOrEqual(title.client + 2);

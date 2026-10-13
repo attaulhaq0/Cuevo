@@ -1,5 +1,5 @@
 import { openCurrentResult, openCurrentRubric } from './result-reader';
-import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -53,7 +53,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
   let visualIndex = 0;
   const visualCheck = async (target: ReturnType<typeof page.locator>) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -61,7 +61,7 @@ test('teacher creates a rubric and releases native criteria with approved parent
     await mkdir('.local/technical-mvp-visuals', { recursive: true });
     await target.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `.local/technical-mvp-visuals/rubric-ar-mobile-${++visualIndex}.png` });
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'en');
     await page.setViewportSize({ width: 1440, height: 900 });
     await target.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `.local/technical-mvp-visuals/rubric-en-desktop-${visualIndex}.png` });

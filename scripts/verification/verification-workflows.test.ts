@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { validateFullRegressionWorkflow,validateCiSourceJobs } from './verification-workflows';
+import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJobs } from './verification-workflows';
 
 test('one existing database producer retains exact original231 source proof without a second replay',async()=>{
  const api:Record<string,unknown>=await import('./verification-workflows');assert.ok(api.ciOriginal231CatalogueArtifactStep,'source231 requires its own exact retained artifact');const step=api.ciOriginal231CatalogueArtifactStep as Record<string,unknown>,job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.deepEqual(step,{name:'Retain exact source original231 catalogue reference',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source231.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);const source=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(source)as{jobs:Record<string,{steps:Record<string,unknown>[]}>};assert.deepEqual(flow.jobs['database-checks'],job);assert.ok(flow.jobs['database-checks'].steps.some(row=>row.name===step.name));
@@ -9,6 +9,33 @@ test('one existing database producer retains exact original231 source proof with
 import { statelessVerificationSteps } from './steps';
 import { createRequire } from 'node:module';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): Record<string, unknown>; dump(value: unknown): string };
+
+test('reset failure companion retains only minimized files without changing required restoration admission', async()=>{
+  const text=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(text) as {jobs:Record<string,{steps:Record<string,unknown>[]}>};
+  assert.deepEqual(validateCiRuntimeJobs(flow.jobs),[]);
+  const steps=flow.jobs['integration-state'].steps,diagnostic=steps.filter(s=>s.name==='Retain minimized local reset failure diagnostics');
+  assert.equal(diagnostic.length,1);
+  assert.deepEqual(diagnostic[0],{name:'Retain minimized local reset failure diagnostics',if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-reset-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/reset-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
+  const result=steps.find(s=>s.name==='Retain exact integration-state partition')!;
+  assert.equal((result.with as Record<string,unknown>).path,'.local/integration-partitions/integration-state/result.json');
+  assert.equal((result.with as Record<string,unknown>)['if-no-files-found'],'error');
+  assert.equal(steps.indexOf(diagnostic[0]),steps.indexOf(result)+1);
+  assert.equal(steps.at(-1)?.run,'npx --no-install supabase stop --project-id cuevo');
+  const aggregate=flow.jobs['technical-mvp'].steps.find(s=>s.name==='Combine exact source and required runtime lanes')!;
+  assert.ok(String(aggregate.run).includes('test "$STATE" = success'));
+  for(const mode of ['missing','raw-path','wrong-name','success-only','required','budget','ignore-failure','omit-result']){
+    const changed=structuredClone(flow.jobs),job=changed['integration-state'] as Record<string,unknown>,rows=job.steps as Record<string,unknown>[],d=rows.find(s=>s.name===diagnostic[0].name)!;
+    if(mode==='missing')rows.splice(rows.indexOf(d),1);
+    if(mode==='raw-path')(d.with as Record<string,unknown>).path='.local/migration-replay/';
+    if(mode==='wrong-name')(d.with as Record<string,unknown>).name='cuevo-reset-diagnostic-latest';
+    if(mode==='success-only')d.if='success()';
+    if(mode==='required')(d.with as Record<string,unknown>)['if-no-files-found']='error';
+    if(mode==='budget')job['timeout-minutes']=60;
+    if(mode==='ignore-failure')job['continue-on-error']=true;
+    if(mode==='omit-result')rows.splice(rows.findIndex(s=>s.name===result.name),1);
+    assert.ok(validateCiRuntimeJobs(changed).length,mode);
+  }
+});
 
 test('full workflow admission refuses execution changes outside named commands', async () => {
   const text = await readFile('.github/workflows/full-regression.yml','utf8');

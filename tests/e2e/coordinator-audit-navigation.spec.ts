@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 
 // Intercepted synthetic presentation only. No source mutation, actual API
 // authorization or database acceptance is established by these journeys.
@@ -96,11 +96,11 @@ test('Coordinator explicit outcome reading preserves native source values throug
   await reader.getByRole('button', { name: 'Return to outcome list', exact: true }).click();
   await expect(directory).toBeVisible(); await expect(reader).toHaveCount(0); await expect(opener).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await opener.click(); await expect(directory).toBeHidden(); await expect(reader).toBeVisible();
   await reader.getByRole('button', { name: 'العودة إلى قائمة النتائج', exact: true }).click();
   await expect(directory).toBeVisible(); await expect(opener).toBeFocused();
-  await page.getByRole('button', { name: 'English', exact: true }).click(); await page.setViewportSize({ width: 1366, height: 768 });
+  await setTrailWorkspaceLanguage(page, 'en'); await page.setViewportSize({ width: 1366, height: 768 });
   await opener.click(); nextStatus = 403;
   await directory.getByRole('button', { name: 'Load more: Outcomes', exact: true }).click();
   await expect(page.locator('.coordinator-outcomes [role="alert"]')).toBeVisible();

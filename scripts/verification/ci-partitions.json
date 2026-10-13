@@ -120,6 +120,7 @@
         "scripts/database/hosted-synthetic-plan.test.ts",
         "scripts/database/hosted-synthetic-population.test.ts",
         "scripts/database/replay-plan.test.ts",
+        "scripts/database/reset-local-diagnostic.test.ts",
         "scripts/database/worker-transport-fixture-policy.test.ts",
         "scripts/database/worker-transport-trust.test.ts",
         "scripts/docs/reference-inventory.test.ts",
@@ -536,6 +537,10 @@
       },
       {
         "path": "scripts/database/replay-plan.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/reset-local-diagnostic.test.ts",
         "durationMs": null
       },
       {

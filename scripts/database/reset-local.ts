@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { assertReplayWorkdirs, createReplayWorkdirs, type ReplayWorkdirs } from './replay-workdir';
 import { posthogEnvironmentMigration, posthogIntelligenceMigration } from './replay-plan';
 import { assertCuevoLocalConfig, assertCuevoLocalTarget, type LocalStatus } from '../configure-local';
+import { runPrefixResetCommand } from './reset-local-diagnostic';
 
 export async function resetCuevoLocalDatabase(prepared?: ReplayWorkdirs) {
   assertCuevoLocalConfig(await readFile('supabase/config.toml', 'utf8'));
@@ -14,8 +15,25 @@ export async function resetCuevoLocalDatabase(prepared?: ReplayWorkdirs) {
   assertCuevoLocalTarget(status);
   const stage = prepared ?? await createReplayWorkdirs();
   console.log('Resetting only verified local Cuevo with reviewed immutable migration dependency order.');
+  let sourceSha: string | null = null, treeSha: string | null = null;
+  try {
+    sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    treeSha = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (!/^[a-f0-9]{40}$/.test(sourceSha) || !/^[a-f0-9]{40}$/.test(treeSha)) { sourceSha = null; treeSha = null; }
+  } catch { sourceSha = null; treeSha = null; }
+  const operation = stage.root.split(/[\\/]/).at(-1)!;
+  const env = process.env;
+  const ci = env.CI === 'true' && env.GITHUB_ACTIONS === 'true' && /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(env.GITHUB_REPOSITORY ?? '') && /^[1-9][0-9]{0,18}$/.test(env.GITHUB_RUN_ID ?? '') && /^[1-9][0-9]{0,5}$/.test(env.GITHUB_RUN_ATTEMPT ?? '') && /^[a-zA-Z0-9_-]{1,80}$/.test(env.GITHUB_JOB ?? '') && /^[a-zA-Z0-9_-]{1,80}$/.test(env.CUEVO_VERIFICATION_SCOPE ?? '') && /^[a-f0-9-]{36}$/.test(env.CUEVO_VERIFICATION_RUN_ID ?? '') && sourceSha === env.CUEVO_VERIFICATION_SOURCE_SHA
+    ? { repository: env.GITHUB_REPOSITORY!, runId: env.GITHUB_RUN_ID!, attempt: Number(env.GITHUB_RUN_ATTEMPT), job: env.GITHUB_JOB!, scope: env.CUEVO_VERIFICATION_SCOPE!, verificationRunId: env.CUEVO_VERIFICATION_RUN_ID! } : null;
   assertReplayWorkdirs(stage, stage.prefix);
-  execFileSync(process.execPath, [cli, 'db', 'reset', '--local', '--no-seed', '--network-id', 'cuevo-local', '--workdir', stage.prefix, '--yes'], { stdio: 'inherit' });
+  await runPrefixResetCommand(process.execPath, [cli, 'db', 'reset', '--local', '--no-seed', '--network-id', 'cuevo-local', '--workdir', stage.prefix, '--yes'], {
+    spawn,
+    write: async diagnostic => {
+      if (!/^operation-[a-zA-Z0-9_-]{1,80}$/.test(operation)) return;
+      assertReplayWorkdirs(stage, stage.prefix);
+      await writeFile(resolve(stage.root, 'reset-diagnostic.json'), JSON.stringify({ version: 1, purpose: 'CUEVO_LOCAL_PREFIX_RESET_DIAGNOSTIC', context: { sourceSha, treeSha, operation, ci }, cliVersion: '2.119.0', ...diagnostic, observedAt: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 });
+    },
+  });
   assertReplayWorkdirs(stage, stage.prerequisite);
   execFileSync(process.execPath, [cli, 'migration', 'up', '--include-all', '--local', '--network-id', 'cuevo-local', '--workdir', stage.prerequisite], { stdio: 'inherit' });
   const environmentStage = resolve(stage.root, 'posthog-environment');

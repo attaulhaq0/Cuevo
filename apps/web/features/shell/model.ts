@@ -88,6 +88,7 @@ export type WorkspaceChromeContext = {
   profileNotice?: ReactNode;
   searchAction?: WorkspaceChromeAction;
   notificationAction?: WorkspaceChromeAction;
+  notificationControl?: ReactNode;
   helpAction?: WorkspaceChromeAction;
 };
 

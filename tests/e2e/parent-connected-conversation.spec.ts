@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Browser, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -200,7 +201,7 @@ test.describe('isolated actual Parent conversation acceptance', () => {
 
       await healthy(parent.page); await info.attach('parent-en-connected', { body: await parent.page.screenshot({ fullPage: true }), contentType: 'image/png' });
       for (const width of [390, 320]) {
-        await parent.page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await parent.page.getByRole('button', { name: 'العربية', exact: true }).click();
+        await parent.page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await setTrailWorkspaceLanguage(parent.page, 'ar');
         await expect(parent.page.locator('html')).toHaveAttribute('dir', 'rtl'); await expect(parentThread.locator('h2')).toHaveText(title);
         await healthy(parent.page); await info.attach(`parent-ar-${width}-connected`, { body: await parent.page.screenshot({ fullPage: true }), contentType: 'image/png' });
       }

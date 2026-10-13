@@ -163,8 +163,12 @@
 .school-day-current-heading h2 { margin:0; }
 .school-day-current-heading p { margin-block:var(--space-1) 0; color:var(--color-text-secondary); font-size:var(--type-sm); line-height:1.5; overflow-wrap:anywhere; }
 .workspace .school-day-current-date { margin-inline-start:auto; }
+.workspace .school-day-current-date { display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:var(--space-1) var(--space-2);flex:0 1 26rem; }
+.workspace .school-day-current-date > label { margin:0; }
+.workspace .school-day-current-date > p { grid-column:2;margin:0; }
 .school-day-current-date input { min-inline-size:0; inline-size:100%; }
 .school-day-current-date p { margin-block:var(--space-1) 0; color:var(--color-text-secondary); font-size:var(--type-sm); line-height:1.5; overflow-wrap:anywhere; }
+@media(max-width:600px){.workspace .school-day-current-date{flex:1 1 100%;grid-template-columns:minmax(0,1fr)}.workspace .school-day-current-date>p{grid-column:1}}
 .workspace .school-staff-current-header { align-items:center; margin-block-end:0; }
 .school-staff-current-header .school-day-heading { margin-block-end:0; }
 .workspace .school-staff-current-header > .school-daily-context-layout { flex:1 1 32rem; }

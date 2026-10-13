@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -130,7 +131,7 @@ test.describe('isolated current-source thinking focus', () => {
     const completionResponse = learner.waitForResponse(response => new URL(response.url()).pathname === `/v1/activities/${work.id}/complete` && response.request().method() === 'POST');
     await learner.getByRole('button', { name: 'Complete activity', exact: true }).click(); const completion = await (await completionResponse).json() as { id: string };
     const snapshot = await request<{ items: FocusRecord[] }>('student', `/thinking-focus/sources/completion/${completion.id}`); expect(snapshot.items[0].classification?.focus).toMatchObject(focus);
-    for (const width of [390, 320]) { await learner.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await learner.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(learner.getByText('استخدم فكرة أو طريقة في هذه المهمة.', { exact: true })).toBeVisible(); await checkPage(learner); }
+    for (const width of [390, 320]) { await learner.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await setTrailWorkspaceLanguage(learner, 'ar'); await expect(learner.getByText('استخدم فكرة أو طريقة في هذه المهمة.', { exact: true })).toBeVisible(); await checkPage(learner); }
     await info.attach('learner-rtl', { body: await learner.screenshot({ fullPage: true }), contentType: 'image/png' });
     await reviewer.close(); await learner.close();
   });
@@ -200,7 +201,7 @@ test.describe('isolated current-source thinking focus', () => {
     const marked = await request<{ id: string; revision: number }>('teacher', `/submissions/${submitted.id}/results`, { score: 0, feedback: 'Explain why the method fits.', expectedPolicyVersion: configured.policyVersion, expectedRevision: 0, sourceEvidence: true });
     const released = await request<{ id: string; nativeResult: { type: string; score: number; maxScore: number } }>('teacher', `/results/${marked.id}/release`, { expectedRevision: marked.revision, parentVisible: true });
     expect(released.nativeResult).toMatchObject({ type: 'numeric', score: 0, maxScore: 10 });
-    await page.setViewportSize({ width: 390, height: 844 }); await login(page, 'parent', 'academic', 'result', released.id); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 }); await login(page, 'parent', 'academic', 'result', released.id); await setTrailWorkspaceLanguage(page, 'ar');
     const snapshot = page.locator('.thinking-focus-snapshot'); await snapshot.getByRole('button').click(); await expect(snapshot.getByText('استخدم فكرة أو طريقة في هذه المهمة.', { exact: true })).toBeVisible();
     await expect(page.locator('.thinking-focus-editor')).toHaveCount(0); await checkPage(page);
     await request('parent', `/thinking-focus/sources/submission/${submitted.id}`, undefined, 403);
@@ -280,7 +281,7 @@ test.describe('isolated current-source thinking focus', () => {
     const name = `${titlePrefix} keyboard review`, work = await activity(name); await draft(work.id);
     await page.context().addCookies([{ name: 'cuevo_workspace_theme', value: 'dark', url: base }]);
     const editor = await reviewEditor(page, name);
-    await page.getByRole('button', { name: 'العربية', exact: true }).click(); await page.setViewportSize({ width: 640, height: 450 });
+    await setTrailWorkspaceLanguage(page, 'ar'); await page.setViewportSize({ width: 640, height: 450 });
     await expect(page.locator('.workspace')).toHaveAttribute('data-theme', 'dark'); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await editor.getByRole('button', { name: 'مراجعة التركيز المقترح', exact: true }).click();
     const select = editor.getByLabel('قرار المراجعة', { exact: true }); await expect(select).toBeVisible();

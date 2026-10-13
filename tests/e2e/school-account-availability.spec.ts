@@ -1,4 +1,4 @@
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import{test,expect}from'@playwright/test';
 import{readFile}from'node:fs/promises';
 import AxeBuilder from'@axe-core/playwright';
@@ -7,5 +7,5 @@ test('disabled account operation setup is explained before invitations, recovery
  const protectedRequests:string[]=[];page.on('request',request=>{const path=new URL(request.url()).pathname;if(path==='/v1/school/accounts/invitations'||/^\/v1\/school\/accounts\/[^/]+\/recovery$/.test(path))protectedRequests.push(path);});
  await page.goto('/');await page.getByLabel('School email',{exact:true}).fill(admin.email);await page.getByLabel('Password',{exact:true}).fill(admin.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await expectTrailWorkspace(page);await page.locator('.workspace-chrome__navigation').getByRole('button',{name:'School',exact:true}).click();await page.getByRole('button',{name:'Accounts and invitations',exact:true}).click();
  await expect(page.getByRole('heading',{name:'School account setup required',exact:true})).toBeVisible();await expect(page.getByRole('region',{name:'Invite someone to school',exact:true})).toHaveCount(0);await expect(page.getByRole('region',{name:'Recover a school member account',exact:true})).toHaveCount(0);expect(protectedRequests).toEqual([]);
- await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'العربية',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('dir','rtl');await expect(page.getByRole('heading',{name:'إعداد حسابات المدرسة مطلوب',exact:true})).toBeVisible();expect((await new AxeBuilder({page}).include('main').analyze()).violations).toEqual([]);
+ await page.setViewportSize({width:390,height:844});await setTrailWorkspaceLanguage(page, 'ar');await expect(page.locator('html')).toHaveAttribute('dir','rtl');await expect(page.getByRole('heading',{name:'إعداد حسابات المدرسة مطلوب',exact:true})).toBeVisible();expect((await new AxeBuilder({page}).include('main').analyze()).violations).toEqual([]);
 });

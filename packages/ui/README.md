@@ -1,5 +1,7 @@
 # Shared design system
 
+An explicitly empty compact WorkspacePageHeading keeps its semantic h1 and focus reference while leaving normal layout flow, so grid owners do not reserve a blank row gap. The marker still requires admitted generic navigation context; captions, real record names, descriptions and actions remain in flow. Focused main owns one top inset for the known workspace roots. This presentation rule grants no navigation or source authority and leaves Home/standalone/no-host headings unchanged.
+
 `readingDocumentStyles` and `ReadingDocumentTheme` provide a pure public document-reading style. A browser feature supplies resolved semantic values from the current UI; the generated file uses no network, font asset, session or application dependency. Safe value validation rejects CSS/markup injection, primary is an accent boundary, summary text uses readable text color, and print resolves to black/white. Missing snapshots use native system colors rather than another brand palette. This utility never determines academic data or report authority.
 
 Public API: @cuevo/ui for Button/Status, @cuevo/ui/tokens.css for semantic tokens. Component stories are colocated under src and previewed using apps/web/.storybook. No school-specific rules, server credentials or application imports belong here. Feature-specific UI remains in its owning feature. Preserve keyboard, reduced motion, Arabic/RTL and shared design tokens.

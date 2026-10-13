@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
@@ -71,7 +71,7 @@ test('authorized synthetic browser diagnostics are minimized across errors, pars
     });
     await openTrailWorkspace(page, 'Learning');
     await expect.poll(() => observed.some(request => request.postDataJSON()?.category === 'response_invalid')).toBe(true);
-    await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
     responseMode = 'unavailable';
     await page.evaluate(() => window.dispatchEvent(new ErrorEvent('error', { message: 'Hydration failed because the server rendered HTML private learner name' })));
     await expect.poll(() => observed.some(request => request.postDataJSON()?.category === 'hydration_error' && request.postDataJSON()?.locale === 'ar' && request.postDataJSON()?.viewport === 'mobile')).toBe(true);

@@ -1,6 +1,6 @@
 import { openCurrentPractice } from './practice-reader';
 import { openCurrentProposal } from './proposal-reader';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type APIResponse } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -73,7 +73,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
   let visualIndex = 0;
   const visualCheck = async (target: ReturnType<typeof page.locator>) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -82,7 +82,7 @@ test('fixture proposal, human approval and native follow-up refresh the own lear
     await mkdir('.local/technical-mvp-visuals', { recursive: true });
     await target.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `.local/technical-mvp-visuals/improvement-ar-mobile-${++visualIndex}.png` });
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'en');
     await page.setViewportSize({ width: 1440, height: 900 });
     await target.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `.local/technical-mvp-visuals/improvement-en-desktop-${visualIndex}.png` });

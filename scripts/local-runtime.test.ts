@@ -48,7 +48,7 @@ async function bootstrapFixture(scenario = 'none') {
   const plan = replayPlan(sources);
   try {
     for (const path of ['scripts/database', 'supabase/migrations', 'supabase/seed']) await mkdir(join(root, path), { recursive: true });
-    for (const path of ['scripts/bootstrap-local.ts', 'scripts/start-supabase.ts', 'scripts/database/reset-local.ts', 'scripts/database/replay-workdir.ts', 'scripts/database/replay-plan.ts', 'scripts/configure-local.ts']) {
+    for (const path of ['scripts/bootstrap-local.ts', 'scripts/start-supabase.ts', 'scripts/database/reset-local.ts', 'scripts/database/reset-local-diagnostic.ts', 'scripts/database/replay-workdir.ts', 'scripts/database/replay-plan.ts', 'scripts/configure-local.ts']) {
       await writeFile(join(root, path), await readFile(join(ownerRoot, path)));
     }
     for (const file of sources) await writeFile(join(root, 'supabase/migrations', file.name), file.bytes);
@@ -64,6 +64,8 @@ import * as fs from 'node:fs';
 import * as promises from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { transformSync } from ${JSON.stringify(pathToFileURL(join(ownerRoot, 'node_modules/esbuild/lib/main.js')).href)};
 const root=${JSON.stringify(root)}, scenario=${JSON.stringify(scenario)}, mutationName=${JSON.stringify(mutationName)};
 const fixtureProject=${JSON.stringify(fixtureProject)}, fixtureApiPort=${JSON.stringify(fixtureApiPort)}, fixtureDbPort=${JSON.stringify(fixtureDbPort)};
@@ -81,7 +83,16 @@ globalThis.bootstrapTransport={
   readFile: async(path,...args)=>{if(String(path).replaceAll('\\\\','/').startsWith(root.replaceAll('\\\\','/')+'/supabase/migrations/'))log({kind:'preparation-source-read'});return promises.readFile(path,...args);},
   writeFile: async(path,...args)=>{if(String(path).replaceAll('\\\\','/').match(/\\/(prefix|prerequisite)\\/supabase\\/migrations\\//))log({kind:'prepared-sql-write'});return promises.writeFile(path,...args);},
   prepared:()=>log({kind:'prepared'}),
+  spawn:(executable,args,options)=>{
+    if(options.detached!==false||JSON.stringify(options.stdio)!==JSON.stringify(['ignore','pipe','pipe'])||args.at(-1)!=='--debug')throw Error('Unrecognized fixture spawn refused');
+    globalThis.bootstrapTransport.exec(executable,args,options);
+    const child=Object.assign(new EventEmitter(),{stdout:new PassThrough(),stderr:new PassThrough()});
+    if(scenario==='reset-diagnostic-existing'){const target=resolve(args[args.indexOf('--workdir')+1],'../reset-diagnostic.json');fs.writeFileSync(target,'{"preserved":"original failure"}');}
+    queueMicrotask(()=>{child.stdout.end();child.stderr.end();child.emit('close',scenario.startsWith('reset-command-failure')||scenario==='reset-diagnostic-existing'?1:0,null);});return child;
+  },
   exec:(executable,args,options)=>{
+    if(executable==='git'&&(scenario.startsWith('reset-command-failure')||scenario==='reset-diagnostic-existing')&&JSON.stringify(args)===JSON.stringify(['rev-parse','HEAD']))return 'a'.repeat(40);
+    if(executable==='git'&&(scenario.startsWith('reset-command-failure')||scenario==='reset-diagnostic-existing')&&JSON.stringify(args)===JSON.stringify(['rev-parse','HEAD^{tree}']))return 'b'.repeat(40);
     if(executable==='docker'&&JSON.stringify(args)===JSON.stringify(['network','inspect','cuevo-local'])) {log({kind:'network',args});return '';}
     if(executable!==process.execPath)throw Error('Unrecognized fixture executable refused');
     const cli=resolve(root,'node_modules/supabase/dist/supabase.js');
@@ -110,7 +121,7 @@ globalThis.bootstrapTransport={
   }
 };
 registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap-fs'||specifier==='fixture:bootstrap-process'||specifier==='fixture:bootstrap-pg')return {url:specifier,shortCircuit:true};if(specifier.startsWith('.')&&context.parentURL&&context.parentURL.includes('/scripts/')&&!specifier.endsWith('.ts'))return {url:new URL(specifier+'.ts',context.parentURL).href,shortCircuit:true};return next(specifier,context);},load(url,context,next){
-  if(url==='fixture:bootstrap-process')return {format:'module',shortCircuit:true,source:'export const execFileSync=globalThis.bootstrapTransport.exec;'};
+  if(url==='fixture:bootstrap-process')return {format:'module',shortCircuit:true,source:'export const execFileSync=globalThis.bootstrapTransport.exec;export const spawn=globalThis.bootstrapTransport.spawn;'};
   if(url==='fixture:bootstrap-pg')return {format:'module',shortCircuit:true,source:'export const Pool=globalThis.bootstrapTransport.Pool;'};
   if(url.includes('/node_modules/pg/'))return {format:'module',shortCircuit:true,source:'export const Pool=globalThis.bootstrapTransport.Pool;'};
   if(url==='fixture:bootstrap-fs')return {format:'module',shortCircuit:true,source:'export const {mkdir,mkdtemp,readdir}=globalThis.bootstrapTransport.fs; export const writeFile=globalThis.bootstrapTransport.writeFile; export const readFile=globalThis.bootstrapTransport.readFile;'};
@@ -155,7 +166,9 @@ registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap
     } catch (error) { failed = true; failureDetails = String((error as { stderr?: Buffer }).stderr ?? error); }
     const eventText = await readFile(join(root, 'events.jsonl'), 'utf8').catch(() => '');
     const events = eventText.trim() ? eventText.trim().split('\n').map(line => JSON.parse(line) as { kind: string; action?: string }) : [];
-    return { failed, failureDetails, events, prefixCopies: plan.before.length * 2 + 1 };
+    const operationDirectories = readdirSync(join(root,'.local/migration-replay'),{withFileTypes:true}).filter(entry=>entry.isDirectory());
+    const diagnostics=operationDirectories.flatMap(entry=>{try{return[JSON.parse(readFileSync(join(root,'.local/migration-replay',entry.name,'reset-diagnostic.json'),'utf8'))]}catch{return[]}});
+    return { failed, failureDetails, events, diagnostics, prefixCopies: plan.before.length * 2 + 1 };
   } finally { await rm(root, { recursive: true, force: true }); }
 }
 
@@ -222,4 +235,11 @@ test('source drift during awaited final database validation prevents synthetic s
   assert.deepEqual(result.events.filter(event => event.kind === 'cli').map(event => event.action), ['start', 'reset', 'up', 'up', 'up']);
   assert.equal(result.events.filter(event => event.kind === 'seed').length, 0);
   assert.equal(result.events.filter(event => event.kind === 'pool-end').length, 1);
+});
+test('original prefix reset failure stops all later migration seed and account effects without guessing a diagnostic cause',async()=>{
+ const result=await bootstrapFixture('reset-command-failure');assert.equal(result.failed,true);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start','reset']);assert.equal(result.events.some(event=>event.kind==='seed'||event.kind==='later-runner'),false);assert.match(result.failureDetails,/Cuevo local prefix reset failed/);assert.equal(result.failureDetails.includes('stdout'),false);
+ assert.equal(result.diagnostics?.length,1);const diagnostic=result.diagnostics![0];assert.equal(diagnostic.exitCode,1);assert.equal(diagnostic.cause,'UNKNOWN');assert.equal(diagnostic.context.sourceSha,'a'.repeat(40));assert.equal(diagnostic.context.treeSha,'b'.repeat(40));assert.equal(diagnostic.context.ci,null);assert.match(diagnostic.context.operation,/^operation-/);assert.equal(diagnostic.cliVersion,'2.119.0');assert.deepEqual(diagnostic.observedCodes,[]);
+});
+test('a preexisting operation diagnostic cannot be overwritten or replace the original prefix reset failure',async()=>{
+ const result=await bootstrapFixture('reset-diagnostic-existing');assert.equal(result.failed,true);assert.match(result.failureDetails,/Cuevo local prefix reset failed/);assert.deepEqual(result.diagnostics,[{preserved:'original failure'}]);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start','reset']);assert.equal(result.events.some(event=>event.kind==='later-runner'||event.kind==='seed'),false);
 });

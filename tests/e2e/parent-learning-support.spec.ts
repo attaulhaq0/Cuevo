@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -49,7 +49,8 @@ test('parent selects a child and reads only current school-published support wit
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' || /hydration|did not match/i.test(message.text())) errors.push(message.text()); });
   const signIn = async (account: Account) => {
-    await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
+    await page.goto('/'); if (await page.locator('.workspace-chrome').isVisible()) await setTrailWorkspaceLanguage(page, 'en');
+    else await page.getByRole('button', { name: 'English', exact: true }).click();
     const signOut = page.locator('.workspace-chrome__person > button'); if (await signOut.isVisible()) await signOutTrailWorkspace(page);
     await page.getByLabel('School email').fill(account.email); await page.getByLabel('Password', { exact: true }).fill(account.password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page, account.role);
@@ -95,9 +96,9 @@ test('parent selects a child and reads only current school-published support wit
     expect(await familyResponse.text()).not.toContain(privateReason); await expect(family.getByRole('heading', { name: supportTitle, exact: true })).toBeVisible();
     await expect(family.getByText(instructions, { exact: true })).toBeVisible(); await expect(family).toContainText(taskTitle);
     await expect(family).not.toContainText('Private staff instructional guide'); await expect(family).not.toContainText('Expired family instructional guide');
-    await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.getByRole('region', { name: 'الدعم التعليمي المعتمد', exact: true }).getByText(instructions, { exact: true })).toBeVisible();
-    expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]); await page.getByRole('button', { name: 'English', exact: true }).click();
+    expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]); await setTrailWorkspaceLanguage(page, 'en');
     await signIn(admin); await page.getByRole('button', { name: 'Campus and approved learning support', exact: true }).click();
     const publishedRow = page.getByRole('region', { name: 'Campus and approved learning support', exact: true }).locator('article').filter({ has: page.getByRole('heading', { name: supportTitle, exact: true }) });
     await expect.poll(async () => await publishedRow.count() > 0 || await page.locator('.school-workspace').getByRole('button', { name: /^Load more(?:[: ·]|$)/ }).count() > 0).toBe(true);

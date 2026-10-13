@@ -1,5 +1,5 @@
 import { currentCoursePreparationOutline } from './learning-source-navigation';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -89,7 +89,9 @@ async function fixture(page: Page) {
     expect(response.status(), `Labeled synthetic setup/cleanup ${path}`).toBe(200); return response.json();
   };
   const signIn = async (account: Account) => {
-    await page.goto('/'); await page.getByRole('button', { name: 'English', exact: true }).click();
+    await page.goto('/');
+    if (await page.locator('.workspace-chrome').isVisible()) await setTrailWorkspaceLanguage(page, 'en');
+    else await page.getByRole('button', { name: 'English', exact: true }).click();
     const signOut = page.locator('.workspace-chrome__person > button');
     if (await signOut.isVisible()) { await signOutTrailWorkspace(page); await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible(); }
     await page.getByLabel('School email', { exact: true }).fill(account.email);
@@ -221,7 +223,7 @@ test('teacher revises exact course, unit and activity sources, retains learner c
     await expect(latest.getByText(finalInstructions, { exact: true })).toBeVisible();
     await latest.getByRole('button', { name: 'Original learning context', exact: true }).click();
     await expect(latest.getByRole('region', { name: 'Original learning context', exact: true }).getByText(firstInstructions, { exact: true })).toBeVisible();
-    await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
