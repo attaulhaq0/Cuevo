@@ -255,9 +255,10 @@
   .workspace[data-navigation-mode="focused"] .workspace-chrome__content { padding-block-end:env(safe-area-inset-bottom); }
   .workspace[data-navigation-mode="focused"] .workspace-main :is(button,input,select,textarea,a,[tabindex]) { scroll-margin-block-end:var(--space-3); }
   .workspace .workspace-chrome__sections .cuevo-workspace-section-actions .button { padding-inline:var(--space-2); }
-  .workspace .workspace-chrome__sections .cuevo-workspace-section-navigation { flex-wrap:nowrap; }
-  .workspace .workspace-chrome__sections .cuevo-workspace-tabs { flex:1 1 0; }
-  .workspace .workspace-chrome__sections .cuevo-workspace-tabs > button { max-inline-size:none;white-space:nowrap;overflow-wrap:normal; }
+  .workspace .workspace-chrome__sections .cuevo-workspace-section-navigation { flex-wrap:wrap; }
+  .workspace .workspace-chrome__sections .cuevo-workspace-tabs { flex:1 1 0;min-inline-size:min(100%,12rem); }
+  .workspace .workspace-chrome__sections .cuevo-workspace-tabs > button { max-inline-size:100%;box-sizing:border-box;white-space:normal;overflow-wrap:normal; }
+  .workspace .workspace-chrome__sections .cuevo-workspace-tabs > button > span { min-inline-size:0;overflow-wrap:normal; }
   .workspace .workspace-chrome__sections .cuevo-workspace-section-current { flex:1 1 0;min-inline-size:0;overflow-x:auto;overflow-wrap:normal; }
   .workspace .workspace-chrome__sections .cuevo-workspace-section-current > :is(svg,span) { flex:none; }
   .workspace .workspace-chrome__sections .cuevo-workspace-section-current > span { white-space:nowrap; }
