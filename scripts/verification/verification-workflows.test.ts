@@ -37,6 +37,18 @@ test('reset failure companion retains only minimized files without changing requ
   }
 });
 
+test('start failure companion retains only safe exact operation files and cannot replace the required partition',async()=>{
+ const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,{steps:Record<string,unknown>[]}>};
+ assert.deepEqual(validateCiRuntimeJobs(workflow.jobs),[]);
+ const steps=workflow.jobs['integration-state'].steps,artifact=steps.find(s=>s.name==='Retain minimized local start failure diagnostics')!;
+ assert.deepEqual(artifact,{name:'Retain minimized local start failure diagnostics',if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-start-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/start-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
+ assert.equal((steps.find(s=>s.name==='Retain exact integration-state partition')!.with as Record<string,unknown>).path,'.local/integration-partitions/integration-state/result.json');
+ for(const mode of ['missing','raw','overwrite','success-only','required','continue']){const jobs=structuredClone(workflow.jobs),job=jobs['integration-state'],rows=job.steps,a=rows.find(s=>s.name===artifact.name)!;
+ if(mode==='missing')rows.splice(rows.indexOf(a),1);if(mode==='raw')(a.with as Record<string,unknown>).path='.local/supabase-start.log';if(mode==='overwrite')(a.with as Record<string,unknown>).name='cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}';if(mode==='success-only')a.if='success()';if(mode==='required')(a.with as Record<string,unknown>)['if-no-files-found']='error';if(mode==='continue')(job as Record<string,unknown>)['continue-on-error']=true;
+ assert.ok(validateCiRuntimeJobs(jobs).length,mode);
+ }
+});
+
 test('full workflow admission refuses execution changes outside named commands', async () => {
   const text = await readFile('.github/workflows/full-regression.yml','utf8');
   type Row = Record<string, unknown>;
