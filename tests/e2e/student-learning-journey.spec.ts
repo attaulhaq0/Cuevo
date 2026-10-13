@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -53,7 +54,7 @@ test.describe('actual isolated Student learning journey', () => {
     await page.getByRole('button', { name: 'English', exact: true }).click();
     await page.locator('#email').fill(accounts.student.email); await page.locator('#password').fill(accounts.student.password); await page.locator('.auth-submit').click();
     await expect(page.locator('.workspace')).toBeVisible();
-    if (locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    if (locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
     await page.getByRole('button', { name: `${locale === 'ar' ? 'فتح الدرس' : 'Open lesson'}: Explain one check`, exact: true }).click();
     await page.getByRole('button', { name: `${locale === 'ar' ? 'فتح النشاط' : 'Open activity'}: ${title}`, exact: true }).click();
     await expect(page.locator('.student-learning-journey__panel > header h2')).toBeFocused();

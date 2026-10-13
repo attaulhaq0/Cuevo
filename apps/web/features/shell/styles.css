@@ -24,10 +24,14 @@
 .workspace .workspace-chrome__profile-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-inline-start: var(--space-2); }
 .workspace .workspace-chrome__profile .button { justify-content: start; min-block-size: 2.75rem; }
 .workspace .workspace-chrome__profile-heading .button { min-inline-size: 2.75rem; justify-content: center; padding: var(--space-2); }
+.workspace .workspace-chrome__profile-language { padding: var(--space-2); border-block-start: 1px solid var(--color-border); }
+.workspace .workspace-chrome__profile-language .language-switch { flex-wrap: wrap; gap: var(--space-2); }
+.workspace .workspace-chrome__profile-language .language-switch button { min-inline-size: 2.75rem; min-block-size: 2.75rem; }
 .workspace .workspace-chrome__profile .workspace-chrome__signout { border-block-start: 1px solid var(--color-border); border-radius: 0; margin-block-start: var(--space-2); }
 .workspace .workspace-chrome__utility { padding: var(--space-2); min-inline-size: 2.75rem; min-block-size: 2.75rem; }
-.workspace .workspace-chrome__person { flex: none; }
-.workspace .workspace-chrome__person > :is(button, .workspace-chrome__identity) { display: flex; align-items: center; gap: var(--space-3); border: 0; border-radius: var(--radius-md); min-block-size: 3rem; padding: var(--space-1) var(--space-2); background: transparent; color: var(--color-text); font: inherit; text-align: start; }
+.workspace .workspace-chrome__person { flex: 0 1 auto; min-inline-size:0; }
+.workspace .workspace-chrome__person > :is(button, .workspace-chrome__identity) { display: flex; align-items: center; gap: var(--space-3); border: 0; border-radius: var(--radius-md); min-block-size: 3rem; min-inline-size:0; max-inline-size:100%; padding: var(--space-1) var(--space-2); background: transparent; color: var(--color-text); font: inherit; text-align: start; }
+.workspace .workspace-chrome__person > :is(button, .workspace-chrome__identity) > span:not(.workspace-chrome__avatar) { min-inline-size:0; }
 .workspace .workspace-chrome__person > button { cursor: pointer; }
 .workspace .workspace-chrome__person > button:hover { background: var(--color-surface-muted); }
 .workspace .workspace-chrome__person strong { display: block; font-size: var(--type-sm); font-weight: var(--font-weight-bold); max-inline-size: 14rem; overflow-wrap: anywhere; }
@@ -53,8 +57,8 @@
 .workspace .workspace-chrome__content { position: relative; isolation: isolate; flex: 1; min-inline-size: 0; background: var(--color-canvas); }
 .workspace-access { display:grid; grid-template-columns:minmax(16rem,.7fr) minmax(0,1.8fr); gap:var(--space-5); align-items:start; }
 .workspace-access > section { background:var(--color-material-reading); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:var(--space-5); min-inline-size:0; }
-.workspace-access header { display:flex; gap:var(--space-3); align-items:center; }
-.workspace-access h2 { font-size:var(--type-lead); margin:0; }
+.workspace-access header { display:flex; gap:var(--space-3); align-items:center; min-inline-size:0; }
+.workspace-access h2 { font-size:var(--type-lead); margin:0; min-inline-size:0; overflow-wrap:anywhere; }
 .workspace-access p { color:var(--color-text-secondary); font-size:var(--type-sm); line-height:1.5; }
 .workspace-access dl { margin:var(--space-4) 0; }
 .workspace-access dl > div { display:grid; gap:var(--space-1); padding-block:var(--space-3); border-block-end:1px solid var(--color-border); }
@@ -75,9 +79,6 @@
 }
 .workspace .workspace-main--student-home { max-inline-size: none; padding: 0; }
 .workspace .workspace-main--student-home > :is(.notice, .form-error) { margin-inline: var(--space-6); }
-.workspace-environment-details { margin-block:var(--space-2); font-size:var(--type-sm); }
-.workspace-environment-details > summary { cursor:pointer; min-block-size:var(--control-min-size); align-content:center; }
-.workspace-environment-details > p { margin-block:var(--space-2); color:var(--color-text-secondary); max-inline-size:65ch; }
 .workspace .workspace-chrome__empty { margin: 0; padding: var(--space-4); font-size: var(--type-sm); color: var(--color-text-secondary); }
 .workspace[data-expression="student"] .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }
 

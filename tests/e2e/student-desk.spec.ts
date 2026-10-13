@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 
 const learner = 'e1100000-0000-4000-8000-000000000001', school = 'e1200000-0000-4000-8000-000000000001';
 const id = (n: number) => `e1300000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -47,7 +47,7 @@ test('Student Desk shows actual source reflection, native zero and exact task ac
   const selected=page.locator('.student-trail__portfolio');await expect(selected.getByText('I checked each step and explained why it works.',{exact:true})).toHaveCount(0);await expect(selected.getByRole('heading',{name:'My selected explanation',exact:true})).toBeVisible();
   await expect(selected.getByText('Waiting for review',{exact:true})).toBeVisible();await expect(selected.getByText('Reviewed',{exact:true})).toBeVisible();
   for(const locale of['English','العربية']){
-    await page.getByRole('button',{name:locale,exact:true}).click();
+    await setTrailWorkspaceLanguage(page, locale === 'English' ? 'en' : 'ar');
     for(const width of[1366,1440,1100,1024,901,768,390,320,640]){
       await page.setViewportSize({width,height:width>=1000?800:844});
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
@@ -58,7 +58,7 @@ test('Student Desk shows actual source reflection, native zero and exact task ac
       expect(reading.stageWords.every(lines=>lines===1),`${locale}/${width}: journey words must not fragment inside narrow grid tracks`).toBe(true);
     }
   }
-  await page.getByRole('button',{name:'English',exact:true}).click();await page.setViewportSize({width:1366,height:768});
+  await setTrailWorkspaceLanguage(page, 'en');await page.setViewportSize({width:1366,height:768});
   const native=page.locator('.student-home__native');await native.locator('summary').click();await expect(native).toHaveAttribute('open','');await expect(native).toContainText('0');await expect(native).toContainText('10');
   await page.locator('.student-trail__hide').click();await expect(page.locator('.student-trail')).toHaveAttribute('data-character','hidden');await expect(page.locator('.student-trail__task-art')).toBeHidden();
   await page.locator('.student-trail__hide').click();await expect(page.locator('.student-trail')).toHaveAttribute('data-character','visible');
@@ -82,16 +82,16 @@ test('a failed summary continuation keeps its named source error and retry visib
 
 test('paged Student work keeps its source continuations without a redundant refresh banner',async({page})=>{
  await desk(page,'partial');const row=page.locator('.student-trail__intro-row'),task=page.locator('.student-trail__current');
- for(const locale of['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();for(const width of[1366,1024,901,768,390,320]){
+ for(const locale of['English','العربية']){await setTrailWorkspaceLanguage(page, locale === 'English' ? 'en' : 'ar');for(const width of[1366,1024,901,768,390,320]){
   await page.setViewportSize({width,height:900});await expect(page.locator('main h1')).toHaveCount(1);await expect(row.locator('.cuevo-workspace-state')).toHaveCount(0);await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');
   await expect(task.getByRole('heading',{name:work.title,exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  }}await expect(page.locator('.student-trail__upcoming-controls .pagination-actions button')).toBeVisible();await expect(page.locator('.student-trail__portfolio .pagination-actions button')).toBeVisible();
 });
 
-test('unknown submitted-work context retains its Home notice and recovery',async({page})=>{
- await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .cuevo-workspace-state');
- for(const locale of['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();await expect(notice).toBeVisible();await expect(notice.getByRole('button')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');await expect(page.getByRole('heading',{name:work.title,exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Compare your next explanation',exact:true})).toBeVisible();}
- await page.getByRole('button',{name:'English',exact:true}).click();const sources=page.locator('.student-home__source-continuations');await sources.locator('summary').click();await sources.getByRole('button',{name:'Load more: My available work',exact:true}).click();await expect(page.getByRole('heading',{name:work.title,exact:true})).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','ready');await expect(notice).toHaveCount(0);
+test('unknown submitted-work context retains its Home notice and compact introduction recovery',async({page})=>{
+ await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .student-trail__source-notice');
+ for(const locale of['English','العربية']){await setTrailWorkspaceLanguage(page, locale === 'English' ? 'en' : 'ar');await expect(notice).toBeVisible();await expect(page.locator('.student-trail__refresh')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');await expect(page.getByRole('heading',{name:work.title,exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Compare your next explanation',exact:true})).toBeVisible();}
+ await setTrailWorkspaceLanguage(page, 'en');const sources=page.locator('.student-home__source-continuations');await sources.locator('summary').click();await sources.getByRole('button',{name:'Load more: My available work',exact:true}).click();await expect(page.getByRole('heading',{name:work.title,exact:true})).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','ready');await expect(notice).toHaveCount(0);
 });
 
 for(const mode of['empty','denied','wrong','partial']as const)test(`Student Portfolio ${mode} remains honest without hiding independent current work`,async({page})=>{

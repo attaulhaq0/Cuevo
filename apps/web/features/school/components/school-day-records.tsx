@@ -15,7 +15,7 @@ export function schoolDaySourceState(source:ParentCalendarSource|undefined):'loa
 }
 
 /** Read-only daily anatomy. Server-authorized records supply every fact. */
-export function SchoolDayRecords({ attendance, timetable, calendar, policy, day, onDayChange, partial = false, parentSources, parentChildId, calendarContinuation }: { attendance: AttendanceRow[]; timetable: SchoolRow[]; calendar: ScheduleRow[]; policy: SchoolPolicy; day: string; onDayChange: (day: string) => void; partial?: boolean; parentSources?: ParentDaySources; parentChildId?: string; calendarContinuation?: ReactNode }) {
+export function SchoolDayRecords({ attendance, timetable, calendar, policy, day, onDayChange, partial = false, parentSources, parentChildId, calendarContinuation, showIntro = false }: { attendance: AttendanceRow[]; timetable: SchoolRow[]; calendar: ScheduleRow[]; policy: SchoolPolicy; day: string; onDayChange: (day: string) => void; partial?: boolean; parentSources?: ParentDaySources; parentChildId?: string; calendarContinuation?: ReactNode; showIntro?: boolean }) {
   const { locale, membership, accessGeneration } = useApp(); const t = locale === 'ar' ? schoolDayAr : schoolDayEn; const school = locale === 'ar' ? schoolAr : schoolEn;
   const id = useId(); const parent = membership?.role === 'parent';
   const timetableDenied=!!parentSources&&parentCalendarSourceDenied(parentSources.timetable),attendanceDenied=!!parentSources&&parentCalendarSourceDenied(parentSources.attendance);
@@ -38,7 +38,10 @@ export function SchoolDayRecords({ attendance, timetable, calendar, policy, day,
     </div>
   </div>;
   return <div className="school-day-records">
-    <div className="school-day-filter"><div className="field"><label htmlFor={`${id}-day`}>{t.date}</label><input id={`${id}-day`} type="date" value={day} onChange={event => onDayChange(event.target.value)} /></div><p>{school.timezone}</p></div>
+    <header className="cuevo-section-header school-day-current-header">
+      {showIntro ? <div className="cuevo-section-header__context school-day-current-heading"><CuevoIcon name="school" variant="filled" size={28} /><div><h2>{t.title}</h2><p>{t.body}</p></div></div> : null}
+      <div className="field school-day-current-date"><label htmlFor={`${id}-day`}>{t.date}</label><input id={`${id}-day`} type="date" value={day} aria-describedby={`${id}-timezone`} onChange={event => onDayChange(event.target.value)} /><p id={`${id}-timezone`}>{school.timezone}</p></div>
+    </header>
     <div className="school-day-layout">
       <section className="school-day-panel school-day-timetable" aria-label={school.timetable}><div className="school-day-heading"><CuevoIcon name="calendar" variant="filled" size={30} /><div><h2>{t.timetable}</h2>{day ? <p><time dateTime={day}>{date(day)}</time></p> : null}</div></div><p className="school-day-note">{t.timetableNote}</p>
         {parent && !policy.parentUpcomingVisible ? <WorkspaceState kind="unavailable" icon="calendar" description={t.upcomingDisabled}/> : !day ? <WorkspaceState kind="unknown" icon="calendar" description={t.dayUnknown}/> : sessions.length ? <ol className="school-day-timeline">{sessions.map(row => <li key={row.id}><div className="school-day-time"><bdi>{String(row.startsAt)}–{String(row.endsAt)}</bdi></div><article><h3><bdi>{label(row, 'subjectName')}</bdi></h3><p><bdi>{label(row, 'className')}</bdi>{row.academicYearName ? <> · <bdi>{String(row.academicYearName)}</bdi></> : null}</p><p>{t.teacher}: <bdi>{label(row, 'teacherName')}</bdi></p><p>{t.location}: <bdi>{label(row, 'location')}</bdi></p><details><summary>{t.dates}</summary><p><time dateTime={String(row.effectiveFrom)}>{date(String(row.effectiveFrom))}</time>–<time dateTime={String(row.effectiveTo)}>{date(String(row.effectiveTo))}</time></p></details></article></li>)}</ol> : parent ? parentEmpty(parentSources?.timetable,t.noTimetable,'calendar') : <WorkspaceState kind={partial ? "review" : "empty"} icon="calendar" description={partial?t.partial:t.noTimetable}/>}

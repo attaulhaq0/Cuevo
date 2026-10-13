@@ -4,7 +4,7 @@ import { TrailBackground } from '../../../shared/characters/ui';
 
 import { useState, useRef, useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Button, CuevoIcon, WorkspacePageHeading, WorkspacePageProvider } from '@cuevo/ui';
+import { Button, CuevoIcon, WorkspacePageHeading } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { Brand } from '../../../shared/components/brand';
 import { LanguageSwitch } from '../../../shared/components/language-switch';
@@ -17,20 +17,19 @@ import { WorkspaceChrome } from './workspace-chrome';
 import { WorkspaceCommandNavigation } from './workspace-command-navigation';
 import { ThemeControl } from './workspace-theme';
 import { WorkspaceAccess } from './workspace-access';
-import { EnvironmentDetails } from './environment-details';
 import { chromeAr, chromeEn } from '../messages';
 import type { WorkspaceTheme } from '../theme-model';
 import { LearningWorkspace } from '../../learning/ui';
 import { learningAr, learningEn } from '../../learning/copy';
 import { AcademicWorkspace } from '../../academic/ui';
-import { academicAr, academicEn, academicWorkspaceBody } from '../../academic/copy';
+import { academicAr, academicEn } from '../../academic/copy';
 import { ProgressWorkspace,LearningObservationPolicyPanel } from '../../progress/ui';
 import { progressAr, progressEn } from '../../progress/copy';
 import { ImprovementWorkspace } from '../../improvement/ui';
 import { improvementAr, improvementEn } from '../../improvement/copy';
 import { SchoolWorkspace,LearnerProfile } from '../../school/ui';
 import { schoolAr,schoolEn } from '../../school/copy';
-import { CommunityWorkspace } from '../../community/ui';
+import { CommunityWorkspace, NotificationPreview } from '../../community/ui';
 import { communityAr,communityEn } from '../../community/copy';
 import { PortfolioWorkspace } from '../../portfolio/ui';
 import { portfolioAr,portfolioEn } from '../../portfolio/copy';
@@ -65,6 +64,10 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
   const [signOutFailed, setSignOutFailed] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const main = useRef<HTMLElement>(null);
+  function currentFocusTarget() {
+    const currentHeading = main.current?.querySelector<HTMLHeadingElement>('h1') ?? heading.current;
+    return currentHeading?.closest('[data-workspace-heading-compact="true"]') ? main.current : currentHeading;
+  }
   const navigation = workspaceNavigation(membership, {
     overview: t.overview, school: school.school, community: community.community,
     portfolio: portfolio.portfolio, development: development.development,
@@ -81,14 +84,14 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     if (focusedDestination.current === destinationKey) return;
     focusedDestination.current = destinationKey;
     clearNotice();
-    requestAnimationFrame(() => (main.current?.querySelector<HTMLHeadingElement>('h1') ?? heading.current)?.focus({preventScroll:!!document.querySelector('[data-demo-active="true"]')}));
+    requestAnimationFrame(() => currentFocusTarget()?.focus({preventScroll:!!document.querySelector('[data-demo-active="true"]')}));
   }, [destinationKey, clearNotice]);
   useEffect(() => { if (requestedView && !navigation.some(item => item.id === requestedView)) window.history.replaceState(null, '', location.pathname); }, [requestedView, membership.role, membership.entitlements]);
 
   function selectView(destination: View|NavigationIntent) {
     if (!openWorkspaceDestination(destination, navigation, location.pathname, window.history)) return;
     clearNotice();
-    requestAnimationFrame(() => (main.current?.querySelector<HTMLHeadingElement>('h1') ?? heading.current)?.focus());
+    requestAnimationFrame(() => currentFocusTarget()?.focus());
   }
   const navigationItems = navigation.map(item => ({ ...item, onSelect: () => selectView(item.id) }));
   const visibleNotice = currentWorkspaceNotice(notice, noticeLocation, `${pathname}?${search.toString()}`);
@@ -99,7 +102,6 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     setSignOutFailed(!success);
   }
   const title = view==='restricted'?restricted.title:view === 'portfolio' ? portfolio.portfolio : view === 'development' ? development.development : view === 'curriculum' ? curriculum.curriculum : view === 'community' ? community.community : view === 'school' ? school.school : view === 'improvement' ? improvement.improvement : view === 'progress' ? progress.progress : view === 'academic' ? academic.academic : view === 'learning' ? learning.learning : view === 'overview' ? t.roleTitles[membership.role] : view === 'access' ? t.accessTitle : t.accountTitle;
-  const body = view==='restricted'?restricted.notice:view === 'portfolio' ? portfolio.body : view === 'development' ? development.body : view === 'curriculum' ? curriculum.body : view === 'community' ? community.body : view === 'school' ? school.body : view === 'improvement' ? improvement.body : view === 'progress' ? progress.body : view === 'academic' ? academicWorkspaceBody(membership.role,locale) : view === 'learning' ? learning.learningBody : view === 'overview' ? t.roleBodies[membership.role] : view === 'access' ? t.accessBody : t.accountBody;
   return <WorkspaceCommandNavigation navigation={navigationItems} selectedId={view} locale={locale}>{(searchAction, commandDialog) => <WorkspaceChrome context={{
     navigation: workspaceRailNavigation(navigationItems),
     mode: composedHome ? 'home' : 'focused',
@@ -109,23 +111,20 @@ export function Workspace({ membership, theme, onThemeChange }: { membership: Me
     roleLabel: t.roles[membership.role], locale, theme,
     expression: membership.role === 'student' ? 'student' : membership.role === 'parent' ? 'parent' : 'staff',
     brand: <div onClickCapture={event => { if (isWorkspaceHomeActivation(event) && (event.target as Element).closest('a')) { event.preventDefault(); event.stopPropagation(); selectView('overview'); } }}><Brand compact /></div>,
-    languageControl: <LanguageSwitch />,
+    languageControl: <LanguageSwitch expanded />,
     appearanceControl: <ThemeControl value={theme} onChange={onThemeChange} locale={locale} />,
     accountAction: { label: t.profile, onClick: () => selectView('account') },
     settingsAction: navigation.some(item => item.id === 'access') ? { label: (locale === 'ar' ? chromeAr : chromeEn).settings, onClick: () => selectView('access') } : undefined,
     signOutAction: { label: signingOut ? t.signingOut : t.signOut, onClick: () => void onSignOut(), pending: signingOut },
     searchAction,
-    notificationAction: navigation.some(item=>item.id==='community') ? {label:community.notifications,onClick:()=>{setNotificationActivation(value=>value+1);selectView({view:'community',section:'notifications'});}} : undefined,
+    notificationControl: navigation.some(item=>item.id==='community') ? <NotificationPreview onSeeAll={()=>{setNotificationActivation(value=>value+1);selectView({view:'community',section:'notifications'});}}/> : undefined,
   }}>
       <TrailBackground className="workspace-chrome__background" src={trailAssets.background} />
       <main ref={main} id="main-content" className={`workspace-main${studentHome ? ' workspace-main--student-home' : ''}${view === 'learning' && membership.role === 'student' ? ' workspace-main--student-learning' : ''}${view === 'community' ? ' workspace-main--community' : ''}${view === 'academic' ? ' workspace-main--academic' : ''}`} tabIndex={composedHome ? -1 : 0}>
-        <WorkspacePageProvider helpLabel={locale === 'ar' ? `حول ${title}` : `About ${title}`} help={composedHome ? null : body}>
-        {view === 'account' || view === 'access' ? <WorkspacePageHeading title={title} headingRef={heading} /> : null}
+        {view === 'account' || view === 'access' ? <WorkspacePageHeading workspaceTitle title={title} headingRef={heading} /> : null}
         {visibleNotice ? <p className="notice" role="status">{visibleNotice}</p> : null}
         {view==='restricted'?<RestrictedRecordsWorkspace/>:view === 'portfolio' ? <PortfolioWorkspace /> : view === 'development' ? <DevelopmentWorkspace /> : view === 'curriculum' ? <CurriculumWorkspace /> : view === 'community' ? <CommunityWorkspace intent={intent?.view==='community'?intent:null} notificationActivation={notificationActivation} onSectionChange={section=>selectView({view:'community',section})} /> : view === 'school' ? <SchoolWorkspace onAutomationControl={selectView} observationPolicyPanel={membership.role === 'admin' && membership.entitlements.includes('school.context') && membership.entitlements.includes('learner.state') ? <LearningObservationPolicyPanel pageHeading/> : undefined}/> : view === 'improvement' ? <ImprovementWorkspace intent={intent?.view==='improvement'?intent:null} /> : view === 'progress' ? <ProgressWorkspace /> : view === 'academic' ? <AcademicWorkspace intent={intent?.view==='academic'?intent:null} /> : view === 'learning' ? <LearningWorkspace intent={intent?.view==='learning'?intent:null} /> : view === 'overview' ? <RoleHome onNavigate={selectView} headingRef={composedHome ? heading : undefined} /> : view === 'access' ? <WorkspaceAccess membership={membership} onRefresh={refreshAccess}/> : <section className="detail-section"><dl className="detail-list workspace-account-identity"><div><dt>{t.profile}</dt><dd><bdi>{membership.displayName}</bdi></dd></div><div><dt>{t.school}</dt><dd><bdi>{membership.school.name}</bdi></dd></div><div><dt>{t.role}</dt><dd>{t.roles[membership.role]}</dd></div></dl>{membership.entitlements.includes('school.operations')?<LearnerProfile/>:null}<details className="support-reference"><summary>{t.accountReference}</summary><p>{t.accountReferenceBody}</p><dl className="detail-list"><div><dt>{t.accountId}</dt><dd className="identifier"><bdi>{membership.userId}</bdi></dd></div><div><dt>{t.membership}</dt><dd className="identifier"><bdi>{membership.membershipId}</bdi></dd></div></dl></details><p className="account-help">{t.accountHelp}</p><p className="session-note">{t.sessionNote}</p><Button type="button" variant="secondary" onClick={() => void onSignOut()} disabled={signingOut}><CuevoIcon name="logout" size={16} />{signingOut ? t.signingOut : t.signOut}</Button></section>}
-        {view==='account'?<EnvironmentDetails locale={locale}/>:null}
         {signOutFailed ? <p className="form-error" role="alert">{t.signOutError}</p> : null}
-        </WorkspacePageProvider>
       </main>
       {commandDialog}
   </WorkspaceChrome>}</WorkspaceCommandNavigation>;

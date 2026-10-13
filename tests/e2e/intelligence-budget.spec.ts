@@ -1,4 +1,4 @@
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
@@ -15,6 +15,6 @@ test('administrator explicitly approves reservation limits and reopens their cur
   const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/intelligence/budget' && response.request().method() === 'POST'); await form.getByRole('button', { name: 'Save', exact: true }).click(); expect((await saved).status()).toBe(200);
   await expect(form.getByLabel('School daily limit (USD)', { exact: true })).toHaveValue('10');
   await expect(form.getByLabel('I approve these reservation limits', { exact: true })).not.toBeChecked();
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.getByRole('region', { name: 'حدود ميزانية التحليل', exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar'); await expect(page.getByRole('region', { name: 'حدود ميزانية التحليل', exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type APIRequestContext, type Locator, type Response, type Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -263,7 +263,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
   await expect(personal.getByRole('heading', { name: 'Recorded development', exact: true })).toBeVisible();
   const goals = page.getByRole('region', { name: 'Learning goals', exact: true }); await expect(goals).toBeVisible();
   await expect(goals.getByRole('button', { name: 'Record a learning goal', exact: true })).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]); expect(errors).toEqual([]);
   });

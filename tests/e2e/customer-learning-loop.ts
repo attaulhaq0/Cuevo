@@ -1,7 +1,7 @@
 import { openCurrentResult } from './result-reader';
 import { openCurrentPractice } from './practice-reader';
 import { openCurrentProposal } from './proposal-reader';
-import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace, selectTrailPortfolioRecord, setTrailWorkspaceLanguage } from './trail-workspace';
 import { expect, type Page, type Locator, type Request } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { membershipSchema, idempotencyKeySchema, learnerStateSchema, classLearningSummarySchema, type MembershipResponse } from '@cuevo/contracts';
@@ -334,7 +334,7 @@ export async function runCustomerBrowserLearningLoop(page: Page, input: Customer
     await expect(outcomeRow).toContainText(studentName);
     await expect(outcomeRow).toContainText(baselineTitle);
     await expect(outcomeRow).toContainText(followUpTitle);
-    await capture('06-source-linked-measured-outcome.png'); await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await capture('06-source-linked-measured-outcome.png'); await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar'); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const arabicFollowUp = page.locator('.academic-row').filter({ has: page.getByRole('heading', { name: followUpTitle, exact: true }) }).locator('.native-score');
     await expect(arabicFollowUp).toHaveAttribute('role', 'img');
     await expect(arabicFollowUp).toHaveAttribute('aria-label', `${new Intl.NumberFormat('ar').format(7)} من ${new Intl.NumberFormat('ar').format(10)}`);
@@ -347,7 +347,7 @@ export async function runCustomerBrowserLearningLoop(page: Page, input: Customer
     await expect(outcomeRatios.nth(0)).toHaveText(`${new Intl.NumberFormat('ar').format(2)} / ${new Intl.NumberFormat('ar').format(10)}`);
     await expect(outcomeRatios.nth(1)).toHaveText(`${new Intl.NumberFormat('ar').format(7)} / ${new Intl.NumberFormat('ar').format(10)}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.emulateMedia({ reducedMotion: 'reduce' }); expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]); await capture('07-arabic-mobile-outcome.png');
-    await page.getByRole('button', { name: 'English', exact: true }).click(); await page.setViewportSize({ width: 1440, height: 900 }); await signOut();
+    await setTrailWorkspaceLanguage(page, 'en'); await page.setViewportSize({ width: 1440, height: 900 }); await signOut();
 
     await signIn('coordinator'); await navigate('Progress'); const classRead = page.waitForResponse(response => new URL(response.url()).origin===api&&new URL(response.url()).pathname==='/v1/classes/'+context.classId+'/learning-summary' && response.request().method() === 'GET');
     await selectHumanLabel(page.getByLabel('Class', { exact: true }), context.classLabel); const summary = classLearningSummarySchema.parse(await (await classRead).json()); expect(summary).toMatchObject({schoolId:context.schoolId,classId:context.classId});

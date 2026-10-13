@@ -116,6 +116,20 @@ async function keyboardWorkspaceAction(page: Page, label: string): Promise<Locat
   await expect(panel).toBeVisible();
   return panel.getByRole('button', { name: label, exact: true });
 }
+async function keyboardWorkspaceLanguage(page: Page, locale: 'en' | 'ar') {
+  const workspace=page.locator('.workspace-chrome'),panel=workspace.locator('.workspace-chrome__profile'),trigger=workspace.locator('.workspace-chrome__person > button');
+  await expect(workspace).toHaveCount(1);await expect(workspace).toBeVisible();
+  if(!await panel.isVisible())await keyboardActivate(page,trigger);
+  const language=panel.locator('.workspace-chrome__profile-language .language-switch').getByRole('button',{name:locale==='en'?'English':'العربية',exact:true});
+  await keyboardActivate(page,language);await expect(workspace).toHaveAttribute('lang',locale);await expect(page.locator('html')).toHaveAttribute('dir',locale==='ar'?'rtl':'ltr');
+  const selected=panel.locator(`.workspace-chrome__profile-language .language-switch button[lang="${locale}"]`);await expect(selected).toHaveCount(1);await expect(selected).toHaveAttribute('aria-label',locale==='en'?'English':'العربية');await expect(selected).toHaveAttribute('aria-pressed','true');
+  if(await panel.evaluate(node=>node.matches(':popover-open')))await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();
+}
+async function expectCurrentHeadingFocus(page: Page) {
+  const heading=page.locator('main h1');await expect(heading).toHaveCount(1);
+  if(await heading.evaluate(node=>!!node.closest('[data-workspace-heading-compact="true"]'))){expect((await heading.boundingBox())!.height).toBeLessThanOrEqual(1);await expect(page.locator('main')).toBeVisible();await expect(page.locator('main')).toBeFocused();}
+  else{await expect(heading).toBeVisible();await expect(heading).toBeFocused();}
+}
 
 async function signIn(page: Page, role: Role) {
   const accounts = JSON.parse(await readFile('.local/synthetic-accounts.json', 'utf8')) as Account[];
@@ -223,7 +237,7 @@ async function semanticSmoke(page: Page) {
 
 async function layoutMatrix(page: Page, role: Role, surface: string) {
   for (const locale of ['en', 'ar'] as const) {
-    await keyboardActivate(page, page.getByRole('button', { name: locale === 'en' ? 'English' : 'العربية', exact: true }));
+    await keyboardWorkspaceLanguage(page,locale);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
     for (const viewport of viewports) {
@@ -243,7 +257,7 @@ async function layoutMatrix(page: Page, role: Role, surface: string) {
     // This checks that exact reflow size; it does not claim an OS/browser zoom gesture.
     await page.setViewportSize({ width: 640, height: 450 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${role}/${surface}/${locale}/200%-reflow`).toBe(true);
-    await keyboardActivate(page, page.getByRole('button', { name: locale === 'en' ? 'English' : 'العربية', exact: true }));
+    await keyboardWorkspaceLanguage(page,locale);
     await page.setViewportSize(locale === 'en' ? viewports[0] : viewports[4]);
     await settled(page); await semanticSmoke(page);
     await page.screenshot({ path: resolve(evidence, `${role}-${surface}-${locale}-${locale === 'en' ? 'desktop' : 'mobile'}.png`), fullPage: false });
@@ -262,7 +276,7 @@ for (const role of roles) {
     if (role === 'parent') { expect(names).not.toContain('Development'); expect(names).not.toContain('Next steps'); expect(names).not.toContain('Curriculum context'); }
     if (role === 'student') expect(names).not.toContain('Curriculum context');
     for (let index = 0; index < names.length; index++) {
-      await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+      await keyboardWorkspaceLanguage(page,'en');
       const target = await keyboardWorkspaceAction(page, names[index].trim());
       const expectedView = await target.getAttribute('data-workspace-destination');
       const profileView = names[index].trim() === 'Account' ? 'account' : names[index].trim() === 'Access settings' ? 'access' : null;
@@ -276,7 +290,7 @@ for (const role of roles) {
         await expect(current).toHaveCount(1);
         if (expectedView !== 'overview') await expect(workspace.locator('.workspace-chrome__workspace-choice > span')).toHaveText(names[index].trim());
       } else await expect(page).toHaveURL(url => url.searchParams.get('view') === profileView);
-      await expect(page.locator('main h1')).toBeFocused(); await settled(page);
+      await expectCurrentHeadingFocus(page); await settled(page);
       const surface = names[index].trim().toLowerCase().replace(/[^a-z]+/g, '-');
       if (names[index].trim() === 'Progress' && ['admin', 'coordinator', 'teacher'].includes(role)) {
         await chooseCurrentClassByKeyboard(page);
@@ -293,10 +307,10 @@ for (const role of roles) {
         await expect(learner).toHaveValue(learnerValue); await settled(page);
       }
       await layoutMatrix(page, role, surface);
-      await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+      await keyboardWorkspaceLanguage(page,'en');
       const tabs = page.locator('[data-workspace-sections] .learning-tabs').getByRole('button'); const tabNames = await tabs.allTextContents();
       for (const tabName of tabNames) {
-        await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+        await keyboardWorkspaceLanguage(page,'en');
         const tab = page.locator('[data-workspace-sections] .learning-tabs').getByRole('button', { name: tabName.trim(), exact: true });
         await keyboardActivate(page, tab); await expect(tab).toHaveAttribute('aria-pressed', 'true'); await settled(page);
         await layoutMatrix(page, role, `${surface}-${tabName.trim().toLowerCase().replace(/[^a-z]+/g, '-')}`);
@@ -503,7 +517,8 @@ test('adapter: profile destinations and ordinary controls retain real keyboard e
   const seen: string[] = [];
   await page.exposeFunction('recordKeyboardFocus', (name: string) => seen.push(name));
   await page.evaluate(() => document.addEventListener('focusin', event => { void (window as unknown as { recordKeyboardFocus: (name: string) => Promise<void> }).recordKeyboardFocus((event.target as HTMLElement).textContent?.trim() ?? ''); }));
-  await keyboardActivate(page, page.getByRole('button', { name: 'English', exact: true }));
+  const profile=page.locator('.workspace-chrome__profile');await keyboardActivate(page,page.locator('.workspace-chrome__person > button'));
+  await keyboardActivate(page,profile.locator('.workspace-chrome__profile-language').getByRole('button',{name:'English',exact:true}));await page.keyboard.press('Escape');await expect(profile).toBeHidden();
   expect(seen).toContain('Skip to main content'); expect(seen).toContain('English');
   await keyboardActivate(page, await keyboardWorkspaceAction(page, 'Account'));
   await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=account');
@@ -511,6 +526,10 @@ test('adapter: profile destinations and ordinary controls retain real keyboard e
   await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=access');
   await expect(page.getByRole('heading', { name: 'Current access', exact: true })).toBeFocused();
   expect(blocked).toEqual([]);
+});
+test('adapter: current compact navigation focus remains on visible main while selected human heading stays visible',async({page})=>{
+ const blocked=await mountKeyboardChrome(page);await page.locator('main h1').evaluate(node=>{node.closest('main')!.focus();node.classList.add('workspace-page-heading__semantic');const header=document.createElement('header');header.setAttribute('data-workspace-heading-compact','true');node.before(header);header.append(node);});
+ await expectCurrentHeadingFocus(page);await page.locator('main h1').evaluate(node=>{node.classList.remove('workspace-page-heading__semantic');node.parentElement!.removeAttribute('data-workspace-heading-compact');node.focus();});await expectCurrentHeadingFocus(page);expect(blocked).toEqual([]);
 });
 
 for (const change of ['closed', 'removed', 'replaced', 'ambiguous', 'disabled'] as const) test(`adapter: native keyboard traversal refuses a ${change} current choice immediately`, async ({ page }) => {

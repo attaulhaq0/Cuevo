@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type Ref } from 'react';
-import { Button, WorkspaceState } from '@cuevo/ui';
+import { Button, IconButton, WorkspaceState } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
 import { useApi, useApiQuery } from '../../../shared/hooks/use-api';
@@ -93,5 +93,5 @@ function CurrentParentTrailHome({onNavigate,headingRef}:{onNavigate:(destination
  }:null;
  const availability:ParentTrailContext['availability']=!app.online?'offline':!ready?'denied':childContext.query.error?'error':loading||partial?'partial':'ready';
  const context:ParentTrailContext={availability,child:childState,snapshot,selector:<ChildSelector context={childContext}/>,notice:loading?t.loading:partial?t.partial:undefined,recovery:{label:c.refresh,onClick:refreshAction}};
- return <div><ParentTrailHomeView context={context} locale={locale} headingRef={headingRef}/>{ready && child && snapshot && availability !== 'error' ? <div className="home-overview-controls"><Button type="button" variant="quiet" onClick={refreshAction}>{c.refresh}</Button></div> : null}</div>;
+ return <div><ParentTrailHomeView context={context} locale={locale} headingRef={headingRef}/>{ready && child && snapshot && availability !== 'error' ? <div className="home-overview-controls"><IconButton icon="refresh" label={c.refresh} type="button" className="home-overview-refresh" onClick={refreshAction}/></div> : null}</div>;
 }

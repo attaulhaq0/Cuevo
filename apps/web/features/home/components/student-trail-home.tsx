@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type Ref } from 'react';
-import { Button } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { canOpenWorkspace } from '../../../shared/session/capabilities';
 import { usePaginatedLearningQuery } from '../../../shared/hooks/use-paginated-query';
@@ -40,7 +39,7 @@ export function StudentTrailHome({ onNavigate, headingRef }: { onNavigate: (targ
 function StudentHomePresentation({ onNavigate, headingRef }: { onNavigate: (target: HomeDestination) => void; headingRef?: Ref<HTMLHeadingElement> }) {
   const app = useApp();
   const [refresh, setRefresh] = useState(0);
-  const [presentation, setPresentation] = useState<'standard' | 'quiet' | 'hidden'>('standard');
+  const [presentation, setPresentation] = useState<'standard' | 'hidden'>('standard');
   const [nativeDisclosure, setNativeDisclosure] = useState<NativeFeedbackDisclosure | null>(null);
   const clearPresentation = useCallback(() => { setPresentation('standard'); setNativeDisclosure(null); }, []);
   return <CurrentStudentTrailHome key={studentHomeReadFrame(app)} onNavigate={onNavigate} headingRef={headingRef} refresh={refresh} reload={() => setRefresh(value => value + 1)} presentation={presentation} setPresentation={setPresentation} clearPresentation={clearPresentation} nativeDisclosure={nativeDisclosure} setNativeDisclosure={setNativeDisclosure} />;
@@ -49,7 +48,7 @@ function StudentHomePresentation({ onNavigate, headingRef }: { onNavigate: (targ
 function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, presentation, setPresentation, clearPresentation, nativeDisclosure, setNativeDisclosure }: {
   onNavigate: (target: HomeDestination) => void; headingRef?: Ref<HTMLHeadingElement>;
   refresh: number; reload: () => void;
-  presentation: 'standard' | 'quiet' | 'hidden'; setPresentation: (update: (value: 'standard' | 'quiet' | 'hidden') => 'standard' | 'quiet' | 'hidden') => void;
+  presentation: 'standard' | 'hidden'; setPresentation: (update: (value: 'standard' | 'hidden') => 'standard' | 'hidden') => void;
   clearPresentation: () => void;
   nativeDisclosure: NativeFeedbackDisclosure | null; setNativeDisclosure: (value: NativeFeedbackDisclosure | null) => void;
 }) {
@@ -120,12 +119,12 @@ function CurrentStudentTrailHome({ onNavigate, headingRef, refresh, reload, pres
     help: null, companion: { visible: available && presentation !== 'hidden', name: 'Foxi', hideAction: available ? { label: presentation === 'hidden' ? t.show : t.hide, onClick: () => setPresentation(value => value === 'hidden' ? 'standard' : 'hidden') } : undefined },
   };
   const portfolioFailure = currentPortfolioDenial?.error ?? portfolio.error ?? (portfolio.moreError?.kind === 'invalid' ? portfolio.moreError : null);
-  const portfolioControls = available && can('portfolio') ? <>{portfolioFailure ? <><LearningError error={portfolioFailure} /><Button type="button" variant="quiet" onClick={reload}>{t.refresh}</Button></> : portfolio.nextCursor || portfolio.moreError ? <LoadMore query={portfolio} label={t.portfolio} /> : null}</> : null;
+  const portfolioControls = available && can('portfolio') ? <>{portfolioFailure ? <LearningError error={portfolioFailure} /> : portfolio.nextCursor || portfolio.moreError ? <LoadMore query={portfolio} label={t.portfolio} /> : null}</> : null;
   const continuingSources = [{query:results,label:t.feedback},{query:interventions,label:t.practice},{query:goals,label:t.goals},{query:calendar,label:home.upcoming},{query:announcements,label:home.communication},...(submissionsNeeded?[{query:submissions,label:t.tasks}]:[])].filter(({query})=>query.nextCursor||query.moreError);
   const failedContinuations = continuingSources.filter(({query})=>query.moreError);
   const additionalSources = continuingSources.filter(({query})=>!query.moreError);
   return <div className="student-home" data-presentation={presentation}>
-    <StudentTrailView compactOverview hidePagingNotice={context.availability==='partial'&&studentHomePagingOnly(queries.filter(query=>'loaded'in query),assessments,submissions)} context={context} assets={trailAssets} locale={locale} headingRef={headingRef} portfolioControls={portfolioControls} upcomingControls={available && (assessments.nextCursor || assessments.moreError) ? <LoadMore query={assessments} label={t.tasks} /> : null} presentationAction={available ? { label: presentation === 'quiet' ? t.standard : t.quiet, onClick: () => setPresentation(value => value === 'quiet' ? 'standard' : 'quiet') } : undefined} nativeFeedback={<>{result && nativeSource ? <details className="student-home__native" open={currentNativeFeedbackDisclosure(nativeDisclosure, nativeSource)} onToggle={event => setNativeDisclosure({ resultId: nativeSource, open: event.currentTarget.open })}><summary>{t.nativeFeedback}</summary><NativeResultView result={result.nativeResult} /></details> : null}{feedbackIdentityError?<LearningError error={feedbackIdentityError}/>:null}</>} />
+    <StudentTrailView compactOverview hidePagingNotice={context.availability==='partial'&&studentHomePagingOnly(queries.filter(query=>'loaded'in query),assessments,submissions)} context={context} assets={trailAssets} locale={locale} headingRef={headingRef} portfolioControls={portfolioControls} upcomingControls={available && (assessments.nextCursor || assessments.moreError) ? <LoadMore query={assessments} label={t.tasks} /> : null} nativeFeedback={<>{result && nativeSource ? <details className="student-home__native" open={currentNativeFeedbackDisclosure(nativeDisclosure, nativeSource)} onToggle={event => setNativeDisclosure({ resultId: nativeSource, open: event.currentTarget.open })}><summary>{t.nativeFeedback}</summary><NativeResultView result={result.nativeResult} /></details> : null}{feedbackIdentityError?<LearningError error={feedbackIdentityError}/>:null}</>} />
     {available ? <div className="student-home__records">
       {failedContinuations.length ? <div className="home-overview-continuations student-home__source-recovery">{failedContinuations.map(({query,label},index)=><section key={index} aria-label={label}><h2>{label}</h2><LoadMore query={query} label={label}/></section>)}</div> : null}
       {additionalSources.length ? <details className="student-home__source-continuations"><summary>{t.summarySources}</summary><p>{t.summarySourcesBody}</p><div className="home-overview-continuations">{additionalSources.map(({query,label},index)=><LoadMore key={index} query={query} label={label}/>)}</div></details> : null}

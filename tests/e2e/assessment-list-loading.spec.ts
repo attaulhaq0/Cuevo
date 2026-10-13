@@ -1,4 +1,4 @@
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -24,8 +24,8 @@ test('published assessment list loads one explicitly opened task detail and exac
   await expect(task.getByRole('region', { name: 'Task details', exact: true })).toBeVisible(); await expect(page.locator('main [role="status"]').filter({ hasText: /^Loading/ })).toHaveCount(0);
   expect(supportRequests).toBe(1); expect(resourceRequests).toBe(1);
   await task.getByRole('button', { name: 'Close task', exact: true }).click(); await expect(task.getByRole('region', { name: 'Task details', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'العربية', exact: true }).click(); await task.getByRole('button', { name: 'فتح التقييم', exact: true }).click(); await expect(task.getByRole('region', { name: 'تفاصيل التقييم', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar'); await task.getByRole('button', { name: 'فتح التقييم', exact: true }).click(); await expect(task.getByRole('region', { name: 'تفاصيل التقييم', exact: true })).toBeVisible();
+  await setTrailWorkspaceLanguage(page, 'en');
   expect(selectedId).not.toBe(''); await page.goto(`/?view=learning&source=assessment&id=${selectedId}`);
   // A new document intentionally has no persisted protected session; sign in at the exact source URL.
   await page.getByLabel('School email').fill(student.email); await page.getByLabel('Password', { exact: true }).fill(student.password);

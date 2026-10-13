@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, chromium, type Page } from '@playwright/test';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -36,7 +37,7 @@ test.describe('isolated actual Admin native page zoom', () => {
       async function nativeScreenshot(){return Buffer.from((await capture.send('Page.captureScreenshot',{format:'png',fromSurface:true})).data,'base64');}
       page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); if (message.type() === 'warning') warnings.push(message.text()); });
       await page.goto(base + '/?view=school'); await page.getByRole('button', { name: 'English', exact: true }).click(); await page.locator('#email').fill(account.email); await page.locator('#password').fill(account.password); await page.locator('.auth-submit').click(); await page.locator('.school-workspace').waitFor();
-      if (locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+      if (locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
       const copy = locale === 'ar' ? { people: 'الأشخاص والصلاحيات', automation: 'مراجعة الأتمتة', audit: 'سجل تدقيق المدرسة', edit: 'تعديل هذا السجل', search: 'البحث عن مساحات العمل', profile: 'الملف الشخصي والإعدادات' } : { people: 'People and access', automation: 'Automation review', audit: 'School audit', edit: 'Edit this record', search: 'Search workspaces', profile: 'Profile and settings' };
       const toolbar = page.locator('.school-workspace > .learning-toolbar'); await toolbar.getByRole('button', { name: copy.people, exact: true }).click();
       const choice = page.locator('.school-access-directory__rows li').first().getByRole('button'); await choice.click();

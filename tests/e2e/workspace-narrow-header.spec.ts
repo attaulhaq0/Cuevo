@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -35,7 +36,7 @@ test.describe('isolated current narrow role header', () => {
     });
     await page.goto(`${base}/?view=school`); await page.getByRole('button', { name: 'English', exact: true }).click();
     await page.locator('#email').fill(account.email); await page.locator('#password').fill(account.password); await page.locator('.auth-submit').click();
-    await expect(page.locator('.school-workspace')).toBeVisible(); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await expect(page.locator('.school-workspace')).toBeVisible(); await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const search = page.getByRole('button', { name: 'البحث عن مساحات العمل', exact: true }); await expect(search).toBeVisible();
     await search.focus(); await search.press('Enter'); await expect(page.locator('dialog[open]')).toBeVisible();

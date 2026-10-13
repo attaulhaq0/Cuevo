@@ -44,6 +44,7 @@ test('CI scope stays conservative for unknown sensitive mixed or selector source
   const { classifyRuntimeChanges, verificationProfileSteps, verificationEvidence } = await api();
   assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.css'], true).profile, 'routine');
   assert.ok(classifyRuntimeChanges(['apps/web/features/learning/components/task.css'], true).browserFiles.includes('learning-content-lifecycle.spec.ts'));
+  assert.ok(classifyRuntimeChanges(['apps/web/features/community/components/notification-preview.tsx'], true).browserFiles.includes('notification-preview.spec.ts'));
   assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.css'], false).profile, 'full-runtime');
   assert.equal(classifyRuntimeChanges(['apps/web/features/learning/components/task.tsx'], true).profile, 'routine');
   for (const files of [['supabase/migrations/example.sql'], ['apps/web/shared/query.ts'], ['apps/web/features/auth/provider.ts'], ['apps/web/features/learning/server/operation.ts'], ['apps/web/features/learning/model.ts'], ['apps/web/features/learning/api.ts'], ['apps/api/src/modules/academic/academic.ts'], ['apps/worker/src/jobs/process.ts'], ['scripts/verification/verification-profiles.ts'], ['.github/workflows/ci.yml'], ['package-lock.json'], ['unknown/path.ts']]) assert.equal(classifyRuntimeChanges(files, true).profile, 'full-runtime');

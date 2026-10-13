@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, signOutTrailWorkspace, chooseTrailSchoolDate } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, chooseTrailSchoolDate, setTrailWorkspaceLanguage } from './trail-workspace';
 import { completeObservedSchoolSources, observeSchoolCurrentSources } from './school-current-sources';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -29,7 +29,7 @@ test('parent chooses a current child and sees named attendance and complete time
   const timetable = page.getByRole('region', { name: 'Timetable', exact: true });
   await chooseTrailSchoolDate(page,'2029-06-01');await expect(timetable).toContainText('Mathematics');await expect(timetable).toContainText('Teacher');
   await expect(timetable).not.toContainText('Name unavailable');
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
 });

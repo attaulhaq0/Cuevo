@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -106,7 +106,7 @@ for (const [name, width, height, arabic] of [
     await expect(goal.getByRole('textbox', { name: 'Planned next step', exact: true })).toHaveValue('Keep the current planned step');
     await openTrailWorkspace(page, 'Overview');
     if (arabic) {
-      await page.getByRole('button', { name: 'العربية', exact: true }).click();
+      await setTrailWorkspaceLanguage(page, 'ar');
       await page.keyboard.press('Control+k');
       await page.getByRole('searchbox', { name: 'اسم مساحة العمل', exact: true }).fill('التعلم');
       await expect(page.locator('dialog [data-workspace-command="learning"]')).toBeVisible();

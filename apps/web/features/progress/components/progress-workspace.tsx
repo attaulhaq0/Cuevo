@@ -49,8 +49,8 @@ function useProgressRecordRefusal(source: ProgressRecordPage) {
 export function ProgressWorkspace() {
   const { membership, status, online, locale } = useApp();
   const t = locale === 'ar' ? progressAr : progressEn;
-  if (!online) return <><WorkspacePageHeading title={t.progress} /><WorkspaceState kind="unavailable" description={t.offline} role="status" /></>;
-  if (status !== 'ready' || !membership || !canOpenWorkspace('progress', membership.entitlements, membership.role)) return <WorkspacePageHeading title={t.progress} />;
+  if (!online) return <><WorkspacePageHeading workspaceTitle title={t.progress} /><WorkspaceState kind="unavailable" description={t.offline} role="status" /></>;
+  if (status !== 'ready' || !membership || !canOpenWorkspace('progress', membership.entitlements, membership.role)) return <WorkspacePageHeading workspaceTitle title={t.progress} />;
   return <CurrentProgressWorkspace key={`${membership.schoolId}:${membership.userId}:${membership.role}`} />;
 }
 
@@ -115,7 +115,7 @@ function CurrentProgressWorkspace() {
   }, [activeLearnerId]);
   const utilities = <>{own ? <div className="progress-companion"><CompanionView registry={companionPoses} character="foxi" state="read" visible={showCompanion} /><Button type="button" variant="quiet" onClick={() => setShowCompanion(value => !value)}>{showCompanion ? t.hideCompanion : t.showCompanion}</Button></div> : null}<IconButton icon="refresh" label={t.refresh} onClick={() => setRefresh(value => value + 1)} /></>;
   return <section className="progress-workspace" data-role={membership?.role}>
-    <WorkspacePageHeading title={t.progress} />
+    <WorkspacePageHeading workspaceTitle title={t.progress} />
     {!activeLearnerId ? <ProgressNavigation utilities={utilities} /> : null}
     <details className="progress-help"><summary>{t.aboutProgress}</summary><p>{t.progressGuide}</p></details>
     {membership?.role === 'admin' ? <LearningObservationPolicyPanel /> : null}

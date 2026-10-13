@@ -16,6 +16,20 @@ function context(): StudentTrailContext {
 }
 function render(value: StudentTrailContext, locale: 'en' | 'ar' = 'en') { return renderToStaticMarkup(createElement(StudentTrailView, { context: value, assets, locale })); }
 
+for (const locale of ['en', 'ar'] as const) test(`${locale}: one compact introduction refresh retains source guidance without task or companion duplicates`, () => {
+  const value = context(); const label = locale === 'ar' ? 'تحديث عملي الحالي' : 'Refresh current work';
+  value.availability = 'error'; value.notice = locale === 'ar' ? 'تعذّر تحميل المصادر الحالية.' : 'Current sources could not be loaded.';
+  value.recovery = { label, onClick() {} };
+  const html = render(value, locale);
+  assert.equal((html.match(new RegExp(`aria-label="${label}"`, 'g')) ?? []).length, 1);
+  const intro = html.slice(html.indexOf('student-trail__intro-row'), html.indexOf('student-trail__scene'));
+  assert.match(intro, /cuevo-icon-button/); assert.match(intro, /student-trail__source-notice/); assert.match(intro, /role="alert"/);
+  assert.match(intro, /cuevo-icon-button__tooltip/); assert.doesNotMatch(intro, /cuevo-workspace-state/);
+  const task = html.slice(html.indexOf('student-trail__task"'), html.indexOf('student-trail__task-art'));
+  assert.doesNotMatch(task, /<button/);
+  assert.doesNotMatch(html, /student-trail__companion-picker/);
+});
+
 test('unknown context does not turn missing recognition into zero or invent human/source labels', () => {
   const html = render(context());
   assert.match(html, /Welcome back!/);

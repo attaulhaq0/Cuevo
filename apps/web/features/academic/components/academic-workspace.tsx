@@ -26,9 +26,9 @@ import { academicNavigationLocked } from '../academic-navigation-model';
 
 type Tab = 'references' | 'rubrics' | 'marking' | 'results' | 'gradebook';
 
-export function AcademicPageHeading({ locale, section, title, caption }: { locale: 'en' | 'ar'; section: Tab; title?: string; caption?: string }) {
+export function AcademicPageHeading({ locale, section, title, caption, inNavigation = false }: { locale: 'en' | 'ar'; section: Tab; title?: string; caption?: string; inNavigation?: boolean }) {
   const t = locale === 'ar' ? academicAr : academicEn;
-  return <WorkspacePageHeading title={title || t[section]} caption={caption} />;
+  return <WorkspacePageHeading title={title || t[section]} caption={caption} navigationTitle={inNavigation ? t[section] : undefined} />;
 }
 type ParentResultState = { scope: string; data: ReturnType<typeof parseCurrentAcademicReport>['items']; nextCursor: string | null; loading: boolean; loadingMore: boolean; error: LearningApiError | null; moreError: LearningApiError | null; loaded: boolean };
 function useParentAcademicResults(enabled: boolean, learnerId: string | undefined, scope: string) {
@@ -100,7 +100,7 @@ function CurrentAcademicWorkspace({intent}:{intent?:Extract<NavigationIntent,{vi
   const loading = active?.loading || (tab === 'rubrics' && grader && (courses.loading || assessments.loading || !courses.loaded || !assessments.loaded));
   const error = active?.error ?? (tab === 'rubrics' && grader ? courses.error ?? assessments.error : null);
   function reload() { setRefresh((value) => value + 1); }
-  const heading = <AcademicPageHeading locale={locale} section={intent?.source === 'marking' ? 'marking' : intent ? 'results' : tab} title={intent?.source === 'marking' && !exactMark.loading && !exactMark.error ? exactMark.data?.assessmentTitle : undefined} caption={intent?.source === 'marking' && !exactMark.loading && !exactMark.error ? exactMark.data?.learnerName : childContext.parent ? childContext.child?.displayName : undefined} />;
+  const heading = <AcademicPageHeading locale={locale} inNavigation={!intent} section={intent?.source === 'marking' ? 'marking' : intent ? 'results' : tab} title={intent?.source === 'marking' && !exactMark.loading && !exactMark.error ? exactMark.data?.assessmentTitle : undefined} caption={intent?.source === 'marking' && !exactMark.loading && !exactMark.error ? exactMark.data?.learnerName : childContext.parent ? childContext.child?.displayName : undefined} />;
   if(intent&&childContext.parent&&!learnerId)return <section>{heading}<ChildSelector context={childContext}/><Button type="button" variant="secondary" onClick={reload}>{t.refresh}</Button></section>;
   if(intent?.source==='marking'&&!grader)return <section>{heading}<Button type="button" variant="quiet" disabled={navigationLocked} onClick={()=>{if (!academicNavigationLocked(commandJournal.pending())) window.history.back();}}>{locale==='ar'?'العودة إلى الخطوة السابقة':'Back to the previous step'}</Button><LearningError error={new LearningApiError('denied')}/></section>;
   if(intent)return <section>{heading}<Button type="button" variant="quiet" disabled={navigationLocked} onClick={()=>{if (!academicNavigationLocked(commandJournal.pending())) window.history.back();}}>{locale==='ar'?'العودة إلى الخطوة السابقة':'Back to the previous step'}</Button>{intent.source==='marking'?exactMark.error?<><LearningError error={exactMark.error}/><Button type="button" onClick={reload}>{t.refresh}</Button></>:exactMark.loading?<WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/>:exactMark.data?<MarkingQueue pageHeading exact items={[exactMark.data]} selected={exactMark.data.id} onSelected={setSelected} onChanged={reload}/>:null:exactResult.error?<><LearningError error={exactResult.error}/><Button type="button" onClick={reload}>{t.refresh}</Button></>:exactResult.loading?<WorkspaceState kind="loading" icon="refresh" description={t.loading} role="status"/>:exactResult.data?<ExactReleasedResult pageHeading source={exactResult.data} />:null}</section>;

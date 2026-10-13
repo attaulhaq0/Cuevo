@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -134,7 +135,7 @@ test.describe('isolated actual Admin guardian command acceptance', () => {
       await workspace.locator(':scope > .learning-toolbar').getByRole('button', { name: copy.en.people, exact: true }).click();
       await page.locator('.school-access-directory').waitFor();
       for (const viewport of [{ locale: 'en', width: 1366, height: 768 }, { locale: 'ar', width: 390, height: 844 }, { locale: 'ar', width: 320, height: 568 }] as const) {
-        await page.setViewportSize(viewport); await page.getByRole('button', { name: copy[viewport.locale].language, exact: true }).click();
+        await page.setViewportSize(viewport); await setTrailWorkspaceLanguage(page, viewport.locale);
         const form = await openRecord(page, viewport.locale, parentPerson.displayName, learnerPerson.displayName);
         await expect(form.locator('[name=relationshipType]')).toHaveValue(source.relationshipType); await expect(form.locator('[name=status]')).toHaveValue(source.status);
         // The native local control may show minute precision; a no-change command
@@ -148,7 +149,7 @@ test.describe('isolated actual Admin guardian command acceptance', () => {
         const next = await current(); expect(next.revision).toBe(source.revision + 1); expect(Date.parse(next.effectiveFrom)).toBe(Date.parse(source.effectiveFrom)); expect(next.effectiveTo).toBe(source.effectiveTo); source = next;
         stages.push(`${viewport.locale}${viewport.width} visible no-change exact precision save`);
       }
-      await page.setViewportSize({ width: 1366, height: 768 }); await page.getByRole('button', { name: 'English', exact: true }).click();
+      await page.setViewportSize({ width: 1366, height: 768 }); await setTrailWorkspaceLanguage(page, 'en');
       let form = await openRecord(page, 'en', parentPerson.displayName, learnerPerson.displayName);
       const originalLocalFrom = await form.locator('[name=effectiveFrom]').inputValue(), originalLocalTo = await form.locator('[name=effectiveTo]').inputValue();
       await form.getByLabel(copy.en.confirm, { exact: true }).check(); delivery = 'abort'; const uncertainStart = attempts.length;

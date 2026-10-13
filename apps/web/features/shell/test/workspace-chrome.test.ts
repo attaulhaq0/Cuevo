@@ -7,6 +7,7 @@ import type { WorkspaceChromeContext, WorkspaceNavigationItem } from '../model.t
 import { navigationFocusTarget } from '../model.ts';
 Object.assign(globalThis, { React });
 const { WorkspaceChrome } = await import('../components/workspace-chrome.tsx');
+const { WorkspacePageHeading } = await import('@cuevo/ui');
 const navigation: WorkspaceNavigationItem[] = [{ id: 'one', label: 'Learning', icon: 'learning', onSelect() {} }, { id: 'two', label: 'Review work', icon: 'assessment', disabled: true, onSelect() {} }, { id: 'three', label: 'Class community', icon: 'community', onSelect() {} }];
 function context(): WorkspaceChromeContext { return { schoolName: null, personName: null, roleLabel: null, navigation, selectedId: 'one', locale: 'en', theme: 'light', navigationLabel: 'Current workspaces', brand: createElement('span', null, 'Cuevo'), languageControl: createElement('span', null, 'Language control') }; }
 function render(value: WorkspaceChromeContext) { return renderToStaticMarkup(createElement(WorkspaceChrome, { context: value, children: createElement('h1', null, 'Current activity') })); }
@@ -39,4 +40,27 @@ test('shared header has one visible search launcher and one closed profile panel
   assert.match(html, /role="alert"/);
   assert.doesNotMatch(html, /role="menu"|role="menuitem"|type="search"/);
   assert.equal(calls, 0);
+});
+
+test('authenticated language owner exists once inside a closed Profile panel even without other profile actions', () => {
+  const value = context();
+  value.languageControl = createElement('div', { className: 'language-switch', role: 'group', 'aria-label': 'Language' }, createElement('button', { type: 'button', 'aria-pressed': true }, 'English'), createElement('button', { type: 'button', 'aria-pressed': false }, 'العربية'));
+  const html = render(value);
+  const utilities = html.match(/<div class="workspace-chrome__utilities">(.*?)<\/div>/s)?.[1] ?? '';
+  assert.doesNotMatch(utilities, /language-switch|English|العربية/);
+  assert.match(html, /class="workspace-chrome__profile"[^>]*>.*class="language-switch"/s);
+  assert.equal((html.match(/class="language-switch"/g) ?? []).length, 1);
+  assert.match(html, /aria-expanded="false"/);
+});
+
+test('focused chrome supplies the actual current workspace label to the semantic heading without altering source context', () => {
+  const value = context(); value.mode = 'focused'; value.currentWorkspace = navigation[0];
+  const html = renderToStaticMarkup(createElement(WorkspaceChrome, { context: value, children: createElement(WorkspacePageHeading, { title: 'Learning', workspaceTitle: true, caption: 'Current Cedar class', description: 'Approved source context' }) }));
+  assert.match(html, /data-workspace-heading-compact="true"/);
+  assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(html, /<h1[^>]*class="workspace-page-heading__semantic"[^>]*>Learning<\/h1>/);
+  assert.match(html, /Current Cedar class/); assert.match(html, /Approved source context/);
+  value.mode = 'home';
+  const home = renderToStaticMarkup(createElement(WorkspaceChrome, { context: value, children: createElement(WorkspacePageHeading, { title: 'Learning' }) }));
+  assert.doesNotMatch(home, /data-workspace-heading-compact="true"|workspace-page-heading__semantic/);
 });

@@ -1,6 +1,6 @@
 import { openCurrentResult } from './result-reader';
 import { completeObservedSchoolSources, observeSchoolCurrentSources } from './school-current-sources';
-import { chooseTrailSchoolDate, expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace } from './trail-workspace';
+import { chooseTrailSchoolDate, expectTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -61,7 +61,8 @@ async function fixture(page: Page) {
   };
   const signIn = async (role: Role, feature = 'School') => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    if (await page.locator('.workspace-chrome').isVisible()) await setTrailWorkspaceLanguage(page, 'en');
+    else await page.getByRole('button', { name: 'English', exact: true }).click();
     const signOut = page.locator('.workspace-chrome__person > button');
     if (await signOut.isVisible()) await signOutTrailWorkspace(page);
     await page.getByLabel('School email', { exact: true }).fill(selected[role].email);
@@ -369,7 +370,7 @@ test('administrator corrects and cancels timetable and report period, then creat
     await studentPeriod(periodName, true);
     await daily();
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]);
     const arabicMaintenance = page.getByRole('region', { name: 'الجدول الدراسي · إدارة السجلات الحالية', exact: true });

@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -139,11 +140,11 @@ test.describe('isolated actual Parent school dates and support', () => {
       await calendar.getByRole('button', { name: new RegExp(`^Open event: ${schoolTitle}`) }).click();
       await healthy(page); await page.screenshot({ path: info.outputPath('calendar-en-desktop.png'), fullPage: false });
       for (const width of [390, 320]) {
-        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 }); await setTrailWorkspaceLanguage(page, 'ar');
         await expect(detail.getByText(description, { exact: true })).toBeVisible(); await healthy(page);
         await page.screenshot({ path: info.outputPath(`calendar-ar-${width}.png`), fullPage: false });
       }
-      await page.getByRole('button', { name: 'English', exact: true }).click(); await page.setViewportSize({ width: 1366, height: 768 });
+      await setTrailWorkspaceLanguage(page, 'en'); await page.setViewportSize({ width: 1366, height: 768 });
       await cancel(wide.id); await page.locator('.school-workspace > .learning-toolbar').getByRole('button', { name: 'Refresh school records', exact: true }).click();
       await expect(calendar.getByRole('heading', { name: schoolTitle, exact: true })).toHaveCount(0); await expect(detail.getByText(description, { exact: true })).toHaveCount(0);
 
@@ -158,10 +159,10 @@ test.describe('isolated actual Parent school dates and support', () => {
       await expect(family.getByRole('heading', { name: supportTitle, exact: true })).toBeVisible(); await expect(family.getByText(instructions, { exact: true })).toBeVisible();
       await expect(family).toContainText(course.title); await expect(family).not.toContainText(privateReason);
       await healthy(page); await page.screenshot({ path: info.outputPath('support-en-desktop.png'), fullPage: false });
-      await page.setViewportSize({ width: 320, height: 568 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+      await page.setViewportSize({ width: 320, height: 568 }); await setTrailWorkspaceLanguage(page, 'ar');
       await expect(page.getByText(instructions, { exact: true })).toBeVisible(); await healthy(page);
       await page.screenshot({ path: info.outputPath('support-ar-320.png'), fullPage: false });
-      await page.getByRole('button', { name: 'English', exact: true }).click(); await revoke(visible.id);
+      await setTrailWorkspaceLanguage(page, 'en'); await revoke(visible.id);
       await family.getByRole('button', { name: 'Refresh approved support', exact: true }).click();
       await expect(family.getByRole('heading', { name: supportTitle, exact: true })).toHaveCount(0); await expect(page.getByText(instructions, { exact: true })).toHaveCount(0);
       expect(errors).toEqual([]); expect(warnings).toEqual([]); expect(blocked).toEqual([]);

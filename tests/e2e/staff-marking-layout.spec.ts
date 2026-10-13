@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -58,7 +59,7 @@ test.describe('isolated current Teacher marking layout', () => {
     const records = await response.json() as { items: MarkingItem[]; nextCursor: string | null };
     expect(records.items.length).toBeGreaterThan(1);
     await expect(page.locator('.marking-queue__item')).toHaveCount(records.items.length);
-    if (locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    if (locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('.academic-workspace')).toBeVisible();
     return records.items;
   }

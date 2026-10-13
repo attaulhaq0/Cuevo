@@ -72,6 +72,24 @@ async function openVisibleTrailProfile(page: Page): Promise<void> {
   if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
   await expect(page.locator('.workspace-chrome__profile')).toBeVisible();
 }
+/** Authenticated language belongs to the current native Profile; no global fallback. */
+export async function setTrailWorkspaceLanguage(page: Page, locale: 'en' | 'ar'): Promise<void> {
+  const workspace = page.locator('.workspace-chrome');
+  await expect(workspace).toHaveCount(1); await expect(workspace).toBeVisible();
+  await expect(workspace).toHaveAttribute('lang', /^(en|ar)$/);
+  await openVisibleTrailProfile(page);
+  const panel = workspace.locator('.workspace-chrome__profile');
+  const language = panel.locator('.workspace-chrome__profile-language .language-switch').getByRole('button', { name: locale === 'en' ? 'English' : 'العربية', exact: true });
+  await expect(language).toHaveCount(1); await expect(language).toBeVisible(); await expect(language).toBeEnabled();
+  await language.click();
+  await expect(workspace).toHaveAttribute('lang', locale); await expect(page.locator('html')).toHaveAttribute('lang', locale); await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+  // A locale reflow can legitimately dismiss the native panel. Retain the
+  // exact labelled owner for pressed-state readback; never retry/reopen it.
+  const selected = panel.locator(`.workspace-chrome__profile-language .language-switch button[lang="${locale}"]`);
+  await expect(selected).toHaveCount(1); await expect(selected).toHaveAttribute('aria-label', locale === 'en' ? 'English' : 'العربية'); await expect(selected).toHaveAttribute('aria-pressed', 'true');
+  if (await panel.evaluate(node => node.matches(':popover-open'))) await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden(); await expect(workspace.locator('.workspace-chrome__person > button')).toBeFocused();
+}
 export async function trailWorkspaceAction(page: Page, label: string): Promise<Locator> {
   if (['Access details', 'Access settings', 'تفاصيل الوصول', 'إعدادات الوصول', 'Account', 'الحساب'].includes(label)) {
     await openVisibleTrailProfile(page);

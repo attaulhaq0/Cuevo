@@ -9,7 +9,7 @@ import type { CustomerCommunityViewCheckpoint } from './customer-community-journ
 import { communityEn, communityAr } from '../../apps/web/features/community/messages';
 import { maintenanceEn, maintenanceAr } from '../../apps/web/features/community/maintenance-messages';
 import { commonEn, commonAr } from '../../apps/web/shared/i18n/common';
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 
 export type CommunityViewReceipt = HostedCommunityViewReceipt;
 const hash = (value: unknown) => createHash('sha256').update(canonicalReleaseExecutionJson(value)).digest('hex');
@@ -167,7 +167,7 @@ export async function observeCommunityView(page: Page, checkpoint: CustomerCommu
   try {
     for (const locale of ['en', 'ar'] as const) {
       await original.assertCurrent(); await page.setViewportSize(viewport[locale]);
-      await page.getByRole('button', { name: locale === 'en' ? 'English' : 'العربية', exact: true }).click(); await settled(page); await original.assertCurrent();
+      await setTrailWorkspaceLanguage(page, locale); await settled(page); await original.assertCurrent();
       const source = await sourceView(page, checkpoint, locale);
       const keyboardControl = await safeDisclosure(page, checkpoint, locale, source.controls); await original.assertCurrent();
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
@@ -188,7 +188,7 @@ export async function observeCommunityView(page: Page, checkpoint: CustomerCommu
   } catch (error) { failure = error; } finally {
     try {
       await page.locator('html').evaluate(node => { node.style.fontSize = ''; }); await page.setViewportSize(originalViewport);
-      await page.getByRole('button', { name: 'English', exact: true }).click(); await settled(page); await original.assertCurrent();
+      await setTrailWorkspaceLanguage(page, 'en'); await settled(page); await original.assertCurrent();
       await sourceView(page, checkpoint, 'en'); expect(await inputSnapshot(page)).toEqual(savedInputs);
     } catch (error) { restorationFailure = error; }
   }

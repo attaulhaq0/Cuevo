@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -49,7 +50,7 @@ test.describe('isolated actual native report style and source', () => {
       }
       await expect(page.locator('#learner-selection')).toBeEnabled(); await page.locator('#learner-selection').selectOption(learner.actorId);
       const report = page.locator('#progress-reports'); await expect(report).toBeVisible();
-      if (scenario.locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+      if (scenario.locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.evaluate(() => new Promise<void>(resolveSettled => requestAnimationFrame(() => requestAnimationFrame(() => resolveSettled()))));
       if (await page.locator('.workspace').getAttribute('data-theme') !== scenario.theme) {

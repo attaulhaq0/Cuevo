@@ -36,3 +36,44 @@ test('Home composition adds no generic workspace help or reserved footer', () =>
   const html = renderToStaticMarkup(createElement(WorkspacePageProvider, { helpLabel:'About overview', help:null, children:createElement('h1',null,'Your learning day') }));
   assert.equal(html,'<h1>Your learning day</h1>');
 });
+
+test('focused navigation keeps one semantic workspace heading without reserving a duplicate visible row', () => {
+  const html = renderToStaticMarkup(createElement(UI.WorkspaceNavigationProvider, { enabled:true,compactHeadings:true,currentWorkspaceLabel:'School', children:createElement(UI.WorkspacePageHeading,{title:'School',workspaceTitle:true}) }));
+  assert.match(html,/data-workspace-heading-compact="true"/);
+  assert.match(html,/data-workspace-heading-empty="true"/);
+  assert.match(html,/<h1 class="workspace-page-heading__semantic"[^>]*>School<\/h1>/);
+});
+
+test('a subsection with no mounted navigation host keeps its visible heading during source loading', () => {
+  const html=renderToStaticMarkup(createElement(UI.WorkspaceNavigationProvider,{enabled:true,compactHeadings:true,currentWorkspaceLabel:'School',children:createElement(UI.WorkspacePageHeading,{title:'Daily operations',navigationTitle:'Daily operations'})}));
+  assert.doesNotMatch(html,/data-workspace-heading-compact/);
+  assert.match(html,/<h1[^>]*>Daily operations<\/h1>/);
+});
+
+test('focused compaction retains selected record identity, meaningful captions and current actions', () => {
+  const html = renderToStaticMarkup(createElement(UI.WorkspaceNavigationProvider,{enabled:true,compactHeadings:true,currentWorkspaceLabel:'Academic',children:createElement(UI.WorkspacePageHeading,{title:'Checking one method',navigationTitle:'Marking',caption:'Cedar · Year six',description:'Current submitted work',actions:createElement('button',null,'Back to marking')})}));
+  assert.doesNotMatch(html,/data-workspace-heading-compact/);
+  assert.match(html,/<h1[^>]*>Checking one method<\/h1>/);
+  assert.match(html,/Cedar · Year six/);
+  assert.match(html,/Back to marking/);
+});
+
+test('standalone and Home headings remain visible without authenticated focused navigation compaction', () => {
+  for(const enabled of [false,true]){
+    const html=renderToStaticMarkup(createElement(UI.WorkspaceNavigationProvider,{enabled,currentWorkspaceLabel:'School',children:createElement(UI.WorkspacePageHeading,{title:'School',navigationTitle:'School'})}));
+    assert.doesNotMatch(html,/data-workspace-heading-compact/);
+    assert.match(html,/<h1[^>]*>School<\/h1>/);
+  }
+});
+
+test('a selected human record named like its workspace never becomes a generic compact title', () => {
+  const html=renderToStaticMarkup(createElement(UI.WorkspaceNavigationProvider,{enabled:true,compactHeadings:true,currentWorkspaceLabel:'Academic',children:createElement(UI.WorkspacePageHeading,{title:'Academic',caption:'Current learner · Cedar'})}));
+  assert.doesNotMatch(html,/data-workspace-heading-compact/);
+  assert.match(html,/<h1[^>]*>Academic<\/h1>/);
+});
+
+test('a source caption that matches its workspace remains meaningful visible context', () => {
+  const html=renderToStaticMarkup(createElement(UI.WorkspaceNavigationProvider,{enabled:true,compactHeadings:true,currentWorkspaceLabel:'School',children:createElement(UI.WorkspacePageHeading,{title:'School',workspaceTitle:true,caption:'School'})}));
+  assert.match(html,/workspace-page-heading__caption">School<\/p>/);
+  assert.doesNotMatch(html,/data-workspace-heading-empty/);
+});

@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -74,7 +75,7 @@ test.describe('isolated actual Admin selected-record focus and layout', () => {
     const people = source.items.filter(value => value.displayName.trim() && source.items.filter(other => other.displayName === value.displayName && other.role === value.role).length === 1);
     expect(people.length).toBeGreaterThan(1);
     const first = people[0], second = people[1];
-    if (viewport.locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    if (viewport.locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
     const directory = page.locator('.school-access-directory'), selected = page.getByRole('region', { name: t.selected, exact: true });
     const rows = directory.locator('.school-access-directory__rows li'); await expect(rows).toHaveCount(source.items.length);
     const rowFor = (person: Person) => rows.filter({ has: page.getByText(person.displayName, { exact: true }) }).filter({has:page.locator('small').filter({hasText:t.roles[person.role as keyof typeof t.roles]})}).getByRole('button');

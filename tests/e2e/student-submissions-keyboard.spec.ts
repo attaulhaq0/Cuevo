@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openTrailWorkspace } from './trail-workspace';
+import { openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 
 // Intercepted presentation: no product command or external request is delivered.
 // Actual learner/tenant/source authority is tested separately through API/SQL.
@@ -98,7 +98,7 @@ test('Student static submissions are reachable by Tab and PageDown scrolls the f
 test('Arabic Student submissions keep one page flow and a reachable selected section', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const evidence = await ownStaticSubmissions(page);
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('.submission-list > .submission-section')).toHaveCount(30);
   await expect(page.locator('main h1')).toHaveCount(1); await expect(page.locator('main h1')).toHaveText('التسليمات');
   const selected = page.locator('[data-workspace-sections] [data-workspace-section="submissions"]');

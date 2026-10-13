@@ -1,5 +1,5 @@
 import { withBrowserRestoration } from './browser-restoration';
-import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { openCurrentResult } from './result-reader';
 import { readRefreshedParentResult } from './refreshed-parent-result';
 import { test, expect, type Page, type Request } from '@playwright/test';
@@ -70,7 +70,7 @@ test('parent work stays unresolved during child verification and the selected ch
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expectTrailWorkspace(page);
   await expect(page.getByRole('heading', { name: 'Your school access', exact: true })).toBeVisible();
   for (const destination of ['Portfolio', 'Academic', 'Progress']) {
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'en');
     await page.setViewportSize({ width: 1440, height: 900 });
     let release!: () => void; const hold = new Promise<void>(resolve => { release = resolve; });
     let observed!: () => void; let directoryFailed!: (error: unknown) => void; const directoryObserved = new Promise<void>((resolve, reject) => { observed = resolve; directoryFailed = reject; });
@@ -94,7 +94,7 @@ test('parent work stays unresolved during child verification and the selected ch
       await directoryObserved;
       await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'Checking current child relationships…' })).toBeVisible();
       await assertUnresolved(page, destination);
-      await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+      await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
       await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
       await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'جارٍ التحقق من علاقات الأطفال…' })).toBeVisible();
       await assertUnresolved(page, destination);
@@ -107,7 +107,7 @@ test('parent work stays unresolved during child verification and the selected ch
     for (const failure of failures) {
       expect(canceled.has(failure.request), `Only a recorded cancelled directory request may end without delivery: ${String(failure.error)}`).toBe(true);
     }
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'en');
     const child = page.getByRole('combobox', { name: 'Child', exact: true }); await expect(child).toBeVisible();
     if (destination === 'Portfolio') {
       await expect(child).toHaveValue('');

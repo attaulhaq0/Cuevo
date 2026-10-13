@@ -434,7 +434,11 @@ html[lang="ar"] { --font-sans: var(--font-arabic); }
 .workspace .workspace-page-heading__caption { margin:0 0 var(--space-1);font-size:var(--type-sm);color:var(--color-text-secondary);overflow-wrap:anywhere; }
 .workspace .workspace-page-heading__description { margin-block-start:var(--space-1);font-size:var(--type-sm);color:var(--color-text-secondary);overflow-wrap:anywhere; }
 .workspace .workspace-page-heading__description > p { margin:0; }
+.workspace .workspace-page-heading__semantic { position:absolute;inline-size:1px;block-size:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0; }
+.workspace .workspace-page-heading[data-workspace-heading-empty="true"] { position:absolute;inline-size:0;block-size:0;margin:0;gap:0; }
+.workspace .workspace-page-heading[data-workspace-heading-empty="true"] .workspace-page-heading__content { min-inline-size:0; }
 .workspace .workspace-page-heading__actions { display:flex;align-items:start;gap:var(--space-2);flex-wrap:wrap;margin-inline-start:auto; }
+.workspace[data-navigation-mode="focused"] .workspace-main > :is(.school-workspace,.learning-workspace,.curriculum-workspace,.development-workspace,.portfolio-workspace,.community-workspace,.academic-workspace,.progress-workspace,.improvement-workspace) { margin-block-start:0; }
 .workspace .workspace-page-help { inline-size:fit-content;max-inline-size:100%;margin-block-start:var(--space-3);margin-inline-start:auto;font-size:var(--type-sm); }
 .workspace .workspace-page-help > summary { min-block-size:var(--control-min-size);align-content:center;cursor:pointer;color:var(--color-link);padding-inline:var(--space-2); }
 .workspace .workspace-page-help[open] { padding:var(--space-2);border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-material-reading); }

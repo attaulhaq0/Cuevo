@@ -1,4 +1,4 @@
-import { expectTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
@@ -38,7 +38,7 @@ test('processed evidence and recorded habits stay separate in bilingual learner 
   await expect(page.locator('.progress-workspace [data-outcome-id]')).toHaveCount(0);
   await expect(page.locator('.progress-workspace .native-score').first()).toBeVisible();
   await expect(page.getByText('Practice activity observed', { exact: true }).first()).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar'); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); expect(axe.violations).toEqual([]);
   expect(errors).toEqual([]); expect(warnings.filter(m => m.includes('Multiple GoTrueClient'))).toEqual([]);
 });

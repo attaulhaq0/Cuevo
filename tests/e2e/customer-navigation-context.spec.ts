@@ -1,6 +1,6 @@
 import { attachDiagnosticPreservingFailure, serializeFailureDiagnostic } from './course-objective-diagnostics';
 import { observeProgressFocus } from './progress-focus-diagnostics';
-import { expectTrailWorkspace, openTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -27,7 +27,7 @@ test('switching language clears the previous-language saved action notice', asyn
   await form.getByRole('button', { name: 'Save', exact: true }).click();
   const notice = page.locator('.workspace-main > .notice[role="status"]');
   await expect(notice).toContainText('Saved.');
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(notice).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'غرف الصف والمجموعات', level:1, exact: true })).toBeVisible();
@@ -43,7 +43,7 @@ test('class review brings the current named learner detail into keyboard focus a
   await expect(heading).toBeFocused(); await expect(heading).toBeInViewport();
   const refresh = page.getByRole('button', { name: 'Refresh learner state', exact: true }); await refresh.click(); await settled(page); await expect(refresh).toBeFocused();
   await page.emulateMedia({ reducedMotion: 'reduce' }); await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'العربية', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await setTrailWorkspaceLanguage(page, 'ar'); await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.getByRole('button',{name:'العودة إلى الطلاب',exact:true}).click();
   await row.getByRole('button', { name: 'مراجعة هذا الطالب', exact: true }).focus(); await page.keyboard.press('Enter');
   const arabic = page.getByRole('heading',{level:2,name:/^شواهد الطالب الحالي · Lina Al-Kuwari(?: ·|$)/}); await attachDiagnosticPreservingFailure(async()=>{await expect(arabic).toBeFocused();await expect(arabic).toBeInViewport()},async()=>{const safe=serializeFailureDiagnostic(await focusDiagnostic(/^شواهد الطالب الحالي · Lina Al-Kuwari(?: ·|$)/));console.log(safe);await test.info().attach('progress-focus-source',{contentType:'application/json',body:safe})});

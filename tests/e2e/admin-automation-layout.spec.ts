@@ -1,3 +1,4 @@
+import { setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -43,7 +44,7 @@ test.describe('isolated current Admin Automation reading', () => {
     await page.locator('.school-workspace > .learning-toolbar').getByRole('button', { name: 'Automation review', exact: true }).click();
     const response = await ready; expect(response.status()).toBe(200); const source = schoolAutomationSchema.parse(await response.json());
     await expect(page.locator('.school-automation-policy')).toHaveCount(1);
-    if (viewport.locale === 'ar') await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    if (viewport.locale === 'ar') await setTrailWorkspaceLanguage(page, 'ar');
     const selector = page.locator('#school-automation-policy'), selected = page.locator('.school-automation-policy');
     await expect(selector.locator('option')).toHaveCount(source.policies.length); await expect(selector).toHaveValue('LEARNER_STATE');
     const titles: string[] = [];

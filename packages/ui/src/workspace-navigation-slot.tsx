@@ -3,14 +3,14 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-type NavigationSlot = { enabled: boolean; host: HTMLDivElement | null; setHost: (element: HTMLDivElement | null) => void; onActivate?: (id: string) => void };
+type NavigationSlot = { enabled: boolean; compactHeadings: boolean; currentWorkspaceLabel?: string; host: HTMLDivElement | null; setHost: (element: HTMLDivElement | null) => void; onActivate?: (id: string) => void };
 const WorkspaceNavigationSlot = createContext<NavigationSlot | null>(null);
 
 /** A DOM destination only. Feature owners retain live controls, callbacks and state. */
-export function WorkspaceNavigationProvider({ enabled, onActivate, children }: { enabled: boolean; onActivate?: (id: string) => void; children: ReactNode }) {
+export function WorkspaceNavigationProvider({ enabled, compactHeadings = false, currentWorkspaceLabel, onActivate, children }: { enabled: boolean; compactHeadings?: boolean; currentWorkspaceLabel?: string; onActivate?: (id: string) => void; children: ReactNode }) {
   const [host, updateHost] = useState<HTMLDivElement | null>(null);
   const setHost = useCallback((element: HTMLDivElement | null) => updateHost(element), []);
-  const value = useMemo(() => ({ enabled, host, setHost, onActivate }), [enabled, host, setHost, onActivate]);
+  const value = useMemo(() => ({ enabled, compactHeadings, currentWorkspaceLabel, host, setHost, onActivate }), [enabled, compactHeadings, currentWorkspaceLabel, host, setHost, onActivate]);
   return <WorkspaceNavigationSlot.Provider value={value}>{children}</WorkspaceNavigationSlot.Provider>;
 }
 

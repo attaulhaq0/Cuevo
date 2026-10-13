@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
-import { expectTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
+import { expectTrailWorkspace, signOutTrailWorkspace, setTrailWorkspaceLanguage } from './trail-workspace';
 
 type Account = { role: string; email: string; password: string };
 test('reviewed thinking focus follows the Student course journey and immutable parent result', async ({ page }) => {
@@ -63,8 +63,8 @@ test('reviewed thinking focus follows the Student course journey and immutable p
   await journey.getByRole('button', { name: `Open activity: ${practice.title}`, exact: true }).click();
   await journey.getByRole('button', { name: 'Open this task', exact: true }).click();
   await expect(journey.locator('.activity-section > h3.activity-section__title')).toHaveText(practice.title);
-  for (const locale of ['English', 'العربية']) { await page.getByRole('button', { name: locale, exact: true }).click(); if (locale === 'العربية') await journey.getByRole('button', { name: 'فتح هذه المهمة', exact: true }).click(); expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]); }
-  await page.getByRole('button', { name: 'English', exact: true }).click();
+  for (const locale of ['English', 'العربية']) { await setTrailWorkspaceLanguage(page, locale === 'English' ? 'en' : 'ar'); if (locale === 'العربية') await journey.getByRole('button', { name: 'فتح هذه المهمة', exact: true }).click(); expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]); }
+  await setTrailWorkspaceLanguage(page, 'en');
   await journey.getByRole('button', { name: `Open activity: Explain the choice ${suffix}`, exact: true }).click();
   const focus = journey.locator('.student-learning-journey__thinking');
   await expect(focus).toContainText('Evaluate'); await expect(focus).toContainText('Understand');
@@ -86,7 +86,7 @@ test('reviewed thinking focus follows the Student course journey and immutable p
   await page.getByRole('button', { name: 'Thinking focus recorded with this work', exact: true }).click();
   await expect(page.locator('.thinking-focus-snapshot')).toContainText('Evaluate');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'العربية', exact: true }).click();
+  await setTrailWorkspaceLanguage(page, 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]);

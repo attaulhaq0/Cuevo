@@ -1,4 +1,4 @@
-import { expectTrailWorkspace, openTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace, trailWorkspaceAction } from './trail-workspace';
+import { expectTrailWorkspace, openTrailWorkspace, selectTrailSchoolRecord, signOutTrailWorkspace, trailWorkspaceAction, setTrailWorkspaceLanguage } from './trail-workspace';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -357,7 +357,7 @@ test('all roles use readable primary headings and selectors across current Engli
       expect(primary.join(' '), `${role}/${name} English primary labels`).not.toMatch(identifier);
     }
     await openTrailWorkspace(page, 'Overview'); await settled(page);
-    await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'العربية', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 }); await setTrailWorkspaceLanguage(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
     await expect(navigation).toHaveAccessibleName('التنقّل في مساحة العمل');
@@ -382,7 +382,7 @@ test('all roles use readable primary headings and selectors across current Engli
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${role}/${name} Arabic mobile overflow`).toBe(true);
     }
     await expect(page.locator('.workspace-chrome__person > button')).toHaveAccessibleName('الملف الشخصي والإعدادات');
-    await page.getByRole('button', { name: 'English', exact: true }).click();
+    await setTrailWorkspaceLanguage(page, 'en');
     await signOutTrailWorkspace(page);
   }
 });

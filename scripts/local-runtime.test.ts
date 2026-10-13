@@ -48,7 +48,7 @@ async function bootstrapFixture(scenario = 'none') {
   const plan = replayPlan(sources);
   try {
     for (const path of ['scripts/database', 'supabase/migrations', 'supabase/seed']) await mkdir(join(root, path), { recursive: true });
-    for (const path of ['scripts/bootstrap-local.ts', 'scripts/start-supabase.ts', 'scripts/database/reset-local.ts', 'scripts/database/replay-workdir.ts', 'scripts/database/replay-plan.ts', 'scripts/configure-local.ts']) {
+    for (const path of ['scripts/bootstrap-local.ts', 'scripts/start-supabase.ts', 'scripts/database/start-local-diagnostic.ts', 'scripts/database/reset-local.ts', 'scripts/database/reset-local-diagnostic.ts', 'scripts/database/replay-workdir.ts', 'scripts/database/replay-plan.ts', 'scripts/configure-local.ts']) {
       await writeFile(join(root, path), await readFile(join(ownerRoot, path)));
     }
     for (const file of sources) await writeFile(join(root, 'supabase/migrations', file.name), file.bytes);
@@ -64,10 +64,13 @@ import * as fs from 'node:fs';
 import * as promises from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { transformSync } from ${JSON.stringify(pathToFileURL(join(ownerRoot, 'node_modules/esbuild/lib/main.js')).href)};
 const root=${JSON.stringify(root)}, scenario=${JSON.stringify(scenario)}, mutationName=${JSON.stringify(mutationName)};
 const fixtureProject=${JSON.stringify(fixtureProject)}, fixtureApiPort=${JSON.stringify(fixtureApiPort)}, fixtureDbPort=${JSON.stringify(fixtureDbPort)};
 const log = value => fs.appendFileSync(resolve(root, 'events.jsonl'), JSON.stringify(value)+'\\n');
+if(scenario==='start-confirmation-failure'){const originalLog=console.log.bind(console);console.log=(...args)=>{if(args[0]==='Cuevo local Supabase is ready. Credential output is retained only in ignored .local/supabase-start.log.')throw new Error('private confirmation canary');return originalLog(...args);};}
 const mutate = kind => {
   if(kind==='config') fs.appendFileSync(resolve(root,'supabase/config.toml'),'\\n# changed during bootstrap\\n');
   else if(kind==='staged'||kind==='prerequisite') {
@@ -79,9 +82,18 @@ const safeChildEnv={TEMP:process.env.TEMP,TMP:process.env.TMP,SystemRoot:process
 globalThis.bootstrapTransport={
   fs:promises,
   readFile: async(path,...args)=>{if(String(path).replaceAll('\\\\','/').startsWith(root.replaceAll('\\\\','/')+'/supabase/migrations/'))log({kind:'preparation-source-read'});return promises.readFile(path,...args);},
-  writeFile: async(path,...args)=>{if(String(path).replaceAll('\\\\','/').match(/\\/(prefix|prerequisite)\\/supabase\\/migrations\\//))log({kind:'prepared-sql-write'});return promises.writeFile(path,...args);},
+  writeFile: async(path,...args)=>{if(String(path).replaceAll('\\\\','/').match(/\\/(prefix|prerequisite)\\/supabase\\/migrations\\//))log({kind:'prepared-sql-write'});if(String(path)==='.local/supabase-start.log'&&scenario==='start-log-write-failure')throw Object.assign(new Error('private log write canary'),{status:88,stderr:Buffer.from('SQLSTATE: 42501\\n')});if(String(path).endsWith('start-diagnostic.json')){log({kind:'start-diagnostic-write',options:args[1]});if(scenario==='start-diagnostic-write-failure')throw new Error('private diagnostic write canary');}return promises.writeFile(path,...args);},
   prepared:()=>log({kind:'prepared'}),
+  spawn:(executable,args,options)=>{
+    if(options.detached!==false||JSON.stringify(options.stdio)!==JSON.stringify(['ignore','pipe','pipe'])||args.at(-1)!=='--debug')throw Error('Unrecognized fixture spawn refused');
+    globalThis.bootstrapTransport.exec(executable,args,options);
+    const child=Object.assign(new EventEmitter(),{stdout:new PassThrough(),stderr:new PassThrough()});
+    if(scenario==='reset-diagnostic-existing'){const target=resolve(args[args.indexOf('--workdir')+1],'../reset-diagnostic.json');fs.writeFileSync(target,'{"preserved":"original failure"}');}
+    queueMicrotask(()=>{child.stdout.end();child.stderr.end();child.emit('close',scenario.startsWith('reset-command-failure')||scenario==='reset-diagnostic-existing'?1:0,null);});return child;
+  },
   exec:(executable,args,options)=>{
+    if(executable==='git'&&(scenario.startsWith('reset-command-failure')||scenario==='reset-diagnostic-existing'||scenario.startsWith('start-'))&&JSON.stringify(args)===JSON.stringify(['rev-parse','HEAD']))return 'a'.repeat(40);
+    if(executable==='git'&&(scenario.startsWith('reset-command-failure')||scenario==='reset-diagnostic-existing'||scenario.startsWith('start-'))&&JSON.stringify(args)===JSON.stringify(['rev-parse','HEAD^{tree}']))return 'b'.repeat(40);
     if(executable==='docker'&&JSON.stringify(args)===JSON.stringify(['network','inspect','cuevo-local'])) {log({kind:'network',args});return '';}
     if(executable!==process.execPath)throw Error('Unrecognized fixture executable refused');
     const cli=resolve(root,'node_modules/supabase/dist/supabase.js');
@@ -89,6 +101,9 @@ globalThis.bootstrapTransport={
     if(args[0]===cli&&[['start'],['db','reset'],['migration','up']].some(prefix=>prefix.every((value,index)=>args[index+1]===value))&&args.includes('--network-id')&&args[args.indexOf('--network-id')+1]==='cuevo-local') {
       const action=args[1]==='db'?'reset':args[1]==='migration'?'up':args[1];
       log({kind:'cli',action,args});
+      if(action==='start'&&(JSON.stringify(args)!==JSON.stringify([cli,'start','--workdir',args[args.indexOf('--workdir')+1],'--network-id','cuevo-local','--exclude','studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor'])||JSON.stringify(options)!==JSON.stringify({encoding:'utf8',stdio:['ignore','pipe','pipe'],maxBuffer:10*1024*1024})))throw new Error('Exact original start arguments or capture changed');
+      if(action==='start'&&scenario==='start-diagnostic-existing'){const target=resolve(args[args.indexOf('--workdir')+1],'../start-diagnostic.json');fs.writeFileSync(target,'{"preserved":"original start failure"}');}
+      if(action==='start'&&['start-command-failure','start-diagnostic-existing','start-diagnostic-write-failure','start-source-changed'].includes(scenario)){if(scenario==='start-source-changed')mutate('staged');throw Object.assign(new Error('private-start-error-canary'),{status:7,signal:null,stderr:Buffer.from('Initialising schema...\\nERROR: private-start-stderr-canary (SQLSTATE 42501)\\nerror running container: exit 7\\n'),stdout:'private-start-stdout-canary'});}
       if(action==='start'&&scenario.startsWith('after-start-')&&!scenario.includes('unused-')) mutate(scenario.slice(12));
       if(action==='reset'&&scenario==='after-reset-staged') mutate('prerequisite');
       if(action==='reset'&&scenario==='after-reset-unused-prefix') mutate('staged');
@@ -110,7 +125,7 @@ globalThis.bootstrapTransport={
   }
 };
 registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap-fs'||specifier==='fixture:bootstrap-process'||specifier==='fixture:bootstrap-pg')return {url:specifier,shortCircuit:true};if(specifier.startsWith('.')&&context.parentURL&&context.parentURL.includes('/scripts/')&&!specifier.endsWith('.ts'))return {url:new URL(specifier+'.ts',context.parentURL).href,shortCircuit:true};return next(specifier,context);},load(url,context,next){
-  if(url==='fixture:bootstrap-process')return {format:'module',shortCircuit:true,source:'export const execFileSync=globalThis.bootstrapTransport.exec;'};
+  if(url==='fixture:bootstrap-process')return {format:'module',shortCircuit:true,source:'export const execFileSync=globalThis.bootstrapTransport.exec;export const spawn=globalThis.bootstrapTransport.spawn;'};
   if(url==='fixture:bootstrap-pg')return {format:'module',shortCircuit:true,source:'export const Pool=globalThis.bootstrapTransport.Pool;'};
   if(url.includes('/node_modules/pg/'))return {format:'module',shortCircuit:true,source:'export const Pool=globalThis.bootstrapTransport.Pool;'};
   if(url==='fixture:bootstrap-fs')return {format:'module',shortCircuit:true,source:'export const {mkdir,mkdtemp,readdir}=globalThis.bootstrapTransport.fs; export const writeFile=globalThis.bootstrapTransport.writeFile; export const readFile=globalThis.bootstrapTransport.readFile;'};
@@ -120,6 +135,7 @@ registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap
     // exercised above; this child changes only their fixed synthetic project/port constants.
     if(url.endsWith('/configure-local.ts'))source=source.replaceAll('"cuevo"','"'+fixtureProject+'"').replaceAll('56321',fixtureApiPort).replaceAll('56322',fixtureDbPort);
     if(url.endsWith('/replay-workdir.ts')) source=source.replaceAll("'node:fs/promises'","'fixture:bootstrap-fs'").replace(/export async function createReplayWorkdirs\\(\\)\\s*\\{/,'export async function createReplayWorkdirs(){globalThis.bootstrapTransport.prepared();');
+    if(url.endsWith('/start-supabase.ts'))source=source.replaceAll("'node:fs/promises'","'fixture:bootstrap-fs'");
     return {format:'module',shortCircuit:true,source:transformSync(source,{loader:'ts',format:'esm'}).code};
   }
   return next(url,context);
@@ -130,7 +146,7 @@ registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap
       const probe = "for (const [exe,args] of [['supabase',['db','reset']], [process.execPath,['unknown']], ['docker',['restart','anything']]]) { try { globalThis.bootstrapTransport.exec(exe,args,{}); process.exitCode=1; } catch {} }";
       execFileSync(process.execPath, ['--import', pathToFileURL(join(root, 'preload.mjs')).href, '--input-type=module', '-e', probe], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { TEMP: process.env.TEMP, TMP: process.env.TMP, SystemRoot: process.env.SystemRoot, PATH: process.env.PATH } });
       assert.equal(await readFile(join(root, 'events.jsonl'), 'utf8').catch(() => ''), '');
-      return { failed: false, failureDetails: '', events: [], prefixCopies: plan.before.length * 2 + 1 };
+      return { failed: false, failureDetails: '', events: [], startDiagnostics: [], prefixCopies: plan.before.length * 2 + 1 };
     }
     if (scenario === 'import-only' || scenario === 'forged-replay' || scenario === 'mutated-replay-files' || scenario === 'mutated-replay-plan') {
       const bootstrapUrl = pathToFileURL(join(root, 'scripts/bootstrap-local.ts')).href;
@@ -146,7 +162,7 @@ registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap
       const text = await readFile(join(root, 'events.jsonl'), 'utf8').catch(() => '');
       if(scenario.startsWith('mutated-replay-')) assert.equal(text.includes('"cli"'),false);
       else assert.equal(text, '');
-      return { failed: false, failureDetails: '', events: [], prefixCopies: plan.before.length * 2 + 1 };
+      return { failed: false, failureDetails: '', events: [], startDiagnostics: [], prefixCopies: plan.before.length * 2 + 1 };
     }
     let failed = false, failureDetails = '';
     try {
@@ -154,13 +170,35 @@ registerHooks({resolve(specifier,context,next){if(specifier==='fixture:bootstrap
       execFileSync(process.execPath, ['--import', pathToFileURL(join(root, 'preload.mjs')).href, join(root, entry)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { TEMP: process.env.TEMP, TMP: process.env.TMP, SystemRoot: process.env.SystemRoot, PATH: process.env.PATH } });
     } catch (error) { failed = true; failureDetails = String((error as { stderr?: Buffer }).stderr ?? error); }
     const eventText = await readFile(join(root, 'events.jsonl'), 'utf8').catch(() => '');
-    const events = eventText.trim() ? eventText.trim().split('\n').map(line => JSON.parse(line) as { kind: string; action?: string }) : [];
-    return { failed, failureDetails, events, prefixCopies: plan.before.length * 2 + 1 };
+    const events = eventText.trim() ? eventText.trim().split('\n').map(line => JSON.parse(line) as { kind: string; action?: string; args?: string[]; options?: { flag?: string; mode?: number } }) : [];
+    const operationDirectories = readdirSync(join(root,'.local/migration-replay'),{withFileTypes:true}).filter(entry=>entry.isDirectory());
+    const diagnostics=operationDirectories.flatMap(entry=>{try{return[JSON.parse(readFileSync(join(root,'.local/migration-replay',entry.name,'reset-diagnostic.json'),'utf8'))]}catch{return[]}});
+    const startDiagnostics=operationDirectories.flatMap(entry=>{try{return[JSON.parse(readFileSync(join(root,'.local/migration-replay',entry.name,'start-diagnostic.json'),'utf8'))]}catch{return[]}});
+    return { failed, failureDetails, events, diagnostics, startDiagnostics, prefixCopies: plan.before.length * 2 + 1 };
   } finally { await rm(root, { recursive: true, force: true }); }
 }
 
 test('bootstrap subprocess harness refuses unknown commands and provides no installed Supabase executable', async () => {
   assert.equal((await bootstrapFixture('unknown-command')).failed, false);
+});
+
+test('original start failure retains finite diagnostic before bootstrap can reset or seed',async()=>{
+ const result=await bootstrapFixture('start-command-failure');assert.equal(result.failed,true);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start']);assert.equal(result.events.some(event=>['seed','status','later-runner'].includes(event.kind)),false);
+ assert.equal(result.startDiagnostics!.length,1);const diagnostic=result.startDiagnostics![0];assert.equal(diagnostic.stage,'CLI_START_FAILURE');assert.equal(diagnostic.cause,'UNKNOWN');assert.equal(diagnostic.outcome.exitCode,7);assert.equal(diagnostic.phase,'INITIALIZING_SCHEMA');assert.equal(diagnostic.observedCodes[0].code,'42501');assert.equal(diagnostic.context.sourceSha,'a'.repeat(40));assert.equal(diagnostic.context.treeSha,'b'.repeat(40));assert.equal(JSON.stringify(diagnostic).includes('canary'),false);assert.equal(result.failureDetails.includes('private-start'),false);assert.match(result.failureDetails,/Cuevo local Supabase failed to start/);
+ assert.deepEqual(result.events.find(event=>event.kind==='start-diagnostic-write')?.options,{flag:'wx',mode:0o600});
+});
+
+test('successful start creates no failure diagnostic and retains the original success path',async()=>{
+ const result=await bootstrapFixture('standalone-start');assert.equal(result.failed,false,result.failureDetails);assert.deepEqual(result.startDiagnostics,[]);assert.equal(result.events.some(event=>event.kind==='start-diagnostic-write'),false);const start=result.events.find(event=>event.kind==='cli')!;assert.equal(start.args!.includes('--debug'),false);
+});
+test('post-start log write failure is distinct and still prevents reset or seed',async()=>{
+ const result=await bootstrapFixture('start-log-write-failure');assert.equal(result.failed,true);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start']);const d=result.startDiagnostics![0];assert.equal(d.stage,'POST_START_LOG_WRITE_FAILURE');assert.deepEqual(d.outcome,{exitCode:null,signal:null,code:null});assert.equal(d.stderr.availability,'NOT_APPLICABLE');assert.equal(d.capture.stderrObserved,false);assert.equal(result.failureDetails.includes('private log write'),false);
+});
+test('post-start confirmation failure cannot be mislabeled private log or CLI failure',async()=>{
+ const result=await bootstrapFixture('start-confirmation-failure');assert.equal(result.failed,true);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start']);const d=result.startDiagnostics![0];assert.equal(d.stage,'POST_START_CONFIRMATION_FAILURE');assert.deepEqual(d.outcome,{exitCode:null,signal:null,code:null});assert.equal(d.stderr.availability,'NOT_APPLICABLE');assert.equal(result.failureDetails.includes('private confirmation'),false);assert.equal(result.events.some(event=>['seed','status','later-runner'].includes(event.kind)),false);
+});
+test('existing diagnostic writer failure and changed source cannot replace the original start failure',async()=>{
+ for(const scenario of ['start-diagnostic-existing','start-diagnostic-write-failure','start-source-changed']){const result=await bootstrapFixture(scenario);assert.equal(result.failed,true,scenario);assert.match(result.failureDetails,/Cuevo local Supabase failed to start/);assert.equal(result.failureDetails.includes('private-start'),false);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start']);assert.equal(result.events.some(event=>['seed','status','later-runner'].includes(event.kind)),false);if(scenario==='start-diagnostic-existing')assert.deepEqual(result.startDiagnostics,[{preserved:'original start failure'}]);else assert.deepEqual(result.startDiagnostics,[]);}
 });
 
 test('local operations import without effects and supplied replay metadata cannot reach any subprocess', async () => {
@@ -222,4 +260,11 @@ test('source drift during awaited final database validation prevents synthetic s
   assert.deepEqual(result.events.filter(event => event.kind === 'cli').map(event => event.action), ['start', 'reset', 'up', 'up', 'up']);
   assert.equal(result.events.filter(event => event.kind === 'seed').length, 0);
   assert.equal(result.events.filter(event => event.kind === 'pool-end').length, 1);
+});
+test('original prefix reset failure stops all later migration seed and account effects without guessing a diagnostic cause',async()=>{
+ const result=await bootstrapFixture('reset-command-failure');assert.equal(result.failed,true);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start','reset']);assert.equal(result.events.some(event=>event.kind==='seed'||event.kind==='later-runner'),false);assert.match(result.failureDetails,/Cuevo local prefix reset failed/);assert.equal(result.failureDetails.includes('stdout'),false);
+ assert.equal(result.diagnostics?.length,1);const diagnostic=result.diagnostics![0];assert.equal(diagnostic.exitCode,1);assert.equal(diagnostic.cause,'UNKNOWN');assert.equal(diagnostic.context.sourceSha,'a'.repeat(40));assert.equal(diagnostic.context.treeSha,'b'.repeat(40));assert.equal(diagnostic.context.ci,null);assert.match(diagnostic.context.operation,/^operation-/);assert.equal(diagnostic.cliVersion,'2.119.0');assert.deepEqual(diagnostic.observedCodes,[]);
+});
+test('a preexisting operation diagnostic cannot be overwritten or replace the original prefix reset failure',async()=>{
+ const result=await bootstrapFixture('reset-diagnostic-existing');assert.equal(result.failed,true);assert.match(result.failureDetails,/Cuevo local prefix reset failed/);assert.deepEqual(result.diagnostics,[{preserved:'original failure'}]);assert.deepEqual(result.events.filter(event=>event.kind==='cli').map(event=>event.action),['start','reset']);assert.equal(result.events.some(event=>event.kind==='later-runner'||event.kind==='seed'),false);
 });

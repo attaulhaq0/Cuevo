@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type Ref } from 'react';
-import { Button } from '@cuevo/ui';
+import { IconButton } from '@cuevo/ui';
 import { useApp } from '../../../shared/session/providers';
 import { canOpenWorkspace } from '../../../shared/session/capabilities';
 import { useApiQuery } from '../../../shared/hooks/use-api';
@@ -13,6 +13,8 @@ import { adminHomeAr, adminHomeEn } from '../admin-home-binding-messages';
 import type { HomeDestination, HomeTarget } from '../model';
 import type { AdminTrailContext } from '../admin-trail-model';
 import { AdminTrailHomeView } from './admin-trail-home';
+import { HomeSourceDisclosure } from './home-disclosure';
+import { homeAr, homeEn } from '../messages';
 
 export function AdminTrailHome({ onNavigate, headingRef }: { onNavigate: (destination: HomeDestination) => void; headingRef?: Ref<HTMLHeadingElement> }) {
   const { membership } = useApp();
@@ -75,8 +77,11 @@ function CurrentAdminHome({ onNavigate, headingRef }: { onNavigate: (destination
     execution: execution ? { state: executionState, title: t.execution, description: t.executionBody, receiptLabel: `${t.received}: ${new Intl.NumberFormat(locale).format(execution.execution.receiptCount)}`, action: schoolAction } : null,
     audit: { status: audit.error || audit.moreError || !sourceScope ? 'unavailable' : audit.loading || !audit.loaded || audit.nextCursor ? 'partial' : 'ready', records: auditRows.slice(0, 3).map(record => ({ key: record.id, actorName: record.actorName, targetName: record.objectName, description: t.audit, dateLabel: date(record.occurredAt), outcome: record.outcome })), action: schoolAction },
   };
+  const pagingSources = [{query: people,label:t.people},{query:enrollments,label:t.learner},{query:assignments,label:t.teacher},{query:guardians,label:t.guardian},{query:audit,label:t.audit}];
+  const healthyPages = !denied && sourceScope ? pagingSources.filter(({query}) => query.nextCursor && !query.moreError) : [];
+  const failedPages = !denied && sourceScope ? pagingSources.filter(({query}) => query.moreError) : [];
   return <div className="admin-home-connected">
     <AdminTrailHomeView context={view} locale={locale} headingRef={currentHeadingRef} />
-    <div className="home-overview-controls">{view.availability === 'ready' || view.availability === 'partial' ? <Button type="button" variant="quiet" onClick={() => setRefresh(value => value + 1)}>{t.refresh}</Button> : null}{queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}{!denied && sourceScope ? [{query: people,label:t.people},{query:enrollments,label:t.learner},{query:assignments,label:t.teacher},{query:guardians,label:t.guardian},{query:audit,label:t.audit}].map(({query,label}) => query.nextCursor || query.moreError ? <LoadMore key={label} query={query} label={label} /> : null) : null}</div>
+    <div className="home-overview-controls">{queries.map((query, index) => query.error ? <LearningError key={index} error={query.error} /> : null)}{failedPages.map(({query,label}) => <section key={label} aria-label={label}><p>{label}</p><LoadMore query={query} label={label} /></section>)}{healthyPages.length ? <HomeSourceDisclosure label={(locale === 'ar' ? homeAr : homeEn).overviewRecords}>{healthyPages.map(({query,label}) => <LoadMore key={label} query={query} label={label} />)}</HomeSourceDisclosure> : null}{view.availability === 'ready' || view.availability === 'partial' ? <IconButton icon="refresh" label={t.refresh} type="button" className="home-overview-refresh" onClick={() => setRefresh(value => value + 1)} /> : null}</div>
   </div>;
 }
