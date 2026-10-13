@@ -135,3 +135,13 @@ test('source-contract evidence is retained only by its exact required producer w
   assert.ok(validateCiSourceJobs(jobs).length,mode);
  }
 });
+
+test('browser startup and reset diagnostics retain only existing minimized companions after the required lane',async()=>{
+ const flow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,{steps:Record<string,unknown>[]}>};
+ const steps=flow.jobs['runtime-browser'].steps,lane=steps.find(row=>row.name==='Retain exact safe browser lane')!,start=steps.find(row=>row.name==='Retain minimized local start failure diagnostics')!,reset=steps.find(row=>row.name==='Retain minimized local reset failure diagnostics')!;
+ assert.ok(start,'The observed startup boundary needs its own retained minimized companion');assert.ok(reset,'A later original reset failure needs its existing distinct minimized companion');
+ assert.equal(steps.indexOf(start),steps.indexOf(lane)+1);assert.equal(steps.indexOf(reset),steps.indexOf(start)+1);assert.equal(steps.at(-1)?.run,'npx --no-install supabase stop --project-id cuevo');
+ for(const[kind,row]of [['start',start],['reset',reset]]as const){assert.deepEqual(row,{name:`Retain minimized local ${kind} failure diagnostics`,if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:`cuevo-${kind}-diagnostic-runtime-browser-\${{ github.run_id }}-\${{ github.run_attempt }}`,path:`.local/migration-replay/operation-*/${kind}-diagnostic.json`,'include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});}
+ assert.deepEqual(validateCiRuntimeJobs(flow.jobs),[]);
+ for(const kind of['start','reset'])for(const mode of['missing','raw','glob','success-only','required','continue','collision']){const jobs=structuredClone(flow.jobs),job=jobs['runtime-browser'],row=job.steps.find(r=>r.name===`Retain minimized local ${kind} failure diagnostics`)!;if(mode==='missing')job.steps.splice(job.steps.indexOf(row),1);if(mode==='raw')(row.with as Record<string,unknown>).path='.local/supabase-start.log';if(mode==='glob')(row.with as Record<string,unknown>).path='.local/migration-replay/**';if(mode==='success-only')row.if='success()';if(mode==='required')(row.with as Record<string,unknown>)['if-no-files-found']='error';if(mode==='continue')(job as Record<string,unknown>)['continue-on-error']=true;if(mode==='collision')(row.with as Record<string,unknown>).name='cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}';assert.ok(validateCiRuntimeJobs(jobs).length,kind+':'+mode);}
+});
