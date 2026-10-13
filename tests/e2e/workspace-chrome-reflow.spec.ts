@@ -68,7 +68,7 @@ for(const locale of['en','ar']as const)test(`${locale}: profile remains actionab
  await trigger.scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise<void>(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done()))));await trigger.click();await expect.poll(()=>profile.evaluate(e=>e.matches(':popover-open'))).toBe(true);const access=profile.getByRole('button',{name:locale==='ar'?'إعدادات الوصول':'Access settings',exact:true});await access.scrollIntoViewIfNeeded();await access.click();await expect(page.locator('[data-current-action]')).toHaveText('access');await fits(page);
 });
 
-for (const locale of ['en', 'ar'] as const) test(locale + ': focused Back retains its full label, arrow and callback under enlarged text', async ({ page }, info) => {
+for (const locale of ['en', 'ar'] as const) test(locale + ': focused Back retains its localized tooltip, arrow and callback under enlarged text', async ({ page }, info) => {
  const faults:string[]=[];page.on('pageerror',error=>faults.push(error.message));page.on('console',message=>{if(['warning','error'].includes(message.type()))faults.push(message.text());});
  await mount(page);
  const initial = await page.evaluate(() => {
@@ -85,16 +85,16 @@ for (const locale of ['en', 'ar'] as const) test(locale + ': focused Back retain
   await expect(page.locator('.workspace')).toHaveAttribute('lang', locale);
   await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))); });
   const back = page.locator('.workspace-chrome__back'), label = locale === 'ar' ? 'العودة إلى لوحة التحكم' : 'Back to dashboard';
-  await expect(back).toHaveAccessibleName(label); await expect(back.locator('span')).toHaveText(label);
-  await back.focus(); await expect(back).toBeFocused();
+  await expect(back).toHaveAccessibleName(label); await expect(back.locator('.cuevo-icon-button__tooltip')).toHaveText(label);
+  await back.focus(); await expect(back).toBeFocused(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab'); await expect(back.locator('.cuevo-icon-button__tooltip')).toBeVisible();
   const geometry = await back.evaluate(button => {
-   const rect = button.getBoundingClientRect(), arrow = button.querySelector('svg')!.getBoundingClientRect(), text=button.querySelector('span')!, span = text.getBoundingClientRect(), range=document.createRange();range.selectNodeContents(text);
+   const rect = button.getBoundingClientRect(), arrow = button.querySelector('svg')!.getBoundingClientRect(), text=button.querySelector('.cuevo-icon-button__tooltip')!, span = text.getBoundingClientRect(), range=document.createRange();range.selectNodeContents(text);
    return { left: rect.left, right: rect.right, width: rect.width, height: rect.height, labelLeft: span.left, labelRight: span.right, textBoxes:[...range.getClientRects()].map(box=>({left:box.left,right:box.right,top:box.top,bottom:box.bottom})),top:rect.top,bottom:rect.bottom, arrowWidth: arrow.width, arrowHeight: arrow.height, document: document.documentElement.scrollWidth, viewport: innerWidth };
   });
   expect(geometry.document).toBeLessThanOrEqual(width + 1); expect(geometry.left).toBeGreaterThanOrEqual(-1); expect(geometry.right).toBeLessThanOrEqual(width + 1);
-  expect(geometry.labelLeft).toBeGreaterThanOrEqual(geometry.left); expect(geometry.labelRight).toBeLessThanOrEqual(geometry.right); expect(geometry.width).toBeGreaterThanOrEqual(44); expect(geometry.height).toBeGreaterThanOrEqual(44);
-  expect(geometry.arrowWidth).toBe(20); expect(geometry.arrowHeight).toBe(20);
-  expect(geometry.textBoxes.length).toBeGreaterThan(0);for(const box of geometry.textBoxes){expect(box.left).toBeGreaterThanOrEqual(geometry.left);expect(box.right).toBeLessThanOrEqual(geometry.right);expect(box.top).toBeGreaterThanOrEqual(geometry.top);expect(box.bottom).toBeLessThanOrEqual(geometry.bottom);}
+  expect(geometry.labelLeft).toBeGreaterThanOrEqual(7); expect(geometry.labelRight).toBeLessThanOrEqual(width-7); expect(geometry.width).toBeGreaterThanOrEqual(44); expect(geometry.height).toBeGreaterThanOrEqual(44);
+  expect(geometry.arrowWidth).toBe(22); expect(geometry.arrowHeight).toBe(22);
+  expect(geometry.textBoxes.length).toBeGreaterThan(0);for(const box of geometry.textBoxes){expect(box.left).toBeGreaterThanOrEqual(7);expect(box.right).toBeLessThanOrEqual(width-7);expect(box.top).toBeGreaterThanOrEqual(0);expect(box.bottom).toBeLessThanOrEqual(901);}
   await page.locator('.workspace-chrome__search').focus(); await page.keyboard.press('Enter'); await expect(page.locator('[data-current-action]')).toHaveText('search');
   await back.focus();
   await page.keyboard.press('Enter'); await expect(page.locator('[data-current-action]')).toHaveText('home');
