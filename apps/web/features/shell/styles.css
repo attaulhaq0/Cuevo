@@ -24,6 +24,9 @@
 .workspace .workspace-chrome__profile-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-inline-start: var(--space-2); }
 .workspace .workspace-chrome__profile .button { justify-content: start; min-block-size: 2.75rem; }
 .workspace .workspace-chrome__profile-heading .button { min-inline-size: 2.75rem; justify-content: center; padding: var(--space-2); }
+.workspace .workspace-chrome__profile-language { padding: var(--space-2); border-block-start: 1px solid var(--color-border); }
+.workspace .workspace-chrome__profile-language .language-switch { flex-wrap: wrap; gap: var(--space-2); }
+.workspace .workspace-chrome__profile-language .language-switch button { min-inline-size: 2.75rem; min-block-size: 2.75rem; }
 .workspace .workspace-chrome__profile .workspace-chrome__signout { border-block-start: 1px solid var(--color-border); border-radius: 0; margin-block-start: var(--space-2); }
 .workspace .workspace-chrome__utility { padding: var(--space-2); min-inline-size: 2.75rem; min-block-size: 2.75rem; }
 .workspace .workspace-chrome__person { flex: none; }
@@ -75,9 +78,6 @@
 }
 .workspace .workspace-main--student-home { max-inline-size: none; padding: 0; }
 .workspace .workspace-main--student-home > :is(.notice, .form-error) { margin-inline: var(--space-6); }
-.workspace-environment-details { margin-block:var(--space-2); font-size:var(--type-sm); }
-.workspace-environment-details > summary { cursor:pointer; min-block-size:var(--control-min-size); align-content:center; }
-.workspace-environment-details > p { margin-block:var(--space-2); color:var(--color-text-secondary); max-inline-size:65ch; }
 .workspace .workspace-chrome__empty { margin: 0; padding: var(--space-4); font-size: var(--type-sm); color: var(--color-text-secondary); }
 .workspace[data-expression="student"] .workspace-chrome__rail button > svg { inline-size: 1.75rem; block-size: 1.75rem; }
 

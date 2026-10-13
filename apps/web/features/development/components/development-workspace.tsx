@@ -159,8 +159,8 @@ function CurrentDevelopmentWorkspace() {
   }
   function reload() { setRefresh(value => value + 1); }
   function saved() { setConfigure(null); reload(); }
-  if (parent) return <><WorkspacePageHeading title={t.development} /><WorkspaceState kind="denied" icon="shieldAlert" description={t.parentDenied}/></>;
-  if (!permitted) return <WorkspacePageHeading title={t.development} />;
+  if (parent) return <><WorkspacePageHeading workspaceTitle title={t.development} /><WorkspaceState kind="denied" icon="shieldAlert" description={t.parentDenied}/></>;
+  if (!permitted) return <WorkspacePageHeading workspaceTitle title={t.development} />;
   const currentRecords = !!activeLearnerId && !!activePeriod && !!summary && summary.status !== 'DISABLED' && !summaryRead.error;
   const periodPrerequisite=developmentPeriodPrerequisite(periodId,periods);
   const recognitionPanel = <section className="development-panel development-recognition" aria-label={t.personal}>
@@ -183,7 +183,7 @@ function CurrentDevelopmentWorkspace() {
         </section> : null}</>;
   const aboutPanel = <details className="development-panel development-about"><summary><CuevoIcon name="help" /><span>{t.about}</span></summary><p>{t.recordedOnly}</p></details>;
   return <div className={`development-workspace ${student ? 'development-workspace--student' : 'development-workspace--staff'}`} data-staff-selected={staffSelected}>
-    <WorkspacePageHeading title={t.development} />
+    <WorkspacePageHeading workspaceTitle title={t.development} />
     {recoveryCommand ? <div className="development-command-recovery"><CommandForm key={commandJournal.get(recoveryCommand.path)!.key} title={recoveryCommand.title} path={recoveryCommand.path} fields={[]} body={() => { throw new LearningApiError('conflict', true); }} note={t.originalCommandRecovery} validateReceipt={confirmDevelopmentCommandReceipt} onSaved={recoveryCommand.path === '/v1/development/policies' || recoveryCommand.path === '/v1/development/periods' ? saved : reload} onLockedChange={onLockedChange} /></div> : null}
     {staffSelected ? <header className="development-selected-context"><h2 className="development-selected-heading" ref={learnerHeading} tabIndex={-1}><bdi>{selectedLearner.label}</bdi></h2><Button type="button" variant="quiet" className="development-back-to-learners" disabled={learnerNavigationLocked} onClick={backToLearners}><CuevoIcon name="arrow" size={18} className="directional-icon" />{t.backToLearners}</Button></header> : null}
     <div className="development-top-row">

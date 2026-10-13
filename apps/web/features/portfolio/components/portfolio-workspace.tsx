@@ -26,8 +26,8 @@ export function PortfolioWorkspace() {
   const actor=`${app.apiUrl}:${app.membership?.schoolId}:${app.membership?.userId}:${app.membership?.role}`;
   const pendingSources=portfolioPendingReadingContexts(app.commandJournal,actor);
   const trail = app.locale === 'ar' ? portfolioTrailAr : portfolioTrailEn;
-  if (!app.online) return <><WorkspacePageHeading title={app.locale==='ar'?portfolioAr.portfolio:portfolioEn.portfolio}/><WorkspaceState kind="unavailable" icon="offline" description={trail.offline} role="status"/></>;
-  if (app.status !== 'ready') return <WorkspacePageHeading title={app.locale==='ar'?portfolioAr.portfolio:portfolioEn.portfolio}/>;
+  if (!app.online) return <><WorkspacePageHeading workspaceTitle title={app.locale==='ar'?portfolioAr.portfolio:portfolioEn.portfolio}/><WorkspaceState kind="unavailable" icon="offline" description={trail.offline} role="status"/></>;
+  if (app.status !== 'ready') return <WorkspacePageHeading workspaceTitle title={app.locale==='ar'?portfolioAr.portfolio:portfolioEn.portfolio}/>;
   return <CurrentPortfolioWorkspace key={actor} pendingSources={pendingSources} />;
 }
 
@@ -144,7 +144,7 @@ function CurrentPortfolioWorkspace({pendingSources}:{pendingSources:Map<string,P
     const element = event.target as HTMLElement;
     focusedControl.current = element.matches('input, textarea, select, button') ? { context: selectionContext, element, form: element.closest('section[aria-label]')?.getAttribute('aria-label') ?? undefined, name: element.getAttribute('name') ?? undefined, button: element.tagName === 'BUTTON' ? element.getAttribute('aria-label') || element.textContent?.trim() : undefined } : null;
   };
-  if (parent && !childContext.child) return <div ref={root} onFocusCapture={captureFocusedControl} className="portfolio-workspace portfolio-workspace--parent"><WorkspacePageHeading title={t.portfolio} /><ChildSelector key="child-context" context={childContext} /><div className="portfolio-toolbar"><IconButton icon="refresh" label={t.refresh} type="button" onClick={() => setRefresh(value => value + 1)} /></div></div>;
+  if (parent && !childContext.child) return <div ref={root} onFocusCapture={captureFocusedControl} className="portfolio-workspace portfolio-workspace--parent"><WorkspacePageHeading workspaceTitle title={t.portfolio} /><ChildSelector key="child-context" context={childContext} /><div className="portfolio-toolbar"><IconButton icon="refresh" label={t.refresh} type="button" onClick={() => setRefresh(value => value + 1)} /></div></div>;
 
   return <div ref={root} onFocusCapture={captureFocusedControl} className={`portfolio-workspace portfolio-workspace--${student ? 'student' : parent ? 'parent' : 'staff'}`}>
     <ChildSelector key="child-context" context={childContext} />

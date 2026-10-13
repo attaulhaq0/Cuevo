@@ -55,13 +55,14 @@ const ownerBrowserFiles: Record<string, readonly string[]> = {
   community: ['community-safety.spec.ts','community-member-source-pagination.spec.ts','customer-community-actions.spec.ts','customer-community-journey.spec.ts','hosted-community-consumer.spec.ts','shared-control-affordances.spec.ts'],
   curriculum: ['curriculum-lifecycle-review.spec.ts','curriculum-runtime-behavior.spec.ts','curriculum-record-context.spec.ts'],
   development: ['development-source-state.spec.ts','development-learner-context.spec.ts','recognition-actions.spec.ts','shared-control-affordances.spec.ts'],
-  home: ['exact-home-destinations.spec.ts','customer-arabic-home.spec.ts','frontend-compact-layout.spec.ts','parent-home-heading-identity.spec.ts'],
+  home: ['exact-home-destinations.spec.ts','customer-arabic-home.spec.ts','frontend-compact-layout.spec.ts','parent-home-heading-identity.spec.ts','home-compact-actions.spec.ts'],
   improvement: ['improvement-loop.spec.ts','improvement-current-list-state.spec.ts'],
   learning: ['learning-content-lifecycle.spec.ts','learning-source-navigation.spec.ts','learning-completion-receipt.spec.ts','download-lifecycle.spec.ts','learning-download-lifecycle.spec.ts'],
   portfolio: ['portfolio-sharing-recovery.spec.ts','portfolio-history-source-refusal.spec.ts','customer-private-file.spec.ts','frontend-compact-layout.spec.ts','portfolio-download-lifecycle.spec.ts'],
   progress: ['progress-current-context.spec.ts','progress-run-source-states.spec.ts'],
   'restricted-records': ['restricted-records.spec.ts','restricted-create-recovery-state.spec.ts'],
-  school: ['school-current-sources.spec.ts','school-daily-source-refusal.spec.ts','school-access-revision.spec.ts','shared-control-affordances.spec.ts'],
+  school: ['school-current-sources.spec.ts','school-daily-source-refusal.spec.ts','school-access-revision.spec.ts','shared-control-affordances.spec.ts','school-day-header.spec.ts'],
+  shell: ['workspace-profile-language.spec.ts'],
 };
 export const routineBrowserFiles = [...new Set([...criticalBrowserFiles,...Object.values(ownerBrowserFiles).flat()])].sort();
 export function criticalBrowserFilesForChanges(files:readonly string[]):string[]{return classifyRuntimeChanges(files,true).browserFiles;}

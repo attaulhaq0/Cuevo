@@ -36,6 +36,5 @@
 .student-home__native { margin-block: var(--space-3); }
 .student-home__native summary { cursor: pointer; min-block-size: 2.75rem; display: flex; align-items: center; }
 .student-home__native summary:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
-.student-home[data-presentation="quiet"] .student-trail__path, .student-home[data-presentation="quiet"] .student-trail__encouragement { display: none; }
 @media (max-width: 767px) { .student-home__records { padding-inline: var(--space-4); } }
 @media (max-width: 767px) { .home-action-list li { flex-direction: column; align-items: start; } }

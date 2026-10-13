@@ -88,9 +88,9 @@ test('paged Student work keeps its source continuations without a redundant refr
  }}await expect(page.locator('.student-trail__upcoming-controls .pagination-actions button')).toBeVisible();await expect(page.locator('.student-trail__portfolio .pagination-actions button')).toBeVisible();
 });
 
-test('unknown submitted-work context retains its Home notice and recovery',async({page})=>{
- await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .cuevo-workspace-state');
- for(const locale of['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();await expect(notice).toBeVisible();await expect(notice.getByRole('button')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');await expect(page.getByRole('heading',{name:work.title,exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Compare your next explanation',exact:true})).toBeVisible();}
+test('unknown submitted-work context retains its Home notice and compact introduction recovery',async({page})=>{
+ await desk(page,'unknown_work');const notice=page.locator('.student-trail__intro-row .student-trail__source-notice');
+ for(const locale of['English','العربية']){await page.getByRole('button',{name:locale,exact:true}).click();await expect(notice).toBeVisible();await expect(page.locator('.student-trail__refresh')).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','partial');await expect(page.getByRole('heading',{name:work.title,exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Compare your next explanation',exact:true})).toBeVisible();}
  await page.getByRole('button',{name:'English',exact:true}).click();const sources=page.locator('.student-home__source-continuations');await sources.locator('summary').click();await sources.getByRole('button',{name:'Load more: My available work',exact:true}).click();await expect(page.getByRole('heading',{name:work.title,exact:true})).toBeVisible();await expect(page.locator('.student-trail')).toHaveAttribute('data-availability','ready');await expect(notice).toHaveCount(0);
 });
 

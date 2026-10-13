@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, type Ref } from 'react';
+import { useWorkspaceNavigationSlot } from './workspace-navigation-slot';
 
 type WorkspacePageHelp = { helpLabel: string; help: ReactNode };
 
@@ -10,11 +11,15 @@ export function WorkspacePageProvider({ helpLabel, help, children }: WorkspacePa
 }
 
 /** One current content h1, authored directly from the owner's admitted source. */
-export function WorkspacePageHeading({ title, caption, description, actions, headingRef }: { title: ReactNode; caption?: ReactNode; description?: ReactNode; actions?: ReactNode; headingRef?: Ref<HTMLHeadingElement> }) {
-  return <header className="workspace-page-heading">
+export function WorkspacePageHeading({ title, caption, description, actions, headingRef, navigationTitle, workspaceTitle = false }: { title: ReactNode; caption?: ReactNode; description?: ReactNode; actions?: ReactNode; headingRef?: Ref<HTMLHeadingElement>; navigationTitle?: string; workspaceTitle?: boolean }) {
+  const navigation = useWorkspaceNavigationSlot();
+  const compact = !!navigation?.enabled && navigation.compactHeadings && typeof title === 'string' && (workspaceTitle && title === navigation.currentWorkspaceLabel || !!navigation.host && title === navigationTitle);
+  const currentCaption = caption;
+  const contextOnly = compact && !currentCaption && !description && !actions;
+  return <header className="workspace-page-heading" data-workspace-heading-compact={compact || undefined} data-workspace-heading-empty={contextOnly || undefined}>
     <div className="workspace-page-heading__content">
-      {caption ? <p className="workspace-page-heading__caption">{caption}</p> : null}
-      <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
+      {currentCaption ? <p className="workspace-page-heading__caption">{currentCaption}</p> : null}
+      <h1 className={compact ? 'workspace-page-heading__semantic' : undefined} ref={headingRef} tabIndex={-1}>{title}</h1>
       {description ? <div className="workspace-page-heading__description">{description}</div> : null}
     </div>
     {actions ? <div className="workspace-page-heading__actions">{actions}</div> : null}
