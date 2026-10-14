@@ -13,6 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import type { createHostedMigrationNativeProcess } from './hosted-migration-native-process';
 import { sourceChildCatalogueImage, admitSourceChildCatalogueImageInspection, isSourceChildCatalogueImageAbsent, verifySourceChildCatalogueContainerInspection } from './hosted-child-catalogue-reference';
+import {createNativeIsolationFailureRecorder,nativeIsolationDiagnosticPrefix,type NativeIsolationStep,type NativeIsolationFailureKind} from '../verification/ci-test-timings';
 
 const hash=(bytes:string|Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 const pinnedBaseManifest=Buffer.from('ewogICJzY2hlbWFWZXJzaW9uIjogMiwKICAibWVkaWFUeXBlIjogImFwcGxpY2F0aW9uL3ZuZC5vY2kuaW1hZ2UubWFuaWZlc3QudjEranNvbiIsCiAgImNvbmZpZyI6IHsKICAgICJtZWRpYVR5cGUiOiAiYXBwbGljYXRpb24vdm5kLm9jaS5pbWFnZS5jb25maWcudjEranNvbiIsCiAgICAiZGlnZXN0IjogInNoYTI1NjpkOWU4NzJjM2VlNTkzNThkYzcxYzNjOTk5NTdjMmQ4Y2NkM2YyMTQxOWZlZTg3Yjc0MmZhZGRjZjAwYTZlY2VlIiwKICAgICJzaXplIjogNjgyNgogIH0sCiAgImxheWVycyI6IFsKICAgIHsKICAgICAgIm1lZGlhVHlwZSI6ICJhcHBsaWNhdGlvbi92bmQub2NpLmltYWdlLmxheWVyLnYxLnRhcitnemlwIiwKICAgICAgImRpZ2VzdCI6ICJzaGEyNTY6YjkxMzY2MDliZWYwMTI4MTkxYWExNTc2MzdiOThkZDdiOThlNTIxNTRjYTYwYzE4MjU4ZDY1OTU3YTAxYzZkMCIsCiAgICAgICJzaXplIjogMjgyMzc2MjQKICAgIH0sCiAgICB7CiAgICAgICJtZWRpYVR5cGUiOiAiYXBwbGljYXRpb24vdm5kLm9jaS5pbWFnZS5sYXllci52MS50YXIrZ3ppcCIsCiAgICAgICJkaWdlc3QiOiAic2hhMjU2OjA1NmNkNDM3NDk1ZDdmYTE2N2U2N2FkMTYxZTAyYTZiMDY2YjRkYTE5YjMwNmRlMmRlM2E5YzdmNDc4MjUyNTIiLAogICAgICAic2l6ZSI6IDMzMTEKICAgIH0sCiAgICB7CiAgICAgICJtZWRpYVR5cGUiOiAiYXBwbGljYXRpb24vdm5kLm9jaS5pbWFnZS5sYXllci52MS50YXIrZ3ppcCIsCiAgICAgICJkaWdlc3QiOiAic2hhMjU2OjExZWU3YTUyZDhiYjA2MWRlMjVlNTczNTZhY2M4YzIwMTljZTlkNWUwNGIwZTRhMWU0MmE3NTBjNjgyODQ5YjMiLAogICAgICAic2l6ZSI6IDUwMDk0MTY0CiAgICB9LAogICAgewogICAgICAibWVkaWFUeXBlIjogImFwcGxpY2F0aW9uL3ZuZC5vY2kuaW1hZ2UubGF5ZXIudjEudGFyK2d6aXAiLAogICAgICAiZGlnZXN0IjogInNoYTI1Njo2ZmZiZDY4ZGFhYmYwNGI4Y2QyNDQxMjA1NDZmZDhjZTJkYzUzMDg4MTIwZTk4MTBhYTlkMjc2NDY3NDFlOGMwIiwKICAgICAgInNpemUiOiAxNzEyNjQxCiAgICB9LAogICAgewogICAgICAibWVkaWFUeXBlIjogImFwcGxpY2F0aW9uL3ZuZC5vY2kuaW1hZ2UubGF5ZXIudjEudGFyK2d6aXAiLAogICAgICAiZGlnZXN0IjogInNoYTI1NjplYWE5YzkxNzNjOWVmOGIyMGMwMzlkYzViZDM0NDMyOTZlMTJlZGVhMmMyOWY0ZmQxZTU0YjYzMjMwOGI2ZWEyIiwKICAgICAgInNpemUiOiA0NDcKICAgIH0KICBdLAogICJhbm5vdGF0aW9ucyI6IHsKICAgICJjb20uZG9ja2VyLm9mZmljaWFsLWltYWdlcy5iYXNoYnJldy5hcmNoIjogImFtZDY0IiwKICAgICJvcmcub3BlbmNvbnRhaW5lcnMuaW1hZ2UuYmFzZS5kaWdlc3QiOiAic2hhMjU2OjM1YWU5NTlmNmU4M2ZmYjQ2NWU3NjE0ZDI3YjRmZGRkMjgyODhjYWE1NTFmYmNhMjc5ODM2NzU2N2NjZTgwZDMiLAogICAgIm9yZy5vcGVuY29udGFpbmVycy5pbWFnZS5iYXNlLm5hbWUiOiAiZGViaWFuOmJvb2t3b3JtLXNsaW0iLAogICAgIm9yZy5vcGVuY29udGFpbmVycy5pbWFnZS5jcmVhdGVkIjogIjIwMjYtMDYtMTFUMDA6NDY6MzJaIiwKICAgICJvcmcub3BlbmNvbnRhaW5lcnMuaW1hZ2UucmV2aXNpb24iOiAiYjIzZTM0Yjk2OTFlNGU5ODU0M2E5ZTcwZTlkZjgzMWE2YzA1MGYwZiIsCiAgICAib3JnLm9wZW5jb250YWluZXJzLmltYWdlLnNvdXJjZSI6ICJodHRwczovL2dpdGh1Yi5jb20vbm9kZWpzL2RvY2tlci1ub2RlLmdpdCNiMjNlMzRiOTY5MWU0ZTk4NTQzYTllNzBlOWRmODMxYTZjMDUwZjBmOjI0L2Jvb2t3b3JtLXNsaW0iLAogICAgIm9yZy5vcGVuY29udGFpbmVycy5pbWFnZS51cmwiOiAiaHR0cHM6Ly9odWIuZG9ja2VyLmNvbS9fL25vZGUiLAogICAgIm9yZy5vcGVuY29udGFpbmVycy5pbWFnZS52ZXJzaW9uIjogIjI0LWJvb2t3b3JtLXNsaW0iCiAgfQp9','base64').toString();
@@ -121,22 +122,28 @@ test('binary sidecar CA and symlink replacement refuse immutable preparation bef
 type NativePostgresImage={imageId:string;reference:string};
 type NativeImageCommand=(args:string[])=>string;
 const nativeImageRefusal=()=>Error('Native PostgreSQL image admission requires review; contents withheld.');
-function prepareNativePostgresImage(command:NativeImageCommand):NativePostgresImage{
+type NativeIsolationRecorder=ReturnType<typeof createNativeIsolationFailureRecorder>;
+function nativeIsolationStep<T>(recorder:NativeIsolationRecorder|undefined,step:NativeIsolationStep,kind:NativeIsolationFailureKind,work:()=>T):T{
+ try{return work();}catch(error){recorder?.recordFailure(step,kind,error);throw error;}
+}
+function prepareNativePostgresImage(command:NativeImageCommand,recorder?:NativeIsolationRecorder):NativePostgresImage{
  try{
   for(const reference of[sourceChildCatalogueImage.mirrorPinnedReference,sourceChildCatalogueImage.pinnedReference]){
-   let inspection:string;try{inspection=command(['image','inspect',reference]);}catch(error){if(isSourceChildCatalogueImageAbsent(error,reference))continue;throw nativeImageRefusal();}
-   return admitSourceChildCatalogueImageInspection(inspection,reference);
+   let inspection:string;try{inspection=command(['image','inspect',reference]);}catch(error){if(isSourceChildCatalogueImageAbsent(error,reference))continue;recorder?.recordFailure(reference===sourceChildCatalogueImage.mirrorPinnedReference?'IMAGE_GHCR_LOOKUP':'IMAGE_ECR_LOOKUP','COMMAND_FAILED',error);throw nativeImageRefusal();}
+   return nativeIsolationStep(recorder,'IMAGE_ADMISSION','ADMISSION_REFUSED',()=>admitSourceChildCatalogueImageInspection(inspection,reference));
   }
-  command(['pull','--platform','linux/amd64',sourceChildCatalogueImage.mirrorPinnedReference]);
-  return admitSourceChildCatalogueImageInspection(command(['image','inspect',sourceChildCatalogueImage.mirrorPinnedReference]),sourceChildCatalogueImage.mirrorPinnedReference);
+  nativeIsolationStep(recorder,'IMAGE_PULL','COMMAND_FAILED',()=>command(['pull','--platform','linux/amd64',sourceChildCatalogueImage.mirrorPinnedReference]));
+  const inspection=nativeIsolationStep(recorder,'IMAGE_POST_PULL_LOOKUP','COMMAND_FAILED',()=>command(['image','inspect',sourceChildCatalogueImage.mirrorPinnedReference]));
+  return nativeIsolationStep(recorder,'IMAGE_POST_PULL_ADMISSION','ADMISSION_REFUSED',()=>admitSourceChildCatalogueImageInspection(inspection,sourceChildCatalogueImage.mirrorPinnedReference));
  }catch{throw nativeImageRefusal();}
 }
-function startNativePostgresContainer(command:NativeImageCommand,id:string,image:NativePostgresImage):void{
+function startNativePostgresContainer(command:NativeImageCommand,id:string,image:NativePostgresImage,recorder?:NativeIsolationRecorder):void{
  try{
-  verifySourceChildCatalogueContainerInspection(command(['inspect',id]),id,image);
-  const current=admitSourceChildCatalogueImageInspection(command(['image','inspect',image.imageId]),image.reference);
-  if(current.imageId!==image.imageId)throw nativeImageRefusal();
-  command(['start',id]);
+  const container=nativeIsolationStep(recorder,'CONTAINER_READBACK','COMMAND_FAILED',()=>command(['inspect',id]));
+  nativeIsolationStep(recorder,'CONTAINER_READBACK','ADMISSION_REFUSED',()=>verifySourceChildCatalogueContainerInspection(container,id,image));
+  const inspection=nativeIsolationStep(recorder,'IMAGE_READBACK','COMMAND_FAILED',()=>command(['image','inspect',image.imageId]));
+  nativeIsolationStep(recorder,'IMAGE_READBACK_ADMISSION','ADMISSION_REFUSED',()=>{const current=admitSourceChildCatalogueImageInspection(inspection,image.reference);if(current.imageId!==image.imageId)throw nativeImageRefusal();});
+  nativeIsolationStep(recorder,'CONTAINER_START','COMMAND_FAILED',()=>command(['start',id]));
  }catch{throw nativeImageRefusal();}
 }
 function nativePostgresCreateArguments(name:string,network:string,image:NativePostgresImage):string[]{
@@ -190,6 +197,18 @@ test('native disposable PostgreSQL creation uses the admitted immutable image wi
  assert.deepEqual(nativePostgresCreateArguments('owned-db','owned-network',{imageId:cachedPostgresConfig,reference:cachedPostgresEcr}),['create','--pull=never','--platform=linux/amd64','--name','owned-db','--network','owned-network','--env','POSTGRES_PASSWORD',cachedPostgresConfig]);
 });
 
+test('native isolation helper retains the original failed boundary before fixed refusal and excludes definitive absence',async()=>{
+ const{createNativeIsolationFailureRecorder:create}=await import('../verification/ci-test-timings');
+ const prepare=prepareNativePostgresImage,start=startNativePostgresContainer;
+ const timedOut=Object.assign(Error(secret),{status:null,signal:'SIGTERM',code:'ETIMEDOUT'});
+ const cold=create(),calls:string[][]=[];assert.throws(()=>prepare(args=>{calls.push(args);if(args[0]==='pull')throw timedOut;throw missingPostgresImage(args[2]);},cold),/requires review/);
+ assert.equal(cold.snapshot('CONFIRMED')?.step,'IMAGE_PULL','definitive absent lookups must not latch a failure before the failed original pull');assert.deepEqual(cold.snapshot('CONFIRMED')?.outcome,{exitCode:null,signal:'SIGTERM',code:'ETIMEDOUT'});assert.equal(calls.filter(args=>args[0]==='pull').length,1);assert.equal(JSON.stringify(cold.snapshot('CONFIRMED')).includes(secret),false);
+ const invalid=create();assert.throws(()=>prepare(()=>cachedPostgresInspection().replace('amd64','arm64'),invalid),/requires review/);assert.equal(invalid.snapshot('CONFIRMED')?.step,'IMAGE_ADMISSION');assert.equal(invalid.snapshot('CONFIRMED')?.kind,'ADMISSION_REFUSED');
+ const lookup=create();assert.throws(()=>prepare(()=>{throw timedOut;},lookup),/requires review/);assert.equal(lookup.snapshot('CONFIRMED')?.step,'IMAGE_GHCR_LOOKUP');
+ const stopped=create(),id='7'.repeat(64),image={imageId:cachedPostgresConfig,reference:cachedPostgresMirror};assert.throws(()=>start(()=>JSON.stringify([{Id:id,Image:'sha256:'+'0'.repeat(64)}]),id,image,stopped),/requires review/);assert.equal(stopped.snapshot('CONFIRMED')?.step,'CONTAINER_READBACK');assert.equal(stopped.snapshot('CONFIRMED')?.kind,'ADMISSION_REFUSED');
+ const cached=create();prepare(args=>{if(args[2]===cachedPostgresMirror)throw missingPostgresImage(args[2]);return cachedPostgresInspection(cachedPostgresEcr);},cached);assert.equal(cached.snapshot('CONFIRMED'),null,'successful ECR reuse produces no failure diagnostic');
+});
+
 // This test is registered on Linux rather than skipped after a Docker failure.
 // source-native runs on a fresh GitHub-hosted Linux runner and must prove the
 // real process owner, complete binary runtime, enforced write denial, inside-gate
@@ -202,8 +221,10 @@ if(process.platform==='linux')test('actual pinned Linux container prevents input
  let actual:typeof import('./hosted-migration-native-process')|undefined,port:Awaited<ReturnType<typeof createHostedMigrationNativeProcess>>|undefined,duplicatePort:Awaited<ReturnType<typeof createHostedMigrationNativeProcess>>|undefined,preparedImage:string|undefined;
  let source:{input:Input;env:Record<string,string>;workdir:string;name:string;certificate:string;key:string}|undefined,databaseIp:string|undefined,sqlExec:((query:string)=>string)|undefined;
  const dockerCommand=(args:string[],maximum=1024*1024)=>execFileSync('/usr/bin/docker',args,{env:{PATH:'/usr/bin:/bin',HOME:'/home/runner',DOCKER_CONFIG:'/home/runner/.docker'},stdio:['ignore','pipe','pipe'],timeout:30000,maxBuffer:maximum}).toString('utf8').trim();
+ const diagnostic=createNativeIsolationFailureRecorder();let nativeCleanup:'NOT_ATTEMPTED'|'CONFIRMED'|'UNCONFIRMED'='NOT_ATTEMPTED';
  let cleanup:Promise<void>|undefined;
  const cleanupOwned=()=>cleanup??=(async()=>{
+  nativeCleanup='UNCONFIRMED';
   const failures:unknown[]=[];const attempt=async(work:()=>Promise<void>|void)=>{try{await work();}catch(error){failures.push(error);}};
   if(databaseId)await attempt(()=>{dockerCommand(['rm','--force','--volumes',databaseId!]);assert.equal(dockerCommand(['container','ls','--all','--no-trunc','--quiet','--filter','id='+databaseId]),'');});
   if(networkCreated)await attempt(()=>{dockerCommand(['network','rm',network!]);});
@@ -211,6 +232,7 @@ if(process.platform==='linux')test('actual pinned Linux container prevents input
   if(port)await attempt(async()=>{await port!.dispose();port=undefined;});
   if(folder)await attempt(async()=>{assert.equal(resolve(folder!,'..'),releaseRoot);await rm(folder!,{recursive:true,force:true});});
   if(failures.length)throw new AggregateError(failures,'Native isolation cleanup requires review; private contents withheld.');
+  nativeCleanup='CONFIRMED';
  })();
  try{
   await phase('preparation',async()=>{
@@ -229,14 +251,14 @@ if(process.platform==='linux')test('actual pinned Linux container prevents input
    // Actual native db push runs only on an isolated disposable test network. Its
    // original hostname and verify-full CA remain unchanged; --add-host is a test
    // transport replacing DNS, never part of the production prepared container.
-   const{certificate,key}=source!,postgresImage=prepareNativePostgresImage(dockerCommand);dockerCommand(['network','create',network!]);networkCreated=true;
+   const{certificate,key}=source!,postgresImage=prepareNativePostgresImage(dockerCommand,diagnostic);nativeIsolationStep(diagnostic,'NETWORK_CREATE','COMMAND_FAILED',()=>dockerCommand(['network','create',network!]));networkCreated=true;
    const dbEnv={PATH:'/usr/bin:/bin',HOME:'/home/runner',DOCKER_CONFIG:'/home/runner/.docker',POSTGRES_PASSWORD:secret};
-   databaseId=execFileSync('/usr/bin/docker',nativePostgresCreateArguments(databaseName!,network!,postgresImage),{env:dbEnv,stdio:['ignore','pipe','pipe'],timeout:30000}).toString().trim();assert.match(databaseId,/^[a-f0-9]{64}$/);
-   startNativePostgresContainer(dockerCommand,databaseId,postgresImage);for(let attempt=0;attempt<100;attempt++){try{dockerCommand(['exec',databaseId,'pg_isready','-h','127.0.0.1','-p','5432','-U','postgres']);break;}catch{if(attempt===99)throw Error('Disposable native test database was not ready');await new Promise(done=>setTimeout(done,100));}}
-   dockerCommand(['cp',certificate,databaseId+':/tmp/cuevo-native-ca.pem']);dockerCommand(['cp',key,databaseId+':/tmp/cuevo-native-key.pem']);dockerCommand(['exec','--user','root',databaseId,'/bin/bash','-c','chown postgres:postgres /tmp/cuevo-native-ca.pem /tmp/cuevo-native-key.pem && chmod 600 /tmp/cuevo-native-key.pem']);
+   databaseId=nativeIsolationStep(diagnostic,'DATABASE_CREATE','COMMAND_FAILED',()=>execFileSync('/usr/bin/docker',nativePostgresCreateArguments(databaseName!,network!,postgresImage),{env:dbEnv,stdio:['ignore','pipe','pipe'],timeout:30000}).toString().trim());nativeIsolationStep(diagnostic,'DATABASE_CREATE_ID','ASSERTION_FAILED',()=>assert.match(databaseId!,/^[a-f0-9]{64}$/));
+   startNativePostgresContainer(dockerCommand,databaseId,postgresImage,diagnostic);for(let attempt=0;attempt<100;attempt++){try{dockerCommand(['exec',databaseId,'pg_isready','-h','127.0.0.1','-p','5432','-U','postgres']);break;}catch(error){if(attempt===99){diagnostic.recordFailure('DATABASE_READY','COMMAND_FAILED',error);throw Error('Disposable native test database was not ready');}await new Promise(done=>setTimeout(done,100));}}
+   const ownedDatabaseId=databaseId;nativeIsolationStep(diagnostic,'CERTIFICATE_COPY','COMMAND_FAILED',()=>dockerCommand(['cp',certificate,ownedDatabaseId+':/tmp/cuevo-native-ca.pem']));nativeIsolationStep(diagnostic,'KEY_COPY','COMMAND_FAILED',()=>dockerCommand(['cp',key,ownedDatabaseId+':/tmp/cuevo-native-key.pem']));nativeIsolationStep(diagnostic,'TLS_PERMISSIONS','COMMAND_FAILED',()=>dockerCommand(['exec','--user','root',ownedDatabaseId,'/bin/bash','-c','chown postgres:postgres /tmp/cuevo-native-ca.pem /tmp/cuevo-native-key.pem && chmod 600 /tmp/cuevo-native-key.pem']));
    sqlExec=(query:string)=>dockerCommand(['exec',databaseId!,'psql','-X','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1','-A','-t','-c',query]);
-   sqlExec("ALTER SYSTEM SET ssl_cert_file='/tmp/cuevo-native-ca.pem'");sqlExec("ALTER SYSTEM SET ssl_key_file='/tmp/cuevo-native-key.pem'");sqlExec("ALTER SYSTEM SET ssl='on'");sqlExec('SELECT pg_reload_conf()');sqlExec("ALTER ROLE postgres PASSWORD '"+secret+"'");
-   const databaseInspect=JSON.parse(dockerCommand(['inspect',databaseId])) as {NetworkSettings:{Networks:Record<string,{IPAddress:string}>}}[];databaseIp=databaseInspect[0].NetworkSettings.Networks[network!].IPAddress;assert.match(databaseIp,/^172[.]\d+[.]\d+[.]\d+$/);
+   nativeIsolationStep(diagnostic,'TLS_CERTIFICATE','COMMAND_FAILED',()=>sqlExec!("ALTER SYSTEM SET ssl_cert_file='/tmp/cuevo-native-ca.pem'"));nativeIsolationStep(diagnostic,'TLS_KEY','COMMAND_FAILED',()=>sqlExec!("ALTER SYSTEM SET ssl_key_file='/tmp/cuevo-native-key.pem'"));nativeIsolationStep(diagnostic,'TLS_ENABLE','COMMAND_FAILED',()=>sqlExec!("ALTER SYSTEM SET ssl='on'"));nativeIsolationStep(diagnostic,'TLS_RELOAD','COMMAND_FAILED',()=>sqlExec!('SELECT pg_reload_conf()'));nativeIsolationStep(diagnostic,'DATABASE_PASSWORD','COMMAND_FAILED',()=>sqlExec!("ALTER ROLE postgres PASSWORD '"+secret+"'"));
+   const inspection=nativeIsolationStep(diagnostic,'DATABASE_IP_READBACK','COMMAND_FAILED',()=>dockerCommand(['inspect',ownedDatabaseId]));databaseIp=nativeIsolationStep(diagnostic,'DATABASE_IP_READBACK','ADMISSION_REFUSED',()=>{const databaseInspect=JSON.parse(inspection) as {NetworkSettings:{Networks:Record<string,{IPAddress:string}>}}[];return databaseInspect[0].NetworkSettings.Networks[network!].IPAddress;});nativeIsolationStep(diagnostic,'DATABASE_IP_ASSERTION','ASSERTION_FAILED',()=>assert.match(databaseIp!,/^172[.]\d+[.]\d+[.]\d+$/));
   });
   await phase('native db push',async()=>{
    const{input}=source!;const nativeOutput=execFileSync('/usr/bin/docker',['run','--rm','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--user','65532:65532','--network',network!,'--add-host',`db.${ref}.supabase.co:${databaseIp}`,'--interactive','--env','PGPASSWORD','--tmpfs','/scratch:rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=700','--tmpfs','/work/supabase/.temp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532,mode=700',preparedImage!,'db','push','--db-url',input.databaseUrl,'--include-all','--skip-vault','--workdir','/work','--yes','--output-format','json'],{env:{PATH:'/usr/bin:/bin',HOME:'/home/runner',DOCKER_CONFIG:'/home/runner/.docker',PGPASSWORD:secret},input:String(Date.now()+30000)+'\n',stdio:['pipe','pipe','pipe'],timeout:30000,maxBuffer:1024*1024});assert.equal(nativeOutput.includes(Buffer.from(secret)),false);
@@ -248,8 +270,9 @@ if(process.platform==='linux')test('actual pinned Linux container prevents input
    await port!.dispose();port=undefined;assert.equal(dockerCommand(['container','ls','--all','--no-trunc','--quiet','--filter','ancestor='+preparedImage]),'');
   });
  }finally{
-  let completed=false;try{await t.test('cleanup',async()=>{await cleanupOwned();completed=true;});}finally{await cleanupOwned();}
-  assert.equal(completed,true,'Native isolation cleanup subtest requires review; private contents withheld.');
+  try{let completed=false;try{await t.test('cleanup',async()=>{await cleanupOwned();completed=true;});}finally{await cleanupOwned();}
+   assert.equal(completed,true,'Native isolation cleanup subtest requires review; private contents withheld.');
+  }finally{try{const snapshot=diagnostic.snapshot(nativeCleanup);if(snapshot)t.diagnostic(nativeIsolationDiagnosticPrefix+JSON.stringify(snapshot));}catch{/* Optional diagnostic publication never replaces the original test or cleanup outcome. */}}
  }
 });
 test.after(()=>hook.deregister());
