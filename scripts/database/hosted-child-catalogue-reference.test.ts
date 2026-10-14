@@ -33,6 +33,12 @@ test('only the exact own native absent-image outcome permits cold acquisition',(
  for(const patch of[{status:0},{status:2},{signal:'SIGTERM'},{code:'ETIMEDOUT'},{stdout:Buffer.from('unexpected output')},{stderr:Buffer.from('Cannot connect to the Docker daemon')},{stderr:Buffer.from('Error response from daemon: No such image: '+ecrImage+'\n')},{stderr:Buffer.from('Error response from daemon: No such image: '+mirrorImage+'\npermission denied')},{stderr:'Error response from daemon: No such image: '+mirrorImage},{stderr:Buffer.alloc(4097)}])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),...patch},mirrorImage),false);
  assert.equal(api.isSourceChildCatalogueImageAbsent!(absentImageError(),'foreign/image'),false);
 });
+test('Docker 28 default missing-image empty-array stdout retains exact native absence without accepting other data',()=>{
+ // docker/cli v28.0.4 TestIndentedInspectorEmpty emits this even when lookup fails.
+ const api=imageApi();for(const stdout of[Buffer.from('[]\n'),Buffer.from('[]\r\n'),Buffer.from('[]')])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),stdout},mirrorImage),true);
+ for(const stdout of[Buffer.from('{}'),Buffer.from('[null]'),Buffer.from('[ ]'),Buffer.from('[]\n\n'),Buffer.from('\n')])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),stdout},mirrorImage),false);
+ for(const patch of[{status:0},{status:2},{signal:'SIGTERM'},{code:'ETIMEDOUT'},{stderr:Buffer.from('permission denied')},{stderr:Buffer.from('Error response from daemon: No such image: '+ecrImage+'\n')}])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),stdout:Buffer.from('[]\n'),...patch},mirrorImage),false);
+});
 test('absence classification does not read error getters proxy traps or overridden buffer properties',()=>{
  const api=imageApi();let reads=0;const getter=absentImageError();Object.defineProperty(getter,'stderr',{get(){reads++;throw Error('private getter');}});
  assert.equal(api.isSourceChildCatalogueImageAbsent!(getter,mirrorImage),false);

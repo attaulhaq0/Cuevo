@@ -48,7 +48,8 @@ export function isSourceChildCatalogueImageAbsent(error:unknown,reference:string
  try{
   const selected=selectedImageReference.parse(reference);
   if(imageFailureData(error,'status')!==1||imageFailureData(error,'signal')!==null||imageFailureData(error,'code')!==undefined)return false;
-  if(imageFailureBytes(imageFailureData(error,'stdout'),0).byteLength!==0)return false;
+  const stdout=imageFailureBytes(imageFailureData(error,'stdout'),4);
+  if(stdout.byteLength!==0&&!/^\[\](?:\r?\n)?$/.test(stdout.toString('utf8')))return false;
   const stderr=imageFailureBytes(imageFailureData(error,'stderr'),4096).toString('utf8').replace(/\r?\n$/,'');
   return stderr==='Error response from daemon: No such image: '+selected;
  }catch{return false;}

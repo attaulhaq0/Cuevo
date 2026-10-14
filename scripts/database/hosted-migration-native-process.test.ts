@@ -146,7 +146,7 @@ const cachedPostgresConfig='sha256:e671c63f6ad3a3bc0503d26bb6641bb2b8eddaabbfe17
 const cachedPostgresMirror='ghcr.io/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
 const cachedPostgresEcr='public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
 const cachedPostgresInspection=(reference=cachedPostgresMirror)=>JSON.stringify([{Id:cachedPostgresConfig,RepoDigests:[reference],Os:'linux',Architecture:'amd64'}]);
-const missingPostgresImage=(reference:string)=>Object.assign(Error('private-image-canary'),{status:1,signal:null,stdout:Buffer.alloc(0),stderr:Buffer.from('Error response from daemon: No such image: '+reference+'\n')});
+const missingPostgresImage=(reference:string)=>Object.assign(Error('private-image-canary'),{status:1,signal:null,stdout:Buffer.from('[]\n'),stderr:Buffer.from('Error response from daemon: No such image: '+reference+'\n')});
 const nativeImageFunctions=()=>{assert.equal(typeof prepareNativePostgresImage,'function');assert.equal(typeof startNativePostgresContainer,'function');return{prepareNativePostgresImage,startNativePostgresContainer};};
 
 test('native PostgreSQL cache admission avoids pulling either exact already available repository image',()=>{
