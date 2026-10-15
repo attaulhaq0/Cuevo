@@ -8,6 +8,7 @@ import { LearningError } from './feedback';
 import { useApp } from '../session/providers';
 import type { FormValues } from '../session/form-drafts';
 import { commandFieldValue } from './command-field-value';
+import { captureCommandRecoveryFocus, type CommandRecoveryFocus } from './command-recovery-focus';
 
 export type FormField = { name: string; label: string; type?: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'datetime-local' | 'select' | 'checkbox'; required?: boolean; options?: { value: string; label: string }[]; defaultValue?: string | number; defaultChecked?: boolean; maxLength?: number; min?: number; max?: number; step?: number | 'any' };
 
@@ -22,7 +23,11 @@ export function CommandForm({ title, regionLabel, asRegion=true, showHeading=tru
   const scope = `${workingSlot}:${membership?.role}:${apiUrl}:${accessToken ?? ''}:${online}:${accessGeneration}`;
   const currentScope = useRef(scope); currentScope.current = scope;
   const mounted = useRef(false);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const formRef = useRef<HTMLFormElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const focusAttempt = useRef<{ focus: CommandRecoveryFocus | null; scope: string; key?: string; recover: boolean } | null>(null);
+  const [recoveryFocusVisible, setRecoveryFocusVisible] = useState(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; focusAttempt.current?.focus?.cancel(); focusAttempt.current = null; }; }, []);
   const working = formDrafts.get(workingSlot);
   const retained = journal.get(slot);
   const recoveryKey = useRef(retained?.key);
@@ -31,6 +36,7 @@ export function CommandForm({ title, regionLabel, asRegion=true, showHeading=tru
   const [formRevision, setFormRevision] = useState(0);
   const [error, setError] = useState<LearningApiError | null>(() => retained ? new LearningApiError('unavailable', true) : null);
   useEffect(() => {
+    focusAttempt.current?.focus?.cancel(); focusAttempt.current = null; setRecoveryFocusVisible(false);
     const currentCommand = journal.get(slot);
     recoveryKey.current = currentCommand?.key;
     setPending(false);
@@ -39,8 +45,21 @@ export function CommandForm({ title, regionLabel, asRegion=true, showHeading=tru
   useEffect(() => { if (recoveryKey.current && !retained) { recoveryKey.current = undefined; setError(current => current?.uncertain ? null : current); } }, [journalRevision, retained]);
   const locked = pending || !!error?.uncertain;
   useEffect(() => { onLockedChange?.(locked); return () => onLockedChange?.(false); }, [locked, onLockedChange]);
+  useEffect(() => {
+    const attempt = focusAttempt.current;
+    if (pending || !error?.uncertain || !attempt?.recover) return;
+    focusAttempt.current = null;
+    if (!mounted.current || currentScope.current !== attempt.scope || journal.get(slot)?.key !== attempt.key) { attempt.focus?.cancel(); return; }
+    const action = actionsRef.current?.querySelector<HTMLButtonElement>('button[type="button"]:not(:disabled)') ?? null;
+    setRecoveryFocusVisible(attempt.focus?.restore(action) ?? false);
+  }, [pending, error, scope, journal, journalRevision, slot]);
   async function send(values?: FormData) {
     if (pending) return;
+    focusAttempt.current?.focus?.cancel();
+    const form = formRef.current;
+    const origin = actionsRef.current?.querySelector<HTMLButtonElement>('button:focus') ?? null;
+    const attempt = { focus: form ? captureCommandRecoveryFocus(form, origin) : null, scope, key: undefined as string | undefined, recover: false };
+    focusAttempt.current = attempt; setRecoveryFocusVisible(false);
     setPending(true); setError(null);
     const expectedScope = scope; let commandKey: string | undefined;
     const ownsCommand = () => mounted.current && currentScope.current === expectedScope && (!commandKey || journal.get(slot)?.key === commandKey);
@@ -50,6 +69,7 @@ export function CommandForm({ title, regionLabel, asRegion=true, showHeading=tru
       const command = values && payload ? journal.prepare(slot, path, { ...payload, ...Object.fromEntries(Object.entries(basis).filter(([key]) => /^expected(?:Revision|Version|PolicyVersion|AvailabilityVersion)$/.test(key) && key in payload)) }) : journal.get(slot);
       if (!command) throw new LearningApiError('invalid');
       commandKey = command.key;
+      attempt.key = command.key;
       recoveryKey.current = command.key;
       const validateOriginalReceipt = captureCommandReceiptValidator(command, validateReceipt);
       const submittedDraft = formDrafts.get(workingSlot);
@@ -63,8 +83,12 @@ export function CommandForm({ title, regionLabel, asRegion=true, showHeading=tru
       const canPublishError = ownsCommand();
       if (!safe.uncertain && commandKey) journal.confirm(slot, commandKey);
       if (!canPublishError) return;
+      attempt.recover = safe.uncertain && commandKey !== undefined;
       setError(safe);
-    } finally { if (mounted.current && currentScope.current === expectedScope) setPending(false); }
+    } finally {
+      if (!attempt.recover || !ownsCommand() || focusAttempt.current !== attempt) { attempt.focus?.cancel(); if (focusAttempt.current === attempt) focusAttempt.current = null; }
+      if (mounted.current && currentScope.current === expectedScope) setPending(false);
+    }
   }
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void send(new FormData(event.currentTarget)); }
   function remember(form: HTMLFormElement) {
@@ -78,12 +102,12 @@ export function CommandForm({ title, regionLabel, asRegion=true, showHeading=tru
     setInputRevision(value => value + 1);
     onValuesChange?.(values);
   }
-  return <section className="learning-form" aria-label={asRegion?regionLabel??title:undefined}>{showHeading?<h3>{title}</h3>:null}{note ? <p className="learning-form__note">{note}</p> : null}<form key={formRevision} onSubmit={submit} onChange={event => remember(event.currentTarget)} aria-busy={pending}><fieldset disabled={locked}><div className="learning-form__fields">{fields.map((field) => {
+  return <section className="learning-form" aria-label={asRegion?regionLabel??title:undefined}>{showHeading?<h3>{title}</h3>:null}{note ? <p className="learning-form__note">{note}</p> : null}<form ref={formRef} key={formRevision} onSubmit={submit} onChange={event => remember(event.currentTarget)} aria-busy={pending}><fieldset disabled={locked}><div className="learning-form__fields">{fields.map((field) => {
     const id = `${idPrefix}-${field.name}`;
     const retainedValue = retained?.body[field.name];
     const workingValue = working?.values[field.name];
     const defaultValue = commandFieldValue(field.type, typeof retainedValue === 'string' || typeof retainedValue === 'number' ? retainedValue : typeof workingValue === 'string' ? workingValue : field.defaultValue);
     if (field.type === 'checkbox') return <div className="field field--wide checkbox-field" key={field.name}><input id={id} name={field.name} aria-describedby={error ? errorId : undefined} type="checkbox" required={field.required} defaultChecked={typeof retainedValue==='boolean'?retainedValue:typeof workingValue==='boolean'?workingValue:field.defaultChecked??false} /><label htmlFor={id}>{field.label}</label></div>;
     return <div className={`field ${field.type === 'textarea' ? 'field--wide' : ''}`} key={field.name}><label htmlFor={id}>{field.label}</label>{field.type === 'select' ? <select id={id} name={field.name} aria-describedby={error ? errorId : undefined} required={field.required} value={defaultValue ?? ''} onChange={() => undefined}><option value="">{t.choose}</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : field.type === 'textarea' ? <textarea id={id} name={field.name} aria-describedby={error ? errorId : undefined} required={field.required} defaultValue={defaultValue} maxLength={field.maxLength ?? 10_000} rows={5} /> : <input id={id} name={field.name} aria-describedby={error ? errorId : undefined} type={field.type ?? 'text'} required={field.required} defaultValue={defaultValue} min={field.min} max={field.max} maxLength={field.maxLength ?? 200} step={field.type === 'number' ? field.step ?? 1 : field.type === 'time' || field.type === 'datetime-local' ? field.step : undefined} />}</div>;
-  })}</div></fieldset>{error ? <LearningError error={error} id={errorId} /> : null}<div className="learning-form__actions">{error?.uncertain ? <Button type="button" disabled={pending} onClick={() => void send()}>{pending ? t.saving : t.retrySame}</Button> : <Button type="submit" disabled={pending}>{pending ? t.saving : actionLabel ?? t.save}</Button>}{onCancel && !error?.uncertain ? <Button type="button" variant="quiet" onClick={() => { formDrafts.remove(workingSlot); onCancel(); }} disabled={pending}>{t.cancel}</Button> : null}</div></form></section>;
+  })}</div></fieldset>{error ? <LearningError error={error} id={errorId} /> : null}<div ref={actionsRef} className="learning-form__actions">{error?.uncertain ? <Button type="button" disabled={pending} data-command-recovery-focus={recoveryFocusVisible || undefined} onBlur={() => setRecoveryFocusVisible(false)} onClick={() => void send()}>{pending ? t.saving : t.retrySame}</Button> : <Button type="submit" disabled={pending}>{pending ? t.saving : actionLabel ?? t.save}</Button>}{onCancel && !error?.uncertain ? <Button type="button" variant="quiet" onClick={() => { formDrafts.remove(workingSlot); onCancel(); }} disabled={pending}>{t.cancel}</Button> : null}</div></form></section>;
 }
