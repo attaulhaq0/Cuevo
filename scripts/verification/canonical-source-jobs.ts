@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
-import {readFileSync,lstatSync,realpathSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
+import {captureCanonicalSourceContext} from './git-source-digest';
+export {captureCanonicalSourceContext} from './git-source-digest';
 import {resolve} from 'node:path';
 import {z} from 'zod';
 import {canonicalReleaseExecutionJson} from './release-review';
@@ -19,19 +20,6 @@ const runSchema=z.object({id:positive,run_attempt:positive,head_sha:sha,head_bra
 const jobSchema=z.object({id:positive,name:z.string(),run_id:positive,run_attempt:positive,head_sha:sha,head_branch:z.string(),status:z.literal('completed'),conclusion:z.literal('success'),started_at:date,completed_at:date});
 const artifactSchema=z.object({id:positive,name:z.string().max(200),size_in_bytes:positive.max(2*1024*1024),expired:z.literal(false),digest:z.string().regex(/^sha256:[a-f0-9]{64}$/),created_at:date,expires_at:date,workflow_run:z.object({id:positive,head_sha:sha,head_branch:z.literal('main')})});
 const partitions=['source-native','source-contracts','source-delivery']as const;
-
-/** Captured checkout metadata only. The closure is not serialized evidence or
- * effect authority and never reacquires the immutable source blob inventory. */
-export function captureCanonicalSourceContext(rootValue:string,sourceShaValue:string,treeShaValue:string|undefined,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA'='CURRENT_SOURCE'){
- const root=resolve(rootValue),sourceSha=sha.parse(sourceShaValue),env=Object.fromEntries(['PATH','Path','SystemRoot','SYSTEMROOT','WINDIR','TEMP','TMP','LANG','LC_ALL'].filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]!]).concat([['GIT_NO_REPLACE_OBJECTS','1'],['GIT_CONFIG_NOSYSTEM','1'],['GIT_CONFIG_GLOBAL',process.platform==='win32'?'NUL':'/dev/null']]));
- if(!['CURRENT_SOURCE','ORIGINAL_RUNTIME_METADATA'].includes(purpose))throw fail();
- const git=(args:string[],input?:string)=>execFileSync('git',['-C',root,...args],{env,input,shell:false,windowsHide:true,stdio:['pipe','pipe','ignore'],timeout:15000,maxBuffer:32*1024*1024});
- if(realpathSync(root)!==root||lstatSync(root).isSymbolicLink()||realpathSync(git(['rev-parse','--show-toplevel']).toString().trim())!==root||git(['rev-parse','--is-shallow-repository']).toString().trim()!=='false'||git(['for-each-ref','--format=%(refname)','refs/replace']).length)throw fail();
- const graft=git(['rev-parse','--git-path','info/grafts']).toString().trim();try{if(readFileSync(resolve(root,graft)).length)throw fail();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw fail();}
- const currentSha=git(['rev-parse','HEAD']).toString().trim(),currentTree=git(['rev-parse','HEAD^{tree}']).toString().trim(),treeSha=sha.parse(git(['rev-parse',sourceSha+'^{tree}']).toString().trim());if(purpose==='CURRENT_SOURCE'&&currentSha!==sourceSha||treeShaValue!==undefined&&treeSha!==sha.parse(treeShaValue)||git(['status','--porcelain','--untracked-files=all']).length)throw fail();if(purpose==='ORIGINAL_RUNTIME_METADATA')git(['merge-base','--is-ancestor',sourceSha,currentSha]);
- const finalMetadata=()=>{if(realpathSync(root)!==root||lstatSync(root).isSymbolicLink()||git(['for-each-ref','--format=%(refname)','refs/replace']).length||git(['rev-parse','HEAD']).toString().trim()!==currentSha||git(['rev-parse','HEAD^{tree}']).toString().trim()!==currentTree||git(['rev-parse',sourceSha+'^{tree}']).toString().trim()!==treeSha||git(['status','--porcelain','--untracked-files=all']).length)throw fail();try{if(readFileSync(resolve(root,graft)).length)throw fail();}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw fail();}};
- return{root,treeSha,git,finalMetadata};
-}
 
 /** Exact committed descriptor, not an admission cache or caller supplied proof. */
 function sourceDescriptor(sourceSha:string,treeSha:string,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA'){

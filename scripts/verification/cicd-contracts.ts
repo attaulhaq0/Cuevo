@@ -1,7 +1,7 @@
 import {dataApiConfigurationObservationSchema,validateDisabledDataApiConfigurationEvidence} from './data-api-configuration';
 import { createRequire } from 'node:module';
 import { z } from 'zod';
-import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep,runtimeDeliveryArtifactStep,ciDatabaseJob,ciChildCatalogueArtifactStep,ciNative180CatalogueArtifactStep,ciOriginal231CatalogueArtifactStep,ciChildCatalogueFailureStep,ciRequiredJob,ciSourceJobs,ciRuntimeJobs} from './verification-workflows';
+import {validateCiRuntimeJobs,validateCiSourceJobs,runtimeLaneArtifactStep,runtimeDeliveryArtifactStep,ciDatabaseJob,ciChildCatalogueArtifactStep,ciNative180CatalogueArtifactStep,ciOriginal231CatalogueArtifactStep,ciChildCatalogueFailureStep,ciRequiredJob,ciSourceJobs,ciRuntimeJobs,ciCodeqlReceiptStep} from './verification-workflows';
 import { canonicalReleaseReviewJson } from './release-review';
 import { verificationSteps } from './steps';
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown };
@@ -120,7 +120,7 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   const issues: string[] = []; let ci: Mapping; let release: Mapping;
   try { ci = mapping(yaml.load(ciText)); release = mapping(yaml.load(releaseText)); } catch { return ['Workflow YAML is invalid.']; }
   const ciTrigger = mapping(ci.on), pushTrigger = mapping(ciTrigger.push);
-  const codeqlReceiptStep = { name:'Retain original processed CodeQL receipt',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-codeql-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/codeql-receipt/receipt.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90} };
+  const codeqlReceiptStep = ciCodeqlReceiptStep;
   if (Object.keys(ciTrigger).sort().join(',') !== 'pull_request,push,workflow_dispatch'
     || Object.keys(pushTrigger).join(',') !== 'branches' || JSON.stringify(pushTrigger.branches) !== JSON.stringify(['main'])
     || ciTrigger.pull_request !== null || ciTrigger.workflow_dispatch !== null) {
@@ -128,6 +128,8 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   }
   for (const [index, flow] of [ci, release].entries()) {
     const trigger = mapping(flow.on);
+    const codeqlCommits=Object.values(mapping(flow.jobs)).flatMap(job=>list(mapping(job).steps).map(mapping)).map(step=>String(step.uses??'')).filter(uses=>uses.startsWith('github/codeql-action/')).map(uses=>uses.slice(uses.lastIndexOf('@')+1));
+    if(new Set(codeqlCommits).size>1)issues.push('CodeQL actions in one workflow must use the same pinned commit.');
     if (Object.hasOwn(trigger, 'pull_request_target') || list(flow.on).some(event => ['pull_request_target', 'workflow_run'].includes(String(event))) || index === 0 && Object.hasOwn(trigger, 'workflow_run')) issues.push('Privileged untrusted triggers are forbidden.');
     if (index === 1 && (Object.keys(trigger).join(',') !== 'workflow_dispatch' || !Object.hasOwn(mapping(mapping(trigger.workflow_dispatch).inputs), 'full_verification_run_id'))) issues.push('Release must be manual and retain separate routine and full-candidate run inputs.');
     if (mapping(flow.permissions).contents !== 'read') issues.push('Default contents permission must be read.');

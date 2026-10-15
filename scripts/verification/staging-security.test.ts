@@ -6,12 +6,19 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { canonicalReleaseReviewJson } from './release-review';
+import {readFileSync} from 'node:fs';
+import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
+import {execFileSync,spawnSync} from 'node:child_process';
 const { yazl }=createRequire(import.meta.url)('playwright-core/lib/utilsBundle') as {yazl:{ZipFile:new()=>{outputStream:Readable;addBuffer(bytes:Buffer,name:string):void;end():void}}};
 async function receiptZip(value:unknown){const zip=new yazl.ZipFile(),chunks:Buffer[]=[];const done=new Promise<Buffer>((resolve,reject)=>{zip.outputStream.on('data',chunk=>chunks.push(chunk));zip.outputStream.on('error',reject);zip.outputStream.on('end',()=>resolve(Buffer.concat(chunks)));});zip.addBuffer(Buffer.from(canonicalReleaseReviewJson(value)),'receipt.json');zip.end();return done;}
 const receipt=()=>({version:1,purpose:'ORIGINAL_PROCESSED_CODEQL_RECEIPT',policy:'CODEQL_MEDIUM_HIGH_CRITICAL_V1',repository:expected.repository,sourceSha:expected.sha,ref:'refs/heads/main',runId:'41',runAttempt:2,observedAt:'2026-10-07T00:01:00Z',analysis:{id:20,sarifId:'01234567-89ab-cdef-0123-456789abcdef',key:'.github/workflows/ci.yml:codeql',toolVersion:'2.27.1',createdAt:'2026-10-07T00:00:30Z'},result:{check:'codeql-open-security-alerts',status:'VERIFIED',analysisResults:0,analysisRules:87,openAlerts:0,blockingAlerts:0,severities:{low:0,medium:0,high:0,critical:0,nonsecurity:0},snapshotPasses:2}});
 const expected = { sha: 'a'.repeat(40), repository: 'owner/repo' };
+const sourceBytes=readFileSync(resolve('.github/workflows/ci.yml'));
+const sourceMetadata=()=>({type:'file',path:'.github/workflows/ci.yml',encoding:'base64',size:sourceBytes.length,content:sourceBytes.toString('base64'),sha:createHash('sha1').update(Buffer.from('blob '+sourceBytes.length+'\0')).update(sourceBytes).digest('hex')});
 const run = { id: 41, run_attempt: 2, head_sha: expected.sha, head_branch: 'main', event: 'push', status: 'in_progress', conclusion: null, path: '.github/workflows/ci.yml', repository: { full_name: expected.repository } };
-const requiredSteps = ['Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', 'Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020', 'Run npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund', 'Run npm ci --ignore-scripts --no-audit --no-fund', 'Run node node_modules/esbuild/install.js', 'Run github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2', 'Run github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2', 'Require current processed CodeQL security findings to be clear','Retain original processed CodeQL receipt'];
+const requiredSteps = ['Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', 'Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020', 'Run npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund', 'Run npm ci --ignore-scripts --no-audit --no-fund', 'Run node node_modules/esbuild/install.js', 'Run github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d', 'Run github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d', 'Require current processed CodeQL security findings to be clear','Retain original processed CodeQL receipt'];
 const job = () => ({ id: 51, name: 'codeql', run_id: run.id, run_attempt: run.run_attempt, head_sha: run.head_sha, head_branch: 'main', status: 'completed', conclusion: 'success', started_at:'2026-10-07T00:00:00Z',completed_at:'2026-10-07T00:02:00Z',steps: requiredSteps.map((name, index) => ({ name, number: index + 1, status: 'completed', conclusion: 'success' })) });
 async function api() {
   let subject: Record<string, unknown> = {};
@@ -25,6 +32,8 @@ function fixture(mutate: (path: string, value: unknown, count: number) => unknow
   const reader = async (path: string): Promise<unknown> => {
     calls.push(path); let value: unknown;
     if (path === 'git/ref/heads/main') value = { object: { type: 'commit', sha: expected.sha } };
+    else if(path==='git/commits/'+expected.sha)value={sha:expected.sha,tree:{sha:'b'.repeat(40)},verification:{verified:true,reason:'valid',signature:'controlled signed source',payload:'controlled source tuple'}};
+    else if(path==='contents/.github/workflows/ci.yml?ref='+expected.sha)value=sourceMetadata();
     else if (path.startsWith('actions/workflows/ci.yml/runs?')) value = { total_count: 1, workflow_runs: [run] };
     else if (path === 'actions/runs/41') value = run;
     else if (path === 'actions/runs/41/attempts/2/jobs?per_page=100&page=1') value = { total_count: 2, jobs: [job(), { id: 52, name: 'technical-mvp', run_id: run.id, run_attempt: 2, head_sha: run.head_sha, head_branch: 'main', status: 'in_progress', conclusion: null,started_at:null,completed_at:null }] };
@@ -37,6 +46,88 @@ async function withReceipt(f:ReturnType<typeof fixture>,value:unknown=receipt())
  const archive=await receiptZip(value);const reader=async(path:string)=>path==='actions/runs/41/artifacts?per_page=100'?{total_count:1,artifacts:[{id:72,name:'cuevo-codeql-41-2',size_in_bytes:archive.length,expired:false,digest:'sha256:'+createHash('sha256').update(archive).digest('hex'),created_at:'2026-10-07T00:01:10Z',expires_at:'2026-10-21T00:00:00Z',workflow_run:{id:41,head_sha:expected.sha,head_branch:'main'}}]}:f.reader(path);
  return{...f,reader,artifact:async()=>archive};
 }
+
+test('current official security admits the actual reviewed new paired CodeQL action and cleanup names',async()=>{
+ const f=await withReceipt(fixture((path,value)=>{
+  if(path==='actions/runs/41/attempts/2/jobs?per_page=100&page=1'){
+   const result=structuredClone(value) as {jobs:ReturnType<typeof job>[]};
+   const current=result.jobs[0];
+   current.steps[5].name='Run github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d';
+   current.steps[6].name='Run github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d';
+   current.steps.push({name:'Post Run github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d',number:17,status:'completed',conclusion:'success'},{name:'Post Run github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d',number:18,status:'completed',conclusion:'success'});
+   return result;
+  }return value;
+ }));
+ const subject=await api(),result=await subject.readCanonicalStagingSecurityAndGuard(expected,f.reader,f.artifact);
+ assert.equal(result.proof.status,'VERIFIED');await result.refreshOriginalMetadata();
+});
+
+test('official security refuses invalid source bytes signature and whole-job drift before any receipt ZIP',async()=>{
+ const subject=await api();
+ for(const mode of ['blob','base64','length','size','utf8','path','encoding','signature','tree','source','pair','old-pair','gate','hidden','permission']){
+  const f=await withReceipt(fixture((path,value)=>{
+   if(path.startsWith('git/commits/')){const data=structuredClone(value) as {sha:string;tree:{sha:string};verification:{verified:boolean}};if(mode==='signature')data.verification.verified=false;if(mode==='tree')data.tree.sha='not-a-tree';if(mode==='source')data.sha='c'.repeat(40);return data;}
+   if(path.startsWith('contents/')){const data=structuredClone(value) as ReturnType<typeof sourceMetadata>;
+    if(mode==='blob')data.sha='0'.repeat(40);if(mode==='base64')data.content='not canonical!';if(mode==='length')data.size--;if(mode==='size')data.size=128*1024+1;if(mode==='path')data.path='.github/workflows/other.yml';if(mode==='encoding')data.encoding='none';
+    let bytes:Buffer|undefined;
+    if(mode==='utf8')bytes=Buffer.from([0xff]);
+    if(['pair','old-pair','gate','hidden','permission'].includes(mode)){const flow=createRequire(import.meta.url)('js-yaml').load(sourceBytes.toString()) as {jobs:{codeql:{steps:Record<string,unknown>[];permissions:Record<string,unknown>}}},job=flow.jobs.codeql;
+     if(mode==='pair'||mode==='old-pair')job.steps[5].uses='github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2';if(mode==='old-pair')job.steps[6].uses='github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2';if(mode==='gate')(job.steps[6].with as Record<string,unknown>)['wait-for-processing']=false;if(mode==='hidden')(job.steps[8].with as Record<string,unknown>)['include-hidden-files']=false;if(mode==='permission')job.permissions.contents='write';bytes=Buffer.from(createRequire(import.meta.url)('js-yaml').dump(flow));
+    }
+    if(bytes){data.size=bytes.length;data.content=bytes.toString('base64');data.sha=createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex');}return data;
+   }return value;
+  }));let zipReads=0;
+  await assert.rejects(subject.readCanonicalStagingSecurityAndGuard(expected,f.reader,async()=>{zipReads++;return f.artifact();}),/requires review/,mode);assert.equal(zipReads,0,mode);
+ }
+});
+
+test('original new-pair source metadata cannot renew receipts or recover after source drift',async()=>{
+ const subject=await api(),f=await withReceipt(fixture());let zipReads=0,changed=false;
+ const github=async(path:string)=>{const value=await f.reader(path);return changed&&path.startsWith('contents/')?{...value as object,sha:'0'.repeat(40)}:value;};
+ const result=await subject.readOriginalCanonicalStagingSecurityAndGuard({...run,status:'completed',conclusion:'success'},async path=>path==='actions/runs/41'?{...run,status:'completed',conclusion:'success'}:github(path),async()=>{zipReads++;return f.artifact();});
+ const original=canonicalReleaseReviewJson(result.proof);await result.refreshOriginalMetadata();assert.equal(zipReads,1);assert.equal(canonicalReleaseReviewJson(result.proof),original);
+ changed=true;await assert.rejects(result.refreshOriginalMetadata());changed=false;assert.throws(result.assertOriginalValidity);await assert.rejects(result.refreshOriginalMetadata());assert.equal(zipReads,1);
+});
+
+test('official new source refuses old action or cleanup names independently of successful job metadata',async()=>{
+ const subject=await api();
+ for(const mode of ['old-actions','old-post']){
+  const f=await withReceipt(fixture((path,value)=>{
+   if(!path.includes('/jobs?'))return value;const data=structuredClone(value) as {jobs:ReturnType<typeof job>[]},steps=data.jobs[0].steps;
+   if(mode==='old-actions'){steps[5].name='Run github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2';steps[6].name='Run github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2';}
+   else steps.push({name:'Post Run github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2',number:17,status:'completed',conclusion:'success'});return data;
+  }));let zipReads=0;await assert.rejects(subject.readCanonicalStagingSecurityAndGuard(expected,f.reader,async()=>{zipReads++;return f.artifact();}));assert.equal(zipReads,0);
+ }
+});
+
+test('original old CodeQL receipts retain actual source ancestry and never admit current or dirty source',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-original-codeql-'));
+ try{
+  execFileSync('git',['clone','--shared','--no-checkout','--quiet',resolve('.'),root],{windowsHide:true});
+  execFileSync('git',['-C',root,'checkout','--detach','--quiet','95184c1146f341bd2f1e60536229ab0e134ef5b9'],{windowsHide:true});
+  await mkdir(join(root,'.local'),{recursive:true});
+  const runner=join(root,'.local/codeql-original.mjs');
+  await writeFile(runner,`import assert from 'node:assert/strict';import{execFileSync}from'node:child_process';import{createHash}from'node:crypto';import{createRequire}from'node:module';import{readFileSync,writeFileSync}from'node:fs';
+const input=JSON.parse(readFileSync(process.env.CUEVO_ORIGINAL_CODEQL_INPUT,'utf8')),api=await import(input.url),{canonicalReleaseExecutionJson}=await import(input.reviewUrl),{yazl}=createRequire(input.packageJson)('playwright-core/lib/utilsBundle'),yaml=createRequire(input.packageJson)('js-yaml');
+const git=args=>execFileSync('git',args,{windowsHide:true}),date=delta=>new Date(Date.now()+delta).toISOString();
+for(const source of input.sources){
+const bytes=git(['show',source+':.github/workflows/ci.yml']),tree=git(['rev-parse',source+'^{tree}']).toString().trim(),flow=yaml.load(bytes.toString()),names=flow.jobs.codeql.steps.map(step=>step.name??'Run '+(step.uses??step.run));
+const run={id:41,run_attempt:2,head_sha:source,head_branch:'main',event:'push',path:'.github/workflows/ci.yml',status:'completed',conclusion:'success',repository:{full_name:'attaulhaq0/Cuevo'}};
+const started=date(-20000),completed=date(-2000),observed=date(-5000),created=date(-10000),expiry=date(60000),value={version:1,purpose:'ORIGINAL_PROCESSED_CODEQL_RECEIPT',policy:'CODEQL_MEDIUM_HIGH_CRITICAL_V1',repository:run.repository.full_name,sourceSha:source,ref:'refs/heads/main',runId:'41',runAttempt:2,observedAt:observed,analysis:{id:20,sarifId:'01234567-89ab-cdef-0123-456789abcdef',key:'.github/workflows/ci.yml:codeql',toolVersion:'controlled-original',createdAt:created},result:{check:'codeql-open-security-alerts',status:'VERIFIED',analysisResults:0,analysisRules:87,openAlerts:0,blockingAlerts:0,severities:{low:0,medium:0,high:0,critical:0,nonsecurity:0},snapshotPasses:2}};
+const zip=new yazl.ZipFile(),parts=[],done=new Promise((yes,no)=>{zip.outputStream.on('data',p=>parts.push(p));zip.outputStream.on('error',no);zip.outputStream.on('end',()=>yes(Buffer.concat(parts)));});zip.addBuffer(Buffer.from(canonicalReleaseExecutionJson(value)),'receipt.json');zip.end();const archive=await done;let archives=0;
+const get=async path=>{if(path==='git/ref/heads/main')return{object:{type:'commit',sha:source}};if(path==='git/commits/'+source)return{sha:source,tree:{sha:tree},verification:{verified:true,reason:'valid',signature:'controlled source signature metadata',payload:'controlled signed source tuple'}};if(path==='contents/.github/workflows/ci.yml?ref='+source)return{type:'file',path:'.github/workflows/ci.yml',encoding:'base64',size:bytes.length,content:bytes.toString('base64'),sha:createHash('sha1').update(Buffer.from('blob '+bytes.length+'\\0')).update(bytes).digest('hex')};if(path==='actions/runs/41')return run;if(path==='actions/runs/41/attempts/2/jobs?per_page=100&page=1')return{total_count:1,jobs:[{id:51,name:'codeql',run_id:41,run_attempt:2,head_sha:source,head_branch:'main',status:'completed',conclusion:'success',started_at:started,completed_at:completed,steps:names.map((name,index)=>({name,number:index+1,status:'completed',conclusion:'success'}))}]};if(path==='actions/runs/41/artifacts?per_page=100')return{total_count:1,artifacts:[{id:72,name:'cuevo-codeql-41-2',size_in_bytes:archive.length,expired:false,digest:'sha256:'+createHash('sha256').update(archive).digest('hex'),created_at:observed,expires_at:expiry,workflow_run:{id:41,head_sha:source,head_branch:'main'}}]};throw Error('Unexpected fixed test route');};
+if(input.dirty)writeFileSync('README.md','Changed local original source');
+if(input.dirty||input.current){await assert.rejects(input.current?api.readCanonicalStagingSecurityAndGuard({sha:source,repository:run.repository.full_name},get,async()=>{archives++;return archive;}):api.readOriginalCanonicalStagingSecurityAndGuard(run,get,async()=>{archives++;return archive;}));assert.equal(archives,0);}
+else{const result=await api.readOriginalCanonicalStagingSecurityAndGuard(run,get,async()=>{archives++;return archive;});const original=JSON.stringify(result.proof);await result.refreshOriginalMetadata();await result.refreshOriginalMetadata();assert.equal(archives,1);assert.equal(JSON.stringify(result.proof),original);result.assertOriginalValidity();}
+}
+console.log(JSON.stringify({controlledOriginalSource:true}));`);
+  for(const mode of ['original','current','dirty']){
+   const input=join(root,'.local/input.json');await writeFile(input,JSON.stringify({url:pathToFileURL(resolve('scripts/verification/staging-security.ts')).href,packageJson:resolve('package.json'),reviewUrl:pathToFileURL(resolve('scripts/verification/release-review.ts')).href,sources:mode==='original'?['08006c085d5030178bc104129b7ff28f7273346e','561085f8df13c40fbd23ba51f422ed3445d3a4a9','c4e734d07b1484262bbedbc4b9fcc73baf3eeff2','239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37','ef8437b7fd77cc0f518efbb88756ab0ae78c07c6','95184c1146f341bd2f1e60536229ab0e134ef5b9']:['95184c1146f341bd2f1e60536229ab0e134ef5b9'],current:mode==='current',dirty:mode==='dirty'}));
+   const result=spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,runner],{cwd:root,windowsHide:true,encoding:'utf8',env:{...process.env,CUEVO_ORIGINAL_CODEQL_INPUT:input}});
+   assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).controlledOriginalSource,true);
+  }
+ }finally{assert.equal(dirname(root),resolve(tmpdir()));await rm(root,{recursive:true,force:true});}
+});
 test('missing malformed stale or changed processed receipt never falls back to successful job metadata',async()=>{
  const subject=await api();const original=fixture();await assert.rejects(subject.readCanonicalStagingSecurity(expected,original.reader));
  for(const mode of ['source','attempt','policy','time','private','digest','changed-metadata','missing']){
