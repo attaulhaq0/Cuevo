@@ -8,7 +8,7 @@ const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 const same = (left: unknown, right: unknown) => canonicalReleaseReviewJson(left) === canonicalReleaseReviewJson(right);
 const main = "github.ref == 'refs/heads/main'";
 const checkout = { uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', with: { 'persist-credentials': false, 'fetch-depth': 0 } };
-const node = { uses: 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020', with: { 'node-version': '24.16.0' } };
+const node = { uses: 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1', with: { 'node-version': '24.16.0' } };
 const install = { run: 'npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js' };
 const metadata = { GH_TOKEN: '${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}', SUPABASE_ACCESS_TOKEN: '${{ secrets.SUPABASE_ACCESS_TOKEN }}', VERCEL_TOKEN: '${{ secrets.VERCEL_TOKEN }}' };
 const review = { ...metadata, NATIVE_REVIEW_BASE64: '${{ needs.prepare-qa.outputs.review-base64 }}', NATIVE_REVIEW_DIGEST: '${{ needs.prepare-qa.outputs.review-digest }}' };
@@ -48,7 +48,7 @@ export function validateHostedCommunityQaWorkflow(text: string): string[] {
     const expectedNative = [checkout, node, install,
       { name: 'Admit current protected QA before operator credentials', env: review, run: command('approval') },
       { name: 'Verify fixed original commands and native recipe read only', env: { ...review, CUEVO_MIGRATION_DATABASE_PASSWORD: '${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}', CUEVO_DATABASE_TLS_CA: '${{ secrets.CUEVO_DATABASE_TLS_CA }}' }, run: command('verify') },
-      { name: 'Preserve only native QA result or failure metadata', if: 'always()', uses: 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+      { name: 'Preserve only native QA result or failure metadata', if: 'always()', uses: 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
         with: { name: 'cuevo-community-native-${{ github.run_id }}-${{ github.run_attempt }}', path: outputPaths, 'include-hidden-files': true, 'if-no-files-found': 'warn', 'retention-days': 14 } },
     ];
     if (!same(preparation, expectedPreparation)) issues.push('Community native QA preparation actions, metadata recipients or required command changed.');

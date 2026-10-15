@@ -16,8 +16,23 @@ import type {Readable} from 'node:stream';
 import {createPreparedEdgeFixture} from './prepared-edge-artifact.fixture';
 function denied(result:Awaited<ReturnType<typeof runCanonicalJobFixture>>,label='',marker?:string){assert.match(result.stderr,/FIXTURE_CANONICAL_READER_ENTERED/,label);assert.equal(result.stderr.includes('SyntaxError'),false,label);if(marker)assert.ok(result.stderr.includes(marker),label+': '+result.stderr);assert.notEqual(result.status,0,label);}
 
+test('original source-era compatibility never admits a failed runtime or mandatory source producer',async()=>{
+ const runtime=await runCanonicalJobFixture('runtime',value=>{value.run.status='completed';value.run.conclusion='failure';},{sourcePurpose:'ORIGINAL_RUNTIME_METADATA'});
+ denied(runtime,'A failed original whole runtime run cannot become canonical proof.');
+ const schema=await runCanonicalJobFixture('schema',value=>{value.run.status='completed';value.run.conclusion='failure';value.jobs.find(job=>job.name==='source-fixtures-native')!.conclusion='failure';},{sourcePurpose:'ORIGINAL_RUNTIME_METADATA',historicalSchema:true});
+ denied(schema,'A failed mandatory source-native producer prevents original schema proof.');
+});
+
 test('historical database policy accepts only exact source-bound pre231 jobs and current sources require the231 artifact',async()=>{
  const url=pathToFileURL(resolve('scripts/verification/canonical-runtime-jobs.ts')).href+'?historical-database-policy',hook=registerHooks({load(selected,context,next){if(selected===url)return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(selected),'utf8')+'\nexport {historicalDatabaseContract as fixtureHistoricalDatabaseContract};',{loader:'ts',format:'esm'}).code};return next(selected,context);}});try{const api:Record<string,unknown>=await import(url);assert.equal(typeof api.fixtureHistoricalDatabaseContract,'function');const select=api.fixtureHistoricalDatabaseContract as(job:unknown,source:string,purpose:string,git:(args:string[])=>Buffer)=>unknown,git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:32*1024*1024}),sha='239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37',yaml=createRequire(import.meta.url)('js-yaml')as{load(value:string):{jobs:Record<string,unknown>}},old=yaml.load(git(['show',sha+':.github/workflows/ci.yml']).toString()).jobs['database-checks'];assert.deepEqual(select(old,sha,'ORIGINAL_RUNTIME_METADATA',git),old);assert.throws(()=>select(old,sha,'CURRENT_SOURCE',git));assert.throws(()=>select({...old as object,'continue-on-error':true},sha,'ORIGINAL_RUNTIME_METADATA',git));assert.throws(()=>select(old,'0'.repeat(40),'ORIGINAL_RUNTIME_METADATA',git));}finally{hook.deregister();}
+});
+
+test('runtime database and browser policies retain exact pre-Actions501 jobs only for original source metadata',async()=>{
+ const url=pathToFileURL(resolve('scripts/verification/canonical-runtime-jobs.ts')).href+'?pre-actions-policies',hook=registerHooks({load(selected,context,next){if(selected===url)return{format:'module',shortCircuit:true,source:transformSync(readFileSync(new URL(selected),'utf8')+'\nexport {historicalDatabaseContract as fixtureDatabase,historicalBrowserContract as fixtureBrowser};',{loader:'ts',format:'esm'}).code};return next(selected,context);}});
+ try{
+  const api=await import(url) as {fixtureDatabase:(job:unknown,source:string,purpose:string,git:(args:string[])=>Buffer)=>unknown;fixtureBrowser:(job:unknown,source:string,purpose:string,git:(args:string[])=>Buffer)=>unknown},git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:32*1024*1024}),source='501224dc5f6bfea631ecc66a0efae7892a83c847',yaml=createRequire(import.meta.url)('js-yaml') as{load(value:string):{jobs:Record<string,unknown>}},jobs=yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs;
+  for(const[name,select]of [['database-checks',api.fixtureDatabase],['runtime-browser',api.fixtureBrowser]] as const){const original=jobs[name];assert.deepEqual(select(original,source,'ORIGINAL_RUNTIME_METADATA',git),original);assert.throws(()=>select(original,source,'CURRENT_SOURCE',git));assert.throws(()=>select({...original as object,'continue-on-error':true},source,'ORIGINAL_RUNTIME_METADATA',git));assert.throws(()=>select(original,source,'ORIGINAL_RUNTIME_METADATA',args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)));}
+ }finally{hook.deregister();}
 });
 
 test('canonical runtime admission binds original run attempt and every successful isolated lane and source artifact',async()=>{

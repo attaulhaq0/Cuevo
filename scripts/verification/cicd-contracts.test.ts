@@ -1,4 +1,11 @@
 import assert from 'node:assert/strict';
+
+test('release current admission rejects old or arbitrary reviewed Action pins even when CI uses new pins',async()=>{
+ const api=await import('./cicd-contracts'),{readFile}=await import('node:fs/promises');
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ assert.deepEqual(api.validateWorkflows(ci,release),[]);
+ for(const[current,old]of [['949feb2413d6458794dcd2491c4babbbce0c15c1','820762786026740c76f36085b0efc47a31fe5020'],['cf430e030ddbb5b0abf93d22962f4752f3646cd9','043fb46d1a93c77aae656e7c1c64a875d1fc6a0a']])for(const pin of [old,'f'.repeat(40)])assert.ok(api.validateWorkflows(ci,release.replaceAll(current,pin)).length);
+});
 import test from 'node:test';
 import { mkdtemp, mkdir, readFile, rm, writeFile,lstat,realpath } from 'node:fs/promises';
 import { existsSync,readFileSync } from 'node:fs';

@@ -7,7 +7,7 @@ import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './rel
 import { readSingleJsonArchive } from './single-json-archive';
 import { validateCodeqlReceipt } from './codeql-alerts';
 import { createRequire } from 'node:module';
-import { ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract } from './verification-workflows';
+import { ciCodeqlJobBeforeUpgrade,ciCodeqlJobBeforeActions,deriveCodeqlJobStepContract } from './verification-workflows';
 import { captureCanonicalSourceContext } from './git-source-digest';
 
 const unavailable = () => new Error('Canonical staging security evidence is unavailable or requires review; contents withheld.');
@@ -34,7 +34,7 @@ async function readSecuritySource(expected:z.infer<typeof expectedSchema>,github
   return{commit,bytes,job,raw:canonicalReleaseExecutionJson({commit:commitRaw,contents:contentsRaw})};
  };
  const original=await read();let context:ReturnType<typeof captureCanonicalSourceContext>|undefined;
- if(canonicalReleaseReviewJson(original.job)===canonicalReleaseReviewJson(ciCodeqlJobBeforeUpgrade)){
+ if([ciCodeqlJobBeforeUpgrade,ciCodeqlJobBeforeActions].some(job=>canonicalReleaseReviewJson(original.job)===canonicalReleaseReviewJson(job))){
   if(purpose!=='ORIGINAL_RUNTIME_METADATA')throw unavailable();
   context=captureCanonicalSourceContext(resolve('.'),expected.sha,original.commit.tree.sha,purpose);
   if(!context.git(['show',expected.sha+':.github/workflows/ci.yml']).equals(original.bytes))throw unavailable();
