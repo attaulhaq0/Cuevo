@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.0.0
         with: { node-version: '24.16.0', cache: npm }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
@@ -59,7 +59,7 @@ jobs:
           CUEVO_BACKEND_RELEASE_INPUT_JSON: ${{ vars.CUEVO_BACKEND_RELEASE_INPUT_JSON }}
         run: node --import tsx scripts/verification/backend-release.ts prepare
       - name: Retain this run's secret-free staged package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-backend-package-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -78,13 +78,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.0.0
         with: { node-version: '24.16.0', cache: npm }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
       - name: Read only this run's prepared package
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.0
         with:
           name: cuevo-backend-package-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/
@@ -125,7 +125,7 @@ jobs:
         run: node --import tsx scripts/verification/backend-release.ts export-schema-completion
       - name: Retain confirmed schema recovery completion
         if: inputs.scope == 'reconcile-schema'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-schema-recovery-completion-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/hosted-release/schema-recovery-completion.json
@@ -233,7 +233,7 @@ jobs:
         run: node --import tsx scripts/verification/backend-release.ts export-runtime-recovery
       - name: Retain original runtime rollout recovery evidence
         if: always() && inputs.scope == 'runtime-rollout' && (inputs.runtime_action == '' || inputs.runtime_action == 'ROLL_FORWARD') && (steps.runtime-rollout.outcome == 'failure' || steps.runtime-rollout.outcome == 'cancelled') && steps.runtime-recovery-export.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-runtime-rollout-recovery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/hosted-release/runtime-rollout-recovery.json
@@ -249,7 +249,7 @@ jobs:
         run: node --import tsx scripts/verification/backend-release.ts export-activation-execution
       - name: Retain original worker activation execution evidence
         if: always() && inputs.scope == 'complete-backend' && steps.original-worker-export.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-worker-activation-execution-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/hosted-release/worker-activation-execution-export.json
@@ -342,7 +342,7 @@ jobs:
         run: node --import tsx scripts/verification/backend-release.ts export-web-handover
       - name: Retain only the completed backend public handover
         if: inputs.scope == 'installed-runtime'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-web-handover-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/hosted-release/web-transfer.json
@@ -351,7 +351,7 @@ jobs:
           retention-days: 2
       - name: Preserve schema status without private runtime inputs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-backend-schema-result-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

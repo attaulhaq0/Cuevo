@@ -41,7 +41,7 @@ export function validateBackendVerificationRun(value: unknown, expected: { sha: 
 }
 
 const checkout = { name: 'Check out frozen source', uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', with: { 'persist-credentials': false, 'fetch-depth': 0 } };
-const node = { name: 'Set up Node', uses: 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020', with: { 'node-version': '24.16.0', cache: 'npm' } };
+const node = { name: 'Set up Node', uses: 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1', with: { 'node-version': '24.16.0', cache: 'npm' } };
 const setup = [checkout, node,
   { name: 'Install pinned npm', run: 'npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund' },
   { name: 'Install locked dependencies', run: 'npm ci --ignore-scripts --no-audit --no-fund' },
@@ -79,7 +79,7 @@ const workflow = { name: 'Cuevo focused staging verification', on: { workflow_di
   concurrency: { group: 'cuevo-staging-verification-${{ github.ref }}', 'cancel-in-progress': true }, env: { CI: 'true', NEXT_TELEMETRY_DISABLED: '1', SCARF_ANALYTICS: 'false' }, jobs:{'canonical-schema':job(10,[...setup,
    {name:'Observe original canonical source and database proof',env:{GH_TOKEN:'${{ github.token }}',CUEVO_CANONICAL_CI_RUN_ID:'${{ inputs.ci_run_id }}'},run:'node --import tsx scripts/verification/staging-verification.ts'},
    frozenSource,
-   {name:'Retain canonical observation only',if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-schema-observation-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/staging-schema/observation.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':14}},
+   {name:'Retain canonical observation only',if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-schema-observation-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/staging-schema/observation.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':14}},
   ])} };
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown };
 

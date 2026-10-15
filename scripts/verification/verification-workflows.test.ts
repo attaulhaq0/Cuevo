@@ -3,7 +3,73 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJobs } from './verification-workflows';
 import {execFileSync} from 'node:child_process';
-import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract} from './verification-workflows';
+import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics} from './verification-workflows';
+
+test('actual main88 pre-Actions source and original501 require original purpose without changing current or earlier CodeQL policy',()=>{
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024});
+ for(const source of ['501224dc5f6bfea631ecc66a0efae7892a83c847','88b35965242e5b076806da3f05110bd61db12ef7']){
+  const jobs=yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>;
+  for(const name of ['fast-checks','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery','source-contracts','source-cohort-continuation-1','source-cohort-reconciliation-2','runtime-backend','runtime-browser','integration-learning','integration-state','technical-mvp','database-checks']){
+   assert.deepEqual(selectCanonicalWorkflowJob(name,jobs[name],'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),jobs[name],source+': '+name);
+   assert.throws(()=>selectCanonicalWorkflowJob(name,jobs[name],'CURRENT_SOURCE',{sha:source,git}),source+': '+name);
+  }
+  const original=deriveCodeqlJobStepContract(jobs.codeql,'ORIGINAL_RUNTIME_METADATA',{sha:source,git});
+  assert.equal(original.requiredSteps[1],'Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020');
+  assert.throws(()=>deriveCodeqlJobStepContract(jobs.codeql,'CURRENT_SOURCE',{sha:source,git}));
+  assert.throws(()=>deriveCodeqlJobStepContract(jobs.codeql,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+ }
+ const original951=(yaml.load(git(['show','95184c1146f341bd2f1e60536229ab0e134ef5b9:.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>).codeql;
+ assert.equal(deriveCodeqlJobStepContract(original951,'ORIGINAL_RUNTIME_METADATA',{sha:'95184c1146f341bd2f1e60536229ab0e134ef5b9',git}).requiredSteps[5],'Run github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2');
+});
+
+test('canonical job eras preserve actual original source jobs and reject current old mixed or unbound contracts',()=>{
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),source='501224dc5f6bfea631ecc66a0efae7892a83c847';
+ const original=yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,{steps:Record<string,unknown>[]}>;
+ const pins=[['actions/setup-node@820762786026740c76f36085b0efc47a31fe5020','actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'],['actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a','actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'],['actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3','actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333']];
+ for(const name of ['fast-checks','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery','source-contracts','source-cohort-continuation-1','source-cohort-reconciliation-2','runtime-backend','runtime-browser','integration-learning','integration-state','technical-mvp','database-checks']){
+  const old=original[name],current=structuredClone(old);for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
+  assert.deepEqual(selectCanonicalWorkflowJob(name,current,'CURRENT_SOURCE'),current,name);
+  assert.deepEqual(selectCanonicalWorkflowJob(name,old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old,name);
+  assert.throws(()=>selectCanonicalWorkflowJob(name,old,'CURRENT_SOURCE',{sha:source,git}),name);
+  assert.throws(()=>selectCanonicalWorkflowJob(name,old,'ORIGINAL_RUNTIME_METADATA'),name);
+  assert.throws(()=>selectCanonicalWorkflowJob(name,old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}),name);
+  const changed=structuredClone(current);changed.steps.find(step=>String(step.uses??'').startsWith('actions/setup-node@'))!.uses='actions/setup-node@'+'f'.repeat(40);
+  assert.throws(()=>selectCanonicalWorkflowJob(name,changed,'CURRENT_SOURCE'),name);
+  assert.throws(()=>selectCanonicalWorkflowJob(name,changed,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),name);
+ }
+ assert.throws(()=>selectCanonicalWorkflowJob('unknown',original['database-checks'],'ORIGINAL_RUNTIME_METADATA',{sha:source,git}));
+ assert.deepEqual(ciDatabaseJobBeforeOriginal231,(yaml.load(git(['show','239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37:.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['database-checks']);
+ assert.deepEqual(ciRuntimeBrowserJobBeforeDiagnostics,(yaml.load(git(['show','08006c085d5030178bc104129b7ff28f7273346e:.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['runtime-browser']);
+});
+
+test('reviewed Actions pins are admitted as current complete source and runtime jobs without relaxing mixed pins',async()=>{
+ const text=await readFile('.github/workflows/ci.yml','utf8');
+ const upgrades=[['043fb46d1a93c77aae656e7c1c64a875d1fc6a0a','cf430e030ddbb5b0abf93d22962f4752f3646cd9'],['70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3','9000827ccba6bdab643e8b6fd33ac0654aef8333'],['820762786026740c76f36085b0efc47a31fe5020','949feb2413d6458794dcd2491c4babbbce0c15c1']];
+ const upgraded=upgrades.reduce((value,[before,after])=>value.replaceAll(before,after),text),flow=yaml.load(upgraded);
+ assert.deepEqual(validateCiSourceJobs(flow.jobs),[]);
+ assert.deepEqual(validateCiRuntimeJobs(flow.jobs),[]);
+ for(const [oldPin,newPin] of upgrades){const changed=yaml.load(upgraded.replaceAll(newPin,oldPin));assert.ok(validateCiSourceJobs(changed.jobs).length||validateCiRuntimeJobs(changed.jobs).length);}
+ const mixed=yaml.load(upgraded.replace('actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1','actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'));
+ assert.ok(validateCiSourceJobs(mixed.jobs).length);
+});
+
+test('CodeQL current and original pre-Actions source select distinct setup and receipt contracts',async()=>{
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),source='501224dc5f6bfea631ecc66a0efae7892a83c847';
+ const original=(yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>).codeql;
+ const current=structuredClone(original) as {steps:Record<string,unknown>[]};
+ current.steps[1].uses='actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1';current.steps[8].uses='actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9';
+ const contract=deriveCodeqlJobStepContract(current,'CURRENT_SOURCE');
+ assert.equal(contract.requiredSteps[1],'Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1');
+ assert.ok(contract.allowedPostSteps.includes('Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'));
+ assert.ok(!contract.allowedPostSteps.includes('Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'));
+ assert.throws(()=>deriveCodeqlJobStepContract(original,'CURRENT_SOURCE',{sha:source,git}));
+ const retained=deriveCodeqlJobStepContract(original,'ORIGINAL_RUNTIME_METADATA',{sha:source,git});
+ assert.equal(retained.requiredSteps[1],'Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020');
+ assert.ok(!retained.allowedPostSteps.includes('Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'));
+ assert.throws(()=>deriveCodeqlJobStepContract(original,'ORIGINAL_RUNTIME_METADATA'));
+ assert.throws(()=>deriveCodeqlJobStepContract(original,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+ for(const index of [1,8]){const mixed=structuredClone(current);mixed.steps[index].uses=(original as typeof current).steps[index].uses;assert.throws(()=>deriveCodeqlJobStepContract(mixed,'CURRENT_SOURCE'));assert.throws(()=>deriveCodeqlJobStepContract(mixed,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}));}
+});
 
 test('official CodeQL step projection admits exact new whole job and source-bound original cutoffs only',async()=>{
  const current=deriveCodeqlJobStepContract(ciCodeqlJob,'CURRENT_SOURCE');
@@ -40,7 +106,7 @@ test('official CodeQL step projection admits exact new whole job and source-boun
 });
 
 test('one existing database producer retains exact original231 source proof without a second replay',async()=>{
- const api:Record<string,unknown>=await import('./verification-workflows');assert.ok(api.ciOriginal231CatalogueArtifactStep,'source231 requires its own exact retained artifact');const step=api.ciOriginal231CatalogueArtifactStep as Record<string,unknown>,job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.deepEqual(step,{name:'Retain exact source original231 catalogue reference',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source231.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);const source=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(source)as{jobs:Record<string,{steps:Record<string,unknown>[]}>};assert.deepEqual(flow.jobs['database-checks'],job);assert.ok(flow.jobs['database-checks'].steps.some(row=>row.name===step.name));
+ const api:Record<string,unknown>=await import('./verification-workflows');assert.ok(api.ciOriginal231CatalogueArtifactStep,'source231 requires its own exact retained artifact');const step=api.ciOriginal231CatalogueArtifactStep as Record<string,unknown>,job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.deepEqual(step,{name:'Retain exact source original231 catalogue reference',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source231.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);const source=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(source)as{jobs:Record<string,{steps:Record<string,unknown>[]}>};assert.deepEqual(flow.jobs['database-checks'],job);assert.ok(flow.jobs['database-checks'].steps.some(row=>row.name===step.name));
 });
 import { statelessVerificationSteps } from './steps';
 import { createRequire } from 'node:module';
@@ -51,7 +117,7 @@ test('reset failure companion retains only minimized files without changing requ
   assert.deepEqual(validateCiRuntimeJobs(flow.jobs),[]);
   const steps=flow.jobs['integration-state'].steps,diagnostic=steps.filter(s=>s.name==='Retain minimized local reset failure diagnostics');
   assert.equal(diagnostic.length,1);
-  assert.deepEqual(diagnostic[0],{name:'Retain minimized local reset failure diagnostics',if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-reset-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/reset-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
+  assert.deepEqual(diagnostic[0],{name:'Retain minimized local reset failure diagnostics',if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-reset-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/reset-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
   const result=steps.find(s=>s.name==='Retain exact integration-state partition')!;
   assert.equal((result.with as Record<string,unknown>).path,'.local/integration-partitions/integration-state/result.json');
   assert.equal((result.with as Record<string,unknown>)['if-no-files-found'],'error');
@@ -77,7 +143,7 @@ test('start failure companion retains only safe exact operation files and cannot
  const workflow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,{steps:Record<string,unknown>[]}>};
  assert.deepEqual(validateCiRuntimeJobs(workflow.jobs),[]);
  const steps=workflow.jobs['integration-state'].steps,artifact=steps.find(s=>s.name==='Retain minimized local start failure diagnostics')!;
- assert.deepEqual(artifact,{name:'Retain minimized local start failure diagnostics',if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-start-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/start-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
+ assert.deepEqual(artifact,{name:'Retain minimized local start failure diagnostics',if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-start-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/start-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
  assert.equal((steps.find(s=>s.name==='Retain exact integration-state partition')!.with as Record<string,unknown>).path,'.local/integration-partitions/integration-state/result.json');
  for(const mode of ['missing','raw','overwrite','success-only','required','continue']){const jobs=structuredClone(workflow.jobs),job=jobs['integration-state'],rows=job.steps,a=rows.find(s=>s.name===artifact.name)!;
  if(mode==='missing')rows.splice(rows.indexOf(a),1);if(mode==='raw')(a.with as Record<string,unknown>).path='.local/supabase-start.log';if(mode==='overwrite')(a.with as Record<string,unknown>).name='cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}';if(mode==='success-only')a.if='success()';if(mode==='required')(a.with as Record<string,unknown>)['if-no-files-found']='error';if(mode==='continue')(job as Record<string,unknown>)['continue-on-error']=true;
@@ -177,7 +243,12 @@ test('browser startup and reset diagnostics retain only existing minimized compa
  const steps=flow.jobs['runtime-browser'].steps,lane=steps.find(row=>row.name==='Retain exact safe browser lane')!,start=steps.find(row=>row.name==='Retain minimized local start failure diagnostics')!,reset=steps.find(row=>row.name==='Retain minimized local reset failure diagnostics')!;
  assert.ok(start,'The observed startup boundary needs its own retained minimized companion');assert.ok(reset,'A later original reset failure needs its existing distinct minimized companion');
  assert.equal(steps.indexOf(start),steps.indexOf(lane)+1);assert.equal(steps.indexOf(reset),steps.indexOf(start)+1);assert.equal(steps.at(-1)?.run,'npx --no-install supabase stop --project-id cuevo');
- for(const[kind,row]of [['start',start],['reset',reset]]as const){assert.deepEqual(row,{name:`Retain minimized local ${kind} failure diagnostics`,if:'always()',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:`cuevo-${kind}-diagnostic-runtime-browser-\${{ github.run_id }}-\${{ github.run_attempt }}`,path:`.local/migration-replay/operation-*/${kind}-diagnostic.json`,'include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});}
+ for(const[kind,row]of [['start',start],['reset',reset]]as const){assert.deepEqual(row,{name:`Retain minimized local ${kind} failure diagnostics`,if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:`cuevo-${kind}-diagnostic-runtime-browser-\${{ github.run_id }}-\${{ github.run_attempt }}`,path:`.local/migration-replay/operation-*/${kind}-diagnostic.json`,'include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});}
  assert.deepEqual(validateCiRuntimeJobs(flow.jobs),[]);
  for(const kind of['start','reset'])for(const mode of['missing','raw','glob','success-only','required','continue','collision']){const jobs=structuredClone(flow.jobs),job=jobs['runtime-browser'],row=job.steps.find(r=>r.name===`Retain minimized local ${kind} failure diagnostics`)!;if(mode==='missing')job.steps.splice(job.steps.indexOf(row),1);if(mode==='raw')(row.with as Record<string,unknown>).path='.local/supabase-start.log';if(mode==='glob')(row.with as Record<string,unknown>).path='.local/migration-replay/**';if(mode==='success-only')row.if='success()';if(mode==='required')(row.with as Record<string,unknown>)['if-no-files-found']='error';if(mode==='continue')(job as Record<string,unknown>)['continue-on-error']=true;if(mode==='collision')(row.with as Record<string,unknown>).name='cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}';assert.ok(validateCiRuntimeJobs(jobs).length,kind+':'+mode);}
+});
+
+test('full-regression current whole workflow rejects each old or arbitrary Actions pin independently',async()=>{
+ const validate=validateFullRegressionWorkflow,text=await readFile('.github/workflows/full-regression.yml','utf8');assert.deepEqual(validate(text),[]);
+ for(const[current,old]of [['949feb2413d6458794dcd2491c4babbbce0c15c1','820762786026740c76f36085b0efc47a31fe5020'],['cf430e030ddbb5b0abf93d22962f4752f3646cd9','043fb46d1a93c77aae656e7c1c64a875d1fc6a0a']])if(text.includes(current))for(const pin of [old,'f'.repeat(40)])assert.ok(validate(text.replace(current,pin)).length,current);
 });

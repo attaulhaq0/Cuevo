@@ -153,3 +153,8 @@ test('Community workflow source parsing fails closed on missing malformed oversi
     assert(api.validateHostedCommunityQaWorkflow(value as string).length > 0);
   }
 });
+
+test('hosted-community-qa current whole workflow rejects each old or arbitrary Actions pin independently',async()=>{
+ const validate=(await owner()).validateHostedCommunityQaWorkflow,text=await readFile('.github/workflows/hosted-community-qa.yml','utf8');assert.deepEqual(validate(text),[]);
+ for(const[current,old]of [['949feb2413d6458794dcd2491c4babbbce0c15c1','820762786026740c76f36085b0efc47a31fe5020'],['cf430e030ddbb5b0abf93d22962f4752f3646cd9','043fb46d1a93c77aae656e7c1c64a875d1fc6a0a']])if(text.includes(current))for(const pin of [old,'f'.repeat(40)])assert.ok(validate(text.replace(current,pin)).length,current);
+});

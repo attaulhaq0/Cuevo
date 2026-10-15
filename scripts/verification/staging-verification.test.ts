@@ -92,3 +92,8 @@ test('actual manual command retains safe pending or review receipt with GET only
   }
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test('staging-verification current whole workflow rejects each old or arbitrary Actions pin independently',async()=>{
+ const validate=(await api()).validateStagingVerificationWorkflow,text=await readFile('.github/workflows/staging-verification.yml','utf8');assert.deepEqual(validate(text),[]);
+ for(const[current,old]of [['949feb2413d6458794dcd2491c4babbbce0c15c1','820762786026740c76f36085b0efc47a31fe5020'],['cf430e030ddbb5b0abf93d22962f4752f3646cd9','043fb46d1a93c77aae656e7c1c64a875d1fc6a0a']])if(text.includes(current))for(const pin of [old,'f'.repeat(40)])assert.ok(validate(text.replace(current,pin)).length,current);
+});

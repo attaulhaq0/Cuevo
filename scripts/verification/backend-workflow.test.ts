@@ -8,6 +8,11 @@ const map = (value: unknown): Map => value && typeof value === 'object' && !Arra
 async function source() { return map(yaml.load(await readFile('.github/workflows/backend-release.yml', 'utf8'))); }
 const originalRuntimeRecoveryCondition = "always() && inputs.scope == 'runtime-rollout' && (inputs.runtime_action == '' || inputs.runtime_action == 'ROLL_FORWARD') && (steps.runtime-rollout.outcome == 'failure' || steps.runtime-rollout.outcome == 'cancelled')";
 
+test('both backend jobs retain exact reviewed setup upload and download pins rather than any full SHA',async()=>{
+ const workflow=await source(),pins:Record<string,string>={'actions/checkout':'3d3c42e5aac5ba805825da76410c181273ba90b1','actions/setup-node':'949feb2413d6458794dcd2491c4babbbce0c15c1','actions/upload-artifact':'cf430e030ddbb5b0abf93d22962f4752f3646cd9','actions/download-artifact':'9000827ccba6bdab643e8b6fd33ac0654aef8333'};
+ for(const name of ['prepare','schema']){const steps=map(map(workflow.jobs)[name]).steps as Map[];assert.ok(steps.some(step=>String(step.uses??'').startsWith('actions/setup-node@')),name);assert.ok(steps.some(step=>String(step.uses??'').startsWith('actions/upload-artifact@')),name);for(const step of steps)if(step.uses){const[action,pin]=String(step.uses).split('@');assert.equal(pin,pins[action],name+': '+action);}}
+});
+
 test('protected API deployment has one owner and cannot discover a mutable global Vercel CLI',async()=>{
  const workflow=await source(),jobs=map(workflow.jobs),commands=Object.values(jobs).flatMap(job=>(map(job).steps as unknown[]).map(map).map(step=>String(step.run??'')));
  assert.equal(commands.some(command=>/npm\s+(?:install|i)\b[^\n]*--global\s+vercel/.test(command)),false);
@@ -105,7 +110,7 @@ test('only metadata token reaches preparation; schema credentials arrive after p
   for (const [index, step] of schema.entries()) {
     if (![schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts reconcile-prefix'),schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts initialize-runtime'),schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts rollout-runtime'),mutationIndex,provisionIndex,deployIndex,activationIndex,recoveryIndex,restoreIndex,bindIndex,handoverIndex,publicIndex,schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts resume-runtime'),schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts export-web-handover'),schema.findIndex(step=>step.run==='node --import tsx scripts/verification/backend-release.ts confirm-pending-activation')].includes(index)) assert.ok(!Object.keys(map(step.env)).some(key => key === 'CUEVO_MIGRATION_DATABASE_PASSWORD' || key === 'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'));
     if (step.run) assert.ok(!(step.run as string).includes('${{'));
-    if (step.uses) assert.match(step.uses as string, /@[a-f0-9]{40}$/);
+    if (step.uses) {assert.match(step.uses as string, /@[a-f0-9]{40}$/);const pins:Record<string,string>={'actions/checkout':'3d3c42e5aac5ba805825da76410c181273ba90b1','actions/setup-node':'949feb2413d6458794dcd2491c4babbbce0c15c1','actions/upload-artifact':'cf430e030ddbb5b0abf93d22962f4752f3646cd9','actions/download-artifact':'9000827ccba6bdab643e8b6fd33ac0654aef8333'};const [action,pin]=String(step.uses).split('@');assert.equal(pin,pins[action],action+' requires its reviewed source pin');}
   }
   const download = schema.find(step => String(step.uses).startsWith('actions/download-artifact@'))!;
   assert.deepEqual(Object.keys(map(download.with)).sort(), ['name', 'path']); assert.equal(map(download.with).name, 'cuevo-backend-package-${{ github.run_id }}-${{ github.run_attempt }}');

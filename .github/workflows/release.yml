@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.0.0
         with: { node-version: '24.16.0' }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
       - name: Admit release event without evaluating event input as code
@@ -112,7 +112,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           ref: ${{ needs.release-admission.outputs.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.0.0
         with: { node-version: '24.16.0', cache: npm }
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund && npm ci --ignore-scripts --no-audit --no-fund && node node_modules/esbuild/install.js
       - name: Revalidate canonical CI and current main after environment approval
@@ -292,7 +292,7 @@ jobs:
         run: node --import tsx scripts/verification/cicd-release.ts verify-community
       - name: Preserve the scoped original Community evidence
         if: always() && needs.release-admission.outputs.backend-selection-base64 != '' && needs.release-admission.outputs.environment == 'staging' && inputs.backend_handoff == 'customer-candidate'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-community-ui-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -303,7 +303,7 @@ jobs:
           retention-days: 14
       - name: Preserve the scoped original learning-loop evidence
         if: always() && needs.release-admission.outputs.backend-selection-base64 != '' && inputs.backend_handoff != 'operating-staging'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-learning-loop-ui-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -313,7 +313,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Retain only the verified public web deployment identity
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-web-deployment-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/cicd-release/web-deployment-result.json
@@ -322,7 +322,7 @@ jobs:
           retention-days: 2
       - name: Preserve exact public staging intent and cleanup evidence
         if: always() && needs.release-admission.outputs.backend-selection-base64 != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-web-staging-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

@@ -169,3 +169,8 @@ test('all four full-regression jobs require bound completion times and selected 
   const race=await fixture({mutate:(url,value,read)=>url.pathname.endsWith('/runs/42')&&read>1?{...(value as Row),run_attempt:2}:value});
   const result=await api.observeDailyRegression(race.input,race.transport);assert.equal(result.state,'UNVERIFIABLE');assert.equal(result.deadlineMet,null);assert.equal(result.recoveredLate,null);
 });
+
+test('daily-watchdog current whole workflow rejects each old or arbitrary Actions pin independently',async()=>{
+ const validate=(await owner()).validateDailyWatchdogWorkflow,text=await readFile('.github/workflows/daily-watchdog.yml','utf8');assert.deepEqual(validate(text),[]);
+ for(const[current,old]of [['949feb2413d6458794dcd2491c4babbbce0c15c1','820762786026740c76f36085b0efc47a31fe5020'],['cf430e030ddbb5b0abf93d22962f4752f3646cd9','043fb46d1a93c77aae656e7c1c64a875d1fc6a0a']])if(text.includes(current))for(const pin of [old,'f'.repeat(40)])assert.ok(validate(text.replace(current,pin)).length,current);
+});
