@@ -21,14 +21,14 @@ test('fixed reader refuses malformed credentials and accessors before a request'
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test('fixed source reader sends one reviewed query and returns minimized current facts', async () => {
+for (const status of [200, 201]) test(`fixed source reader accepts HTTP ${status} with one reviewed query and minimized current facts`, async () => {
   assert.ok(reader); const originalFetch = globalThis.fetch; let requests = 0;
   globalThis.fetch = async (url, options) => {
     requests++; assert.equal(url, endpoint); assert.equal(options?.method, 'POST'); assert.equal(options?.redirect, 'error');
     assert.equal(createHash('sha256').update(JSON.parse(String(options?.body)).query).digest('hex'), querySha256);
     const f = currentFixture(); const clock = new Date().toISOString();
     for (const key of ['transactionStartedAt', 'statementAt', 'readStartedAt', 'readCompletedAt']) f.raw[key] = clock;
-    const response = new Response(f.encode(), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const response = new Response(f.encode(), { status, headers: { 'Content-Type': 'application/json' } });
     Object.defineProperty(response, 'url', { value: endpoint }); return response;
   };
   try {
@@ -37,6 +37,23 @@ test('fixed source reader sends one reviewed query and returns minimized current
     assert.equal(result.status, 'unknown'); assert.equal(result.current.scopedRoleRow, 'ABSENT');
     assert.equal(result.authenticCustodyCreated, false); assert.equal(result.futureEffectAdmitted, false); assert.equal(result.nativeAcceptance, false);
     assert.equal(JSON.stringify(result).includes('SIMULATED_TOKEN'), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+for (const status of [204, 206]) test(`fixed source reader refuses HTTP ${status} without authenticating current facts`, async () => {
+  assert.ok(reader); const originalFetch = globalThis.fetch; let requests = 0;
+  globalThis.fetch = async () => {
+    requests++; const f = currentFixture(), clock = new Date().toISOString();
+    for (const key of ['transactionStartedAt', 'statementAt', 'readStartedAt', 'readCompletedAt']) f.raw[key] = clock;
+    const response = new Response(status === 204 ? null : f.encode(), { status, headers: { 'Content-Type': 'application/json' } });
+    Object.defineProperty(response, 'url', { value: endpoint }); return response;
+  };
+  try {
+    const result = await reader.readCurrentCronRecovery('observe', { providerToken: 'SIMULATED_TOKEN', originalEvidence: {} });
+    assert.equal(requests, 1); assert.equal(result.status, 'unknown'); assert.equal(result.currentReadAuthentication, 'UNKNOWN');
+    assert.deepEqual(result.reasons, ['CURRENT_READ_FAILED_OR_UNPROVED']);
+    assert.equal(result.current.scopedRoleRow, 'UNKNOWN'); assert.equal(result.nativeExecutionAuthorized, false);
+    assert.equal(result.authenticCustodyCreated, false); assert.equal(result.futureEffectAdmitted, false); assert.equal(result.nativeAcceptance, false);
   } finally { globalThis.fetch = originalFetch; }
 });
 

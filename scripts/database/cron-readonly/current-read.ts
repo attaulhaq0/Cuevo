@@ -29,7 +29,7 @@ async function fixedSource() {
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 async function boundedBody(response: Response, signal: AbortSignal): Promise<string> {
-  if (response.status !== 200 || response.redirected || response.url !== currentFactsEndpoint || !response.body) throw Error('Current read transport unproved.');
+  if ((response.status !== 200 && response.status !== 201) || response.redirected || response.url !== currentFactsEndpoint || !response.body) throw Error('Current read transport unproved.');
   const size = response.headers.get('content-length');
   if (size !== null && (!/^\d+$/.test(size) || Number(size) > 2097152)) { await response.body.cancel(); throw Error('Current read body exceeds bound.'); }
   const reader = response.body.getReader(), pieces: Uint8Array[] = []; let bytes = 0, settled = false;
