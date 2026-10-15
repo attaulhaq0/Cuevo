@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 /** Single API process budget; never stores tokens, IP addresses or request content. */
 export class RequestBudget {
@@ -28,9 +28,10 @@ export function registerRequestLimits(instance: FastifyInstance, limits: { reads
   const addresses = new RequestBudget(limits.addresses ?? 3000);
   const readiness = new RequestBudget(limits.readiness ?? 120);
   const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-  instance.addHook('onRequest', async (request, reply) => {
+  const refusals = new WeakMap<FastifyRequest, { code: 'REQUEST_LIMIT_REACHED'; message: string; requestId: string }>();
+  instance.addHook('onRequest', async request => {
     if (request.url.split('?')[0] === '/health/ready') {
-      if (!readiness.consume(digest(request.ip))) return reply.code(429).header('Cache-Control', 'no-store').header('Retry-After', '60').send({ code: 'REQUEST_LIMIT_REACHED', message: 'Readiness checks are temporarily limited.', requestId: request.id });
+      if (!readiness.consume(digest(request.ip))) refusals.set(request, { code: 'REQUEST_LIMIT_REACHED', message: 'Readiness checks are temporarily limited.', requestId: request.id });
       return;
     }
     if (!request.url.startsWith('/v1/') || request.method === 'OPTIONS') return;
@@ -39,9 +40,18 @@ export function registerRequestLimits(instance: FastifyInstance, limits: { reads
     const key = typeof authorization === 'string' ? digest(authorization) : address;
     const budget = request.method === 'GET' || request.method === 'HEAD' ? reads : writes;
     if (!addresses.consume(address) || !budget.consume(key)) {
-      return reply.code(429).header('Cache-Control', 'no-store').header('Retry-After', '60').send({
+      refusals.set(request, {
         code: 'REQUEST_LIMIT_REACHED', message: 'Please wait before retrying this school request.', requestId: request.id,
       });
     }
   });
+  return {
+    isRefused: (request: FastifyRequest) => refusals.has(request),
+    finish: (request: FastifyRequest, reply: FastifyReply) => {
+      const refusal = refusals.get(request);
+      if (!refusal) return;
+      refusals.delete(request);
+      return reply.code(429).header('Cache-Control', 'no-store').header('Retry-After', '60').send(refusal);
+    },
+  };
 }
