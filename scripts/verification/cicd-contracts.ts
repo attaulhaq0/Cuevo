@@ -128,6 +128,8 @@ export function validateWorkflows(ciText: string, releaseText: string): string[]
   }
   for (const [index, flow] of [ci, release].entries()) {
     const trigger = mapping(flow.on);
+    const codeqlCommits=Object.values(mapping(flow.jobs)).flatMap(job=>list(mapping(job).steps).map(mapping)).map(step=>String(step.uses??'')).filter(uses=>uses.startsWith('github/codeql-action/')).map(uses=>uses.slice(uses.lastIndexOf('@')+1));
+    if(new Set(codeqlCommits).size>1)issues.push('CodeQL actions in one workflow must use the same pinned commit.');
     if (Object.hasOwn(trigger, 'pull_request_target') || list(flow.on).some(event => ['pull_request_target', 'workflow_run'].includes(String(event))) || index === 0 && Object.hasOwn(trigger, 'workflow_run')) issues.push('Privileged untrusted triggers are forbidden.');
     if (index === 1 && (Object.keys(trigger).join(',') !== 'workflow_dispatch' || !Object.hasOwn(mapping(mapping(trigger.workflow_dispatch).inputs), 'full_verification_run_id'))) issues.push('Release must be manual and retain separate routine and full-candidate run inputs.');
     if (mapping(flow.permissions).contents !== 'read') issues.push('Default contents permission must be read.');

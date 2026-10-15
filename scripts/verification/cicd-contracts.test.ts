@@ -97,6 +97,31 @@ test('only the same-job minimized CodeQL receipt can be retained with serialized
  }
 });
 
+test('CodeQL actions reject mixed pinned commits before their shared configuration is consumed',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,{steps:Record<string,unknown>[]}>};dump(value:unknown):string};
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');
+ const previous='2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2',aligned='24c54180a607b1449ed407dd24f251e4e9147c8d',reason='CodeQL actions in one workflow must use the same pinned commit.';
+ assert.deepEqual(validateWorkflows(ci,release),[]);
+ for(const changed of ['init','analyze']){
+  const flow=yaml.load(ci),steps=flow.jobs.codeql.steps;
+  for(const step of steps)if(String(step.uses??'').startsWith('github/codeql-action/'))step.uses=String(step.uses).split('@')[0]+'@'+previous;
+  const selected=steps.find(step=>String(step.uses??'').startsWith('github/codeql-action/'+changed+'@'))!;selected.uses='github/codeql-action/'+changed+'@'+aligned;
+  assert.ok(validateWorkflows(yaml.dump(flow),release).includes(reason),changed+' must not consume another CodeQL version\'s configuration');
+ }
+ const flow=yaml.load(ci);flow.jobs.codeql.steps.push({uses:'github/codeql-action/upload-sarif@'+previous});
+ for(const step of flow.jobs.codeql.steps)if(String(step.uses??'').startsWith('github/codeql-action/')&&!String(step.uses).startsWith('github/codeql-action/upload-sarif@'))step.uses=String(step.uses).split('@')[0]+'@'+aligned;
+ assert.ok(validateWorkflows(yaml.dump(flow),release).includes(reason),'another CodeQL action shares the workflow version contract');
+ for(const step of flow.jobs.codeql.steps)if(String(step.uses??'').startsWith('github/codeql-action/'))step.uses=String(step.uses).split('@')[0]+'@'+aligned;
+ assert.deepEqual(validateWorkflows(yaml.dump(flow),release),[],'one coherent pinned version remains supported');
+});
+
+test('CodeQL workflow and dependency group keep init and analyze on the reviewed paired update',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs?:{codeql:{steps:Record<string,unknown>[]}};updates?:{['package-ecosystem']:string;directory:string;schedule:{interval:string};['open-pull-requests-limit']:number;groups?:Record<string,{patterns:string[]}>}[]}};
+ const ci=yaml.load(await readFile('.github/workflows/ci.yml','utf8')),updates=yaml.load(await readFile('.github/dependabot.yml','utf8')).updates!;
+ assert.deepEqual(ci.jobs!.codeql.steps.map(step=>step.uses).filter(uses=>String(uses??'').startsWith('github/codeql-action/')),['github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d','github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d']);
+ const actions=updates.find(update=>update['package-ecosystem']==='github-actions')!;assert.equal(actions.directory,'/');assert.equal(actions.schedule.interval,'weekly');assert.equal(actions['open-pull-requests-limit'],5);assert.deepEqual(actions.groups?.['codeql-actions'],{patterns:['github/codeql-action*']});
+});
+
 test('hosted web source and browser budget cannot silently return to the shorter pre-loop limit',async()=>{
  const yaml=createRequire(import.meta.url)('js-yaml') as {load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
  const root=resolve(import.meta.dirname,'../..'),ci=await readFile(join(root,'.github/workflows/ci.yml'),'utf8'),release=await readFile(join(root,'.github/workflows/release.yml'),'utf8');
