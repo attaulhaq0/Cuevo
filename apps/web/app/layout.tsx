@@ -4,6 +4,7 @@ import { Providers } from '../shared/session/providers';
 import { getLocale } from '../shared/i18n/locale';
 import '@cuevo/ui/tokens.css';
 import './globals.css';
+import '../shared/components/command-form.css';
 import '../features/auth/styles.css';
 import '../features/shell/styles.css';
 import '../features/learning/styles.css';

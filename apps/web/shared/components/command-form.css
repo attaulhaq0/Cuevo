@@ -1,0 +1,8 @@
+.learning-form__actions > button[data-command-recovery-focus]:focus {
+  outline: var(--focus-width, 2px) solid var(--color-focus);
+  outline-offset: var(--focus-offset, 3px);
+  box-shadow: var(--focus-ring);
+}
+@media (forced-colors: active) {
+  .learning-form__actions > button[data-command-recovery-focus]:focus { outline-color: Highlight; box-shadow: none; }
+}
