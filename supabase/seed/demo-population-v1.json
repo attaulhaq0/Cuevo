@@ -1,0 +1,523 @@
+{
+  "version": 1,
+  "kind": "CUEVO_SYNTHETIC_DEMO_POPULATION_PROFILE",
+  "profileId": "DEMO_49_V1",
+  "purpose": "DEMO",
+  "synthetic": true,
+  "schools": [
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "name": {
+        "en": "Cuevo Demo School – Qatar",
+        "ar": "مدرسة كيوفو التجريبية – قطر"
+      },
+      "country": "QA",
+      "languages": [
+        "en",
+        "ar"
+      ],
+      "startingState": "POPULATED_DEMO",
+      "initialClasses": [],
+      "initialCourses": [],
+      "curriculum": {
+        "packDirectory": "synthetic-primary-v1",
+        "packId": "synthetic-primary",
+        "version": "synthetic-1",
+        "framework": "School Custom",
+        "packManifestSha256": "437e170aa5fda3f907e366acda0d694a7a87d2b0c2e42edcab126cb0a8860c63",
+        "assessmentArtifactSha256": "f16a637d6d9b2aea7a5235bb9482febd2db1c6b327fe6c4997e396e0592b8354",
+        "assessmentModel": "numeric"
+      },
+      "qualityFrameworks": []
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "name": {
+        "en": "Cuevo Demo School – Pakistan",
+        "ar": "مدرسة كيوفو التجريبية – باكستان"
+      },
+      "country": "PK",
+      "languages": [
+        "en",
+        "ar"
+      ],
+      "startingState": "POPULATED_DEMO",
+      "initialClasses": [],
+      "initialCourses": [],
+      "curriculum": {
+        "packDirectory": "synthetic-pathway-v1",
+        "packId": "synthetic-pathway",
+        "version": "synthetic-1",
+        "framework": "School Custom",
+        "packManifestSha256": "3b829ab62af5f550dc6818f3c012bd8ad67873d621a8b868eac37457069764f2",
+        "assessmentArtifactSha256": "f16a637d6d9b2aea7a5235bb9482febd2db1c6b327fe6c4997e396e0592b8354",
+        "assessmentModel": "rubric"
+      },
+      "qualityFrameworks": []
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000103",
+      "name": {
+        "en": "Cuevo Setup Demo",
+        "ar": "عرض إعداد كيوفو"
+      },
+      "country": "QA",
+      "languages": [
+        "en",
+        "ar"
+      ],
+      "startingState": "ADMIN_ONLY_SETUP",
+      "initialClasses": [],
+      "initialCourses": [],
+      "curriculum": null,
+      "qualityFrameworks": []
+    }
+  ],
+  "actors": [
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000001",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "admin",
+      "email": "demo-qa-001@cuevo.test",
+      "displayName": "Mariam Al-Nuaimi"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000002",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "coordinator",
+      "email": "demo-qa-002@cuevo.test",
+      "displayName": "Nadia Rahman"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000003",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "teacher",
+      "email": "demo-qa-003@cuevo.test",
+      "displayName": "Hana Haddad"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000004",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "teacher",
+      "email": "demo-qa-004@cuevo.test",
+      "displayName": "Yusuf Karim"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000005",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-005@cuevo.test",
+      "displayName": "Aisha Rahman"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000006",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-006@cuevo.test",
+      "displayName": "Omar Haddad"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000007",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-007@cuevo.test",
+      "displayName": "Sara Karim"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000008",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-008@cuevo.test",
+      "displayName": "Adam Mansour"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000009",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-009@cuevo.test",
+      "displayName": "Noor Ali"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000010",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-010@cuevo.test",
+      "displayName": "Zayd Hassan"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000011",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-011@cuevo.test",
+      "displayName": "Lina Faris"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000012",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-012@cuevo.test",
+      "displayName": "Sami Nasser"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000013",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-013@cuevo.test",
+      "displayName": "Maya Saleh"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000014",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "student",
+      "email": "demo-qa-014@cuevo.test",
+      "displayName": "Rayan Khalid"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000015",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-015@cuevo.test",
+      "displayName": "Laila Rahman"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000016",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-016@cuevo.test",
+      "displayName": "Farid Haddad"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000017",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-017@cuevo.test",
+      "displayName": "Salma Karim"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000018",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-018@cuevo.test",
+      "displayName": "Nabil Mansour"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000019",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-019@cuevo.test",
+      "displayName": "Huda Ali"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000020",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-020@cuevo.test",
+      "displayName": "Amal Hassan"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000021",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-021@cuevo.test",
+      "displayName": "Kareem Faris"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000022",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-022@cuevo.test",
+      "displayName": "Rasha Nasser"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000023",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-023@cuevo.test",
+      "displayName": "Dalia Saleh"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000024",
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "role": "parent",
+      "email": "demo-qa-024@cuevo.test",
+      "displayName": "Imran Khalid"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000025",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "admin",
+      "email": "demo-pk-001@cuevo.test",
+      "displayName": "Zainab Ahmed"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000026",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "coordinator",
+      "email": "demo-pk-002@cuevo.test",
+      "displayName": "Asad Malik"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000027",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "teacher",
+      "email": "demo-pk-003@cuevo.test",
+      "displayName": "Sana Iqbal"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000028",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "teacher",
+      "email": "demo-pk-004@cuevo.test",
+      "displayName": "Tariq Khan"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000029",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-005@cuevo.test",
+      "displayName": "Amina Ahmed"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000030",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-006@cuevo.test",
+      "displayName": "Bilal Malik"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000031",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-007@cuevo.test",
+      "displayName": "Hira Iqbal"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000032",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-008@cuevo.test",
+      "displayName": "Hamza Khan"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000033",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-009@cuevo.test",
+      "displayName": "Maryam Raza"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000034",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-010@cuevo.test",
+      "displayName": "Ali Shah"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000035",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-011@cuevo.test",
+      "displayName": "Zoya Hussain"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000036",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-012@cuevo.test",
+      "displayName": "Umar Siddiq"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000037",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-013@cuevo.test",
+      "displayName": "Fatima Javed"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000038",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "student",
+      "email": "demo-pk-014@cuevo.test",
+      "displayName": "Hasan Mir"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000039",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-015@cuevo.test",
+      "displayName": "Nasreen Ahmed"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000040",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-016@cuevo.test",
+      "displayName": "Kamran Malik"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000041",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-017@cuevo.test",
+      "displayName": "Rubina Iqbal"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000042",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-018@cuevo.test",
+      "displayName": "Nadia Khan"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000043",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-019@cuevo.test",
+      "displayName": "Saima Raza"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000044",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-020@cuevo.test",
+      "displayName": "Faisal Shah"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000045",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-021@cuevo.test",
+      "displayName": "Naila Hussain"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000046",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-022@cuevo.test",
+      "displayName": "Farah Siddiq"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000047",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-023@cuevo.test",
+      "displayName": "Sadia Javed"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000048",
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "role": "parent",
+      "email": "demo-pk-024@cuevo.test",
+      "displayName": "Adnan Mir"
+    },
+    {
+      "actorId": "c1000000-0000-4000-8000-000000000049",
+      "schoolId": "c0000000-0000-4000-8000-000000000103",
+      "role": "admin",
+      "email": "demo-setup-admin@cuevo.test",
+      "displayName": "Layla Amin"
+    }
+  ],
+  "guardianRelationships": [
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000005",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000015"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000006",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000016"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000007",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000017"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000008",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000018"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000009",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000019"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000010",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000020"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000011",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000021"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000012",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000022"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000013",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000023"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000101",
+      "studentActorId": "c1000000-0000-4000-8000-000000000014",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000024"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000029",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000039"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000030",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000040"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000031",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000041"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000032",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000042"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000033",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000043"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000034",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000044"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000035",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000045"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000036",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000046"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000037",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000047"
+    },
+    {
+      "schoolId": "c0000000-0000-4000-8000-000000000102",
+      "studentActorId": "c1000000-0000-4000-8000-000000000038",
+      "guardianActorId": "c1000000-0000-4000-8000-000000000048"
+    }
+  ]
+}

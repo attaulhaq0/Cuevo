@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import { prepareDemoPopulationInput } from './demo-population-profile';
+
+/** Profile-bound source preparation only; the original native population path remains133-specific. */
+export const prepareHostedDemoPopulationInput = prepareDemoPopulationInput;
 import { mkdir, open, readFile, lstat, realpath } from 'node:fs/promises';
 import { join, resolve, isAbsolute } from 'node:path';
 import { z } from 'zod';

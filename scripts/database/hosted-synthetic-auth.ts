@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'node:crypto';
+import { prepareDemoAuthInput } from './demo-population-profile';
+
+/** Planned49-member input only. No Auth completion, approval or provider effect is admitted. */
+export const prepareHostedDemoAuthInput = prepareDemoAuthInput;
 import { execFileSync } from 'node:child_process';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';

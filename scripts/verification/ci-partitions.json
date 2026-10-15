@@ -96,6 +96,7 @@
         "scripts/database/cron-readonly/current-facts.test.ts",
         "scripts/database/cron-readonly/current-read.test.ts",
         "scripts/database/cron-readonly/recovery-policy.test.ts",
+        "scripts/database/demo-population-profile.test.ts",
         "scripts/database/hosted-active-runtime-state.test.ts",
         "scripts/database/hosted-community-native-read.test.ts",
         "scripts/database/hosted-installed-state.test.ts",
@@ -377,6 +378,10 @@
       },
       {
         "path": "scripts/database/cron-readonly/recovery-policy.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/demo-population-profile.test.ts",
         "durationMs": null
       },
       {
