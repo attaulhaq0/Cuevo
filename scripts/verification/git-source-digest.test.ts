@@ -41,6 +41,18 @@ test('streamed source digest retains the complete exact binary Git diff and empt
     assert.deepEqual(await api.readGitBinaryDiffDigest({ repoRoot: root, baseSha: source, sourceSha: source }), { sha256: hash(Buffer.alloc(0)), bytes: 0 });
   });
 });
+
+test('moved source context and its public forwarding surface retain current and original checkout guards',async()=>{
+ const api=await owner(),publicOwner=await import('./canonical-source-jobs');
+ await fixture(async(root,base,source)=>{
+  const tree=git(root,'rev-parse','HEAD^{tree}');
+  const current=api.captureCanonicalSourceContext(root,source,tree),original=publicOwner.captureCanonicalSourceContext(root,base,undefined,'ORIGINAL_RUNTIME_METADATA');
+  current.finalMetadata();original.finalMetadata();assert.equal(current.treeSha,tree);assert.equal(original.git(['show',base+':README.md']).toString(),'Original\n');
+  assert.throws(()=>publicOwner.captureCanonicalSourceContext(root,base,undefined,'CURRENT_SOURCE'));
+  await writeFile(join(root,'README.md'),'Changed after both captured contexts\n');
+  assert.throws(current.finalMetadata);assert.throws(original.finalMetadata);
+ });
+});
 test('unresolved or injected revisions fail without printing arguments or executing another command', async () => {
   const api = await owner(); await fixture(async (root, base, source) => {
     for (const revision of ['--output=outside', 'a'.repeat(40), source + ';echo private']) await assert.rejects(api.readGitBinaryDiffDigest({ repoRoot: root, baseSha: base, sourceSha: revision }), /requires review; contents withheld/);

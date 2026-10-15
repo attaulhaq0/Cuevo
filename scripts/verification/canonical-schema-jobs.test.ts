@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {runCanonicalJobFixture} from './canonical-source-job-fixtures';
+
+test('canonical schema consumer admits the reviewed paired CodeQL producer without borrowing PR authority',async()=>{
+ const result=await runCanonicalJobFixture('schema',value=>{
+  const job=value.jobs.find(row=>row.name==='codeql') as{steps:{name:string}[]};
+  job.steps[5].name='Run github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d';
+  job.steps[6].name='Run github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d';
+ });
+ assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,'VERIFIED');
+});
 function denied(result:Awaited<ReturnType<typeof runCanonicalJobFixture>>,label='',marker?:string){assert.match(result.stderr,/FIXTURE_CANONICAL_READER_ENTERED/,label);assert.equal(result.stderr.includes('SyntaxError'),false,label);if(marker)assert.ok(result.stderr.includes(marker),label+': '+result.stderr);assert.notEqual(result.status,0,label);}
 
 test('retained schema verification binds the original source policies and archives after main advances',async()=>{
