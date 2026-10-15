@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Button, CuevoIcon, Status, type CuevoIconName } from '../src/index';
 
 describe('shared component compatibility', () => {
@@ -75,6 +75,41 @@ describe('controlled workspace icon coverage', () => {
     expect(html).toContain('width="28" height="28"');
     expect(html).toMatch(/<image href="[^"]+"/);
     expect(html).toContain('search-control');
+  });
+
+  it('accepts raster stroke controls without forwarding unsupported SVG props or warnings', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const ordinary = renderToStaticMarkup(createElement(CuevoIcon, { name: 'help', size: '1.5em' }));
+      const configured = renderToStaticMarkup(createElement(CuevoIcon, {
+        name: 'help', size: '1.5em', variant: 'filled', strokeWidth: 3,
+        absoluteStrokeWidth: true, nonScalingStroke: true, color: 'red', fill: 'blue',
+      }));
+      expect(configured).toBe(ordinary);
+      expect(configured).toContain('width="1.5em" height="1.5em"');
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('preserves native SVG ref, event and labelled-context props for callers', () => {
+    const ref = () => undefined;
+    const onClick = () => undefined;
+    const element = CuevoIcon({
+      name: 'help', ref, onClick, 'aria-labelledby': 'help-context', 'aria-hidden': false,
+      role: 'img', tabIndex: -1, style: { opacity: 0.5 }, className: 'owner-icon',
+    });
+    expect(element.props.ref).toBe(ref);
+    expect(element.props.onClick).toBe(onClick);
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('aria-labelledby="help-context"');
+    expect(html).toContain('aria-hidden="false"');
+    expect(html).toContain('role="img"');
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain('style="opacity:0.5"');
+    expect(html).toContain('class="cuevo-icon owner-icon"');
+    expect(html).toContain('focusable="false"');
   });
 
   it('preserves an explicitly named icon when the caller provides nondecorative semantics', () => {
