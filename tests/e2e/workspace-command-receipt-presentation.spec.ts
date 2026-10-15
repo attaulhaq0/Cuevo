@@ -10,6 +10,7 @@ const courseId = 'f1400000-0000-4000-8000-000000000001';
 const goalId = 'f5400000-0000-4000-8000-000000000001';
 type JsonBody = Record<string, unknown>;
 type CapturedCommand = { path: string; key: string | undefined; body: JsonBody };
+const controlledRouteHandled = Symbol('controlled receipt delivery handled');
 
 function deferred() {
   let resolve!: () => void;
@@ -43,6 +44,7 @@ async function fictionalWorkspace(page: Page, view: 'development' | 'portfolio',
       };
       else if (url.pathname === '/v1/diagnostics/config') body = { enabled: false };
       else body = await responseFor(route, url) ?? body;
+      if (body === controlledRouteHandled) return;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }); return;
     }
     if (url.origin !== origin) { remoteOrigins.push(url.origin); await route.abort(); return; }
@@ -62,6 +64,42 @@ async function revalidate(page: Page) {
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   expect((await response).ok()).toBe(true);
 }
+
+test('an uncertain owned command keeps native keyboard recovery on the original action', async ({ page }) => {
+  const held = deferred(), started = deferred(), path = '/v1/portfolio/collections'; let attempts = 0, firstUrl = '';
+  const consoleErrors: { text: string; url: string }[] = [];
+  page.on('console', message => { if (message.type() === 'error') consoleErrors.push({ text: message.text(), url: message.location().url }); });
+  const fixture = await fictionalWorkspace(page, 'portfolio', async (route, url) => {
+    if (url.pathname !== path || route.request().method() !== 'POST') return undefined;
+    attempts++;
+    if (attempts === 1) {
+      firstUrl = url.toString(); started.resolve(); await held.promise;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'REQUEST_UNAVAILABLE', requestId: 'controlled-owned-delivery' }) });
+      return controlledRouteHandled;
+    }
+    return { id: 'f9000000-0000-4000-8000-000000000001', revision: 1 };
+  });
+  await withBrowserRestoration(async () => {
+    await page.getByRole('button', { name: 'Create named collection', exact: true }).click();
+    const form = page.getByRole('region', { name: 'Create named collection', exact: true });
+    await form.getByLabel('Collection name', { exact: true }).fill('My controlled recorded step');
+    await form.getByLabel('Collection description', { exact: true }).fill('The original controlled work stays unchanged.');
+    await form.getByRole('button', { name: 'Save', exact: true }).click(); await started.promise;
+    await expect(form.getByLabel('Collection name', { exact: true })).toBeDisabled(); held.resolve();
+    const retry = form.getByRole('button', { name: 'Retry the same action', exact: true });
+    await expect(retry).toBeEnabled(); await expect(retry).toBeFocused();
+    await expect(form.getByLabel('Collection name', { exact: true })).toHaveValue('My controlled recorded step');
+    await expect(form.getByLabel('Collection description', { exact: true })).toBeDisabled();
+    const outline = await retry.evaluate(node => ({ style: getComputedStyle(node).outlineStyle, width: getComputedStyle(node).outlineWidth }));
+    expect(outline.style).not.toBe('none'); expect(parseFloat(outline.width)).toBeGreaterThan(0);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: 'Create named collection: Saved.' })).toBeVisible();
+    const commands = fixture.commands.filter(command => command.path === path);
+    expect(commands).toHaveLength(2); expect(commands[0].key).toBeTruthy(); expect(commands[1].key).toBe(commands[0].key); expect(commands[1].body).toEqual(commands[0].body);
+    const expectedError = 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)';
+    expect(consoleErrors).toEqual([{ text: expectedError, url: firstUrl }]); expect(fixture.errors).toEqual([expectedError]); expect(fixture.remoteOrigins).toEqual([]);
+  }, async () => { held.resolve(); await page.unrouteAll({ behavior: 'wait' }); });
+});
 
 test('a confirmed collection notice stays on Portfolio and is not shown as access feedback after navigation', async ({page}) => {
   const path='/v1/portfolio/collections';
