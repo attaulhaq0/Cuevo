@@ -90,6 +90,27 @@ const push=history.pushState.bind(history);history.pushState=(...args)=>{push(..
  await page.evaluate(prepareProfileLanguageFixture,observeProfileFocus);
  return{source,denied};
 }
+test('native queued Profile opening retains established language focus',async({page})=>{
+ const faults:string[]=[];page.on('pageerror',error=>faults.push(error.message));page.on('console',message=>{if(['warning','error'].includes(message.type()))faults.push(message.text());});
+ const{denied}=await mount(page,'student','ar',true);await page.setViewportSize({width:320,height:844});const initial=await retained(page);
+ const panel=page.locator('.workspace-chrome__profile'),language=panel.getByRole('button',{name:'English',exact:true}),trigger=page.locator('.workspace-chrome__person>button');
+ const before=await page.evaluate(()=>{
+  const panel=document.querySelector<HTMLDivElement>('.workspace-chrome__profile'),trigger=document.querySelector<HTMLButtonElement>('.workspace-chrome__person>button'),language=Array.from(panel?.querySelectorAll<HTMLButtonElement>('.language-switch button')??[]).find(button=>button.textContent==='English');
+  if(!panel||!trigger||!language||panel.matches(':popover-open'))throw Error('The current closed Profile and language control are required.');
+  const observation={events:0,trusted:false,removed:false};(globalThis as unknown as{cuevoQueuedProfileOpening:typeof observation}).cuevoQueuedProfileOpening=observation;
+  const observe=(event:ToggleEvent)=>{if(event.newState!=='open')return;observation.events++;observation.trusted=event.isTrusted;panel.removeEventListener('toggle',observe);observation.removed=true;};panel.addEventListener('toggle',observe);
+  trigger.click();language.focus({preventScroll:true});return{open:panel.matches(':popover-open'),focused:document.activeElement===language,events:observation.events};
+ });
+ expect(before).toEqual({open:true,focused:true,events:0});
+ await expect.poll(()=>page.evaluate(()=>(globalThis as unknown as{cuevoQueuedProfileOpening:{events:number}}).cuevoQueuedProfileOpening.events)).toBe(1);
+ expect(await page.evaluate(()=>(globalThis as unknown as{cuevoQueuedProfileOpening:{trusted:boolean;removed:boolean}}).cuevoQueuedProfileOpening)).toEqual({events:1,trusted:true,removed:true});
+ await expect(language).toBeFocused();await expect.poll(()=>panel.evaluate(element=>element.matches(':popover-open'))).toBe(true);expect(await retained(page)).toEqual(initial);
+ await page.keyboard.press('Space');await expect(page.locator('html')).toHaveAttribute('dir','ltr');await expect(page.locator('.workspace')).toHaveAttribute('lang','en');await expect(language).toHaveAttribute('aria-pressed','true');await expect(language).toBeFocused();expect(await retained(page)).toEqual(initial);
+ await page.keyboard.press('Escape');await expect(trigger).toBeFocused();await expect(panel).toBeHidden();
+ await page.keyboard.press('Enter');await expect(panel.getByRole('button',{name:'Close profile and settings',exact:true})).toBeFocused();expect(await page.evaluate(()=>(globalThis as unknown as{cuevoQueuedProfileOpening:{events:number}}).cuevoQueuedProfileOpening.events)).toBe(1);
+ await page.keyboard.press('Escape');await expect(trigger).toBeFocused();expect(denied).toEqual([]);expect(faults).toEqual([]);
+});
+
 async function openProfile(page:Page){const trigger=page.locator('.workspace-chrome__person>button');await trigger.scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise<void>(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done()))));await trigger.focus();await page.keyboard.press('Enter');const panel=page.locator('.workspace-chrome__profile');await expect.poll(()=>panel.evaluate(e=>e.matches(':popover-open'))).toBe(true);return{trigger,panel};}
 async function retained(page:Page){return page.evaluate(()=>{const app=(globalThis as unknown as{profileLanguageApp:{commandJournal:{pending:()=>unknown[]};formDrafts:{get:(slot:string)=>unknown};accessToken:string;membership:{role:string;userId:string};accessGeneration:number}}).profileLanguageApp;return{command:app.commandJournal.pending(),draft:app.formDrafts.get('retained-draft'),accessToken:app.accessToken,role:app.membership.role,userId:app.membership.userId,accessGeneration:app.accessGeneration};});}
 for(const role of['admin','teacher','student','coordinator','parent']as const)for(const locale of['en','ar']as const)test(`${role}/${locale}: Profile keyboard language switch preserves current source, preference and account actions`,async({page})=>{
