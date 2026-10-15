@@ -4,6 +4,58 @@ import { hostedChildCatalogueCategories, hostedChildCatalogueSummarySchema, appl
 import policy from './unknown-prefix-catalogue-policy.json';
 import * as reference from './hosted-child-catalogue-reference';
 
+type ImageAdmission={imageId:string;reference:string};
+const imageApi=()=>{const api=reference as unknown as {
+ admitSourceChildCatalogueImageInspection?:(value:unknown,selectedReference:string)=>ImageAdmission;
+ isSourceChildCatalogueImageAbsent?:(error:unknown,selectedReference:string)=>boolean;
+ verifySourceChildCatalogueContainerInspection?:(value:unknown,containerId:string,image:ImageAdmission)=>void;
+};assert.equal(typeof api.admitSourceChildCatalogueImageInspection,'function');assert.equal(typeof api.isSourceChildCatalogueImageAbsent,'function');assert.equal(typeof api.verifySourceChildCatalogueContainerInspection,'function');return api;};
+const mirrorImage='ghcr.io/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
+const ecrImage='public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
+const postgresConfigId='sha256:e671c63f6ad3a3bc0503d26bb6641bb2b8eddaabbfe1782ba56b7d2c0243b6d8';
+const imageInspect=(selected=mirrorImage)=>({Id:postgresConfigId,RepoDigests:[selected],Os:'linux',Architecture:'amd64'});
+const absentImageError=(selected=mirrorImage)=>Object.assign(Error('private-image-canary'),{status:1,signal:null,stdout:Buffer.alloc(0),stderr:Buffer.from('Error response from daemon: No such image: '+selected+'\n')});
+
+test('local image inspection preserves the exact approved immutable identity for both fixed repositories',()=>{
+ const api=imageApi();for(const selected of[mirrorImage,ecrImage])assert.deepEqual(api.admitSourceChildCatalogueImageInspection!(JSON.stringify([imageInspect(selected)]),selected),{imageId:postgresConfigId,reference:selected});
+ const indexId='sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
+ assert.deepEqual(api.admitSourceChildCatalogueImageInspection!(JSON.stringify([{...imageInspect(),Id:indexId}]),mirrorImage),{imageId:indexId,reference:mirrorImage});
+});
+test('unreadable ambiguous or unapproved local image content cannot become an admitted cache',()=>{
+ const api=imageApi(),valid=imageInspect();
+ for(const value of[null,{},'', 'not JSON',JSON.stringify([]),JSON.stringify([valid,valid]),' '.repeat(1024*1024+1),...[
+  {Id:'sha256:4bfbe2e6d7909bd386b1b774683899deb12efa04a3eebaa141f164ffd04ada1d'},{Id:'sha256:'+'0'.repeat(64)},{RepoDigests:[ecrImage]},{RepoDigests:[mirrorImage,mirrorImage]},{RepoDigests:['ghcr.io/foreign/postgres@'+mirrorImage.split('@')[1]]},{Os:'windows'},{Architecture:'arm64'}
+ ].map(patch=>JSON.stringify([{...valid,...patch}]))])assert.throws(()=>api.admitSourceChildCatalogueImageInspection!(value,mirrorImage),/requires review/);
+ assert.throws(()=>api.admitSourceChildCatalogueImageInspection!(JSON.stringify([valid]),'foreign/image'),/requires review/);
+});
+test('only the exact own native absent-image outcome permits cold acquisition',()=>{
+ const api=imageApi();assert.equal(api.isSourceChildCatalogueImageAbsent!(absentImageError(),mirrorImage),true);assert.equal(api.isSourceChildCatalogueImageAbsent!(absentImageError(ecrImage),ecrImage),true);
+ for(const patch of[{status:0},{status:2},{signal:'SIGTERM'},{code:'ETIMEDOUT'},{stdout:Buffer.from('unexpected output')},{stderr:Buffer.from('Cannot connect to the Docker daemon')},{stderr:Buffer.from('Error response from daemon: No such image: '+ecrImage+'\n')},{stderr:Buffer.from('Error response from daemon: No such image: '+mirrorImage+'\npermission denied')},{stderr:'Error response from daemon: No such image: '+mirrorImage},{stderr:Buffer.alloc(4097)}])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),...patch},mirrorImage),false);
+ assert.equal(api.isSourceChildCatalogueImageAbsent!(absentImageError(),'foreign/image'),false);
+});
+test('Docker 28 default missing-image empty-array stdout retains exact native absence without accepting other data',()=>{
+ // docker/cli v28.0.4 TestIndentedInspectorEmpty emits this even when lookup fails.
+ const api=imageApi();for(const stdout of[Buffer.from('[]\n'),Buffer.from('[]\r\n'),Buffer.from('[]')])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),stdout},mirrorImage),true);
+ for(const stdout of[Buffer.from('{}'),Buffer.from('[null]'),Buffer.from('[ ]'),Buffer.from('[]\n\n'),Buffer.from('\n')])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),stdout},mirrorImage),false);
+ for(const patch of[{status:0},{status:2},{signal:'SIGTERM'},{code:'ETIMEDOUT'},{stderr:Buffer.from('permission denied')},{stderr:Buffer.from('Error response from daemon: No such image: '+ecrImage+'\n')}])assert.equal(api.isSourceChildCatalogueImageAbsent!({...absentImageError(),stdout:Buffer.from('[]\n'),...patch},mirrorImage),false);
+});
+test('absence classification does not read error getters proxy traps or overridden buffer properties',()=>{
+ const api=imageApi();let reads=0;const getter=absentImageError();Object.defineProperty(getter,'stderr',{get(){reads++;throw Error('private getter');}});
+ assert.equal(api.isSourceChildCatalogueImageAbsent!(getter,mirrorImage),false);
+ const inherited=Object.create(absentImageError()) as unknown;assert.equal(api.isSourceChildCatalogueImageAbsent!(inherited,mirrorImage),false);
+ const proxy=new Proxy(absentImageError(),{getOwnPropertyDescriptor(){reads++;throw Error('private proxy');}});assert.equal(api.isSourceChildCatalogueImageAbsent!(proxy,mirrorImage),false);
+ const buffer=absentImageError();Object.defineProperty(buffer.stderr,'length',{get(){reads++;throw Error('private buffer');}});Object.defineProperty(buffer.stderr,'toString',{get(){reads++;throw Error('private method');}});
+ assert.equal(api.isSourceChildCatalogueImageAbsent!(buffer,mirrorImage),true);assert.equal(reads,0);
+});
+test('created disposable container must retain its exact image platform and stopped identity before start',()=>{
+ const api=imageApi(),id='7'.repeat(64),image={imageId:postgresConfigId,reference:mirrorImage},valid={Id:id,Image:postgresConfigId,Platform:'linux',Config:{Image:postgresConfigId},State:{Status:'created',Running:false}};
+ api.verifySourceChildCatalogueContainerInspection!(JSON.stringify([valid]),id,image);
+ for(const value of['',JSON.stringify([]),JSON.stringify([valid,valid]),...[
+  {Id:'8'.repeat(64)},{Image:'sha256:'+'0'.repeat(64)},{Platform:'windows'},{Config:{Image:mirrorImage}},{State:{Status:'running',Running:true}},{State:{Status:'created',Running:true}}
+ ].map(patch=>JSON.stringify([{...valid,...patch}]))])assert.throws(()=>api.verifySourceChildCatalogueContainerInspection!(value,id,image),/requires review/);
+ assert.throws(()=>api.verifySourceChildCatalogueContainerInspection!(JSON.stringify([valid]),id,{imageId:'sha256:'+'0'.repeat(64),reference:mirrorImage}),/requires review/);
+});
+
 const fixtureSummary=(entry:{catalogueSha256:string;categories:unknown;bytes:number;rows:number})=>({version:'CUEVO_SCHEMA_CATALOGUE_V1',serverVersion:170011,sha256:entry.catalogueSha256,categories:entry.categories,bytes:entry.bytes,rows:entry.rows});
 function native180ReceiptFixture(){const scratch123=fixtureSummary(policy.completedPrefix.scratch),provider123=fixtureSummary(policy.completedPrefix.expected),other={version:'CUEVO_SCHEMA_CATALOGUE_V1',serverVersion:170011,sha256:'2'.repeat(64),categories:hostedChildCatalogueCategories.map(category=>({category,count:1,sha256:'3'.repeat(64)})),bytes:160,rows:16};return{version:3,purpose:'CUEVO_SOURCE_NATIVE180_CATALOGUE',repository:'attaulhaq0/Cuevo',sourceSha:'a'.repeat(40),treeSha:'b'.repeat(40),baselineSourceSha:'9bee5e0d59d95274266158a0644139fd4df5334e',baselineTreeSha:'2574891343d9bfd1be09c57dd4e450e086f76f40',runId:'31',runAttempt:2,producerJob:'database-checks',producerStep:'Build exact source child144 catalogue reference',migrationCount:180,migrationRowsSha256:'28ad9500aa5719898303ffce30e6dc8d598d22b650413d4a9639c5bd1313cbb4',sourceInventorySha256:'c'.repeat(64),querySha256:policy.querySha256,policySha256:'5b05d74fc6574c43548d9d8bab852524b9be4fb5564f5f88db74bf946ee2148d',producerSha256:'d'.repeat(64),bootstrapSha256:'e'.repeat(64),serviceSchemaSha256:{auth:'1'.repeat(64),storage:'2'.repeat(64),realtime:'3'.repeat(64)},image:sourceChildCatalogueImage.tag,imageId:sourceChildCatalogueImage.indexDigest,imageReference:sourceChildCatalogueImage.mirrorPinnedReference,imageManifestSha256:sourceChildCatalogueImage.manifestDigest,imageConfigSha256:sourceChildCatalogueImage.configDigest,imagePlatform:sourceChildCatalogueImage.platform,sourceLockSha256:'4'.repeat(64),nodeVersion:'v24.16.0',nodeBinarySha256:'5'.repeat(64),scratch123,provider123,scratch144:other,provider144:other,scratch180:other,catalogueSummary:other,child144ReceiptSha256:'6'.repeat(64),startedAt:'2026-10-11T09:00:00.000Z',capturedAt:'2026-10-11T09:01:00.000Z',cleanupCompletedAt:'2026-10-11T09:02:00.000Z',cleanupConfirmed:true,sourceFrozen:true,hostedAcceptance:false,effectAuthority:false};}
 

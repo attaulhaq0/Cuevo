@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isProxy } from 'node:util/types';
 import { z } from 'zod';
 import policy from './unknown-prefix-catalogue-policy.json';
 import { hostedSchemaCatalogueQuerySha256, requireCompleteHostedSchemaCatalogue, type HostedSchemaCatalogue } from './hosted-schema-catalogue';
@@ -16,6 +17,50 @@ export const sourceChildCatalogueImage=Object.freeze({tag:'public.ecr.aws/supaba
 /** Docker's classic store names the config; containerd may name its OCI index.
  * Both must resolve the exact pinned repository index and amd64 platform. */
 export function verifySourceChildCatalogueImage(value:unknown,reference:string=sourceChildCatalogueImage.pinnedReference){try{const selected=z.enum([sourceChildCatalogueImage.pinnedReference,sourceChildCatalogueImage.mirrorPinnedReference]).parse(reference),v=z.object({Id:z.union([z.literal(sourceChildCatalogueImage.indexDigest),z.literal(sourceChildCatalogueImage.configDigest)]),RepoDigests:z.array(z.string()).min(1).max(20),Os:z.literal('linux'),Architecture:z.literal('amd64')}).parse(JSON.parse(canonicalReleaseExecutionJson(value)));if(!v.RepoDigests.includes(selected)||new Set(v.RepoDigests).size!==v.RepoDigests.length)throw fail();return sourceChildCatalogueImage;}catch{throw fail();}}
+
+export type SourceChildCatalogueImageAdmission=Readonly<{imageId:string;reference:string}>;
+const selectedImageReference=z.enum([sourceChildCatalogueImage.mirrorPinnedReference,sourceChildCatalogueImage.pinnedReference]);
+const admittedImageId=z.union([z.literal(sourceChildCatalogueImage.indexDigest),z.literal(sourceChildCatalogueImage.configDigest)]);
+function imageInspection(value:unknown):unknown{
+ if(typeof value!=='string'||!value.length||Buffer.byteLength(value,'utf8')>1024*1024)throw fail();
+ const rows:unknown=JSON.parse(value);if(!Array.isArray(rows)||rows.length!==1)throw fail();return rows[0];
+}
+/** Local inspection proves content, never a previous pull or another runner. */
+export function admitSourceChildCatalogueImageInspection(value:unknown,reference:string):SourceChildCatalogueImageAdmission{
+ try{const selected=selectedImageReference.parse(reference),row=imageInspection(value);verifySourceChildCatalogueImage(row,selected);return Object.freeze({imageId:admittedImageId.parse((row as{Id:unknown}).Id),reference:selected});}catch{throw fail();}
+}
+const imageTypedArrayPrototype=Object.getPrototypeOf(Uint8Array.prototype)as object;
+const imageByteLength=Object.getOwnPropertyDescriptor(imageTypedArrayPrototype,'byteLength')!.get!;
+const imageByteOffset=Object.getOwnPropertyDescriptor(imageTypedArrayPrototype,'byteOffset')!.get!;
+const imageArrayBuffer=Object.getOwnPropertyDescriptor(imageTypedArrayPrototype,'buffer')!.get!;
+function imageFailureData(error:unknown,key:string):unknown{
+ if(!error||typeof error!=='object'||isProxy(error))throw fail();
+ const descriptor=Object.getOwnPropertyDescriptor(error,key);if(!descriptor)return undefined;if(!Object.hasOwn(descriptor,'value'))throw fail();return descriptor.value;
+}
+function imageFailureBytes(value:unknown,maximum:number):Buffer{
+ if(!value||typeof value!=='object'||isProxy(value)||!Buffer.isBuffer(value))throw fail();
+ const length=imageByteLength.call(value)as number;if(length>maximum)throw fail();
+ return Buffer.from(imageArrayBuffer.call(value)as ArrayBuffer,imageByteOffset.call(value)as number,length);
+}
+/** Only the captured native, exact-reference absent-image outcome allows a pull.
+ * No messages, output arrays, getters, proxy traps or ambiguous failures enter. */
+export function isSourceChildCatalogueImageAbsent(error:unknown,reference:string):boolean{
+ try{
+  const selected=selectedImageReference.parse(reference);
+  if(imageFailureData(error,'status')!==1||imageFailureData(error,'signal')!==null||imageFailureData(error,'code')!==undefined)return false;
+  const stdout=imageFailureBytes(imageFailureData(error,'stdout'),4);
+  if(stdout.byteLength!==0&&!/^\[\](?:\r?\n)?$/.test(stdout.toString('utf8')))return false;
+  const stderr=imageFailureBytes(imageFailureData(error,'stderr'),4096).toString('utf8').replace(/\r?\n$/,'');
+  return stderr==='Error response from daemon: No such image: '+selected;
+ }catch{return false;}
+}
+/** The disposable fixture must still be the exact newly created Linux container. */
+export function verifySourceChildCatalogueContainerInspection(value:unknown,containerId:string,image:SourceChildCatalogueImageAdmission):void{
+ try{
+  const expected=z.object({imageId:admittedImageId,reference:selectedImageReference}).strict().parse(JSON.parse(canonicalReleaseExecutionJson(image))),id=z.string().regex(/^[a-f0-9]{64}$/).parse(containerId);
+  z.object({Id:z.literal(id),Image:z.literal(expected.imageId),Platform:z.literal('linux'),Config:z.object({Image:z.literal(expected.imageId)}),State:z.object({Status:z.literal('created'),Running:z.literal(false)})}).parse(imageInspection(value));
+ }catch{throw fail();}
+}
 export function summarizeSourceChildCatalogue(value:unknown):HostedChildCatalogueSummary{const c=requireCompleteHostedSchemaCatalogue(value);return hostedChildCatalogueSummarySchema.parse({version:c.version,serverVersion:170011,sha256:c.sha256,categories:c.categories,bytes:c.bytes,rows:c.rows.length});}
 const same=(a:unknown,b:unknown)=>canonicalReleaseExecutionJson(a)===canonicalReleaseExecutionJson(b);
 /** Only the ten already reviewed exact row replacements; never category filtering. */

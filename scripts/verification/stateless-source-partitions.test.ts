@@ -23,6 +23,52 @@ async function writePartitionFixtureHook(root:string,steps:unknown,coverage:unkn
  await writeFile(hook,(scratchOutcome?scratchOutcomeFixtureSource:'')+partitionFixtureHookSource);return hook;
 }
 
+const nativeDiagnosticFixtureSource=String.raw`import{test}from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';const input=JSON.parse(readFileSync('scripts/database/native-diagnostic-input.json','utf8'));test(input.title,async t=>{const{createNativeIsolationFailureRecorder}=await import(input.timingOwner);const recorder=createNativeIsolationFailureRecorder();let completed=false;try{await t.test('disposable PostgreSQL and TLS',()=>{const error=Object.assign(Error(input.privateCanary),{status:null,signal:'SIGTERM',code:'ETIMEDOUT'});recorder.recordFailure('IMAGE_PULL','COMMAND_FAILED',error);throw error;});assert.equal(completed,true);}finally{let cleaned=false;await t.test('cleanup',()=>{cleaned=true;});const snapshot=recorder.snapshot(cleaned?'CONFIRMED':'UNCONFIRMED');if(snapshot)t.diagnostic('CUEVO_NATIVE_ISOLATION_DIAGNOSTIC '+JSON.stringify(snapshot));}});
+`;
+const nativeDiagnosticPartitionRunnerSource=String.raw`import{readFileSync,writeFileSync}from'node:fs';const input=JSON.parse(readFileSync(new URL('./native-diagnostic-run-input.json',import.meta.url),'utf8'));const{runStatelessPartition}=await import(input.subject);const result=await runStatelessPartition({repoRoot:process.cwd(),partition:'source-native'});writeFileSync('.local/returned.json',JSON.stringify(result));
+`;
+
+async function writeNativeDiagnosticFixture(root:string,timingOwner:string,title:string,privateCanary:string){
+ await mkdir(join(root,'scripts/database'),{recursive:true});
+ await writeFile(join(root,'scripts/database/native-diagnostic-input.json'),JSON.stringify({timingOwner,title,privateCanary}));
+ await writeFile(join(root,'scripts/database/hosted-migration-native-process.test.ts'),nativeDiagnosticFixtureSource);return nativeDiagnosticFixtureSource;
+}
+
+test('native diagnostic fixture keeps adversarial canary as data while preserving actual child outcomes',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-native-diagnostic-data-'));
+ try{
+  const timingOwner=pathToFileURL(resolve('scripts/verification/ci-test-timings.ts')).href,title='actual pinned Linux container prevents input writes and refuses an expired native exec deadline';
+  const baseline=await writeNativeDiagnosticFixture(root,timingOwner,title,'ordinary-fixture-canary');
+  const privateCanary=['quote',String.fromCharCode(34,39),'</script>',String.fromCodePoint(0x2028,0x2029),';import("node:fs").then(fs=>fs.writeFileSync(".local/canary-executed","bad"));'].join(' ');
+  const text=await writeNativeDiagnosticFixture(root,timingOwner,title,privateCanary);assert.equal(text,baseline,'canary data must not change executable fixture bytes');
+  const data=JSON.parse(await readFile(join(root,'scripts/database/native-diagnostic-input.json'),'utf8'));assert.deepEqual(data,{timingOwner,title,privateCanary});
+  const childEnvironment={...process.env};delete childEnvironment.NODE_TEST_CONTEXT;const result=spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--test','--test-reporter=tap',join(root,'scripts/database/hosted-migration-native-process.test.ts')],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,env:childEnvironment});
+  assert.equal(result.status,1,'the fixed failing child fixture retains its original failure');assert.match(result.stdout,/# tests 3(?:\r?\n|$)/);assert.match(result.stdout,/# pass 1(?:\r?\n|$)/);assert.match(result.stdout,/# fail 2(?:\r?\n|$)/);assert.match(result.stdout,/CUEVO_NATIVE_ISOLATION_DIAGNOSTIC/);await assert.rejects(lstat(join(root,'.local/canary-executed')),{code:'ENOENT'});assert.equal(await readFile(join(root,'scripts/database/hosted-migration-native-process.test.ts'),'utf8'),baseline);
+ }finally{const owned=resolve(root),base=resolve(tmpdir()),separator=process.platform==='win32'?'\\':'/';assert(owned.startsWith(base+separator));await rm(owned,{recursive:true,force:true});}
+});
+
+test('ordinary native partition retains exact failed diagnostic before all-pass refusal without adding execution authority',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'cuevo-native-partition-diagnostic-'));
+ try{
+  const path='scripts/database/hosted-migration-native-process.test.ts',title='actual pinned Linux container prevents input writes and refuses an expired native exec deadline',privateCanary='native-partition-private-canary';
+  const diagnostic={version:1,purpose:'CUEVO_NATIVE_ISOLATION_FAILURE',phase:'DISPOSABLE_POSTGRESQL_TLS',step:'IMAGE_PULL',kind:'COMMAND_FAILED',outcome:{exitCode:null,signal:'SIGTERM',code:'ETIMEDOUT'},cleanup:'CONFIRMED'};
+  await mkdir(join(root,'scripts/database'),{recursive:true});await mkdir(join(root,'.local'),{recursive:true});await writeFile(join(root,'.gitignore'),'.local/\n');await writeFile(join(root,'.gitattributes'),'* text eol=lf\n');await writeFile(join(root,'package-lock.json'),'{}\n');await writeFile(join(root,'package.json'),'{}\n');
+  const timingOwner=pathToFileURL(resolve('scripts/verification/ci-test-timings.ts')).href;
+  const text=await writeNativeDiagnosticFixture(root,timingOwner,title,privateCanary);
+  const git=(args:string[])=>execFileSync('git',['-C',root,...args],{encoding:'utf8',windowsHide:true}).trim();git(['init','--quiet']);git(['add','.']);git(['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','native diagnostic fixture']);const sha=git(['rev-parse','HEAD']);
+  const steps=[{name:'migration-replay-rules',args:['--import','tsx','--test',path]}],coverage={manifestSha256:'c'.repeat(64),source:[{id:'source-native',files:[path]}]},hook=await writePartitionFixtureHook(root,steps,coverage),subject=pathToFileURL(resolve('scripts/verification/stateless-checks.ts')).href,script=join(root,'.local/run.mjs');
+  await writeFile(join(root,'.local/native-diagnostic-run-input.json'),JSON.stringify({subject}));await writeFile(script,nativeDiagnosticPartitionRunnerSource);
+  const result=spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--import',pathToFileURL(hook).href,script],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,env:{...process.env,CI:'true',GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'owner/repo',GITHUB_SHA:sha,GITHUB_RUN_ID:'51',GITHUB_RUN_ATTEMPT:'2',GITHUB_JOB:'source-fixtures-native'}});
+  assert.equal(result.status,0,result.stderr);const receipt=JSON.parse(await readFile(join(root,'.local/returned.json'),'utf8')),file=receipt.files[0];assert.equal(receipt.status,'FAILED');assert.equal(receipt.exitCode,1);assert.equal(receipt.cleanupConfirmed,true);assert.equal(receipt.frozenAfter,true);assert.deepEqual(receipt.reasons,['PROCESS_FAILED','COVERAGE_UNCONFIRMED']);
+  assert.equal(file.nativeIsolationFailureDiagnostics?.length,1,'ordinary failed report must retain the native snapshot before validation throws');const saved=file.nativeIsolationFailureDiagnostics[0];assert.deepEqual(saved.diagnostic,diagnostic);assert.equal(saved.titleSha256,createHash('sha256').update(title).digest('hex'));assert.equal(saved.suiteSha256,null);assert.equal(saved.nesting,0);assert.equal(file.cases.find((row:{definitionSha256:string})=>row.definitionSha256===saved.definitionSha256).outcome,'FAILED');assert.equal(file.cases.length,3);assert.equal(file.cases.filter((row:{outcome:string})=>row.outcome==='PASSED').length,1,'successful cleanup remains a distinct actual child outcome');assert.equal(file.sha256,createHash('sha256').update(text).digest('hex'));assert.equal(receipt.identity.sourceSha,sha);assert.equal(receipt.identity.runId,'51');assert.equal(receipt.identity.runAttempt,2);assert.equal(JSON.stringify(receipt).includes(privateCanary),false);
+  const owner=await import('./stateless-checks');owner.partitionReceiptSchema.parse(receipt);const written=JSON.parse(await readFile(join(root,'.local/verification/source-partitions/source-native/result.json'),'utf8'));assert.deepEqual(written,receipt);
+  for(const changed of[{...file,path:'scripts/database/foreign.test.ts'},{...file,nativeIsolationFailureDiagnostics:[{...saved,titleSha256:'0'.repeat(64)}]},{...file,nativeIsolationFailureDiagnostics:[{...saved,definitionSha256:'0'.repeat(64)}]},{...file,nativeIsolationFailureDiagnostics:[{...saved,diagnostic:{...diagnostic,step:privateCanary}}]},{...file,nativeIsolationFailureDiagnostics:[saved,saved]},{...file,cases:file.cases.map((row:object)=>({...row,outcome:'PASSED'}))},{...file,nativeIsolationFailureDiagnostics:[{...saved,private:privateCanary}]}])assert.throws(()=>owner.partitionReceiptSchema.parse({...receipt,files:[changed]}));
+  let evaluated=0;const hostile=new Proxy([saved],{get(){evaluated++;throw Error(privateCanary);},ownKeys(){evaluated++;throw Error(privateCanary);}}),accessor=Object.defineProperty([saved],'0',{get(){evaluated++;throw Error(privateCanary);}});for(const snapshots of[hostile,accessor,[Object.assign({...saved},{[Symbol('private')]:privateCanary})]])assert.throws(()=>owner.partitionReceiptSchema.parse({...receipt,files:[{...file,nativeIsolationFailureDiagnostics:snapshots}]}));assert.equal(evaluated,0);
+  const review=await import('./release-review'),passed={...receipt,status:'PASSED',exitCode:0,reasons:[]};passed.payloadSha256=createHash('sha256').update(review.canonicalReleaseExecutionJson(Object.fromEntries(Object.entries(passed).filter(([key])=>key!=='payloadSha256')))).digest('hex');assert.throws(()=>owner.validateParsedPartitionOutcome(passed),'failure diagnostics cannot enter accepted passing evidence');
+  const summary={version:1,purpose:'CUEVO_PARTITIONED_SOURCE_CONTRACTS',status:'PASSED',identity:receipt.identity,partitions:['source-native','source-contracts','source-delivery'].map(partition=>({partition,job:'source-fixtures-'+partition.slice(7),payloadSha256:'a'.repeat(64),receiptSha256:'b'.repeat(64)})),files:[file],checks:[]};assert.throws(()=>owner.sourceSummarySchema.parse(summary),'a passing source summary cannot carry a failed native snapshot');
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+
 test('partition fixture JSON stays data and unrelated modules retain their own exports',async()=>{
  const root=await mkdtemp(join(tmpdir(),'cv-fixture-data-'));
  try{

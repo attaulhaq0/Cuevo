@@ -63,6 +63,37 @@ export function readOriginal231ExecutorFailureDiagnostic(value: unknown): Origin
      !nullableEnum(row.compositionPhase,compositionDiagnosticPhases)||!nullableEnum(row.admissionPhase,admissionDiagnosticPhases)||!nullableEnum(row.nativeFailurePhase,nativeDiagnosticPhases))return null;
   return {...row} as Original231ExecutorFailureDiagnostic;
 }
+export const nativeIsolationDiagnosticFile = 'scripts/database/hosted-migration-native-process.test.ts';
+export const nativeIsolationDiagnosticTitle = 'actual pinned Linux container prevents input writes and refuses an expired native exec deadline';
+export const nativeIsolationDiagnosticPrefix = 'CUEVO_NATIVE_ISOLATION_DIAGNOSTIC ';
+const nativeIsolationSteps = ['IMAGE_GHCR_LOOKUP','IMAGE_ECR_LOOKUP','IMAGE_PULL','IMAGE_POST_PULL_LOOKUP','IMAGE_ADMISSION','IMAGE_POST_PULL_ADMISSION','NETWORK_CREATE','DATABASE_CREATE','DATABASE_CREATE_ID','CONTAINER_READBACK','IMAGE_READBACK','IMAGE_READBACK_ADMISSION','CONTAINER_START','DATABASE_READY','CERTIFICATE_COPY','KEY_COPY','TLS_PERMISSIONS','TLS_CERTIFICATE','TLS_KEY','TLS_ENABLE','TLS_RELOAD','DATABASE_PASSWORD','DATABASE_IP_READBACK','DATABASE_IP_ASSERTION'] as const;
+const nativeIsolationKinds = ['COMMAND_FAILED','ADMISSION_REFUSED','ASSERTION_FAILED','UNKNOWN'] as const;
+const nativeIsolationCleanup = ['NOT_ATTEMPTED','CONFIRMED','UNCONFIRMED'] as const;
+export type NativeIsolationStep = typeof nativeIsolationSteps[number];
+export type NativeIsolationFailureKind = typeof nativeIsolationKinds[number];
+export type NativeIsolationFailureDiagnostic = {
+ version:1;purpose:'CUEVO_NATIVE_ISOLATION_FAILURE';phase:'DISPOSABLE_POSTGRESQL_TLS';step:NativeIsolationStep;kind:NativeIsolationFailureKind;
+ outcome:{exitCode:number|null;signal:'SIGINT'|'SIGTERM'|'SIGKILL'|'OTHER'|null;code:'ETIMEDOUT'|null};cleanup:typeof nativeIsolationCleanup[number];
+};
+export type NativeIsolationFailedCaseDiagnostic = {definitionSha256:string;diagnostic:NativeIsolationFailureDiagnostic};
+const nativeDiagnosticRecord=(value:unknown)=>{const row=record(value);return row&&!Reflect.ownKeys(value as object).some(key=>typeof key!=='string')&&!Object.values(Object.getOwnPropertyDescriptors(value as object)).some(property=>!property.enumerable)?row:null;};
+/** Fixed fixture observations only. Native messages, arguments and captured output never enter. */
+export function readNativeIsolationFailureDiagnostic(value:unknown):NativeIsolationFailureDiagnostic|null{
+ const row=nativeDiagnosticRecord(value);if(!row||!exact(row,['version','purpose','phase','step','kind','outcome','cleanup'])||row.version!==1||row.purpose!=='CUEVO_NATIVE_ISOLATION_FAILURE'||row.phase!=='DISPOSABLE_POSTGRESQL_TLS'||typeof row.step!=='string'||!nativeIsolationSteps.includes(row.step as NativeIsolationStep)||typeof row.kind!=='string'||!nativeIsolationKinds.includes(row.kind as NativeIsolationFailureKind)||typeof row.cleanup!=='string'||!nativeIsolationCleanup.includes(row.cleanup as typeof nativeIsolationCleanup[number]))return null;
+ const outcome=nativeDiagnosticRecord(row.outcome);if(!outcome||!exact(outcome,['exitCode','signal','code'])||outcome.exitCode!==null&&!integer(outcome.exitCode,255)||outcome.signal!==null&&(typeof outcome.signal!=='string'||!['SIGINT','SIGTERM','SIGKILL','OTHER'].includes(outcome.signal))||outcome.code!==null&&outcome.code!=='ETIMEDOUT'||row.kind!=='COMMAND_FAILED'&&(outcome.exitCode!==null||outcome.signal!==null||outcome.code!==null))return null;
+ return {...row,outcome:{...outcome}} as NativeIsolationFailureDiagnostic;
+}
+/** The first failed original boundary is latched independently of subsequent cleanup. */
+export function createNativeIsolationFailureRecorder(){
+ let first:Omit<NativeIsolationFailureDiagnostic,'cleanup'>|null=null;
+ const own=(error:unknown,key:string)=>{if(!error||typeof error!=='object'||types.isProxy(error))return undefined;const descriptor=Object.getOwnPropertyDescriptor(error,key);return descriptor&&'value'in descriptor?descriptor.value:undefined;};
+ return{
+  recordFailure(step:NativeIsolationStep,kind:NativeIsolationFailureKind,error:unknown){
+   if(first)return;try{if(!nativeIsolationSteps.includes(step)||!nativeIsolationKinds.includes(kind))return;const status=kind==='COMMAND_FAILED'?own(error,'status'):undefined,signal=kind==='COMMAND_FAILED'?own(error,'signal'):undefined,code=kind==='COMMAND_FAILED'?own(error,'code'):undefined;first={version:1,purpose:'CUEVO_NATIVE_ISOLATION_FAILURE',phase:'DISPOSABLE_POSTGRESQL_TLS',step,kind,outcome:{exitCode:integer(status,255)?status:null,signal:typeof signal==='string'?['SIGINT','SIGTERM','SIGKILL'].includes(signal)?signal as 'SIGINT'|'SIGTERM'|'SIGKILL':'OTHER':null,code:code==='ETIMEDOUT'?'ETIMEDOUT':null}};}catch{/* Diagnostic capture cannot replace the original failure. */}
+  },
+  snapshot(cleanup:typeof nativeIsolationCleanup[number]):NativeIsolationFailureDiagnostic|null{return first&&nativeIsolationCleanup.includes(cleanup)?{...first,outcome:{...first.outcome},cleanup}:null;},
+ };
+}
 export type CiTestTimingIdentity = {
   sourceSha: string; treeSha: string; sourceLockSha256: string; nodeVersion: string;
   runId: string | null; runAttempt: number | null; scope: string; partitionSha256: string;
@@ -92,7 +123,7 @@ export type CiTestTimingEvidence = {
   reasons: CiTestTimingReason[]; summary: Summary | null;
   files: {
     path: string; sha256: string; startedAtMs: number | null; completedAtMs: number | null;
-    durationMs: number | null; summary: Summary | null; cases: TimingCase[]; suites: TimingCase[]; failedCaseDiagnostics?: FailedCaseDiagnostic[];
+    durationMs: number | null; summary: Summary | null; cases: TimingCase[]; suites: TimingCase[]; failedCaseDiagnostics?: FailedCaseDiagnostic[]; nativeIsolationFailureDiagnostics?: NativeIsolationFailedCaseDiagnostic[];
   }[];
 };
 type Unit = {
@@ -100,7 +131,7 @@ type Unit = {
   type: 'test' | 'suite'; wrapper: boolean; startedAtMs: number | null; complete: TimingCase | null;
   parent: Unit | null; ancestrySha256: string; resultSeen: boolean;
 };
-type FileState = { row: CiTestTimingEvidence['files'][number]; units: Unit[]; wrapperCompleted: boolean; diagnosticRejected?: boolean };
+type FileState = { row: CiTestTimingEvidence['files'][number]; units: Unit[]; wrapperCompleted: boolean; diagnosticRejected?: boolean; nativeDiagnosticSeen?:boolean; nativeDiagnosticRejected?:boolean };
 
 /**
  * Observe a process-isolated Node TestsStream without producing release authority.
@@ -187,6 +218,15 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
     const failed=matched[0].complete!;const definition={column:failed.column,line:failed.line,nesting:failed.nesting,suiteSha256:failed.suiteSha256,titleSha256:failed.titleSha256};
     file.row.failedCaseDiagnostics=[{definitionSha256:hash(JSON.stringify(definition)),diagnostic}];
   }
+  function consumeNativeIsolationDiagnostic(value:unknown){
+   if(identity.scope!=='source-native'||identity.runId===null||identity.runAttempt===null)return;
+   const data=record(value);if(!data||typeof data.message!=='string'||data.message.length>2048||!data.message.startsWith(nativeIsolationDiagnosticPrefix)||data.nesting!==0||!integer(data.line,1_000_000)||data.line<1||!integer(data.column,1_000_000)||data.column<1||typeof data.file!=='string')return;
+   const file=files.get(nativeIsolationDiagnosticFile);if(!file||data.file.replaceAll('\\','/')!==nativeIsolationDiagnosticFile&&data.file.replaceAll('\\','/')!==resolve(repoRoot,nativeIsolationDiagnosticFile).replaceAll('\\','/'))return;
+   const matched=file.units.filter(unit=>!unit.wrapper&&unit.type==='test'&&unit.titleSha256===hash(nativeIsolationDiagnosticTitle)&&unit.line===data.line&&unit.column===data.column&&unit.nesting===0&&unit.complete?.outcome==='FAILED');if(matched.length!==1||file.nativeDiagnosticRejected)return;
+   if(file.nativeDiagnosticSeen){delete file.row.nativeIsolationFailureDiagnostics;file.nativeDiagnosticRejected=true;return;}file.nativeDiagnosticSeen=true;
+   let diagnostic:NativeIsolationFailureDiagnostic|null=null;try{diagnostic=readNativeIsolationFailureDiagnostic(JSON.parse(data.message.slice(nativeIsolationDiagnosticPrefix.length)));}catch{return;}if(!diagnostic)return;
+   const failed=matched[0].complete!,definition={column:failed.column,line:failed.line,nesting:failed.nesting,suiteSha256:failed.suiteSha256,titleSha256:failed.titleSha256};file.row.nativeIsolationFailureDiagnostics=[{definitionSha256:hash(JSON.stringify(definition)),diagnostic}];
+  }
   function consume(event: unknown) {
     if (final) throw fixedError();
     if (++eventCount > MAX_EVENTS) { reasons.add('LIMIT_EXCEEDED'); return; }
@@ -194,7 +234,7 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
       const envelope = record(event);
       if (!envelope || !exact(envelope, ['type', 'data']) || typeof envelope.type !== 'string') { reasons.add('EVENT_INVALID'); return; }
       const type = envelope.type;
-      if(type==='test:diagnostic'){consumeClosedDiagnostic(envelope.data);return;}
+      if(type==='test:diagnostic'){consumeClosedDiagnostic(envelope.data);consumeNativeIsolationDiagnostic(envelope.data);return;}
       if (['test:stdout', 'test:stderr', 'test:coverage', 'test:plan', 'test:start'].includes(type)) return;
       if (!['test:enqueue', 'test:dequeue', 'test:complete', 'test:pass', 'test:fail', 'test:summary'].includes(type)) { reasons.add('EVENT_UNSUPPORTED'); return; }
       const data = record(envelope.data);
