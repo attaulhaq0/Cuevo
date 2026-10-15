@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import {ciRuntimeJobs,ciRuntimeBrowserJobBeforeDiagnostics,ciSourceJobs,ciSourceJobsBeforeIsolation,ciDatabaseJob,ciDatabaseJobBeforeOriginal231} from './verification-workflows';
+import {ciRuntimeJobs,ciRuntimeBrowserJobBeforeDiagnostics,ciSourceJobs,ciSourceJobsBeforeIsolation,ciDatabaseJob,ciDatabaseJobBeforeOriginal231,ciDatabaseJobBeforeNativeCronProof} from './verification-workflows';
 import {canonicalReleaseExecutionJson,canonicalReleaseReviewJson} from './release-review';
 import {captureCanonicalSourceContext,readCanonicalSourceArtifactsAndInputs} from './canonical-source-jobs';
 import type {GithubArtifactReader} from './staging-security';
@@ -47,6 +47,10 @@ export function completeCanonicalRuntimeArtifactConsumption(value:CanonicalRunti
 export function abortCanonicalRuntimeArtifactConsumption(value:CanonicalRuntimeArtifactConsumption){const registered=canonicalArtifactConsumer(value);registered.context.invalidate();registered.completed=true;registered.context.lease=undefined;}
 function historicalDatabaseContract(job:unknown,sourceSha:string,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',git:ReturnType<typeof captureCanonicalSourceContext>['git']){
  if(canonicalReleaseExecutionJson(job)===canonicalReleaseExecutionJson(ciDatabaseJob))return ciDatabaseJob;
+ const predecessor='561085f8df13c40fbd23ba51f422ed3445d3a4a9';
+ if(purpose==='ORIGINAL_RUNTIME_METADATA'&&canonicalReleaseExecutionJson(job)===canonicalReleaseExecutionJson(ciDatabaseJobBeforeNativeCronProof)){
+  if(git(['rev-parse',predecessor+'^{tree}']).toString().trim()!=='f1fef10b52a46eed5d861358d6f01ff726ae8fce')throw fail();git(['merge-base','--is-ancestor',sourceSha,predecessor]);return ciDatabaseJobBeforeNativeCronProof;
+ }
  if(purpose!=='ORIGINAL_RUNTIME_METADATA'||canonicalReleaseExecutionJson(job)!==canonicalReleaseExecutionJson(ciDatabaseJobBeforeOriginal231)||git(['rev-parse','239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37^{tree}']).toString().trim()!=='a58fa0bef6f6c0ea9cc57d12156b6c3464ac5559')throw fail();git(['merge-base','--is-ancestor',sourceSha,'239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37']);return ciDatabaseJobBeforeOriginal231;
 }
 function historicalBrowserContract(job:unknown,sourceSha:string,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',git:ReturnType<typeof captureCanonicalSourceContext>['git']){

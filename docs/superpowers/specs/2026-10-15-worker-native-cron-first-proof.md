@@ -1,0 +1,67 @@
+# Native SQL Cron mechanics proof
+
+Status: source implementation prepared for independent review; genuine Linux execution and hosted feasibility remain unproved. This is the first native mechanics unit of the approved whole-app release baseline. It does not replace the accepted Node/Edge worker or authorize pg_net retirement, runtime credentials, dispatch, hosted DDL or customer acceptance.
+
+The stronger successor mechanics receipt is version2. The frozen initial source unit/raw patch remain historical evidence. Review corrections require original at-most-once own-unschedule state, specific permission evidence and actual native statement clocks; a version1-shaped record cannot satisfy this stronger proof.
+
+The original preparation reviewed91a7d9f/tree4141474d and retains its original evidence. The initial source unit and review corrections were authored at eca22195a43db75b0fd8c7f64b3d5a0c649b4164/tree681d9662d2fb7a451f146949d1c6433f5698fdb1; both frozen snapshots retain that scope. The current source unit is authentically rebound to verified main561085f8df13c40fbd23ba51f422ed3445d3a4a9/treef1fef10b52a46eed5d861358d6f01ff726ae8fce. The last pre-Cron database contract uses this exact main/tree only for original metadata and cannot satisfy current mechanics admission. This source rebind does not claim an actual main CI result or native proof. Application code and all231 applied SQL files remain unchanged. Sources08/09/11/38/40/67/81/82, root instructions and the [accepted architecture](../../architecture/scalable-event-processing.md) govern the boundary.
+
+## Owner and purpose
+
+One finite operator verifier under scripts/database creates a new disposable PostgreSQL engine in the existing genuine fresh Linux database-checks job. It reads only same-job provider Auth/Storage/Realtime schema-only bytes and replays the exact frozen current231migration sources through the existing dependency plan. The engine must have0schools,0Auth users,0outbox events, disabled dispatch and disabled analytics. It invokes unchanged worker_health through a genuine cuevo_worker LOGIN; no domain claim/process/fail function is invoked.
+
+The private diagnostic table stores only fixed stages, native backend/transaction identity, timeout and an exact source digest. It is not another operational event or academic ledger. Procedures and records are disposed with the engine; no frontend/model authority is introduced.
+
+## Venue and startup
+
+The only effect entrypoint is the exact standalone `node --import tsx scripts/database/worker-native-cron-proof.ts` in authentic Linux/x64/Node24.16.0 GitHub-hosted database-checks. Importing the module during ordinary tests cannot invoke effects. Source/run/attempt/workspace/frozen Git metadata, Docker binary/socket ownership and absence of hosted/provider/model credentials or Docker/Node overrides are checked before effects. Normal native operations recheck source/deadline admission.
+
+The image uses the existing sourceChildCatalogueImage policy: PostgreSQL17.11.0.002, index0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53, separate manifest4bfbe2e6d7909bd386b1b774683899deb12efa04a3eebaa141f164ffd04ada1d and confige671c63f6ad3a3bc0503d26bb6641bb2b8eddaabbfe1782ba56b7d2c0243b6d8. Inspect the existing exact ECR reference first. Only the existing native absent-image discriminator permits inspecting the already approved exact GHCR cache reference. Ambiguous errors or invalid ECR admission refuse without another lookup. Both use the same immutable index/config/platform owner. No pull, retag, acquisition/retry, new mirror or rejected CLI route is added; no usable cache means refusal.
+
+One create-only UUID name/owner label, exact image, networknone, restartno, no host ports/binds/socket and disposable PGDATA tmpfs define the engine. Inherited volumes and actual mounts are checked. The retained cuevo-bloom engine and original/QA databases are refusal targets. No shared Docker/WSL/host/port change or resource removal occurs.
+
+Fixed source-bound Bash command bytes read actual entrypoint/configuration/library/control/init-script hashes and the natural image preload list before PostgreSQL starts. After a valid finite metadata frame and current source check, the owner sends one fixed start signal. The original image entrypoint initializes only this engine with the observed necessary preload list, pg_cron added at most once, cron.database_name=postgres and background modeON. A fixed log prefix supplies native PID/SQLSTATE observations without exporting raw logs. Unsupported files/version/framing refuse before server start; no HBA/.pgpass rewrite or copied managed preload list is used.
+
+Source-to-binary correspondence stays explicitly UNKNOWN alongside actual library hashes and mechanics. Background mode in this isolated engine does not establish managed OFF/libpq behavior or managed operator permissions.
+
+## Identity, grants and jobs
+
+After exact empty replay, the observed owned provider operator installs pg_cron and checks version1.6.4, routine symbols/definitions/owners/ACLs and an empty job catalogue. In this engine only it enables the existing worker LOGIN, sets database-specific5s and pg_catalog search_path, and creates one separate restricted diagnostic peer. Passwords use private environment and the fixed psql password prompt protocol; plaintext is absent from SQL, argv, source, artifacts and reports.
+
+An independent native worker TCP session must show session_user=current_user=cuevo_worker, role=none, LOGIN, no superuser/BYPASSRLS/CREATEROLE/CREATEDB/replication/inherit, raw application grants/ownership or role-parent route, and unchanged worker_health.ready=true. Owner SET ROLE/SET SESSION AUTHORIZATION are forbidden substitutes.
+
+Only diagnostic schema USAGE, column INSERT(stage), exact probe procedures and supported Cron registration/lifecycle permissions are temporarily granted. PUBLIC/browser/API/service roles lack diagnostic access; explicit RLS and protected defaults prevent overriding source/native identity columns. Committing procedures are SECURITY INVOKER with proconfigNULL.
+
+The genuine worker schedules each fixed single CALL under an exact own name/database/username/int8 ID and actual own readback. SET/BEGIN/multiple-statement jobs and arbitrary selectors refuse. The explicit schedule grant is removed after registration; actual remaining inherited/PUBLIC permission is recorded. A supported scheduling grant is a generic SQL capability confined here to a disposable fixture, not approved permanent worker authority.
+
+## Native facts required
+
+| Case | Required observed outcome |
+|---|---|
+| Commit survival | Cron FAILED/P0001; matched job/run/PID; A and B_FAILED in distinct committed transactions; B absent; restricted native identities, exact source digest and5s |
+| Timeout | Cron FAILED/57014; TIMEOUT_A retained; TIMEOUT_DONE absent; actual initial5s |
+| Cumulative timeout | Two short sleeps totaling6s cross the same5s whole-CALL limit; CUM_A retained, CUM_B/CUM_DONE absent; no assumption that commits reset a timer |
+| Invalid transaction shapes | Genuine worker enclosing BEGIN, SECURITY DEFINER and procedure-level SET reject2D000 with no retained corresponding diagnostic commit |
+| Own-user metadata | Supported schedule_in_database usernameNULL/activefalse records the genuine caller; exact inactive job removal succeeds |
+| Explicit username | Non-NULL username rejects under restricted execution; retain actual SQLSTATE rather than guessing |
+| Peer/raw write | Genuine peer sees no foreign job and cannot unschedule it; raw cron.job deletion rejects42501 |
+
+Error codes are matched to actual backend IDs. A57014 alone is insufficient: private matched-PID classification must be exactly statement-timeout, with native job start/end, statement_timestamp, observed_at and numeric intervals retained. The whole statement must expire at or after5000ms and before the fixed6second body can finish; CUM_A must occur after its first3second sleep and before5seconds. Native ISO/numeric interval agreement is checked with only the less-than1ms precision lost by JavaScript timestamp parsing. This is measured evidence; no SQL, transport or recovery timer is increased. Early/user/admin/unknown cancellation, missing clocks or a reset-after-COMMIT duration cannot pass.
+
+Permission controls carry a successful same-connection restricted session and exact callable routine/ACL context before the attempt, matching fresh context afterward, and the unchanged original inactive own job. Only the privately observed exact supported table-job DELETE denial or non-NULL username superuser restriction can pass; authentication, missing routine, unrelated internal errors and unmatched causes remain UNKNOWN. Raw error/log content is excluded.
+
+Unknown, malformed, duplicate or drifted observations cannot produce PASSED. Exact current source catalogue fingerprints are compared before/after mechanics, after the declared diagnostic/LOGIN/extension overlay, while empty-source invariants remain required. Mechanics do not establish academic, hosted, billing, latency/load or customer outcomes.
+
+## Failure and cleanup
+
+Original create/schedule/own-unschedule intent precedes its effect. The own-unschedule attempt is latched before forwarding. Any unknown acknowledgement makes subsequent job settlement read-only and cannot re-enable that mutation whether the row is present or absent; exact owned-container disposal remains permitted. No second create/schedule/own-unschedule is attempted. First failure remains terminal.
+
+Unschedule only exact owned jobs through the worker's supported routine, read back and drain native Cron execution. Preserve run evidence/source facts before disposal. Normal SQL stays source/deadline fenced. Original created-resource ownership permits only exact physical disposal after source/deadline refusal, with repeated image/name/label/mount checks; it cannot permit another SQL/domain mutation. Removal is once, followed by native ID+owner absence and unchanged unrelated container/volume inventory. Failed/uncertain cleanup blocks PASSED; confirmed container absence is separate from unknown broader cleanup.
+
+Image cache/unrelated resources and Cron run history are not deleted. Proof/failure JSON is create-only/private/minimized. The existing database job owns one required execution step and exact proof/failure artifacts. Pre-Cron and original231 job contracts keep source-bound historical cutoffs and never claim this test existed.
+
+## Limits and next boundary
+
+Pure tests and structural checks establish authored behavior only. Authoring performs no local Docker, database/Auth, managed/provider, native or hosted DDL effects. The next native observation is the genuine isolated CI run: startup/control/library/configuration facts, exact empty schema, actual restricted identity/own jobs/commits/5s/denials and cleanup. Factual gaps remain REQUIRES_REVIEW; permissions/timeouts are not loosened.
+
+After a real pass, prepare a separate direct-adapter ADR/additive migration for canonical single-event claims, per-event processing/failure commits, release generation/pause/lease/concurrency/recovery and source/unknown receipt semantics. Policy reconstruction, Auth-owner exclusion, actual private Community delivery, supported pg_net retirement, new positive transport gates, external AI/PostHog delivery, original231 zero-SQL metadata recovery and hosted/whole-app/customer acceptance remain separate. Applied predicate/history/receipt bytes are unchanged.
