@@ -93,6 +93,9 @@
         "scripts/architecture/rules.test.ts",
         "scripts/architecture/synthetic-runtime.test.ts",
         "scripts/database/browser-pilot-volume-rules.test.ts",
+        "scripts/database/cron-readonly/current-facts.test.ts",
+        "scripts/database/cron-readonly/current-read.test.ts",
+        "scripts/database/cron-readonly/recovery-policy.test.ts",
         "scripts/database/hosted-active-runtime-state.test.ts",
         "scripts/database/hosted-community-native-read.test.ts",
         "scripts/database/hosted-installed-state.test.ts",
@@ -362,6 +365,18 @@
       },
       {
         "path": "scripts/database/browser-pilot-volume-rules.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/cron-readonly/current-facts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/cron-readonly/current-read.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/cron-readonly/recovery-policy.test.ts",
         "durationMs": null
       },
       {
