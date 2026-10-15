@@ -13,7 +13,7 @@ test('fixed reader refuses malformed credentials and accessors before a request'
   const originalFetch = globalThis.fetch; let requests = 0, getters = 0;
   globalThis.fetch = async () => { requests++; throw Error('PRIVATE_TRANSPORT'); };
   try {
-    const invalid: any = {}; Object.defineProperty(invalid, 'providerToken', { get() { getters++; return 'PRIVATE'; } });
+    const invalid = {}; Object.defineProperty(invalid, 'providerToken', { get() { getters++; return 'PRIVATE'; } });
     for (const input of [invalid, { providerToken: '', originalEvidence: {} }, { providerToken: 'SIMULATED_TOKEN', originalEvidence: {}, authenticated: true }]) {
       const result = await reader.readCurrentCronRecovery('observe', input); assert.equal(result.status, 'unknown'); assert.equal(result.nativeExecutionAuthorized, false);
     }
@@ -90,7 +90,7 @@ test('source verification after response completion cannot borrow the old decisi
 test('original read abort during the final source check prevents authenticated completion', async () => {
   assert.ok(reader); const originalFetch = globalThis.fetch, NativeDate = globalThis.Date, originalTimeout = globalThis.setTimeout;
   let constructions = 0, abortRead: (() => void) | undefined;
-  globalThis.setTimeout = ((callback: (...args: any[]) => void, delay?: number, ...args: any[]) => {
+  globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
     if (delay === 30000) abortRead = () => callback(...args);
     return originalTimeout(callback, delay, ...args);
   }) as typeof setTimeout;
@@ -119,7 +119,7 @@ test('caller cannot replace the captured token with a getter after source valida
     const response = new Response(f.encode(), { status: 200 }); Object.defineProperty(response, 'url', { value: endpoint }); return response;
   };
   try {
-    const input: any = { providerToken: 'SIMULATED_ORIGINAL_TOKEN', originalEvidence: {} };
+    const input = { providerToken: 'SIMULATED_ORIGINAL_TOKEN', originalEvidence: {} };
     const pending = reader.readCurrentCronRecovery('observe', input);
     Object.defineProperty(input, 'providerToken', { get() { getters++; throw Error('PRIVATE_REPLACED_TOKEN'); } });
     const result = await pending; assert.equal(getters, 0); assert.equal(requests, 1); assert.equal(result.currentReadAuthentication, 'AUTHENTICATED_FIXED_READER');
@@ -133,7 +133,7 @@ test('caller evidence getter installed during the read is never reread after awa
     const response = new Response(f.encode(), { status: 200 }); Object.defineProperty(response, 'url', { value: endpoint }); return response;
   };
   try {
-    const input: any = { providerToken: 'SIMULATED_TOKEN', originalEvidence: {} };
+    const input = { providerToken: 'SIMULATED_TOKEN', originalEvidence: {} };
     const pending = reader.readCurrentCronRecovery('observe', input);
     Object.defineProperty(input, 'originalEvidence', { get() { getters++; throw Error('PRIVATE_REPLACED_EVIDENCE'); } });
     const result = await pending; assert.equal(getters, 0); assert.equal(result.currentReadAuthentication, 'AUTHENTICATED_FIXED_READER');
@@ -141,7 +141,7 @@ test('caller evidence getter installed during the read is never reread after awa
 });
 test('nested caller evidence mutation cannot change the captured original intent', async () => {
   assert.ok(reader); const originalFetch = globalThis.fetch, f = currentFixture(true);
-  f.evidence.intent.writeIntent.issuedAt = new Date(Date.now() - 10000).toISOString();
+  f.evidence.intent!.writeIntent.issuedAt = new Date(Date.now() - 10000).toISOString();
   const originalEvidence = { intent: f.evidence.intent, custody: null, acknowledgement: null, originalRunBinding: null, originalArmBinding: null, armIntent: null, unrelatedApplicationDrift: false, unrelatedSourceDrift: false };
   globalThis.fetch = async () => {
     const clock = new Date().toISOString(); for (const key of ['transactionStartedAt', 'statementAt', 'readStartedAt', 'readCompletedAt']) f.raw[key] = clock;
@@ -149,7 +149,7 @@ test('nested caller evidence mutation cannot change the captured original intent
   };
   try {
     const pending = reader.readCurrentCronRecovery('prepare', { providerToken: 'SIMULATED_TOKEN', originalEvidence });
-    originalEvidence.intent.originalRoleSettings[0] = 'statement_timeout=2s';
+    originalEvidence.intent!.originalRoleSettings![0] = 'statement_timeout=2s';
     const result = await pending; assert.equal(result.status, 'advice'); assert.equal(result.preparationReadbackMatches, true);
   } finally { globalThis.fetch = originalFetch; }
 });
