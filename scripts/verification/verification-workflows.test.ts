@@ -2,6 +2,32 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJobs } from './verification-workflows';
+import {execFileSync} from 'node:child_process';
+import {ciCodeqlJob,deriveCodeqlJobStepContract} from './verification-workflows';
+
+test('official CodeQL step projection admits exact new whole job and source-bound original cutoffs only',async()=>{
+ const current=deriveCodeqlJobStepContract(ciCodeqlJob,'CURRENT_SOURCE');
+ assert.equal(current.requiredSteps[5],'Run github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d');
+ assert.equal(current.requiredSteps[6],'Run github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d');
+ assert.ok(current.allowedPostSteps.includes('Post Run github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d'));
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),cutoff='c4e734d07b1484262bbedbc4b9fcc73baf3eeff2';
+ for(const sha of ['08006c085d5030178bc104129b7ff28f7273346e','561085f8df13c40fbd23ba51f422ed3445d3a4a9',cutoff,'239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37']){
+  const original=(yaml.load(new TextDecoder('utf8',{fatal:true}).decode(git(['show',sha+':.github/workflows/ci.yml']))).jobs as Record<string,unknown>).codeql;
+  assert.equal(deriveCodeqlJobStepContract(original,'ORIGINAL_RUNTIME_METADATA',{sha,git}).requiredSteps[5],'Run github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2');
+  assert.throws(()=>deriveCodeqlJobStepContract(original,'CURRENT_SOURCE',{sha,git}));
+  assert.throws(()=>deriveCodeqlJobStepContract(original,'ORIGINAL_RUNTIME_METADATA',{sha:'0ed9a09d4316466de45fe08d09d2f0afcb2845ac',git}));
+  assert.throws(()=>deriveCodeqlJobStepContract(original,'ORIGINAL_RUNTIME_METADATA',{sha,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+ }
+ for(const mode of ['split','permission','hidden','sarif','wait','path','budget']){
+  const changed=structuredClone(ciCodeqlJob) as unknown as {steps:Record<string,unknown>[];permissions:Record<string,string>;[key:string]:unknown};
+  if(mode==='split')changed.steps[5].uses='github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2';
+  if(mode==='permission')changed.permissions.contents='write';if(mode==='budget')changed['timeout-minutes']=25;
+  if(mode==='hidden'||mode==='path')(changed.steps[8].with as Record<string,unknown>)[mode==='hidden'?'include-hidden-files':'path']=mode==='hidden'?false:'.local/**';
+  if(mode==='wait')(changed.steps[6].with as Record<string,unknown>)['wait-for-processing']=false;
+  if(mode==='sarif')(changed.steps[7].env as Record<string,unknown>).CUEVO_CODEQL_SARIF_ID='supplied';
+  assert.throws(()=>deriveCodeqlJobStepContract(changed,'CURRENT_SOURCE'),mode);
+ }
+});
 
 test('one existing database producer retains exact original231 source proof without a second replay',async()=>{
  const api:Record<string,unknown>=await import('./verification-workflows');assert.ok(api.ciOriginal231CatalogueArtifactStep,'source231 requires its own exact retained artifact');const step=api.ciOriginal231CatalogueArtifactStep as Record<string,unknown>,job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.deepEqual(step,{name:'Retain exact source original231 catalogue reference',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source231.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);const source=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(source)as{jobs:Record<string,{steps:Record<string,unknown>[]}>};assert.deepEqual(flow.jobs['database-checks'],job);assert.ok(flow.jobs['database-checks'].steps.some(row=>row.name===step.name));

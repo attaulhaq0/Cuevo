@@ -6,6 +6,9 @@ import { z } from 'zod';
 import { canonicalReleaseExecutionJson, canonicalReleaseReviewJson } from './release-review';
 import { readSingleJsonArchive } from './single-json-archive';
 import { validateCodeqlReceipt } from './codeql-alerts';
+import { createRequire } from 'node:module';
+import { ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract } from './verification-workflows';
+import { captureCanonicalSourceContext } from './git-source-digest';
 
 const unavailable = () => new Error('Canonical staging security evidence is unavailable or requires review; contents withheld.');
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER), sha = z.string().regex(/^[a-f0-9]{40}$/);
@@ -14,20 +17,34 @@ const expectedSchema = z.object({ sha, repository }).strict();
 const runSchema = z.object({ id: positive, run_attempt: positive, head_sha: sha, head_branch: z.literal('main'), event: z.enum(['push','workflow_dispatch']), path: z.literal('.github/workflows/ci.yml'), status: z.enum(['queued', 'in_progress', 'completed']), conclusion: z.string().nullable(), repository: z.object({ full_name: repository }) });
 const stepSchema = z.object({ name: z.string().min(1).max(200), number: positive, status: z.string(), conclusion: z.string().nullable() });
 const jobSchema = z.object({ id: positive, name: z.string().min(1).max(200), run_id: positive, run_attempt: positive, head_sha: sha, head_branch: z.literal('main'), status: z.string(), conclusion: z.string().nullable(), started_at: z.iso.datetime({offset:true}).nullable(), completed_at: z.iso.datetime({offset:true}).nullable(), steps: z.array(stepSchema).max(100).optional() });
-const requiredSteps = [
-  'Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
-  'Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
-  'Run npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund',
-  'Run npm ci --ignore-scripts --no-audit --no-fund',
-  'Run node node_modules/esbuild/install.js',
-  'Run github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2',
-  'Run github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2',
-  'Require current processed CodeQL security findings to be clear',
-  'Retain original processed CodeQL receipt',
-];
 const listQuery = (source: string, page: number, diagnostic:boolean) => `actions/workflows/ci.yml/runs?branch=main&${diagnostic?'':'event=push&'}head_sha=${source}&per_page=100&page=${page}`;
 export type CanonicalStagingSecurity = { status: 'VERIFIED'; runId: number; runAttempt: number; jobId: number; jobsSha256: string; receiptSha256: string; analysisId: number; sarifId: string } | { status: 'NOT_READY'; runId?: number; runAttempt?: number };
 type GithubReader = (path: string) => Promise<unknown>;
+/** Fixed authenticated source reads confer no run/receipt/native authority. */
+async function readSecuritySource(expected:z.infer<typeof expectedSchema>,github:GithubReader,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA'){
+ const commitPath='git/commits/'+expected.sha,contentsPath='contents/.github/workflows/ci.yml?ref='+expected.sha;
+ const read=async()=>{
+  const commitRaw=JSON.parse(canonicalReleaseExecutionJson(await github(commitPath))) as unknown;
+  const contentsRaw=JSON.parse(canonicalReleaseExecutionJson(await github(contentsPath))) as unknown;
+  const commit=z.object({sha:z.literal(expected.sha),tree:z.object({sha}),verification:z.object({verified:z.literal(true),reason:z.literal('valid'),signature:z.string().min(1),payload:z.string().min(1)})}).parse(commitRaw);
+  const contents=z.object({type:z.literal('file'),path:z.literal('.github/workflows/ci.yml'),sha,encoding:z.literal('base64'),size:positive.max(128*1024),content:z.string().max(192*1024)}).parse(contentsRaw);
+  const encoded=contents.content.replace(/\r?\n/g,'');if(!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded))throw unavailable();
+  const bytes=Buffer.from(encoded,'base64');if(bytes.length!==contents.size||bytes.toString('base64')!==encoded||createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex')!==contents.sha)throw unavailable();
+  const text=new TextDecoder('utf8',{fatal:true}).decode(bytes),yaml=createRequire(import.meta.url)('js-yaml') as{load(text:string):unknown},job=z.object({jobs:z.object({codeql:z.unknown()})}).parse(yaml.load(text)).jobs.codeql;
+  return{commit,bytes,job,raw:canonicalReleaseExecutionJson({commit:commitRaw,contents:contentsRaw})};
+ };
+ const original=await read();let context:ReturnType<typeof captureCanonicalSourceContext>|undefined;
+ if(canonicalReleaseReviewJson(original.job)===canonicalReleaseReviewJson(ciCodeqlJobBeforeUpgrade)){
+  if(purpose!=='ORIGINAL_RUNTIME_METADATA')throw unavailable();
+  context=captureCanonicalSourceContext(resolve('.'),expected.sha,original.commit.tree.sha,purpose);
+  if(!context.git(['show',expected.sha+':.github/workflows/ci.yml']).equals(original.bytes))throw unavailable();
+ }
+ const contract=deriveCodeqlJobStepContract(original.job,purpose,context?{sha:expected.sha,git:context.git}:undefined);
+ let poisoned=false,refreshing=false;
+ const assertOriginalValidity=()=>{try{if(poisoned)throw unavailable();context?.finalMetadata();}catch{poisoned=true;throw unavailable();}};
+ const refreshOriginalMetadata=async()=>{if(poisoned||refreshing){poisoned=true;throw unavailable();}refreshing=true;try{if((await read()).raw!==original.raw)throw unavailable();assertOriginalValidity();}catch{poisoned=true;throw unavailable();}finally{refreshing=false;}};
+ return{contract,assertOriginalValidity,refreshOriginalMetadata};
+}
 export type GuardedCanonicalStagingSecurity={proof:CanonicalStagingSecurity;refreshOriginalMetadata:()=>Promise<void>;assertOriginalValidity:()=>void};
 export type GithubArtifactReader = (artifactId: number) => Promise<Uint8Array>;
 
@@ -49,7 +66,7 @@ async function originalReceipt(expected:z.infer<typeof expectedSchema>,run:z.inf
 }
 
 /** Read only the canonical security job. Overall CI may remain running or fail unrelated acceptance checks. */
-async function readOriginalSecurity(value: unknown, github: GithubReader, artifact: GithubArtifactReader|undefined, admitSource: (expected:z.infer<typeof expectedSchema>)=>Promise<void>,diagnostic=false): Promise<GuardedCanonicalStagingSecurity> {
+async function readOriginalSecurity(value: unknown, github: GithubReader, artifact: GithubArtifactReader|undefined, admitSource: (expected:z.infer<typeof expectedSchema>)=>Promise<void>,diagnostic=false,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA'='CURRENT_SOURCE'): Promise<GuardedCanonicalStagingSecurity> {
   try {
     const expected = expectedSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));
     await admitSource(expected);
@@ -87,20 +104,22 @@ async function readOriginalSecurity(value: unknown, github: GithubReader, artifa
     if (codeql.length !== 1) throw unavailable(); const exact = codeql[0];
     if (['queued', 'in_progress'].includes(exact.status) && exact.conclusion === null) return{proof:{status:'NOT_READY',runId:selected.id,runAttempt:selected.run_attempt},refreshOriginalMetadata:async()=>{throw unavailable();},assertOriginalValidity:()=>{throw unavailable();}};
     if (exact.status !== 'completed' || exact.conclusion !== 'success' || !exact.steps||!exact.started_at||!exact.completed_at) throw unavailable();
+    const source=await readSecuritySource(expected,github,purpose),{requiredSteps,allowedPostSteps}=source.contract;
     const names = new Set<string>(), numbers = new Set<number>(), authored: string[] = [];
     for (const [index, step] of exact.steps.entries()) {
       if (names.has(step.name) || numbers.has(step.number) || index > 0 && step.number <= exact.steps[index - 1].number) throw unavailable(); names.add(step.name); numbers.add(step.number);
       if (requiredSteps.includes(step.name)) { if (step.status !== 'completed' || step.conclusion !== 'success') throw unavailable(); authored.push(step.name); }
       else if (step.name === 'Set up job' || step.name === 'Complete job') { if (step.status !== 'completed' || step.conclusion !== 'success') throw unavailable(); }
-      else if (![...requiredSteps.filter(name => name.startsWith('Run actions/') || name.startsWith('Run github/codeql-action/')),'Retain original processed CodeQL receipt'].some(name => step.name === `Post ${name}`)
+      else if (!allowedPostSteps.includes(step.name)
         || step.status !== 'completed' || !['success', 'skipped'].includes(step.conclusion ?? '')) throw unavailable();
     }
     if (canonicalReleaseReviewJson(authored) !== canonicalReleaseReviewJson(requiredSteps)) throw unavailable();
     const receipt=await originalReceipt(expected,selected,exact,github,artifact),proof=receipt.proof;
-    const refreshOriginalMetadata=async()=>{try{await currentRun();const current=(await readJobs()).filter(row=>row.name==='codeql');if(current.length!==1||canonicalReleaseExecutionJson(current[0])!==canonicalReleaseExecutionJson(exact))throw unavailable();await receipt.refreshOriginalMetadata();await admitSource(expected);receipt.assertOriginalValidity();}catch{throw unavailable();}};
+    const assertOriginalValidity=()=>{source.assertOriginalValidity();receipt.assertOriginalValidity();};
+    const refreshOriginalMetadata=async()=>{try{await currentRun();const current=(await readJobs()).filter(row=>row.name==='codeql');if(current.length!==1||canonicalReleaseExecutionJson(current[0])!==canonicalReleaseExecutionJson(exact))throw unavailable();await source.refreshOriginalMetadata();await receipt.refreshOriginalMetadata();await admitSource(expected);assertOriginalValidity();}catch{throw unavailable();}};
     await refreshOriginalMetadata();
     const jobsSha256 = createHash('sha256').update(canonicalReleaseReviewJson({ repository: expected.repository, sha: expected.sha, runId: selected.id, runAttempt: selected.run_attempt, jobId: exact.id, steps: exact.steps,...proof })).digest('hex');
-    return {proof:{status:'VERIFIED',runId:selected.id,runAttempt:selected.run_attempt,jobId:exact.id,jobsSha256,...proof},refreshOriginalMetadata,assertOriginalValidity:receipt.assertOriginalValidity};
+    return {proof:{status:'VERIFIED',runId:selected.id,runAttempt:selected.run_attempt,jobId:exact.id,jobsSha256,...proof},refreshOriginalMetadata,assertOriginalValidity};
   } catch { throw unavailable(); }
 }
 
@@ -114,7 +133,7 @@ export function readOriginalCanonicalStagingSecurityAndGuard(value:unknown,githu
  const selected=runSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));if(selected.status!=='completed'||!['success','failure'].includes(selected.conclusion??'')||selected.event!=='push')throw unavailable();
  const admit=async()=>{const current=runSchema.parse(JSON.parse(canonicalReleaseReviewJson(await github('actions/runs/'+selected.id))));if(canonicalReleaseReviewJson(current)!==canonicalReleaseReviewJson(selected))throw unavailable();};
  const originalReader:GithubReader=path=>path.startsWith('actions/workflows/ci.yml/runs?')?Promise.resolve({total_count:1,workflow_runs:[selected]}):github(path);
- return readOriginalSecurity({sha:selected.head_sha,repository:selected.repository.full_name},originalReader,artifact,admit);
+ return readOriginalSecurity({sha:selected.head_sha,repository:selected.repository.full_name},originalReader,artifact,admit,false,'ORIGINAL_RUNTIME_METADATA');
 }
 
 /** Existing callers retain exactly the original public proof shape. */
@@ -128,7 +147,7 @@ export async function readFullRegressionSecurity(value:unknown,github:GithubRead
     if(run.status==='completed'?!['success','failure'].includes(run.conclusion??''):run.conclusion!==null)throw unavailable();
     const normalized=canonicalReleaseReviewJson({id:run.id,run_attempt:run.run_attempt,head_sha:run.head_sha,event:run.event,path:run.path,repository:run.repository});if(original&&original!==normalized)throw unavailable();original=normalized;
   };
-  return(await readOriginalSecurity({sha:input.sha,repository:input.repository},github,artifact,admit,true)).proof;
+  return(await readOriginalSecurity({sha:input.sha,repository:input.repository},github,artifact,admit,true,'ORIGINAL_RUNTIME_METADATA')).proof;
 }
 
 export function readStagingSecurityContext(env: Record<string, string | undefined>, checkoutSha: string) {

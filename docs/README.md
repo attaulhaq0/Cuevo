@@ -10,6 +10,7 @@ For product requirements start with [product context](product/README.md) and its
 
 | Need | Read |
 |---|---|
+| Exact CodeQL producer/current and original official consumer admission | [Source-consumer contract](decisions/2026-10-15-codeql-source-consumer-contract.md): shared full-job policy, fixed official source blob checks, original C4 ancestry and preserved processed receipt clocks; fresh canonical/hosted acceptance remains separate |
 | Current senior frontend audit, duplication decisions and scoped verification | [12 October product QA](reports/2026-10-12-frontend-product-qa.md): actual route/component inventory, current Trail contract, prioritized corrections and remaining connected/hosted/manual checks; [implementation plan](superpowers/plans/2026-10-12-frontend-product-qa.md) |
 | Review the implemented release repairs, remaining hosting gates and timing target | [11 October release process team review](reports/2026-10-11-release-process-team-review.md): exact local source, implemented duplicate/preparation/host fixes, preserved failure evidence, unmeasured20–25-minute deployment target and remaining protected CI/hosted acceptance |
 | Current integrated source and release handover | [Canonical integration handover](reports/2026-10-04-cuevo-integration-handover.md): preserved customer and Trail source, verification plan, pending practice-signal repair, current CI and hosted/customer limits |

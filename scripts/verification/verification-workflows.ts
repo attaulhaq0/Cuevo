@@ -17,6 +17,39 @@ const ciSetup=[
  {run:'npm ci --ignore-scripts --no-audit --no-fund'},
  {run:'node node_modules/esbuild/install.js'},
 ];
+export const ciCodeqlReceiptStep={name:'Retain original processed CodeQL receipt',uses:'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',with:{name:'cuevo-codeql-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/codeql-receipt/receipt.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}};
+const codeqlJob=(pin:'24c54180a607b1449ed407dd24f251e4e9147c8d'|'2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2')=>({
+ concurrency:{group:'cuevo-codeql-${{ github.ref }}','cancel-in-progress':false,queue:'max'},
+ 'runs-on':'ubuntu-latest','timeout-minutes':20,permissions:{contents:'read','security-events':'write'},
+ steps:[
+  {uses:'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',with:{'persist-credentials':false}},
+  {uses:'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',with:{'node-version':'24.16.0'}},
+  ...ciSetup.slice(2),
+  {uses:'github/codeql-action/init@'+pin,with:{languages:'javascript-typescript','build-mode':'none'}},
+  {uses:'github/codeql-action/analyze@'+pin,id:'codeql-analyze',with:{'wait-for-processing':true}},
+  {name:'Require current processed CodeQL security findings to be clear',env:{GH_TOKEN:'${{ github.token }}',CUEVO_CODEQL_SARIF_ID:'${{ steps.codeql-analyze.outputs.sarif-id }}'},run:'node --import tsx scripts/verification/codeql-alerts.ts'},
+  ciCodeqlReceiptStep,
+ ],
+});
+export const ciCodeqlJob=codeqlJob('24c54180a607b1449ed407dd24f251e4e9147c8d');
+export const ciCodeqlJobBeforeUpgrade=codeqlJob('2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2');
+export type CodeqlJobStepContract={requiredSteps:string[];allowedPostSteps:string[]};
+/** Whole authored jobs select step metadata. Supplied names never authorize a
+ * producer; the original source/Git owner retains ancestry and physical authority. */
+export function deriveCodeqlJobStepContract(value:unknown,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',source?:{sha:string;git:(args:string[])=>Buffer}):CodeqlJobStepContract{
+ const fail=()=>Error('Source-owned CodeQL workflow requires review.');
+ try{
+  if(!['CURRENT_SOURCE','ORIGINAL_RUNTIME_METADATA'].includes(purpose))throw fail();
+  const bytes=canonicalReleaseReviewJson(value);let job=ciCodeqlJob;
+  if(bytes!==canonicalReleaseReviewJson(job)){
+   const cutoff='c4e734d07b1484262bbedbc4b9fcc73baf3eeff2';
+   if(purpose!=='ORIGINAL_RUNTIME_METADATA'||bytes!==canonicalReleaseReviewJson(ciCodeqlJobBeforeUpgrade)||!source||!/^[a-f0-9]{40}$/.test(source.sha)||source.git(['rev-parse',cutoff+'^{tree}']).toString().trim()!=='2bfc6ccc10101d28318684829f86d6ff840e4780')throw fail();
+   source.git(['merge-base','--is-ancestor',source.sha,cutoff]);job=ciCodeqlJobBeforeUpgrade;
+  }
+  const steps=job.steps as Record<string,unknown>[];
+  return{requiredSteps:steps.map(step=>typeof step.name==='string'?step.name:'Run '+String(step.uses??step.run)),allowedPostSteps:steps.filter(step=>typeof step.uses==='string').map(step=>'Post '+(typeof step.name==='string'?step.name:'Run '+step.uses))};
+ }catch{throw fail();}
+}
 /** Independent source runners share no mutable fixture directory or generated types. */
 export const ciSourceJobs={
  'fast-checks':{'runs-on':'ubuntu-latest','timeout-minutes':20,steps:[
