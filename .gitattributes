@@ -1,4 +1,7 @@
 * text=auto eol=lf
+# Preserve independently reviewed read-only source bytes across checkouts.
+scripts/database/cron-readonly/collect-current-facts.sql -text -eol
+scripts/database/cron-readonly/recovery-policy.mjs -text -eol
 supabase/migrations/20261003032848_current_academic_source_candidates.sql -text -eol
 supabase/migrations/20261003035947_human_academic_source_context.sql -text -eol
 supabase/migrations/20261003040930_academic_reference_display_dates.sql -text -eol
