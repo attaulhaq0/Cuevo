@@ -21,6 +21,8 @@ Inherit root AGENTS.md. Read this app README, docs/codebase-map.md, the affected
 - Recommendation page optimization may share only full identical immutable proposal/run/saved-source authorization inputs within one statement. Preserve exact current source, policy, publication, synthetic population and relationship denials; never replace them with a baseline-only/TTL verdict or expose raw context in page responses.
 - Update module navigation and run architecture, typecheck, lint, relevant API/SQL and build checks. In-progress improvement work must not be silently altered or declared complete during refactors.
 
+- Keep the request-budget decision before header preparation and its exact-request completion in onRequest before parsing/protected work. Reuse existing Helmet/CORS/correlation; disable preflight completion only for already-refused requests. Preserve quotas, hashes/windows, current OPTIONS distinctions and safe429 bodies; never put request verdicts in shared route configuration or introduce a second header/count engine.
+
 - Portfolio page identity may consume only the exact source object just authorized by the canonical portfolio_source function, through an ungranted owner-only helper. Canonical identity, command and replay paths must keep source checks; parent pointers, source publication, current human/duplicate-name context and artifact metadata remain exact per row.
 
 - Recommendation page source verdict maps remain owner-only and request-local. Full argument tuples and pinned canonical delegate bodies preserve per-run facts/current source/policy/native authority; never expose the map, persist it, substitute a partial key or reuse it for mutations/replay.
