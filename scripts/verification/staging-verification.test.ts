@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile,mkdtemp,writeFile,rm } from 'node:fs/promises';
+import { readFile,mkdtemp,writeFile,rm,mkdir } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {execFileSync,spawnSync} from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -7,6 +7,7 @@ import { resolve,join } from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { validateCiRun } from './cicd-contracts';
+import {ciCodeqlJob} from './verification-workflows';
 
 const yaml = createRequire(import.meta.url)('js-yaml') as { load(text: string): unknown; dump(value: unknown): string };
 const expected = { sha: 'a'.repeat(40), repository: 'owner/repo', ciRunId: '31' };
@@ -83,7 +84,7 @@ test('manual observation context refuses another job event ref source or missing
 
 test('actual manual command retains safe pending or review receipt with GET only and no database reset',async()=>{
  const root=await mkdtemp(join(tmpdir(),'cuevo-schema-observation-'));try{
-  const git=(...args:string[])=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();await writeFile(join(root,'README.md'),'Synthetic command fixture\n');await writeFile(join(root,'.gitignore'),'.local/\nfixture-fetch.mjs\ncalls.json\n');git('init','--quiet');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','source');const sourceSha=git('rev-parse','HEAD'),treeSha=git('rev-parse','HEAD^{tree}');
+  const git=(...args:string[])=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();await writeFile(join(root,'README.md'),'Synthetic command fixture\n');await writeFile(join(root,'.gitignore'),'.local/\nfixture-fetch.mjs\ncalls.json\n');await mkdir(join(root,'.github/workflows'),{recursive:true});await writeFile(join(root,'.github/workflows/ci.yml'),yaml.dump({jobs:{codeql:ciCodeqlJob}}));git('init','--quiet');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','source');const sourceSha=git('rev-parse','HEAD'),treeSha=git('rev-parse','HEAD^{tree}');
   for(const mode of ['pending','denied','changed-source']){
    const hook=join(root,'fixture-fetch.mjs'),calls=join(root,'calls.json'),inputPath=join(root,'.local/fixture-input.json');await import('node:fs/promises').then(fs=>fs.mkdir(join(root,'.local'),{recursive:true}));await writeFile(inputPath,JSON.stringify({callsPath:calls,mode,sourceSha,treeSha}));await writeFile(hook,`import {readFileSync,writeFileSync} from 'node:fs';const input=JSON.parse(readFileSync(process.env.CUEVO_SCHEMA_COMMAND_FIXTURE,'utf8')),calls=[];globalThis.fetch=async(url,options)=>{if(options.method!=='GET')throw Error('Unexpected mutation');calls.push(String(url));writeFileSync(input.callsPath,JSON.stringify(calls));const path=new URL(url).pathname.replace('/repos/owner/repo/','');if(input.mode==='denied')throw Error('PRIVATE fixture credential');const run={id:31,run_attempt:2,head_sha:input.mode==='changed-source'?'a'.repeat(40):input.sourceSha,head_branch:'main',event:'push',path:'.github/workflows/ci.yml',status:'in_progress',conclusion:null,repository:{full_name:'owner/repo'}};const value=path==='actions/runs/31'?run:path==='git/ref/heads/main'?{object:{type:'commit',sha:input.sourceSha}}:path==='git/commits/'+input.sourceSha?{sha:input.sourceSha,tree:{sha:input.treeSha}}:path==='actions/runs/31/attempts/2/jobs'?{total_count:0,jobs:[]}:null;if(value===null)throw Error('Unexpected non-read path');return new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});};`);
    const result=spawnSync(process.execPath,['--import',pathToFileURL(resolve('node_modules/tsx/dist/loader.mjs')).href,'--import',pathToFileURL(hook).href,resolve('scripts/verification/staging-verification.ts')],{cwd:root,encoding:'utf8',env:{...process.env,GITHUB_REPOSITORY:'owner/repo',GITHUB_SHA:sourceSha,GITHUB_WORKFLOW_SHA:sourceSha,GITHUB_WORKFLOW_REF:'owner/repo/.github/workflows/staging-verification.yml@refs/heads/main',GITHUB_JOB:'canonical-schema',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/main',GITHUB_ACTIONS:'true',CI:'true',GITHUB_SERVER_URL:'https://github.com',GITHUB_API_URL:'https://api.github.com',GH_TOKEN:'private-fixture',CUEVO_CANONICAL_CI_RUN_ID:'31',CUEVO_SCHEMA_COMMAND_FIXTURE:inputPath}});
