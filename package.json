@@ -57,7 +57,7 @@
   },
   "dependencies": {
     "@fastify/cors": "11.2.0",
-    "@fastify/helmet": "13.0.2",
+    "@fastify/helmet": "13.1.2",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-fastify": "12.1.2",
