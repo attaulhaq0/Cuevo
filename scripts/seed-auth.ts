@@ -25,6 +25,8 @@ export function verifySyntheticAuthPasswordBinding(password:string,value:unknown
  return timingSafeEqual(actual,Buffer.from(binding.key,'hex'));
 }
 const actorSchema = z.object({ actorId: z.uuid(), schoolId: z.uuid(), email: z.email().max(254), role: z.enum(['admin', 'coordinator', 'teacher', 'student', 'parent']), displayName: z.string().min(1).max(200) }).strict();
+// Shared source shape only. This export does not widen the original133 seed or receipt schemas.
+export { actorSchema as syntheticAuthSeedActorSchema };
 const manifestSchema = z.object({ synthetic: z.literal(true), schoolId: z.uuid(), denialSchoolId: z.uuid(), actors: z.array(actorSchema).length(133) }).strict();
 export const syntheticAuthReceiptV1ActorSchema = z.object({ actorId: z.uuid(), emailSha256: z.string().regex(/^[a-f0-9]{64}$/), state: z.enum(['NOT_ATTEMPTED', 'INTENT', 'CONFIRMED', 'OUTCOME_UNKNOWN', 'REQUIRES_REVIEW']) }).strict();
 const receiptActor=syntheticAuthReceiptV1ActorSchema;
