@@ -1,9 +1,14 @@
 set -euo pipefail
 cuevo_preflight_stage=ENTRYPOINT
+cuevo_preflight_required_file=''
 cuevo_preflight_failure() {
  cuevo_preflight_status=$?
  if [[ "$cuevo_preflight_status" != 0 ]]; then
-  printf 'CUEVO_CRON_PREFLIGHT_FAILURE_V1\t%s\t%s\n' "$cuevo_preflight_stage" "$cuevo_preflight_status" >&2 || :
+  if [[ "$cuevo_preflight_stage" == FILES ]]; then
+   printf 'CUEVO_CRON_PREFLIGHT_FAILURE_V2\tFILES\t%s\t%s\n' "$cuevo_preflight_required_file" "$cuevo_preflight_status" >&2 || :
+  else
+   printf 'CUEVO_CRON_PREFLIGHT_FAILURE_V1\t%s\t%s\n' "$cuevo_preflight_stage" "$cuevo_preflight_status" >&2 || :
+  fi
  fi
  return "$cuevo_preflight_status"
 }
@@ -17,7 +22,14 @@ cuevo_preflight_stage=PG_VERSION
 version=$(pg_config --version)
 [[ "$version" == 'PostgreSQL 17.11' ]] || exit 91
 cuevo_preflight_stage=FILES
-[[ -f "$entrypoint" && -f "$config" && -f "$library" && -f "$control" ]] || exit 92
+cuevo_preflight_required_file=ENTRYPOINT
+[[ -f "$entrypoint" ]] || exit 92
+cuevo_preflight_required_file=CONFIG
+[[ -f "$config" ]] || exit 92
+cuevo_preflight_required_file=LIBRARY
+[[ -f "$library" ]] || exit 92
+cuevo_preflight_required_file=CONTROL
+[[ -f "$control" ]] || exit 92
 cuevo_preflight_stage=PRELOAD_READER
 if command -v gosu >/dev/null; then
  preload=$(gosu postgres postgres -D /etc/postgresql -C shared_preload_libraries)

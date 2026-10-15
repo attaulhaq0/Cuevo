@@ -103,6 +103,7 @@ export async function verifyNativeCronTimedCase(runValue:unknown,expected:unknow
 
 const startupRefusals=['CHILD_ERROR','CHILD_CLOSE','TIMER','STREAM_LIMIT','FIRST_FRAME','HANDSHAKE_ADMISSION','SOURCE_GUARD','UNKNOWN'] as const;
 const startupStages=['ENTRYPOINT','PG_CONFIG_PATHS','PG_VERSION','FILES','PRELOAD_READER','PRELOAD_VALIDATE','CRON_VERSION','HASHES','METADATA','GATE'] as const;
+const requiredFiles=['ENTRYPOINT','CONFIG','LIBRARY','CONTROL'] as const;
 const startupErrorCodes=['EACCES','EINVAL','ENOENT','ENOSPC','ENOMEM','EPERM','EIO','EPIPE','ESRCH','ETIMEDOUT','UNKNOWN'] as const;
 const startupSignals=['SIGINT','SIGTERM','SIGKILL','SIGHUP','SIGABRT','SIGQUIT','SIGILL','SIGTRAP','SIGBUS','SIGFPE','SIGSEGV','SIGPIPE','SIGALRM','SIGUSR1','SIGUSR2','SIGCHLD','SIGCONT','SIGSTOP','SIGTSTP','SIGTTIN','SIGTTOU','OTHER'] as const;
 const startupExit=z.number().int().min(0).max(255),startupFailureExit=startupExit.refine(value=>value>0);
@@ -123,15 +124,25 @@ const preflightObservation=z.union([
  z.object({status:z.literal('UNKNOWN'),stage:z.null(),exitCode:z.null(),terminalSource:z.null(),observedAt:nativeClock.nullable()}).strict(),
  z.object({status:z.literal('MATCHED'),stage:z.enum(startupStages),exitCode:startupFailureExit,terminalSource:z.enum(['CONTAINER_EXIT','CHILD_CLOSE']),observedAt:nativeClock.nullable()}).strict()
 ]);
-const startupDiagnosticSchema=z.object({version:z.literal(1),refusal:z.enum(startupRefusals),observedAt:nativeClock.nullable(),firstFrame:z.enum(['UNOBSERVED','OBSERVED','REJECTED']),childError:errorObservation,childClose:closeObservation,preflight:preflightObservation,containerExit:containerExitObservation}).strict();
+const startupDiagnosticV1Schema=z.object({version:z.literal(1),refusal:z.enum(startupRefusals),observedAt:nativeClock.nullable(),firstFrame:z.enum(['UNOBSERVED','OBSERVED','REJECTED']),childError:errorObservation,childClose:closeObservation,preflight:preflightObservation,containerExit:containerExitObservation}).strict();
+const preflightV2Observation=z.union([
+ z.object({status:z.literal('UNOBSERVED'),stage:z.null(),exitCode:z.null(),terminalSource:z.null(),observedAt:z.null(),requiredFile:z.null()}).strict(),
+ z.object({status:z.literal('UNKNOWN'),stage:z.null(),exitCode:z.null(),terminalSource:z.null(),observedAt:nativeClock.nullable(),requiredFile:z.null()}).strict(),
+ z.object({status:z.literal('MATCHED'),stage:z.enum(startupStages),exitCode:startupFailureExit,terminalSource:z.enum(['CONTAINER_EXIT','CHILD_CLOSE']),observedAt:nativeClock.nullable(),requiredFile:z.enum(requiredFiles).nullable()}).strict()
+]);
+const startupDiagnosticV2Schema=startupDiagnosticV1Schema.extend({version:z.literal(2),preflight:preflightV2Observation}).strict();
+const startupDiagnosticSchema=z.discriminatedUnion('version',[startupDiagnosticV1Schema,startupDiagnosticV2Schema]);
 export type NativeCronStartupDiagnostic=z.infer<typeof startupDiagnosticSchema>;
-export function unobservedNativeCronStartupDiagnostic():NativeCronStartupDiagnostic{return{version:1,refusal:'UNKNOWN',observedAt:null,firstFrame:'UNOBSERVED',childError:{status:'UNOBSERVED',code:null,observedAt:null},childClose:{status:'UNOBSERVED',exitCode:null,signal:null,observedAt:null},preflight:{status:'UNOBSERVED',stage:null,exitCode:null,terminalSource:null,observedAt:null},containerExit:{status:'UNOBSERVED',exitCode:null,finishedAt:null,observedAt:null}};}
+type NativeCronStartupDiagnosticV2=z.infer<typeof startupDiagnosticV2Schema>;
+function emptyStartupDiagnosticV2():NativeCronStartupDiagnosticV2{return{version:2,refusal:'UNKNOWN',observedAt:null,firstFrame:'UNOBSERVED',childError:{status:'UNOBSERVED',code:null,observedAt:null},childClose:{status:'UNOBSERVED',exitCode:null,signal:null,observedAt:null},preflight:{status:'UNOBSERVED',stage:null,exitCode:null,terminalSource:null,observedAt:null,requiredFile:null},containerExit:{status:'UNOBSERVED',exitCode:null,finishedAt:null,observedAt:null}};}
+export function unobservedNativeCronStartupDiagnostic():NativeCronStartupDiagnostic{return emptyStartupDiagnosticV2();}
 export function admitNativeCronStartupDiagnostic(value:unknown){
  const row=parse(startupDiagnosticSchema,value);
  if(row.refusal==='CHILD_ERROR'&&row.childError.status!=='OBSERVED'||row.refusal==='CHILD_CLOSE'&&row.childClose.status!=='OBSERVED'||row.refusal==='FIRST_FRAME'&&row.firstFrame!=='REJECTED'||['HANDSHAKE_ADMISSION','SOURCE_GUARD'].includes(row.refusal)&&row.firstFrame!=='OBSERVED')throw fail();
  if(row.preflight.status==='MATCHED'){
   const terminal=row.preflight.terminalSource==='CONTAINER_EXIT'?row.containerExit.status==='OBSERVED'?row.containerExit.exitCode:null:row.childClose.status==='OBSERVED'&&row.childClose.signal===null?row.childClose.exitCode:null;
   if(terminal!==row.preflight.exitCode)throw fail();
+  if(row.version===2&&row.preflight.requiredFile!==null&&(row.preflight.stage!=='FILES'||row.preflight.exitCode!==92))throw fail();
  }
  return row;
 }
@@ -140,7 +151,7 @@ type StartupPorts={clock:()=>string;setTimer:(callback:()=>void,delay:number)=>u
 
 /** Observes only the original owned child; it never creates, gates or retries one. */
 export class NativeCronStartupObservation{
- private row=unobservedNativeCronStartupDiagnostic();private pending=true;private attempted=false;private disposed=false;private refused=false;private cleanupEffects=false;private inspectionAttempted=false;private incompleteFrame=false;private bytes=0;private stdout='';private stderr='';private frameCount=0;private preflightFrame:{stage:typeof startupStages[number];exitCode:number;observedAt:string|null}|undefined;private frameObservedAt:string|null=null;
+ private row=emptyStartupDiagnosticV2();private pending=true;private attempted=false;private disposed=false;private refused=false;private cleanupEffects=false;private inspectionAttempted=false;private incompleteFrame=false;private bytes=0;private stdout='';private stderr='';private frameCount=0;private preflightFrame:{stage:typeof startupStages[number];exitCode:number;observedAt:string|null;requiredFile:typeof requiredFiles[number]|null}|undefined;private frameObservedAt:string|null=null;
  private line:Promise<string>;private resolveLine!:(value:string)=>void;private rejectLine!:(error:Error)=>void;private timer:unknown;private timerActive=true;private ports:StartupPorts;
  private stdoutListener=(bytes:unknown)=>this.stream(bytes,'stdout');private stderrListener=(bytes:unknown)=>this.stream(bytes,'stderr');
  private errorListener=(error:unknown)=>{if(this.cleanupEffects||this.disposed)return;const at=this.clock();if(this.row.childError.status==='UNOBSERVED'){let code:typeof startupErrorCodes[number]='UNKNOWN';if(error&&typeof error==='object'&&!types.isProxy(error)){const field=Object.getOwnPropertyDescriptor(error,'code');if(field&&'value'in field&&typeof field.value==='string'&&(startupErrorCodes as readonly string[]).includes(field.value))code=field.value as typeof code;}this.row.childError={status:'OBSERVED',code,observedAt:at};}if(this.pending)this.refuse('CHILD_ERROR',at);};
@@ -152,7 +163,7 @@ export class NativeCronStartupObservation{
   child.stdout?.on('data',this.stdoutListener);child.stderr?.on('data',this.stderrListener);child.on('error',this.errorListener);child.on('close',this.closeListener);
  }
  private clock(){try{const value=this.ports.clock();return typeof value==='string'&&nativeClock.safeParse(value).success?value:null;}catch{return null;}}
- private finish(){if(!this.pending)return;this.incompleteFrame||=this.stderr.startsWith('CUEVO_CRON_PREFLIGHT_FAILURE_V1');this.pending=false;if(this.timerActive){this.timerActive=false;try{this.ports.clearTimer(this.timer);}catch{/* Observation failure cannot replace the original refusal. */}}/* Keep the original pipes drained without further capture until owned cleanup. */}
+ private finish(){if(!this.pending)return;this.incompleteFrame||=this.stderr.startsWith('CUEVO_CRON_PREFLIGHT_FAILURE_V');this.pending=false;if(this.timerActive){this.timerActive=false;try{this.ports.clearTimer(this.timer);}catch{/* Observation failure cannot replace the original refusal. */}}/* Keep the original pipes drained without further capture until owned cleanup. */}
  private refuse(cause:typeof startupRefusals[number],at=this.clock()){
   if(!this.refused){this.refused=true;this.row.refusal=cause;this.row.observedAt=at;}
   if(this.pending){const original=fail();this.finish();this.rejectLine(original);}
@@ -168,9 +179,9 @@ export class NativeCronStartupObservation{
   this.stdout+=text;const end=this.stdout.indexOf('\n');if(end<0)return;const line=this.stdout.slice(0,end).trim();if(!line.startsWith('CUEVO_CRON_STARTUP_V1\t')){this.row.firstFrame='REJECTED';return this.refuse('FIRST_FRAME');}this.row.firstFrame='OBSERVED';this.finish();this.resolveLine(line);
  }
  private readPreflight(line:string){
-  if(!line.startsWith('CUEVO_CRON_PREFLIGHT_FAILURE_V1'))return;this.frameCount++;const at=this.clock();if(this.frameCount===1)this.frameObservedAt=at;const fields=line.split('\t');
-  if(this.frameCount!==1||fields.length!==3||fields[0]!=='CUEVO_CRON_PREFLIGHT_FAILURE_V1'||!(startupStages as readonly string[]).includes(fields[1])||!/^([1-9][0-9]{0,2})$/.test(fields[2])||!startupFailureExit.safeParse(Number(fields[2])).success){this.preflightFrame=undefined;return;}
-  this.preflightFrame={stage:fields[1] as typeof startupStages[number],exitCode:Number(fields[2]),observedAt:at};
+  if(!line.startsWith('CUEVO_CRON_PREFLIGHT_FAILURE_V'))return;this.frameCount++;const at=this.clock();if(this.frameCount===1)this.frameObservedAt=at;const fields=line.split('\t'),v1=fields[0]==='CUEVO_CRON_PREFLIGHT_FAILURE_V1'&&fields.length===3,v2=fields[0]==='CUEVO_CRON_PREFLIGHT_FAILURE_V2'&&fields.length===4&&fields[1]==='FILES'&&(requiredFiles as readonly string[]).includes(fields[2])&&fields[3]==='92',code=v2?fields[3]:fields[2];
+  if(this.frameCount!==1||!v1&&!v2||!(startupStages as readonly string[]).includes(fields[1])||!/^([1-9][0-9]{0,2})$/.test(code)||!startupFailureExit.safeParse(Number(code)).success){this.preflightFrame=undefined;return;}
+  this.preflightFrame={stage:fields[1] as typeof startupStages[number],exitCode:Number(code),observedAt:at,requiredFile:v2?fields[2] as typeof requiredFiles[number]:null};
  }
  async handshake(assertSource:()=>void){
   if(this.attempted||this.disposed)throw fail();this.attempted=true;const line=await this.line;let result:ReturnType<typeof admitNativeCronStartupLine>;
@@ -183,11 +194,11 @@ export class NativeCronStartupObservation{
  }
  beginCleanupEffects(){this.cleanupEffects=true;}
  diagnostic():NativeCronStartupDiagnostic{
-  const row={...this.row,childError:{...this.row.childError},childClose:{...this.row.childClose},containerExit:{...this.row.containerExit}},partial=this.incompleteFrame||this.stderr.startsWith('CUEVO_CRON_PREFLIGHT_FAILURE_V1');
-  if(this.frameCount===0&&!partial)row.preflight={status:'UNOBSERVED',stage:null,exitCode:null,terminalSource:null,observedAt:null};
+  const row={...this.row,childError:{...this.row.childError},childClose:{...this.row.childClose},containerExit:{...this.row.containerExit}},partial=this.incompleteFrame||this.stderr.startsWith('CUEVO_CRON_PREFLIGHT_FAILURE_V');
+  if(this.frameCount===0&&!partial)row.preflight={status:'UNOBSERVED',stage:null,exitCode:null,terminalSource:null,observedAt:null,requiredFile:null};
   else{
-   row.preflight={status:'UNKNOWN',stage:null,exitCode:null,terminalSource:null,observedAt:this.frameObservedAt};
-   if(this.frameCount===1&&!partial&&this.preflightFrame){const frame=this.preflightFrame,source=row.containerExit.status==='OBSERVED'?'CONTAINER_EXIT':row.childClose.status==='OBSERVED'&&row.childClose.signal===null?'CHILD_CLOSE':null,code=source==='CONTAINER_EXIT'&&row.containerExit.status==='OBSERVED'?row.containerExit.exitCode:source==='CHILD_CLOSE'&&row.childClose.status==='OBSERVED'?row.childClose.exitCode:null;if(code===frame.exitCode&&source)row.preflight={status:'MATCHED',stage:frame.stage,exitCode:frame.exitCode,terminalSource:source,observedAt:frame.observedAt};}
+   row.preflight={status:'UNKNOWN',stage:null,exitCode:null,terminalSource:null,observedAt:this.frameObservedAt,requiredFile:null};
+   if(this.frameCount===1&&!partial&&this.preflightFrame){const frame=this.preflightFrame,source=row.containerExit.status==='OBSERVED'?'CONTAINER_EXIT':row.childClose.status==='OBSERVED'&&row.childClose.signal===null?'CHILD_CLOSE':null,code=source==='CONTAINER_EXIT'&&row.containerExit.status==='OBSERVED'?row.containerExit.exitCode:source==='CHILD_CLOSE'&&row.childClose.status==='OBSERVED'?row.childClose.exitCode:null;if(code===frame.exitCode&&source)row.preflight={status:'MATCHED',stage:frame.stage,exitCode:frame.exitCode,terminalSource:source,observedAt:frame.observedAt,requiredFile:frame.requiredFile};}
   }
   return admitNativeCronStartupDiagnostic(row);
  }
