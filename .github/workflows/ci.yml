@@ -54,7 +54,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-native
       - name: Retain exact source-native fixture receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-partition-source-native-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-partitions/source-native/result.json
@@ -82,7 +82,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --ordinary-contracts
       - name: Retain exact source-contracts fixture receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-contracts-ordinary-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-partitions/source-contracts/result.json
@@ -110,7 +110,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-delivery
       - name: Retain exact source-delivery fixture receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-partition-source-delivery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-partitions/source-delivery/result.json
@@ -138,7 +138,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-1
       - name: Retain exact continuation-1 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-continuation-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-1/result.json
@@ -147,7 +147,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized continuation-1 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-continuation-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-1/progress.json
@@ -175,7 +175,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-2
       - name: Retain exact continuation-2 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-continuation-2-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-2/result.json
@@ -184,7 +184,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized continuation-2 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-continuation-2-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-2/progress.json
@@ -212,7 +212,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-3
       - name: Retain exact continuation-3 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-continuation-3-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-3/result.json
@@ -221,7 +221,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized continuation-3 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-continuation-3-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-3/progress.json
@@ -249,7 +249,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-4
       - name: Retain exact continuation-4 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-continuation-4-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-4/result.json
@@ -258,7 +258,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized continuation-4 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-continuation-4-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-4/progress.json
@@ -286,7 +286,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=continuation-5
       - name: Retain exact continuation-5 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-continuation-5-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-5/result.json
@@ -295,7 +295,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized continuation-5 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-continuation-5-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/continuation-5/progress.json
@@ -323,7 +323,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=reconciliation-1
       - name: Retain exact reconciliation-1 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-reconciliation-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/reconciliation-1/result.json
@@ -332,7 +332,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized reconciliation-1 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-reconciliation-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/reconciliation-1/progress.json
@@ -360,7 +360,7 @@ jobs:
         run: node --import tsx scripts/verification/stateless-checks.ts --cohort-producer=reconciliation-2
       - name: Retain exact reconciliation-2 producer
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-reconciliation-2-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/reconciliation-2/result.json
@@ -369,7 +369,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized reconciliation-2 progress
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-cohort-progress-reconciliation-2-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-cohort-producers/reconciliation-2/progress.json
@@ -463,7 +463,7 @@ jobs:
         run: test "$NATIVE" = success && test "$CONTRACTS" = success && test "$DELIVERY" = success && test '${{ needs.source-cohort-continuation-1.result }}' = success && test '${{ needs.source-cohort-continuation-2.result }}' = success && test '${{ needs.source-cohort-continuation-3.result }}' = success && test '${{ needs.source-cohort-continuation-4.result }}' = success && test '${{ needs.source-cohort-continuation-5.result }}' = success && test '${{ needs.source-cohort-reconciliation-1.result }}' = success && test '${{ needs.source-cohort-reconciliation-2.result }}' = success && node --import tsx scripts/verification/stateless-source-aggregate.ts
       - name: Retain complete logical contract partition
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-partition-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-partitions/source-contracts/result.json
@@ -472,7 +472,7 @@ jobs:
           retention-days: 90
       - name: Retain exact safe source contracts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/verification/source-contracts/result.json
@@ -502,7 +502,7 @@ jobs:
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=database
       - name: Retain exact safe database lane
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-runtime-database-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lanes/database/lane.json
@@ -510,7 +510,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Retain exact source child144 catalogue reference
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-child144-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/reference.json
@@ -518,7 +518,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Retain exact source native180 catalogue reference
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-native180-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/source180.json
@@ -526,7 +526,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Retain exact source original231 catalogue reference
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/source231.json
@@ -535,7 +535,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized source child144 failure
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-child144-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/failure.json
@@ -564,7 +564,7 @@ jobs:
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=backend
       - name: Retain exact safe backend lane
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-runtime-backend-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lanes/backend/lane.json
@@ -576,7 +576,7 @@ jobs:
         run: node --import tsx scripts/verification/runtime-artifact-receipt.ts
       - name: Retain verified runtime delivery artifacts
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-runtime-delivery-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -610,7 +610,7 @@ jobs:
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=browser
       - name: Retain exact safe browser lane
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-lanes/browser/lane.json
@@ -619,7 +619,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized local start failure diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-start-diagnostic-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/migration-replay/operation-*/start-diagnostic.json
@@ -628,7 +628,7 @@ jobs:
           retention-days: 14
       - name: Retain minimized local reset failure diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-reset-diagnostic-runtime-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/migration-replay/operation-*/reset-diagnostic.json
@@ -695,7 +695,7 @@ jobs:
         run: test "$DATABASE" = success && test "$BACKEND" = success && test "$BROWSER" = success && test "$LEARNING" = success && test "$STATE" = success && node --import tsx scripts/verification/runtime-lane-aggregate.ts
       - name: Retain original complete runtime aggregate
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-runtime-aggregate-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/runtime-aggregate/result.json
@@ -707,7 +707,7 @@ jobs:
         run: node --import tsx scripts/verification/cicd-evidence.ts
       - name: Retain sanitized evidence only
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-safe-${{ github.sha }}
           path: .local/cicd-safe/
@@ -759,7 +759,7 @@ jobs:
           CUEVO_CODEQL_SARIF_ID: ${{ steps.codeql-analyze.outputs.sarif-id }}
         run: node --import tsx scripts/verification/codeql-alerts.ts
       - name: Retain original processed CodeQL receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-codeql-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/codeql-receipt/receipt.json
@@ -829,7 +829,7 @@ jobs:
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --ci-partition=integration-learning
       - name: Retain exact integration-learning partition
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-integration-integration-learning-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/integration-partitions/integration-learning/result.json
@@ -858,7 +858,7 @@ jobs:
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --ci-partition=integration-state
       - name: Retain exact integration-state partition
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-integration-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/integration-partitions/integration-state/result.json
@@ -867,7 +867,7 @@ jobs:
           retention-days: 90
       - name: Retain minimized local reset failure diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-reset-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/migration-replay/operation-*/reset-diagnostic.json
@@ -876,7 +876,7 @@ jobs:
           retention-days: 14
       - name: Retain minimized local start failure diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: cuevo-start-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/migration-replay/operation-*/start-diagnostic.json
