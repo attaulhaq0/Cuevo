@@ -40,7 +40,7 @@ const idleError=(client:ControlledClient)=>{(client as unknown as {_handleErrorE
 const calls:string[]=[];
 class ControlledClient extends InstalledClient{
  constructor(config:ClientConfig){super(config);calls.push('client');assert.equal((config.ssl as {rejectUnauthorized:boolean}).rejectUnauthorized,true);Object.assign(this.connection,{stream:{encrypted:true,authorized:true,getProtocol:()=> 'TLSv1.3',getPeerCertificate:()=>({raw:Buffer.from('fixture-peer')})}});clients.push(this);}
- async connect(){calls.push('connect');}
+ async connect(){calls.push('connect');return this;}
  async end(){calls.push('close');if(mode==='close')throw Error(secret);this.emit('end');}
  query=(async(sql:string,args:unknown[]=[]):Promise<{rows:Record<string,unknown>[]}>=>{
   calls.push(sql);if(mode==='query-loss'&&sql.includes('CUEVO_CONFIRMATION_CONTROL'))idleError(this);
