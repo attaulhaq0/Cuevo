@@ -44,6 +44,24 @@ test('canonical runtime admission binds original run attempt and every successfu
  const drift=await runCanonicalJobFixture('runtime',undefined,{metadataMutation:{kind:'RUN_ATTEMPT_DRIFT'}});denied(drift,'run drift','FIXTURE_METADATA_RUN_ATTEMPT_DRIFT');
 });
 
+test('source companion absence preserves successful canonical admission while skipped uploads and receipts remain denied',async()=>{
+ const name='Retain minimized inactive-Cron pairing failure';
+ const accepted=await runCanonicalJobFixture('schema',value=>{
+  const producer=value.jobs.find(job=>job.name==='source-fixtures-delivery')!;
+  assert.equal((producer.steps as {name:string;conclusion:string}[]).find(step=>step.name===name)!.conclusion,'success');
+  assert.equal((value.artifacts as {name:string}[]).some(artifact=>artifact.name.startsWith('cuevo-inactive-cron-pairing-failure-')),false);
+ });
+ assert.equal(accepted.status,0,accepted.stderr);
+ for(const mode of ['companion-skipped','companion-failed','receipt-skipped']){
+  const result=await runCanonicalJobFixture('schema',value=>{
+   const producer=value.jobs.find(job=>job.name==='source-fixtures-delivery')!;
+   const selected=(producer.steps as {name:string;conclusion:string}[]).find(step=>step.name===(mode==='receipt-skipped'?'Retain exact source-delivery fixture receipt':name))!;
+   selected.conclusion=mode==='companion-failed'?'failure':'skipped';
+  });
+  denied(result,mode);
+ }
+});
+
 test('canonical admission requires all three independently successful source producers and their exact original aggregate',async()=>{
  for(const mode of ['missing','failed','skipped','attempt','source','command','duplicate','order','cancelled','summary']){
   const result=await runCanonicalJobFixture('runtime',value=>{const producer=value.jobs.find(row=>row.name==='source-fixtures-contracts')!;if(mode==='missing')value.jobs.splice(value.jobs.indexOf(producer),1);if(mode==='failed'||mode==='skipped')producer.conclusion=mode==='failed'?'failure':'skipped';if(mode==='attempt')producer.run_attempt=1;if(mode==='source')producer.head_sha='b'.repeat(40);if(mode==='command')(producer.steps as {name:string}[]).find(step=>step.name.startsWith('Verify exact'))!.name='Run echo omitted';if(mode==='duplicate')value.jobs.push({...producer,id:999});if(mode==='order')(producer.steps as unknown[]).reverse();if(mode==='cancelled')producer.status='cancelled';if(mode==='summary')(value.bodies[0] as {status:string}).status='FAILED';});denied(result,mode);

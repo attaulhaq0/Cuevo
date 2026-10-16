@@ -39,11 +39,13 @@ test('native continuation two cohorts and executor five cohorts retain independe
  assert.equal(owner('scripts/database/hosted-schema-reconciliation-executor.test.ts'),'source-contracts');
  assert.equal(owner('scripts/database/hosted-schema-continuation-executor.test.ts'),'source-contracts');
  assert.equal(owner('scripts/verification/backend-release-prepare.test.ts'),'source-delivery');
- assert.deepEqual(coverage.source.map(part=>[part.id,part.files.length]),[['source-native',15],['source-contracts',60],['source-delivery',117]]);
+ assert.deepEqual(coverage.source.map(part=>[part.id,part.files.length]),[['source-native',15],['source-contracts',60],['source-delivery',118]]);
+ assert.equal(owner('scripts/database/hosted-inactive-cron-native-pairing.test.ts'),'source-delivery');
  for(const file of ['current-facts','current-read','recovery-policy'])assert.equal(owner(`scripts/database/cron-readonly/${file}.test.ts`),'source-delivery');
  assert.equal(owner('scripts/database/reset-local-diagnostic.test.ts'),'source-delivery');
  assert.equal(owner('scripts/database/start-local-diagnostic.test.ts'),'source-delivery');
- const files=coverage.source.flatMap(part=>part.files);assert.equal(files.length,192);assert.equal(new Set(files).size,192);
+ const files=coverage.source.flatMap(part=>part.files);assert.equal(files.length,193);assert.equal(new Set(files).size,193);
+ assert.equal(files.filter(file=>file==='scripts/database/hosted-inactive-cron-native-pairing.test.ts').length,1);
  assert.equal(owner('scripts/database/demo-population-profile.test.ts'),'source-delivery');assert.equal(files.filter(file=>file==='scripts/database/demo-population-profile.test.ts').length,1);
  for(const file of ['hosted-community-journal','hosted-community-command','hosted-community-command-gate','hosted-community-live-prefix','hosted-native-ca','hosted-community-auxiliary','hosted-community-delivery','hosted-community-view'])assert.equal(owner(`scripts/verification/${file}.test.ts`),'source-delivery');
 });

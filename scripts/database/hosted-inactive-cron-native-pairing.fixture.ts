@@ -9,6 +9,7 @@ import {registerHooks} from 'node:module';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {PassThrough} from 'node:stream';
+import {types} from 'node:util';
 import {transformSync} from 'esbuild';
 import {canonicalReleaseExecutionJson} from '../verification/release-review';
 import {originalChildNative124JournalFixture} from './hosted-original-child-recovery.fixture';
@@ -25,6 +26,57 @@ import {verifyHostedMigrationHistory} from './hosted-migration-history';
 import {nativeHostedOperatorStorageCountsSchema,nativeHostedOperatorStorageBucketsSchema,nativeHostedOperatorStorageObjectsSchema,prepareNativeHostedInactiveCronDefinitionStorageInventory} from './hosted-operator-storage-observation';
 import {observeHostedInactiveCronDefinitionStorageProject,createHostedInactiveCronDefinitionOperatorStorage} from './hosted-migration-storage-observation';
 import type {HostedSchemaCatalogueRow} from './hosted-schema-catalogue';
+
+export type PairingFailurePhase='CATALOGUE'|'BASELINE51'|'POST_ACK52'|'READ53'|'READ54';
+const failurePhases:readonly string[]=['CATALOGUE','BASELINE51','POST_ACK52','READ53','READ54'];
+const failureCategories:readonly string[]=['ASSERTION','SYNTAX_OR_MODULE','REFUSAL','OTHER'];
+const failureFrameFiles=new Set(['hosted-inactive-cron-native-pairing.fixture.ts','hosted-inactive-cron-native-pairing.test.ts','hosted-migration-executor.ts','hosted-migration-database.ts','hosted-migration-journal.ts','hosted-migration-native-process.ts'].map(name=>'scripts/database/'+name));
+export const pairingFailureDiagnosticPath='.local/verification/inactive-cron-pairing/failure.json';
+const failureRecord=(value:unknown,keys:readonly string[])=>{
+ if(!value||typeof value!=='object'||types.isProxy(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw Error('Invalid fixed diagnostic');
+ const names=Reflect.ownKeys(value);if(names.length!==keys.length||names.some(key=>typeof key!=='string'||!keys.includes(key)))throw Error('Invalid fixed diagnostic');
+ const result:Record<string,unknown>={};for(const key of keys){const field=Object.getOwnPropertyDescriptor(value,key);if(!field||!('value'in field)||!field.enumerable)throw Error('Invalid fixed diagnostic');result[key]=field.value;}return result;
+};
+const failureInteger=(value:unknown,maximum:number)=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0&&value<=maximum;
+/** Closed test-only data. No raw error, journal, SQL or caller effect flag is retained. */
+export function encodePairingFailureDiagnostic(value:unknown):string|null{
+ try{
+  const raw=failureRecord(value,['identity','phase','category','frame','counters']),identity=failureRecord(raw.identity,['sourceSha','treeSha','runId','runAttempt','testSha256','fixtureSha256']);
+  for(const key of['sourceSha','treeSha'])if(typeof identity[key]!=='string'||!/^[a-f0-9]{40}$/.test(identity[key] as string))return null;
+  for(const key of['testSha256','fixtureSha256'])if(typeof identity[key]!=='string'||!/^[a-f0-9]{64}$/.test(identity[key] as string))return null;
+  if(typeof identity.runId!=='string'||!/^[1-9][0-9]{0,19}$/.test(identity.runId)||!Number.isSafeInteger(Number(identity.runId))||!failureInteger(identity.runAttempt,1000000)||identity.runAttempt===0||typeof raw.phase!=='string'||!failurePhases.includes(raw.phase)||typeof raw.category!=='string'||!failureCategories.includes(raw.category))return null;
+  let frame:Record<string,unknown>|null=null,counters:Record<string,unknown>|null=null;
+  if(raw.frame!==null){frame=failureRecord(raw.frame,['file','line','column']);if(typeof frame.file!=='string'||!failureFrameFiles.has(frame.file)||!failureInteger(frame.line,1000000)||frame.line===0||!failureInteger(frame.column,1000000)||frame.column===0)return null;}
+  if(raw.counters!==null){counters=failureRecord(raw.counters,['cliAttempts','historyRows','closed','released','ownerObjects','ackRecords','localAckRecords']);if(!failureInteger(counters.cliAttempts,2)||!failureInteger(counters.historyRows,1000)||typeof counters.closed!=='boolean'||typeof counters.released!=='boolean'||!failureInteger(counters.ownerObjects,1)||!failureInteger(counters.ackRecords,3)||counters.localAckRecords!==null&&!failureInteger(counters.localAckRecords,3))return null;}
+  const encoded=JSON.stringify({version:1,purpose:'CUEVO_CONTROLLED_INACTIVE_PAIRING_FAILURE',evidence:'CONTROLLED_SOURCE_FIXTURE_FAILURE_ONLY',effectAuthority:false,hostedAcceptance:false,acceptedReceipt:false,identity,phase:raw.phase,category:raw.category,frame,counters});return Buffer.byteLength(encoded)<=4096?encoded:null;
+ }catch{return null;}
+}
+/** Read only own error data; private text never reaches the output. */
+export function pairingFailureErrorDetails(value:unknown):{category:string;frame:{file:string;line:number;column:number}|null}{
+ const absent={category:'OTHER',frame:null};try{
+  if(!value||typeof value!=='object'||types.isProxy(value))return absent;const code=Object.getOwnPropertyDescriptor(value,'code'),stack=Object.getOwnPropertyDescriptor(value,'stack');if(code&&!('value'in code))return absent;
+  const category=code?.value==='ERR_ASSERTION'?'ASSERTION':code?.value==='ERR_MODULE_NOT_FOUND'||Object.getPrototypeOf(value)===SyntaxError.prototype?'SYNTAX_OR_MODULE':'OTHER';let frame:{file:string;line:number;column:number}|null=null;
+  if(stack&&'value'in stack&&typeof stack.value==='string'&&stack.value.length<=32768)for(const line of stack.value.split(/\r?\n/).slice(1)){
+   const location=/^ {4}at (?:[^()\r\n]+ \(([^()\r\n]+)\)|((?:file:\/\/\/|\/|[A-Za-z]:\/)[^()\r\n]+))$/.exec(line.replaceAll('\\','/'));if(!location)continue;
+   const match=/^(?:file:\/\/\/|\/|[A-Za-z]:\/)[^()\r\n]*\/scripts\/database\/([^/:]+):([1-9][0-9]{0,5}):([1-9][0-9]{0,5})$/.exec(location[1]??location[2]);if(match&&failureFrameFiles.has('scripts/database/'+match[1])){frame={file:'scripts/database/'+match[1],line:Number(match[2]),column:Number(match[3])};break;}
+  }return{category,frame};
+ }catch{return absent;}
+}
+/** Optional companion only in the actual owned source-delivery job. It cannot
+ * replace an assertion, repair custody, or become a partition receipt. */
+export async function retainPairingFailureDiagnostic(details:unknown):Promise<boolean>{
+ try{
+  const raw=failureRecord(details,['phase','category','frame','counters']);if(process.platform!=='linux'||process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_ENVIRONMENT!=='github-hosted'||process.env.GITHUB_JOB!=='source-fixtures-delivery')return false;
+  const root=resolve(import.meta.dirname,'../..');if(!root.startsWith('/home/runner/work/')||await actualFs.realpath(root)!==root)return false;
+  const timing=JSON.parse(process.env.CUEVO_CI_TEST_TIMING_INPUT??''),current=timing.identity,sourceSha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).trim(),treeSha=execFileSync('git',['rev-parse','HEAD^{tree}'],{cwd:root,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).trim();
+  if(current?.scope!=='source-delivery'||sourceSha!==process.env.GITHUB_SHA||sourceSha!==current.sourceSha||treeSha!==current.treeSha||current.runId!==process.env.GITHUB_RUN_ID||String(current.runAttempt)!==process.env.GITHUB_RUN_ATTEMPT||!Array.isArray(timing.files))return false;
+  const testPath='scripts/database/hosted-inactive-cron-native-pairing.test.ts',fixturePath='scripts/database/hosted-inactive-cron-native-pairing.fixture.ts',testSha256=pairingHash(readFileSync(join(root,testPath))),fixtureSha256=pairingHash(readFileSync(join(root,fixturePath))),test=timing.files.filter((row:{path:unknown})=>row?.path===testPath);if(test.length!==1||test[0].sha256!==testSha256)return false;
+  for(const[path,expected]of[[testPath,testSha256],[fixturePath,fixtureSha256]])if(pairingHash(execFileSync('git',['show',sourceSha+':'+path],{cwd:root,windowsHide:true,stdio:['ignore','pipe','ignore']}))!==expected)return false;
+  const identity={sourceSha,treeSha,runId:current.runId,runAttempt:current.runAttempt,testSha256,fixtureSha256},encoded=encodePairingFailureDiagnostic({identity,...raw});if(!encoded)return false;
+  let directory=root;for(const name of['.local','verification','inactive-cron-pairing']){directory=join(directory,name);try{await actualFs.lstat(directory);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')return false;await mkdir(directory,{mode:0o700});}const stat=await actualFs.lstat(directory);if(!stat.isDirectory()||stat.isSymbolicLink()||await actualFs.realpath(directory)!==directory)return false;}
+  await writeFile(join(root,pairingFailureDiagnosticPath),encoded+'\n',{flag:'wx',mode:0o600});return true;
+ }catch{return false;}
+}
 import type {Original231TransportAppendPlan} from './original231-transport-plan-contracts';
 
 /** Test-only external I/O. Production admission, source, permit, native execution
@@ -80,7 +132,7 @@ export function preflightPairingExecutionPacket(value:unknown){
 }
 type FixtureInput={run:{id:number;head_sha:string;repository:{full_name:string}};jobs:Record<string,unknown>[];artifacts:Record<string,unknown>[];archives:Record<string,string>;tree:string;ownerRoot:string};
 type ChildProof={reference:Record<string,unknown>;original231Reference:Record<string,unknown>;receipt232:{disabledDefinitions:{facts:unknown}};plan:Original231TransportAppendPlan};
-type PairingState={objects:Map<string,string>;queries:string[];events:string[];history:Record<string,unknown>[];deliveredHistoryVersions:string[];catalogue:HostedSchemaCatalogueRow[];vault:Map<string,string>;installed:boolean;closed:boolean;released:boolean;cliAttempts:number;nativeState:Record<string,unknown>|null;nativeOwner:string;mode:string;currentPrefix:string|null;clock:number;finalAckLeafReads:number;lateReadInjected:boolean};
+type PairingState={objects:Map<string,string>;queries:string[];events:string[];history:Record<string,unknown>[];deliveredHistoryVersions:string[];catalogue:HostedSchemaCatalogueRow[];vault:Map<string,string>;installed:boolean;closed:boolean;released:boolean;cliAttempts:number;nativeState:Record<string,unknown>|null;nativeOwner:string;mode:string;currentPrefix:string|null;clock:number;finalAckLeafReads:number;lateReadInjected:boolean;observedLocalAckRecords:number|null};
 
 /** Exact external metadata fixture, with the same controls as the existing
  * canonical/admission fixture. No request escapes this test's local responder. */
@@ -92,7 +144,7 @@ export async function pairingMetadataHarness(input:FixtureInput){
  const dependencies=registerHooks({resolve(specifier,context,next){return specifier==='zod'?{shortCircuit:true,url:zodUrl}:next(specifier,context);}});
  const root=process.cwd(),repository=input.run.repository.full_name,sourceSha=input.run.head_sha,treeSha=input.tree,ciRunId=String(input.run.id),releaseRunId='51',now=pairingNow;let activeReleaseRunId=releaseRunId;
  const contracts=await import('../verification/backend-release-contracts');
- let approvalComment='';
+ let approvalComment='',failurePhase:PairingFailurePhase='CATALOGUE';let failureState:PairingState|null=null;
  const backend={id:51,run_attempt:1,head_sha:sourceSha,head_branch:'main',event:'workflow_dispatch',status:'in_progress',conclusion:null,path:'.github/workflows/backend-release.yml',repository:{full_name:repository}};
  const environment={id:123,name:'staging',can_admins_bypass:false,protection_rules:[{type:'required_reviewers',prevent_self_review:false,reviewers:[{type:'User',reviewer:{id:95836629,login:'attaulhaq0',type:'User'}}]}],deployment_branch_policy:{protected_branches:false,custom_branch_policies:true}};
  const read=async(path:string):Promise<unknown>=>{
@@ -114,7 +166,7 @@ export async function pairingMetadataHarness(input:FixtureInput){
   throw Error('Unexpected controlled GitHub path: '+path);
  };
  const archive=async(id:number)=>{assert.ok(input.archives[String(id)],'only the existing retained fixture archives are read');return Buffer.from(input.archives[String(id)],'base64');};
- return{root,repository,sourceSha,treeSha,ciRunId,releaseRunId,now,contracts,read,archive,backend,environment,disposeDependencies:()=>dependencies.deregister(),setReleaseRun:(value:string)=>{activeReleaseRunId=value;backend.id=Number(value);},setApproval:(comment:string)=>{approvalComment=comment;}};
+ return{root,repository,sourceSha,treeSha,ciRunId,releaseRunId,now,contracts,read,archive,backend,environment,disposeDependencies:()=>dependencies.deregister(),setReleaseRun:(value:string)=>{activeReleaseRunId=value;backend.id=Number(value);},setApproval:(comment:string)=>{approvalComment=comment;},setFailurePhase:(value:PairingFailurePhase)=>{failurePhase=value;},setFailureState:(value:PairingState|null)=>{failureState=value;},failureDetails:(error:unknown)=>{const state=failureState,prefix=state?.currentPrefix;return{phase:failurePhase,...pairingFailureErrorDetails(error),counters:state?{cliAttempts:state.cliAttempts,historyRows:state.history.length,closed:state.closed,released:state.released,ownerObjects:prefix&&state.objects.has(prefix+'owner.json')?1:0,ackRecords:prefix?['000001.record.json','000002.record.json','000003.record.json'].filter(name=>state.objects.has(prefix+name)).length:0,localAckRecords:state.observedLocalAckRecords}:null};}};
 }
 const originalMetadataPins:Record<string,readonly[string,string,number,number,string]>={
  '11707162912':['cuevo-backend-schema-result-38150995125-1','832e6eed86f1cb55b0928319b473a51fe4d39acdc4b5ad6bf93f5a1ce5009bcb',4369,38150995125,'239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37'],
@@ -132,7 +184,7 @@ function originalObjects(state:PairingState,plan:Original231TransportAppendPlan)
  state.vault.set('cuevo_schema_stage_'+ref,original.installedMarkerJson);state.vault.set('cuevo_original_native180_'+ref+'_'+native.selection.originalOperationSha256,original.native180ReceiptJson);state.vault.set('cuevo_original_child144_'+ref+'_'+child.selection.originalOperationSha256,native.original144ReceiptJson);original.batchReceiptJson.forEach((bytes,index)=>state.vault.set('cuevo_batch_prefix_'+ref+'_'+original.selection.originalOperationSha256+'_'+String(index+1).padStart(3,'0'),bytes));
 }
 function createPairingState(plan:Original231TransportAppendPlan,identity:unknown,root:string,clock:number):PairingState{
- const state:PairingState={objects:new Map(),queries:[],events:[],history:plan.migrations.slice(0,231).map(row=>pairingHistoryRow(row,readFileSync(join(root,'supabase/migrations',row.name)))),deliveredHistoryVersions:[],catalogue:pairingCatalogueRows(),vault:new Map(),installed:false,closed:false,released:false,cliAttempts:0,nativeState:null,nativeOwner:'',mode:'',currentPrefix:`migration/v1/${ref}/${pairingHash(JSON.stringify(identity))}/`,clock,finalAckLeafReads:0,lateReadInjected:false};originalObjects(state,plan);return state;
+ const state:PairingState={objects:new Map(),queries:[],events:[],history:plan.migrations.slice(0,231).map(row=>pairingHistoryRow(row,readFileSync(join(root,'supabase/migrations',row.name)))),deliveredHistoryVersions:[],catalogue:pairingCatalogueRows(),vault:new Map(),installed:false,closed:false,released:false,cliAttempts:0,nativeState:null,nativeOwner:'',mode:'',currentPrefix:`migration/v1/${ref}/${pairingHash(JSON.stringify(identity))}/`,clock,finalAckLeafReads:0,lateReadInjected:false,observedLocalAckRecords:null};originalObjects(state,plan);return state;
 }
 const objectId=(path:string)=>{const raw=pairingHash(path);return raw.slice(0,8)+'-'+raw.slice(8,12)+'-4'+raw.slice(13,16)+'-8'+raw.slice(17,20)+'-'+raw.slice(20,32);};
 const buckets=[{id:bucket,name:bucket,public:false,type:'STANDARD',file_size_limit:49152,allowed_mime_types:['application/json']},{id:'learner-private',name:'learner-private',public:false,type:'STANDARD',file_size_limit:524288,allowed_mime_types:['text/plain','image/png','image/jpeg','application/pdf']}];
@@ -227,6 +279,7 @@ export async function debugRetainedPairingNativeObservation(retained:{root:strin
 }
 
 export async function runPairingAfterCatalogue(input:FixtureInput,metadata:Awaited<ReturnType<typeof pairingMetadataHarness>>,proof:ChildProof,options:{releaseRunId?:string;captureFault?:boolean}={}){
+ metadata.setFailurePhase(options.captureFault?'POST_ACK52':'BASELINE51');metadata.setFailureState(null);
  const {root,sourceSha,treeSha,contracts,now}=metadata,plan=proof.plan;
  const releaseRunId=options.releaseRunId??'51';metadata.setReleaseRun(releaseRunId);
  const ca=Buffer.from(pairingPublicCa);assert.equal(pairingHash(ca),plan.original231Recovery.template.originalIdentity.certificateSha256,'original public certificate bytes remain exact');
@@ -244,7 +297,7 @@ export async function runPairingAfterCatalogue(input:FixtureInput,metadata:Await
  const expected={...identity,targets,fingerprints,reviews,now,currentMainSha:sourceSha,ciRun:input.run,backendRun:metadata.backend};
  const prepared=contracts.prepareBackendReleaseIntent({version:3,purpose:'BACKEND_SYNTHETIC_STAGING',...identity,targets,fingerprints,reviews:reviews.map(row=>({...row,releaseSha:sourceSha,treeSha,baseSha:sourceSha,sourceManifestSha256:fingerprints.sourceManifestSha256,diffSha256:fingerprints.diffSha256,reviewedAt:new Date(now-1000).toISOString()})),preparedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+600000).toISOString()},expected);metadata.setApproval(prepared.comment);
  const contextIdentity=preflightPairingExecutionPacket({version:3,purpose:'CUEVO_BACKEND_RELEASE_EXECUTION',repoRoot:root,expected,preparedApproval:prepared,plan,migrationEndpoint:endpoint,stages:[stage],toolchainManifestPath:join(root,'.local/hosted-release/migration-toolchain.json'),operatorStoragePolicyPath:join(root,'.local/hosted-release/operator-storage-policy.json'),delivery:{kind:'DATABASE_ONLY',apiRoot:null,edgeRoot:null},catalogueReference232:proof.reference,original231RecoveryEvidence:readOriginal231SourceAttestationGuard(plan.original231Recovery.template.selection).evidence}).identity;
- const state=createPairingState(plan,contextIdentity,root,now);state.mode=options.captureFault?'POST_ACK_CAPTURE_FAULT':'';
+ const state=createPairingState(plan,contextIdentity,root,now);state.mode=options.captureFault?'POST_ACK_CAPTURE_FAULT':'';metadata.setFailureState(state);
  const originals=[...state.objects],originalVault=[...state.vault],oldHistory=structuredClone(state.history);
  const restore=await installExternalPrimitives(input,state,plan,proof.receipt232.disabledDefinitions.facts,metadata,certificate.path);
  const admission=await import('../verification/backend-release-admission');let handle:Awaited<ReturnType<typeof admission.prepareNativeBackendReleaseAdmission>>|undefined;
@@ -253,7 +306,7 @@ export async function runPairingAfterCatalogue(input:FixtureInput,metadata:Await
   const result=await (await import('./hosted-migration-executor')).executeNativeOriginal231TransportAppend({repoRoot:root,plan,stage,prepared,expected,identity:contextIdentity,catalogueReference232:proof.reference,releaseRunId,releaseRunAttempt:1,databaseUrl:contextIdentity.databaseUrl,certificate,migrationPassword:password,providerToken:password,storageKey:password,cli,timeoutMs:30000,privateEnvironment:{PGPASSWORD:password,PGSSLROOTCERT:certificate.path},admissionHandle:handle});
   assert.equal(result.status,options.captureFault?'REQUIRES_REVIEW':'INACTIVE_DEFINITIONS_ACKNOWLEDGED',JSON.stringify({result,events:state.events.slice(-12),queries:state.queries.slice(-3)}));assert.equal(state.cliAttempts,1);assert.equal(result.sqlCommitment,'CONFIRMED_INACTIVE_DEFINITIONS');if(options.captureFault)assert.equal(result.configuration,null);else{assert.equal(result.configuration?.effectScope,'SQL_CRON_CONFIGURATION_ONLY');assert.equal(result.configuration?.activationAuthorized,false);assert.equal(result.configuration?.configurationExecution,'NOT_EXECUTED');}assert.equal(result.foundationAccepted,false);assert.equal(result.hostedAcceptance,false);assert.equal(result.originalAcknowledgement,'UNKNOWN');assert.equal(result.cleanup,'CONFIRMED_STOPPED_AND_RELEASED');assert.equal(state.closed,true);assert.equal(state.released,true);assert.equal(state.nativeState,null);
   assert.deepEqual(state.history.slice(0,231),oldHistory);assert.equal(state.history.length,232);assert.deepEqual([...state.vault],originalVault);for(const[path,bytes]of originals)assert.equal(state.objects.get(path),bytes);
-  assert.ok(result.journal);const localRoot=join(root,'.local/hosted-release/journal-'+pairingHash(JSON.stringify(contextIdentity))),localChain=await Promise.all(['owner.json','000001.record.json','000002.record.json'].map(async name=>({name,bytes:await readFile(join(localRoot,name),'utf8')})));for(const row of localChain)assert.equal(state.objects.get(state.currentPrefix+row.name),row.bytes,'actual local and fixed remote raw chain bytes match');const journalChainSha256=pairingHash(localChain.map(row=>row.bytes).join(''));if(!options.captureFault)assert.equal(journalChainSha256,result.configuration?.journalChainSha256);
+  assert.ok(result.journal);const localRoot=join(root,'.local/hosted-release/journal-'+pairingHash(JSON.stringify(contextIdentity))),localChain=await Promise.all(['owner.json','000001.record.json','000002.record.json'].map(async name=>({name,bytes:await readFile(join(localRoot,name),'utf8')})));for(const row of localChain)assert.equal(state.objects.get(state.currentPrefix+row.name),row.bytes,'actual local and fixed remote raw chain bytes match');state.observedLocalAckRecords=2;const journalChainSha256=pairingHash(localChain.map(row=>row.bytes).join(''));if(!options.captureFault)assert.equal(journalChainSha256,result.configuration?.journalChainSha256);
   const assertOriginalAckRetained=async()=>{assert.deepEqual((await actualFs.readdir(localRoot)).sort(),['000001.record.json','000002.record.json','owner.json']);for(const row of localChain){assert.equal(await readFile(join(localRoot,row.name),'utf8'),row.bytes);assert.equal(state.objects.get(state.currentPrefix+row.name),row.bytes);}assert.equal(state.objects.has(state.currentPrefix+'000003.record.json'),false);assert.equal(state.objects.size,originals.length+3);};await assertOriginalAckRetained();
   assert.equal(state.objects.size,originals.length+3);assert.equal(state.queries.some(sql=>/^(insert|update|delete|alter|create|drop|truncate|commit)\b/i.test(sql)),false,'the database observer never performs SQL mutations');
   assert.equal(JSON.stringify(result).includes(password),false);let rebound:unknown=null,lateRead:unknown=null;if(options.captureFault){assert.equal(state.mode,'POST_ACK_CAPTURE_FAULT_INJECTED','the post-ACK refusal follows the controlled provider read failure');state.mode='';await actualFs.chmod(localRoot,0o755);for(const row of localChain)await actualFs.chmod(join(localRoot,row.name),0o644);const rebindInput={input,metadata,proof,plan,state,originalContext:result.journal.context,journalPayloadSha256:pairingHash(JSON.stringify(result.journal)),journalChainSha256,expected,prepared,certificate};rebound=await runReboundPairing({...rebindInput,releaseRunId:'53'});await assertOriginalAckRetained();state.mode='FINAL_LOCAL_EXPIRY';lateRead=await runReboundPairing({...rebindInput,releaseRunId:'54',expectRefusal:true});await assertOriginalAckRetained();}
@@ -264,6 +317,7 @@ export async function runPairingAfterCatalogue(input:FixtureInput,metadata:Await
 async function createControlledCliFiles(root:string){const files=[['node_modules/supabase/package.json',JSON.stringify({name:'supabase',version:'2.119.0',type:'module'})],['node_modules/@supabase/cli-linux-x64/package.json',JSON.stringify({name:'@supabase/cli-linux-x64',version:'2.119.0'})],['node_modules/supabase/dist/supabase.js','pinned wrapper'],['node_modules/@supabase/cli-linux-x64/bin/supabase','pinned binary'],['node_modules/@supabase/cli-linux-x64/bin/supabase-go','pinned sidecar']];for(const[path,bytes]of files){await mkdir(resolve(root,path,'..'),{recursive:true});await writeFile(join(root,path),bytes);}return{shimSha256:pairingHash('pinned wrapper'),binarySha256:pairingHash('pinned binary'),sidecarSha256:pairingHash('pinned sidecar')};}
 
 async function runReboundPairing(value:{input:FixtureInput;metadata:Awaited<ReturnType<typeof pairingMetadataHarness>>;proof:ChildProof;plan:Original231TransportAppendPlan;state:PairingState;originalContext:ReturnType<typeof prepareInactiveCronDefinitionContext>;journalPayloadSha256:string;journalChainSha256:string;expected:unknown;prepared:unknown;certificate:{path:string;sha256:string};releaseRunId:string;expectRefusal?:boolean}){
+ value.metadata.setFailurePhase(value.expectRefusal?'READ54':'READ53');
  const selection=preparePersistedInactiveCronAcknowledgementSelection({context:value.originalContext,journalPayloadSha256:value.journalPayloadSha256,journalChainSha256:value.journalChainSha256}),previous=value.expected as Record<string,unknown>,previousBody=JSON.parse((value.prepared as {canonicalJson:string}).canonicalJson),binding=previous.inactiveCronDefinitions as Record<string,unknown>;
  value.metadata.setReleaseRun(value.releaseRunId);
  const reboundBinding=value.metadata.contracts.prepareInactiveCronDefinitionBackendBinding({plan:value.plan,stageSha256:binding.stageSha256,catalogueReference232:value.proof.reference,persistedAcknowledgement:selection}),fingerprints={...(previous.fingerprints as Record<string,unknown>),migrationHistorySha256:reboundBinding.afterHistorySha256};

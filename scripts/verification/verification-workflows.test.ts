@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJobs } from './verification-workflows';
 import {execFileSync} from 'node:child_process';
-import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics,ciDatabaseJob} from './verification-workflows';
+import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics,ciDatabaseJob,ciSourceJobs} from './verification-workflows';
 
 test('actual main88 pre-Actions source and original501 require original purpose without changing current or earlier CodeQL policy',()=>{
  const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024});
@@ -27,7 +27,7 @@ test('canonical job eras preserve actual original source jobs and reject current
  const original=yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,{steps:Record<string,unknown>[]}>;
  const pins=[['actions/setup-node@820762786026740c76f36085b0efc47a31fe5020','actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'],['actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a','actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'],['actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3','actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333']];
  for(const name of ['fast-checks','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery','source-contracts','source-cohort-continuation-1','source-cohort-reconciliation-2','runtime-backend','runtime-browser','integration-learning','integration-state','technical-mvp','database-checks']){
-  const old=original[name],current=structuredClone(name==='database-checks'?ciDatabaseJob:old)as{steps:Record<string,unknown>[]};for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
+  const old=original[name],current=structuredClone(name==='database-checks'?ciDatabaseJob:name==='source-fixtures-delivery'?(ciSourceJobs as Record<string,unknown>)[name]:old)as{steps:Record<string,unknown>[]};for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
   assert.deepEqual(selectCanonicalWorkflowJob(name,current,'CURRENT_SOURCE'),current,name);
   assert.deepEqual(selectCanonicalWorkflowJob(name,old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old,name);
   assert.throws(()=>selectCanonicalWorkflowJob(name,old,'CURRENT_SOURCE',{sha:source,git}),name);
@@ -246,6 +246,43 @@ test('source-contract evidence is retained only by its exact required producer w
  assert.ok(step);assert.equal(step.if,'always()');assert.equal(step.with?.path,'.local/verification/source-contracts/result.json');
  for(const mode of ['missing','extra-path','optional','clock','budget']){const jobs=structuredClone(workflow.jobs),steps=(jobs['source-contracts'] as {steps:typeof source.steps}).steps,artifact=steps.find(item=>item.name===step.name)!;
   if(mode==='missing')steps.splice(steps.indexOf(artifact),1);if(mode==='extra-path')artifact.with!.path='.local/';if(mode==='optional')artifact.if='success()';if(mode==='clock')artifact.with!.name='cuevo-source-contracts-latest';if(mode==='budget')jobs['source-contracts']['timeout-minutes']=60;
+  assert.ok(validateCiSourceJobs(jobs).length,mode);
+ }
+});
+
+test('source-bound pre-companion delivery is historical metadata and cannot substitute for current source',()=>{
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024});
+ for(const source of ['5b6e39956d7b9cbe507ec4352812f433225fa6f6','15271080265baf4b8be56750706ae603b0770af2']){
+  const original=(yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['source-fixtures-delivery'];
+  assert.deepEqual(selectCanonicalWorkflowJob('source-fixtures-delivery',original,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),original);
+  assert.throws(()=>selectCanonicalWorkflowJob('source-fixtures-delivery',original,'CURRENT_SOURCE',{sha:source,git}));
+  assert.throws(()=>selectCanonicalWorkflowJob('source-fixtures-delivery',original,'ORIGINAL_RUNTIME_METADATA'));
+  assert.throws(()=>selectCanonicalWorkflowJob('source-fixtures-delivery',original,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+  const changed=structuredClone(original) as {steps:Record<string,unknown>[]};(changed.steps.find(step=>String(step.uses??'').startsWith('actions/upload-artifact@'))!.with as {path:string}).path='.local/';
+  assert.throws(()=>selectCanonicalWorkflowJob('source-fixtures-delivery',changed,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}));
+ }
+});
+
+test('inactive pairing failure companion retains its exact source owner without replacing a partition receipt',async()=>{
+ const flow=yaml.load(await readFile('.github/workflows/ci.yml','utf8')) as {jobs:Record<string,{steps:Record<string,unknown>[]}>};
+ assert.deepEqual(validateCiSourceJobs(flow.jobs),[]);
+ const steps=flow.jobs['source-fixtures-delivery'].steps,name='Retain minimized inactive-Cron pairing failure',diagnostic=steps.find(row=>row.name===name)!;
+ assert.ok(diagnostic);
+ assert.equal(diagnostic.if,'always()');
+ assert.equal(diagnostic.uses,'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9');
+ assert.deepEqual(diagnostic.with,{name:'cuevo-inactive-cron-pairing-failure-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/verification/inactive-cron-pairing/failure.json','include-hidden-files':true,'if-no-files-found':'ignore','retention-days':90});
+ const receipt=steps.find(row=>row.name==='Retain exact source-delivery fixture receipt')!;
+ assert.equal((receipt.with as {path:string}).path,'.local/verification/source-partitions/source-delivery/result.json');
+ assert.equal(receipt.if,'always()');assert.ok(steps.indexOf(diagnostic)>steps.indexOf(receipt));assert.ok(steps.indexOf(diagnostic)<steps.findIndex(row=>row.name==='Confirm frozen authored source'));
+ for(const mode of ['missing','duplicate','path','condition','pin','owner','partition-substitution']){
+  const jobs=structuredClone(flow.jobs),selected=jobs['source-fixtures-delivery'].steps,row=selected.find(item=>item.name===name)!;
+  if(mode==='missing')selected.splice(selected.indexOf(row),1);
+  if(mode==='duplicate')selected.push(structuredClone(row));
+  if(mode==='path')(row.with as {path:string}).path='.local/';
+  if(mode==='condition')row.if='failure()';
+  if(mode==='pin')row.uses='actions/upload-artifact@main';
+  if(mode==='owner')jobs['source-fixtures-native'].steps.push(structuredClone(row));
+  if(mode==='partition-substitution'){const original=selected.find(item=>item.name==='Retain exact source-delivery fixture receipt')!;(original.with as {path:string}).path='.local/verification/inactive-cron-pairing/failure.json';}
   assert.ok(validateCiSourceJobs(jobs).length,mode);
  }
 });
