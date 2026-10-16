@@ -7,8 +7,8 @@ import { PageAccumulator, pagePath, parsePage } from '../api/pagination';
 import { useApi } from './use-api';
 import { queryReadEnabled, queryReadFrame } from './query-frame';
 
-type PageState<T> = { data: T[]; nextCursor: string | null; loading: boolean; loadingMore: boolean; error: LearningApiError | null; moreError: LearningApiError | null; loaded: boolean; context: string };
-function empty<T>(context: string, loading: boolean): PageState<T> { return { data: [], nextCursor: null, loading, loadingMore: false, error: null, moreError: null, loaded: false, context }; }
+type PageState<T> = { data: T[]; nextCursor: string | null; loading: boolean; loadingMore: boolean; error: LearningApiError | null; moreError: LearningApiError | null; loaded: boolean; pagesLoaded: number; context: string };
+function empty<T>(context: string, loading: boolean): PageState<T> { return { data: [], nextCursor: null, loading, loadingMore: false, error: null, moreError: null, loaded: false, pagesLoaded: 0, context }; }
 
 export function usePaginatedLearningQuery<T extends { id: string }>(path: string | null, parse: (value: unknown) => T, refresh: number) {
   const { request, parseResponse } = useApi();
@@ -33,7 +33,7 @@ export function usePaginatedLearningQuery<T extends { id: string }>(path: string
     void requestRef.current(path, { signal: controller.signal, isCurrentRead: currentRead }).then((value) => {
       if (!currentRead()) return;
       const page = currentParseResponse(path, value, value => parsePage(value, parse));
-      if (accumulator.current.apply(context, null, page)) setState({ ...empty<T>(context, false), data: accumulator.current.items, nextCursor: page.nextCursor, loaded: true });
+      if (accumulator.current.apply(context, null, page)) setState({ ...empty<T>(context, false), data: accumulator.current.items, nextCursor: page.nextCursor, loaded: true, pagesLoaded: 1 });
     }).catch((error: unknown) => {
       if (currentRead() && accumulator.current.context === context) { formDrafts.clearRead(`${membership?.schoolId}:${membership?.userId}:`, path); setState({ ...empty<T>(context, false), error: error instanceof LearningApiError ? error : new LearningApiError('invalid') }); }
     });
@@ -51,7 +51,7 @@ export function usePaginatedLearningQuery<T extends { id: string }>(path: string
     void requestRef.current(pagePath(path, cursor), { signal: controller.signal, isCurrentRead: currentRead }).then((value) => {
       if (!currentRead()) return;
       const page = currentParseResponse(path, value, value => parsePage(value, parse));
-      if (accumulator.current.apply(context, cursor, page)) { pending.current = false; setState((current) => ({ ...current, data: accumulator.current.items, nextCursor: page.nextCursor, loadingMore: false })); }
+      if (accumulator.current.apply(context, cursor, page)) { pending.current = false; setState((current) => ({ ...current, data: accumulator.current.items, nextCursor: page.nextCursor, loadingMore: false, pagesLoaded: current.pagesLoaded + 1 })); }
     }).catch((error: unknown) => {
       if (currentRead() && accumulator.current.context === context) { pending.current = false; setState((value) => ({ ...value, loadingMore: false, moreError: error instanceof LearningApiError ? error : new LearningApiError('invalid') })); }
     }).finally(() => { if (currentContext.current === context && accumulator.current.context === context && moreController.current === controller) pending.current = false; });
