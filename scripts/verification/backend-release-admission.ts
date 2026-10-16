@@ -15,7 +15,7 @@ import {readOriginalNative180ArtifactMetadataAndGuard} from './backend-schema-co
 import {readOriginal231SourceAttestationGuard} from '../database/hosted-original231-provenance';
 import {originalNative180RecoverySelectionSchema,original231RecoverySelectionSchema} from '../database/hosted-original-child-recovery';
 import { createGithubCodeqlArtifactReader } from './staging-security';
-import { canonicalReleaseReviewJson } from './release-review';
+import { canonicalReleaseReviewJson,canonicalReleaseExecutionJson } from './release-review';
 import { validatePreparedBackendReleaseIntent, validateFounderBackendApproval, type BackendReleaseExpected } from './backend-release-contracts';
 import { readGitBinaryDiffDigest } from './git-source-digest';
 import type { Stats } from 'node:fs';
@@ -75,15 +75,22 @@ declare const nativeBackendAdmissionBrand:unique symbol;
 export type NativeBackendAdmissionHandle={readonly[nativeBackendAdmissionBrand]:true};
 type InactiveDefinitionCatalogueReceipt=Awaited<ReturnType<typeof readOriginal231TransportCatalogueReferenceAndGuard>>['receipt'];
 const nativeBackendAdmissions=new WeakMap<object,{binding:string;read:()=>Promise<NativeBackendReleaseAdmission>;dispose:()=>void;active:boolean;invalid:boolean;disposed:boolean;inactive?:{assert:()=>void;catalogue:()=>InactiveDefinitionCatalogueReceipt;lastReadAtMs:number|null;expiresAtMs:number}}>();// Native objects cannot be supplied as JSON.
+/** Combined operator transport retains each document's existing review budget. */
+function captureAdmissionEnvelope(value:unknown):Record<string,unknown>{
+ const captured:unknown=JSON.parse(canonicalReleaseExecutionJson(value));
+ if(!captured||typeof captured!=='object'||types.isProxy(captured)||Array.isArray(captured)||![Object.prototype,null].includes(Object.getPrototypeOf(captured)))throw failure();
+ for(const key of['prepared','expected']){const field=Object.getOwnPropertyDescriptor(captured,key);if(!field||!('value'in field)||!field.enumerable)throw failure();canonicalReleaseReviewJson(field.value);}
+ return captured as Record<string,unknown>;
+}
 function admissionBinding(value:unknown){
- const checked=z.object({repoRoot:z.string(),prepared:z.unknown(),expected:z.unknown(),effectScope:inputSchema.shape.effectScope}).strict().parse(JSON.parse(canonicalReleaseReviewJson(value))),expected=JSON.parse(canonicalReleaseReviewJson(checked.expected)) as Record<string,unknown>;delete expected.now;
- return canonicalReleaseReviewJson({...checked,expected});
+ const checked=z.object({repoRoot:z.string(),prepared:z.unknown(),expected:z.unknown(),effectScope:inputSchema.shape.effectScope}).strict().parse(captureAdmissionEnvelope(value)),expected=JSON.parse(canonicalReleaseReviewJson(checked.expected)) as Record<string,unknown>;delete expected.now;
+ return canonicalReleaseExecutionJson({...checked,expected});
 }
 /** Prepares original immutable evidence once. Current authority is observed only by each subsequent read. */
 export async function prepareNativeBackendReleaseAdmission(value:unknown):Promise<NativeBackendAdmissionHandle>{
  let lifetime:AbortController|undefined,operation:AbortController|undefined;
  try{
-  const input=inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value))),boundaryNow=Date.now(),supplied=JSON.parse(canonicalReleaseReviewJson(input.expected)) as BackendReleaseExpected,expected={...supplied,now:boundaryNow},prepared=validatePreparedBackendReleaseIntent(input.prepared,expected);
+  const input=inputSchema.parse(captureAdmissionEnvelope(value)),boundaryNow=Date.now(),supplied=JSON.parse(canonicalReleaseReviewJson(input.expected)) as BackendReleaseExpected,expected={...supplied,now:boundaryNow},prepared=validatePreparedBackendReleaseIntent(input.prepared,expected);
   const inactiveDefinitions=input.effectScope==='INACTIVE_CRON_DEFINITIONS';if(inactiveDefinitions!== (expected.executionScope==='inactive-cron-definitions')||inactiveDefinitions&&!expected.inactiveCronDefinitions)throw failure();
   if(input.effectScope==='COMPLETE_BACKEND'&&(expected.stagingVerification!==undefined||['schema-and-accounts','reconcile-schema','pending-runtime-confirmation','runtime-rollout'].includes(expected.executionScope??'')))throw failure();if(input.effectScope==='PENDING_RUNTIME_CONFIRMATION'&&(expected.executionScope!=='pending-runtime-confirmation'||!expected.pendingRuntimeConfirmation||expected.installedRuntime||expected.stagingVerification)||expected.executionScope==='pending-runtime-confirmation'&&input.effectScope!=='PENDING_RUNTIME_CONFIRMATION')throw failure();
   if(input.effectScope==='RUNTIME_ROLLOUT'&&(expected.executionScope!=='runtime-rollout'||!expected.runtimeRollout||expected.stagingVerification||expected.canonicalSchemaVerification)||expected.executionScope==='runtime-rollout'&&input.effectScope!=='RUNTIME_ROLLOUT')throw failure();
@@ -134,7 +141,7 @@ export async function readNativeBackendReleaseAdmission(handle:unknown,binding:u
  * only from its authenticated captured four-archive catalogue guard. */
 export async function readNativeInactiveCronBackendReleaseAdmission(handle:unknown,binding:unknown):Promise<{admission:NativeBackendReleaseAdmission;catalogueReceipt:InactiveDefinitionCatalogueReceipt}>{
  if(!handle||typeof handle!=='object'||types.isProxy(handle))throw failure();const registered=nativeBackendAdmissions.get(handle);if(!registered?.inactive)throw failure();
- try{const checked=z.object({repoRoot:z.string(),prepared:z.unknown(),expected:z.unknown(),effectScope:z.literal('INACTIVE_CRON_DEFINITIONS')}).strict().parse(JSON.parse(canonicalReleaseReviewJson(binding))),admission=await readNativeBackendReleaseAdmission(handle,checked);if(admission.expected.executionScope!=='inactive-cron-definitions'||!admission.expected.inactiveCronDefinitions)throw failure();registered.inactive.lastReadAtMs=Date.parse(admission.observedAt);assertNativeInactiveCronBackendReleaseAdmission(handle,checked);return{admission,catalogueReceipt:registered.inactive.catalogue()};}
+ try{const checked=z.object({repoRoot:z.string(),prepared:z.unknown(),expected:z.unknown(),effectScope:z.literal('INACTIVE_CRON_DEFINITIONS')}).strict().parse(captureAdmissionEnvelope(binding)),admission=await readNativeBackendReleaseAdmission(handle,checked);if(admission.expected.executionScope!=='inactive-cron-definitions'||!admission.expected.inactiveCronDefinitions)throw failure();registered.inactive.lastReadAtMs=Date.parse(admission.observedAt);assertNativeInactiveCronBackendReleaseAdmission(handle,checked);return{admission,catalogueReceipt:registered.inactive.catalogue()};}
  catch{registered.invalid=true;registered.dispose();throw failure();}
 }
 /** Final synchronous source/expiry check after a successful fresh official
@@ -147,12 +154,12 @@ export function assertNativeInactiveCronBackendReleaseAdmission(handle:unknown,b
 }
 export function disposeNativeBackendReleaseAdmission(handle:unknown):void{if(!handle||typeof handle!=='object'||types.isProxy(handle))throw failure();const registered=nativeBackendAdmissions.get(handle);if(!registered)throw failure();registered.disposed=true;registered.dispose();}
 /** One-shot compatibility consumer. Prepared handles never serialize cached approval as authority. */
-export async function readBackendReleaseAdmission(value:unknown):Promise<NativeBackendReleaseAdmission>{const handle=await prepareNativeBackendReleaseAdmission(value);try{const input=inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));return await readNativeBackendReleaseAdmission(handle,{repoRoot:input.repoRoot,prepared:input.prepared,expected:input.expected,effectScope:input.effectScope});}finally{disposeNativeBackendReleaseAdmission(handle);}}
+export async function readBackendReleaseAdmission(value:unknown):Promise<NativeBackendReleaseAdmission>{const handle=await prepareNativeBackendReleaseAdmission(value);try{const input=inputSchema.parse(captureAdmissionEnvelope(value));return await readNativeBackendReleaseAdmission(handle,{repoRoot:input.repoRoot,prepared:input.prepared,expected:input.expected,effectScope:input.effectScope});}finally{disposeNativeBackendReleaseAdmission(handle);}}
 /** Nested publisher observations share immutable inputs, while every boundary
  * still reads current authority. Only the creator disposes a borrowed handle. */
 async function withPublisherAdmission<T>(value:unknown,borrowed:NativeBackendAdmissionHandle|undefined,observe:(input:z.infer<typeof inputSchema>,handle:NativeBackendAdmissionHandle)=>Promise<T>):Promise<T>{
  let handle:NativeBackendAdmissionHandle|undefined;
- try{const input=inputSchema.parse(JSON.parse(canonicalReleaseReviewJson(value)));handle=borrowed===undefined?await prepareNativeBackendReleaseAdmission(input):borrowed;return await observe(input,handle);}
+ try{const input=inputSchema.parse(captureAdmissionEnvelope(value));handle=borrowed===undefined?await prepareNativeBackendReleaseAdmission(input):borrowed;return await observe(input,handle);}
  catch{if(handle&&typeof handle==='object'&&!types.isProxy(handle)){const registered=nativeBackendAdmissions.get(handle);if(registered){registered.invalid=true;registered.dispose();}}throw failure();}
  finally{if(handle&&borrowed===undefined)disposeNativeBackendReleaseAdmission(handle);}
 }
