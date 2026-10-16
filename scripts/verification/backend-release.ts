@@ -4,7 +4,7 @@ import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promi
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
-import { prepareNativeBackendRelease } from './backend-release-prepare';
+import { prepareNativeBackendRelease,readInactiveCronAcknowledgementRecoveryInput } from './backend-release-prepare';
 import {readBackendReleaseAdmission,prepareNativeBackendReleaseAdmission,readNativeBackendReleaseAdmission,disposeNativeBackendReleaseAdmission,type NativeBackendAdmissionHandle} from './backend-release-admission';
 import { validatePreparedBackendReleaseIntent,readBackendRuntimeFingerprints } from './backend-release-contracts';
 import {backendReleaseExecutionSchema,validateBackendReleaseDelivery} from './backend-release-delivery';
@@ -35,6 +35,9 @@ import {exportOriginalWorkerActivationExecution} from './backend-hosted-activati
 import {confirmPendingHostedWorkerActivation} from './backend-hosted-activation-confirmation';
 import {canonicalHostedMigrationPlan,readCanonicalMigrationSources,type HostedMigrationPlanV1} from '../database/hosted-migration-plan';
 import {validateOriginalWorkerActivationExecutionExport} from './backend-hosted-activation-export-contracts';
+import {executeNativeOriginal231TransportAppend,executeNativePersistedInactiveCronAcknowledgementRead} from '../database/hosted-migration-executor';
+import {restorePersistedInactiveCronJournalPermissions} from '../database/hosted-migration-journal';
+import {validateHostedOperatorStoragePolicy} from '../database/hosted-operator-storage-policy';
 
 const failure = () => Error('Backend release step requires review; private contents withheld.');
 const digest = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
@@ -54,13 +57,50 @@ async function record(root: string, filename: string, value: unknown, canonical 
   const path = join(root, '.local/hosted-release', filename), handle = await open(path, 'wx', 0o600);
   try { await handle.writeFile(canonical ? canonicalReleaseExecutionJson(value) : JSON.stringify(value) + '\n'); await handle.sync(); } finally { await handle.close(); }
 }
+async function exposeInactiveJournalOwner(repoRoot:string,identity:unknown,env:Record<string,string|undefined>){
+ const path=join(repoRoot,'.local/hosted-release','journal-'+digest(JSON.stringify(identity)));if(env.GITHUB_OUTPUT)await writeFile(env.GITHUB_OUTPUT,'inactive-journal-root='+path+'\n',{flag:'a'});
+}
+async function runPersistedInactiveAcknowledgementRead(bundle:Extract<z.infer<typeof backendReleaseExecutionSchema>,{version:3}>,repoRoot:string,env:Record<string,string|undefined>,admissionHandle:NativeBackendAdmissionHandle,ca:string){
+ const expected=bundle.expected as import('./backend-release-contracts').BackendReleaseExpected,selection=expected.inactiveCronDefinitions!.persistedAcknowledgement!;
+ if(bundle.stages[0].materialization!=='METADATA_ONLY'||bundle.stages[0].pending.length||bundle.stages[0].commandArgs.length)throw failure();
+ await restorePersistedInactiveCronJournalPermissions({repoRoot,persistedAcknowledgement:selection});
+ const certificatePath=join(repoRoot,'.local/hosted-release/database-ca.pem');try{const file=await open(certificatePath,'wx',0o600);try{await file.writeFile(ca);await file.sync();}finally{await file.close();}}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST'||!(await ownedFile(repoRoot,certificatePath,512*1024)).equals(Buffer.from(ca)))throw failure();}
+ const endpoint=bundle.migrationEndpoint,databaseUrl=`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+endpoint.projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,prepared=bundle.preparedApproval as import('./backend-release-contracts').PreparedBackendReleaseIntent,identity={projectRef:endpoint.projectRef,sourceSha:expected.releaseSha,treeSha:expected.treeSha,planSha256:expected.fingerprints.migrationPlanSha256,stageId:'remaining',stageSha256:expected.inactiveCronDefinitions!.stageSha256,databaseUrl,approvalDigest:prepared.sha256,ciRunId:expected.ciRunId,certificateSha256:digest(ca)};
+ await exposeInactiveJournalOwner(repoRoot,selection.context.identity,env);
+ const result=await executeNativePersistedInactiveCronAcknowledgementRead({repoRoot,plan:bundle.plan,prepared,expected,identity,catalogueReference232:bundle.catalogueReference232,releaseRunId:expected.releaseRunId,releaseRunAttempt:expected.runAttempt,databaseUrl,certificate:{path:certificatePath,sha256:digest(ca)},migrationPassword:required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD'),providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),storageKey:required(env,'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'),admissionHandle});
+ await record(repoRoot,'inactive-cron-ack-read-result.json',result,true);if(result.status!=='ACK_REBOUND_READ_ONLY'||result.cleanup!=='RELEASED'||result.sqlExecution!=='NOT_EXECUTED'||result.cliExecution!=='NOT_EXECUTED'||result.effectAuthority!==false||result.foundationAccepted!==false||result.hostedAcceptance!==false||!result.configuration)throw failure();return result;
+}
+async function runInactiveDefinitionPhase(bundle:Extract<z.infer<typeof backendReleaseExecutionSchema>,{version:3}>,mode:string,repoRoot:string,env:Record<string,string|undefined>){
+ if(!['approval','append-inactive-cron-definitions'].includes(mode)||bundle.repoRoot!==repoRoot||env.VERCEL_TOKEN||env.CUEVO_SYNTHETIC_PILOT_PASSWORD||env.CUEVO_AUTH_PROVISIONING_KEY)throw failure();
+ const expected=bundle.expected as import('./backend-release-contracts').BackendReleaseExpected;
+ z.object({repository:z.literal(required(env,'GITHUB_REPOSITORY')),releaseSha:z.literal(required(env,'GITHUB_SHA')),releaseRunId:z.literal(required(env,'GITHUB_RUN_ID')),runAttempt:z.literal(Number(required(env,'GITHUB_RUN_ATTEMPT'))),executionScope:z.literal('inactive-cron-definitions'),environmentName:z.literal('staging'),deploymentEnvironment:z.literal('synthetic-staging')}).parse(expected);
+ validatePreparedBackendReleaseIntent(bundle.preparedApproval,{...expected,now:Date.now()});const admissionInput={repoRoot,expected,prepared:bundle.preparedApproval,effectScope:'INACTIVE_CRON_DEFINITIONS' as const,githubToken:required(env,'GH_TOKEN')};
+ if(mode==='approval'&&(privateNames.some(key=>!!env[key])||env.SUPABASE_ACCESS_TOKEN))throw failure();
+ const handle=await prepareNativeBackendReleaseAdmission(admissionInput);
+ try{
+  await readNativeBackendReleaseAdmission(handle,{repoRoot,expected,prepared:bundle.preparedApproval,effectScope:'INACTIVE_CRON_DEFINITIONS'});if(mode==='approval')return{status:'ADMITTED' as const,hostedAcceptance:false};
+  const ca=required(env,'CUEVO_DATABASE_TLS_CA');if(!ca.includes('-----BEGIN CERTIFICATE-----')||Buffer.byteLength(ca)>512*1024)throw failure();
+  const readOnly=expected.inactiveCronDefinitions!.persistedAcknowledgement!==undefined,policyBytes=await ownedFile(repoRoot,bundle.operatorStoragePolicyPath,8192);if(digest(policyBytes)!==expected.fingerprints.operatorStoragePolicySha256)throw failure();
+  validateHostedOperatorStoragePolicy(policyBytes.toString('utf8'),{sourceSha:expected.releaseSha,treeSha:expected.treeSha,projectRef:bundle.migrationEndpoint.projectRef});
+  if(readOnly)return await runPersistedInactiveAcknowledgementRead(bundle,repoRoot,env,handle,ca);
+  const toolchainBytes=await ownedFile(repoRoot,bundle.toolchainManifestPath,49152);if(digest(toolchainBytes)!==expected.fingerprints.migrationToolchainSha256)throw failure();
+  const manifest=z.object({version:z.literal(1),purpose:z.literal('CUEVO_HOSTED_MIGRATION_TOOLCHAIN'),sourceSha:z.literal(expected.releaseSha),treeSha:z.literal(expected.treeSha),sourceLockSha256:z.string().regex(/^[a-f0-9]{64}$/),cliVersion:z.literal('2.119.0'),platform:z.literal(process.platform+'-'+process.arch),cli:z.object({shimSha256:z.string().regex(/^[a-f0-9]{64}$/),binarySha256:z.string().regex(/^[a-f0-9]{64}$/),sidecarSha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict()}).strict().parse(parseCanonicalReleaseReviewJson(toolchainBytes.toString('utf8')));
+  validateHostedOperatorStoragePolicy(policyBytes.toString('utf8'),{sourceSha:expected.releaseSha,treeSha:expected.treeSha,projectRef:bundle.migrationEndpoint.projectRef});
+  const certificatePath=join(repoRoot,'.local/hosted-release/database-ca.pem');try{const file=await open(certificatePath,'wx',0o600);try{await file.writeFile(ca);await file.sync();}finally{await file.close();}}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST'||!(await ownedFile(repoRoot,certificatePath,512*1024)).equals(Buffer.from(ca)))throw failure();}
+  const endpoint=bundle.migrationEndpoint,databaseUrl=`postgresql://${endpoint.kind==='session-pooler'?'postgres.'+endpoint.projectRef:'postgres'}@${endpoint.host}:5432/postgres?sslmode=verify-full`,prepared=bundle.preparedApproval as import('./backend-release-contracts').PreparedBackendReleaseIntent,stage=bundle.stages[0],identity={projectRef:endpoint.projectRef,sourceSha:expected.releaseSha,treeSha:expected.treeSha,planSha256:expected.fingerprints.migrationPlanSha256,stageId:'remaining',stageSha256:expected.inactiveCronDefinitions!.stageSha256,databaseUrl,approvalDigest:prepared.sha256,ciRunId:expected.ciRunId,certificateSha256:digest(ca)},migrationPassword=required(env,'CUEVO_MIGRATION_DATABASE_PASSWORD'),keys=['PATH','Path','SystemRoot','SYSTEMROOT','WINDIR','ComSpec','COMSPEC','PATHEXT','TEMP','TMP','LANG','LC_ALL','TZ'],privateEnvironment={...Object.fromEntries(keys.filter(key=>env[key]!==undefined).map(key=>[key,env[key]!])),PGPASSWORD:migrationPassword,PGSSLROOTCERT:certificatePath};
+  await exposeInactiveJournalOwner(repoRoot,identity,env);
+  const result=await executeNativeOriginal231TransportAppend({repoRoot,plan:bundle.plan,stage,prepared,expected,identity,catalogueReference232:bundle.catalogueReference232,releaseRunId:expected.releaseRunId,releaseRunAttempt:expected.runAttempt,databaseUrl,certificate:{path:certificatePath,sha256:digest(ca)},migrationPassword,providerToken:required(env,'SUPABASE_ACCESS_TOKEN'),storageKey:required(env,'CUEVO_RELEASE_JOURNAL_STORAGE_KEY'),cli:manifest.cli,timeoutMs:300000,privateEnvironment,admissionHandle:handle});
+  await record(repoRoot,'inactive-cron-definition-result.json',result,true);if(result.status!=='INACTIVE_DEFINITIONS_ACKNOWLEDGED'||result.cleanup!=='CONFIRMED_STOPPED_AND_RELEASED'||result.sqlCommitment!=='CONFIRMED_INACTIVE_DEFINITIONS'||!result.configuration||result.foundationAccepted!==false||result.hostedAcceptance!==false||result.originalAcknowledgement!=='UNKNOWN')throw failure();return result;
+ }finally{disposeNativeBackendReleaseAdmission(handle);}
+}
 /** The workflow owns credential recipients; native owners recheck current official
  * source/approval and provider state before their original operations. */
-export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'approval' | 'bootstrap-schema' | 'reconcile-prefix' | 'export-schema-completion' | 'provision' | 'deploy' | 'resume-runtime' | 'export-activation-execution' | 'confirm-pending-activation' | 'rollout-runtime' | 'initialize-runtime' | 'export-runtime-recovery' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web' | 'export-web-handover'; repoRoot: string; env: Record<string, string | undefined> }) {
+export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'prepare' | 'inspect-inactive-custody' | 'approval' | 'append-inactive-cron-definitions' | 'bootstrap-schema' | 'reconcile-prefix' | 'export-schema-completion' | 'provision' | 'deploy' | 'resume-runtime' | 'export-activation-execution' | 'confirm-pending-activation' | 'rollout-runtime' | 'initialize-runtime' | 'export-runtime-recovery' | 'verify' | 'verify-private' | 'activate' | 'verify-recovery' | 'verify-restore' | 'bind-api' | 'handover' | 'configure-web' | 'export-web-handover'; repoRoot: string; env: Record<string, string | undefined> }) {
   let operationAdmission:NativeBackendAdmissionHandle|undefined,schemaConsumptionAdmission:NativeBackendAdmissionHandle|undefined;
   try {
-    if (!['prepare','approval','bootstrap-schema','reconcile-prefix','export-schema-completion','provision','deploy','resume-runtime','export-activation-execution','confirm-pending-activation','rollout-runtime','initialize-runtime','export-runtime-recovery','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
+    if (!['prepare','inspect-inactive-custody','approval','append-inactive-cron-definitions','bootstrap-schema','reconcile-prefix','export-schema-completion','provision','deploy','resume-runtime','export-activation-execution','confirm-pending-activation','rollout-runtime','initialize-runtime','export-runtime-recovery','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
     if (!isAbsolute(repoRoot) || resolve(repoRoot) !== repoRoot || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw failure();
+    if(mode==='inspect-inactive-custody'){if(privateNames.some(key=>!!env[key])||env.GH_TOKEN||env.SUPABASE_ACCESS_TOKEN)throw failure();const result=readInactiveCronAcknowledgementRecoveryInput({repoRoot,scope:required(env,'CUEVO_BACKEND_RELEASE_SCOPE'),repository:required(env,'GITHUB_REPOSITORY'),sourceSha:required(env,'GITHUB_SHA'),ciRunId:required(env,'CUEVO_BACKEND_CI_RUN_ID'),releaseRunId:required(env,'GITHUB_RUN_ID'),releaseRunAttempt:Number(required(env,'GITHUB_RUN_ATTEMPT')),input:parseCanonicalReleaseReviewJson(required(env,'CUEVO_BACKEND_RELEASE_INPUT_JSON'))});await writeFile(required(env,'GITHUB_OUTPUT'),'original-run-id='+(result.originalRunId??'')+'\noriginal-run-attempt='+(result.originalRunAttempt??'')+'\n',{flag:'a'});return result;}
     if (mode === 'prepare') {
       if (privateNames.some(key => !!env[key])) throw failure();
       const result = await prepareNativeBackendRelease({ repoRoot, eventPath: required(env, 'GITHUB_EVENT_PATH'), repository: required(env, 'GITHUB_REPOSITORY'), sha: required(env, 'GITHUB_SHA'), ref: required(env, 'GITHUB_REF'), eventName: required(env, 'GITHUB_EVENT_NAME'), runId: required(env, 'GITHUB_RUN_ID'), runAttempt: Number(required(env, 'GITHUB_RUN_ATTEMPT')), githubToken: required(env, 'GH_TOKEN'), providerToken: required(env, 'SUPABASE_ACCESS_TOKEN'), input: parseCanonicalReleaseReviewJson(required(env, 'CUEVO_BACKEND_RELEASE_INPUT_JSON')) });
@@ -73,6 +113,8 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
     const bytes = await ownedFile(repoRoot, bundlePath, 1024 * 1024);
     if (digest(bytes) !== required(env, 'CUEVO_BACKEND_BUNDLE_SHA256')) throw failure();
     const bundle = bundleSchema.parse(parseReleaseExecutionJson(new TextDecoder('utf8', { fatal: true }).decode(bytes)));
+    if(bundle.version===3)return await runInactiveDefinitionPhase(bundle,mode,repoRoot,env);
+    if(mode==='append-inactive-cron-definitions')throw failure();
     // A focused database/account gate is never a provider deployment certificate.
     const scope = z.object({ stagingVerification: z.unknown().optional(), installedRuntime:z.unknown().optional(),currentRuntime:z.unknown().optional(), executionScope: z.enum(['schema-and-accounts', 'complete-backend','installed-runtime','reconcile-schema','pending-runtime-confirmation','runtime-rollout']).optional() }).parse(bundle.expected);
     const operating=z.object({handoff:z.enum(['operating-staging','customer-candidate']).optional()}).parse(bundle.expected).handoff==='operating-staging';
@@ -303,7 +345,7 @@ export async function runBackendReleasePhase({ mode, repoRoot, env }: { mode: 'p
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const mode = process.argv[2];
-  if (!['prepare', 'approval', 'bootstrap-schema', 'reconcile-prefix', 'export-schema-completion', 'provision','deploy','resume-runtime','export-activation-execution','confirm-pending-activation','rollout-runtime','initialize-runtime','export-runtime-recovery','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
+  if (!['prepare', 'inspect-inactive-custody', 'approval', 'append-inactive-cron-definitions', 'bootstrap-schema', 'reconcile-prefix', 'export-schema-completion', 'provision','deploy','resume-runtime','export-activation-execution','confirm-pending-activation','rollout-runtime','initialize-runtime','export-runtime-recovery','verify','verify-private','activate','verify-recovery','verify-restore','bind-api','handover','configure-web','export-web-handover'].includes(mode)) throw failure();
   try { const result = await runBackendReleasePhase({ mode: mode as 'prepare' | 'approval' | 'bootstrap-schema' | 'reconcile-prefix' | 'export-schema-completion' | 'provision'|'deploy'|'resume-runtime'|'verify'|'verify-private'|'activate'|'verify-recovery'|'verify-restore'|'bind-api'|'handover'|'configure-web'|'export-web-handover', repoRoot: process.cwd(), env: process.env }); console.log(JSON.stringify({ step: mode, status: 'status' in result ? result.status : 'EXPORTED_VERIFIED_BACKEND_HANDOVER', hostedAcceptance: false })); }
   catch { console.error('Cuevo backend step requires review. Inspect retained source-bound receipts; private contents withheld.'); process.exitCode = 1; }
 }

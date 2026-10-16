@@ -7,6 +7,8 @@ import { deriveCanonicalHostedMigrationBatches } from './hosted-migration-batche
 import { types } from 'node:util';
 import { canonicalReleaseExecutionJson } from '../verification/release-review';
 import { posthogIntelligenceMigration } from './replay-plan';
+import {readOriginal231TransportAppendPlan,type Original231TransportAppendPlan} from './original231-transport-plan-contracts';
+import {prepareCanonicalOriginal231TransportAppendOperation,readCanonicalOriginal231TransportAppendOperation} from './hosted-migration-plan';
 
 const failure=()=>new Error('Hosted migration workdir source, plan or owned output requires review; contents withheld.');
 const hash=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');
@@ -28,6 +30,31 @@ async function createOwnedMigrationDelivery(input:{workdir:string;included:Migra
  if(JSON.stringify((await readdir(input.workdir)).sort())!==JSON.stringify(['supabase'])||JSON.stringify((await readdir(supabase)).sort())!==JSON.stringify(['config.toml','migrations'])||JSON.stringify((await readdir(migrations)).sort())!==JSON.stringify(input.included.map(row=>row.name).sort()))throw failure();
 }
 function ownedMetadata(value:unknown,depth=0):unknown{if(depth>12)throw failure();if(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return value;if(!value||typeof value!=='object'||types.isProxy(value)||!Array.isArray(value)&&![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw failure();if(Array.isArray(value)&&(value.length>5000||Reflect.ownKeys(value).length!==value.length+1))throw failure();const output:Record<string,unknown>|unknown[]=Array.isArray(value)?[]:Object.create(null);for(const key of Reflect.ownKeys(value)){if(Array.isArray(value)&&key==='length')continue;const field=Object.getOwnPropertyDescriptor(value,key);if(typeof key!=='string'||!field||!('value'in field)||!field.enumerable)throw failure();Object.defineProperty(output,key,{value:ownedMetadata(field.value,depth+1),enumerable:true});}return output;}
+
+export type Original231TransportAppendWorkdir={version:1;purpose:'CUEVO_ORIGINAL231_TRANSPORT_APPEND_DELIVERY';root:string;sourceSha:string;treeSha:string;planSha256:string;execution:'NOT_EXECUTED';effectAuthority:false;originalAcknowledgement:'UNKNOWN';stage:HostedMigrationWorkdirs['stages'][number]};
+/** Exact current source delivery only. Historical files are present for native
+ * history comparison; the sole pending file is the immutable Cron definition. */
+export async function createOriginal231TransportAppendWorkdir(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:Original231TransportAppendPlan;outputRoot:string},borrowed?:CanonicalMigrationOperation):Promise<Original231TransportAppendWorkdir>{
+ let operation:CanonicalMigrationOperation|undefined;
+ try{
+  const input=JSON.parse(canonicalReleaseExecutionJson(ownedMetadata(value))) as typeof value;
+  if(JSON.stringify(Object.keys(input).sort())!==JSON.stringify(['repoRoot','sourceSha','treeSha','plan','outputRoot'].sort()))throw failure();
+  const plan=readOriginal231TransportAppendPlan(input.plan),binding={repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,plan};
+  operation=borrowed??prepareCanonicalOriginal231TransportAppendOperation(binding);
+  const loaded=readCanonicalOriginal231TransportAppendOperation(operation,binding),root=input.repoRoot,releaseRoot=join(root,'.local','hosted-release');
+  if(!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||input.outputRoot!==releaseRoot)throw failure();
+  const probe='.local/hosted-release/migration-probe/builder-state.json',git=(args:string[],stdin?:string)=>execFileSync('git',['-C',root,...args],{env:gitEnv(),input:stdin,encoding:'utf8',windowsHide:true,shell:false,timeout:15000,stdio:['pipe','pipe','ignore']});
+  if(git(['check-ignore','--no-index','--stdin'],probe+'\n').trim()!==probe||git(['ls-files','--cached','--','.local/hosted-release']).length)throw failure();
+  const directory=async(path:string,create=false)=>{let stat;try{stat=await lstat(path);}catch(error){if(!create||(error as NodeJS.ErrnoException).code!=='ENOENT')throw failure();await mkdir(path);stat=await lstat(path);}if(!stat.isDirectory()||stat.isSymbolicLink()||await realpath(path)!==path)throw failure();};
+  await directory(join(root,'.local'),true);await directory(releaseRoot,true);
+  const output=join(releaseRoot,'migration-'+randomUUID());await mkdir(output);await directory(output);
+  const handle=await open(join(output,'builder-state.json'),'wx',0o600),workdir=join(output,'remaining');
+  const stage:HostedMigrationWorkdirs['stages'][number]={...structuredClone(plan.stage),workdir,configSha256:hash(config),commandArgs:['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',workdir,'--yes','--output-format','json'],materialization:'SQL_FILES'};
+  const record=async(state:'CREATING'|'READY'|'REQUIRES_REVIEW')=>{await handle.truncate(0);await handle.write(JSON.stringify({version:1,purpose:'CUEVO_ORIGINAL231_TRANSPORT_APPEND_DELIVERY',state,sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:plan.planSha256,execution:'NOT_EXECUTED',effectAuthority:false,originalAcknowledgement:'UNKNOWN'})+'\n',0,'utf8');await handle.sync();};
+  try{await record('CREATING');await createOwnedMigrationDelivery({workdir,included:plan.migrations,sources:loaded.sources,verify:async()=>{await directory(releaseRoot);await directory(output);}});readCanonicalOriginal231TransportAppendOperation(operation,binding);await record('READY');readCanonicalOriginal231TransportAppendOperation(operation,binding);return{version:1,purpose:'CUEVO_ORIGINAL231_TRANSPORT_APPEND_DELIVERY',root:output,sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:plan.planSha256,execution:'NOT_EXECUTED',effectAuthority:false,originalAcknowledgement:'UNKNOWN',stage};}
+  catch{await record('REQUIRES_REVIEW').catch(()=>undefined);throw failure();}finally{await handle.close();}
+ }catch{throw failure();}finally{if(operation&&borrowed===undefined)disposeCanonicalMigrationOperation(operation);}
+}
 
 /** Builds ignored CLI input only. Hosted target, credentials, approval and execution remain separate. */
 export async function createHostedMigrationWorkdirs(input:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;outputRoot:string;preparation?:'ALL_SQL'|'PREFIX_SQL'|'RUNTIME_OBSERVATION'|'INSTALLED_NOOP'|'ORIGINAL231_OBSERVATION_METADATA'},borrowed?:CanonicalMigrationOperation):Promise<HostedMigrationWorkdirs>{

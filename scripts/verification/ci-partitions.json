@@ -99,6 +99,10 @@
         "scripts/database/demo-population-profile.test.ts",
         "scripts/database/hosted-active-runtime-state.test.ts",
         "scripts/database/hosted-community-native-read.test.ts",
+        "scripts/database/hosted-inactive-cron-configuration.test.ts",
+        "scripts/database/hosted-inactive-cron-definition-contracts.test.ts",
+        "scripts/database/hosted-inactive-cron-journal.test.ts",
+        "scripts/database/hosted-inactive-cron-native-pairing.test.ts",
         "scripts/database/hosted-installed-state.test.ts",
         "scripts/database/hosted-migration-batch-receipt.test.ts",
         "scripts/database/hosted-migration-batches.test.ts",
@@ -111,10 +115,13 @@
         "scripts/database/hosted-migration-remote-journal.test.ts",
         "scripts/database/hosted-migration-stage-files.test.ts",
         "scripts/database/hosted-migration-stage-observation.test.ts",
+        "scripts/database/hosted-migration-storage-observation.test.ts",
         "scripts/database/hosted-migration-workdirs.test.ts",
         "scripts/database/hosted-operator-storage-bootstrap.test.ts",
         "scripts/database/hosted-operator-storage-inventory.test.ts",
         "scripts/database/hosted-operator-storage-policy.test.ts",
+        "scripts/database/hosted-original231-transport-append.test.ts",
+        "scripts/database/hosted-original231-transport-catalogue.test.ts",
         "scripts/database/hosted-provider-state.test.ts",
         "scripts/database/hosted-runtime-connection-snapshot.test.ts",
         "scripts/database/hosted-runtime-rollout-session.test.ts",
@@ -125,6 +132,7 @@
         "scripts/database/hosted-synthetic-population.test.ts",
         "scripts/database/replay-plan.test.ts",
         "scripts/database/reset-local-diagnostic.test.ts",
+        "scripts/database/sql-cron-transport.test.ts",
         "scripts/database/start-local-diagnostic.test.ts",
         "scripts/database/worker-transport-fixture-policy.test.ts",
         "scripts/database/worker-transport-trust.test.ts",
@@ -401,6 +409,22 @@
         "durationMs": null
       },
       {
+        "path": "scripts/database/hosted-inactive-cron-configuration.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-inactive-cron-definition-contracts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-inactive-cron-journal.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-inactive-cron-native-pairing.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/database/hosted-installed-state.test.ts",
         "durationMs": null
       },
@@ -473,6 +497,10 @@
         "durationMs": null
       },
       {
+        "path": "scripts/database/hosted-migration-storage-observation.test.ts",
+        "durationMs": null
+      },
+      {
         "path": "scripts/database/hosted-migration-workdirs.test.ts",
         "durationMs": null
       },
@@ -494,6 +522,14 @@
       },
       {
         "path": "scripts/database/hosted-original-native-intent.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-original231-transport-append.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-original231-transport-catalogue.test.ts",
         "durationMs": null
       },
       {
@@ -562,6 +598,10 @@
       },
       {
         "path": "scripts/database/reset-local-diagnostic.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/sql-cron-transport.test.ts",
         "durationMs": null
       },
       {

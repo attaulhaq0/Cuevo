@@ -9,6 +9,8 @@ import { parseReconciliationTemplate, verifyReconciledPrefix, type Reconciliatio
 import { replayPlan, nativeSourceMigration, posthogEnvironmentMigration, posthogIntelligenceMigration } from './replay-plan';
 import {originalChildRecoveryPlanContextSchema,validateOriginalChildRecoveryPlanContext,originalChildRecoveryFingerprint,originalChildReconciledPlanProjection,type OriginalChildRecoveryPlanContext,originalNative180RecoveryPlanContextSchema,validateOriginalNative180RecoveryPlanContext,originalNative180RecoveryFingerprint,originalNative180ReconciledPlanProjection,type OriginalNative180RecoveryPlanContext,original231RecoveryPlanContextSchema,validateOriginal231RecoveryPlanContext,original231ReconciledPlanProjection,type Original231RecoveryPlanContext} from './hosted-original-child-recovery';
 import {canonicalReleaseExecutionJson} from '../verification/release-review';
+import {hostedMigrationPlanningTargetSchema} from './hosted-migration-plan-contracts';
+import {readOriginal231TransportAppendPlan,type Original231TransportAppendPlan} from './original231-transport-plan-contracts';
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -16,13 +18,8 @@ const version = z.string().regex(/^\d{14}$/);
 const projectRef = z.string().regex(/^[a-z]{20}$/);
 const rowSchema = z.object({ version, sha256: digest }).strict();
 const identitySchema = z.object({ sha, tree: sha }).strict();
-const targetSchema = z.object({
-  projectRef, boundProjectRef: projectRef, projectName: z.string(), projectStatus: z.literal('ACTIVE_HEALTHY'),
-  deploymentEnvironment: z.literal('synthetic-staging'), observedAt: z.iso.datetime({ offset: true }),
-  authUsers: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), storageObjects: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  appSchemas: z.array(z.enum(['app', 'internal', 'authorization'])).max(3), migrationVersions: z.array(version).max(1000),
-  dispatchDisabled: z.literal(true), population: z.enum(['EMPTY', 'GUARDED_SYNTHETIC','SCHEMA_ONLY']),
-}).strict();
+const targetSchema=hostedMigrationPlanningTargetSchema;
+export {hostedMigrationPlanningTargetSchema} from './hosted-migration-plan-contracts';
 const priorSchema = z.object({ projectRef, sourceSha: sha, treeSha: sha, migrations: z.array(rowSchema).min(1).max(1000), completedSourceMigrationCount: z.number().int().positive().max(1000).optional() }).strict();
 const failure = () => new Error('Hosted migration source, target or verified history requires review; contents withheld.');
 const hash = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
@@ -222,12 +219,13 @@ export function readCanonicalMigrationSources(input:{repoRoot:string;sourceSha:s
 declare const canonicalMigrationOperationBrand:unique symbol;
 export type CanonicalMigrationOperation={readonly[canonicalMigrationOperationBrand]:true};
 export type CanonicalMigrationOperationInput={repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1};
+export type CanonicalOriginal231TransportAppendOperationInput={repoRoot:string;sourceSha:string;treeSha:string;plan:Original231TransportAppendPlan};
 export type CanonicalMigrationOperationRead=CanonicalMigrationSources&{replay:ReturnType<typeof replayPlan>;order:string[];rows:HostedMigrationPlanV1['migrations'];groups:string[][];boundaries:number[]};
 type MigrationSourceProjection=Omit<CanonicalMigrationOperationRead,'sources'|'provenance'>;
 function migrationSourceProjection(sources:MigrationSource[]):MigrationSourceProjection{const replay=replayPlan(sources),order=[...replay.before,replay.prerequisite,...replay.remaining],rows=order.map(name=>({name,version:name.slice(0,14),sha256:hash(sources.find(row=>row.name===name)!.bytes)})),stop=replay.remaining.indexOf(posthogIntelligenceMigration),groups=[replay.before,[nativeSourceMigration],replay.remaining.slice(0,stop),replay.remaining.slice(stop)],boundaries=groups.map((_,index)=>groups.slice(0,index+1).flat().length);if(stop<0)throw failure();return{replay,order,rows,groups,boundaries};}
 export type CanonicalMigrationPriorKind='PRIOR_SCHEMA'|'PRIOR_COMPLETED';
 type RetainedHistoricalMigrationSource=MigrationSourceProjection&{sources:MigrationSource[];tree:Uint8Array;provenance:CanonicalMigrationSources['provenance']};
-const canonicalMigrationOperations=new WeakMap<object,{binding:string;original:ReturnType<typeof readCurrentMigrationSources>&{normalized:Map<string,Uint8Array>};projection:Omit<CanonicalMigrationOperationRead,'sources'|'provenance'>;historical?:Partial<Record<CanonicalMigrationPriorKind,RetainedHistoricalMigrationSource>>;invalid:boolean;busy:boolean}>();
+const canonicalMigrationOperations=new WeakMap<object,{purpose:'ORDINARY_V1'|'ORIGINAL231_TRANSPORT_V2';binding:string;original:ReturnType<typeof readCurrentMigrationSources>&{normalized:Map<string,Uint8Array>};projection:Omit<CanonicalMigrationOperationRead,'sources'|'provenance'>;historical?:Partial<Record<CanonicalMigrationPriorKind,RetainedHistoricalMigrationSource>>;invalid:boolean;busy:boolean}>();
 function migrationOperationInput(value:CanonicalMigrationOperationInput){
  const input=z.object({repoRoot:z.string(),sourceSha:sha,treeSha:sha,plan:z.unknown()}).strict().parse(jsonSnapshot(value)),canonical=canonicalHostedMigrationPlan(input.plan as HostedMigrationPlanV1),plan=JSON.parse(canonical.json) as HostedMigrationPlanV1;
  if(!isAbsolute(input.repoRoot)||resolve(input.repoRoot)!==input.repoRoot||plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();return{input:{...input,plan},binding:canonicalReleaseExecutionJson({repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:canonical.sha256})};
@@ -237,25 +235,46 @@ export function prepareCanonicalMigrationOperation(value:CanonicalMigrationOpera
  try{const{input}=migrationOperationInput(value),loaded=readCurrentMigrationSources(input);verifyOriginal231SourceAncestry(input.repoRoot,input.plan);return registerMigrationOperation(input,loaded,migrationSourceProjection(loaded.sources));}catch{throw failure();}
 }
 function registerMigrationOperation(value:CanonicalMigrationOperationInput,loaded:ReturnType<typeof readCurrentMigrationSources>,projection:MigrationSourceProjection,prior?:RetainedHistoricalMigrationSource):CanonicalMigrationOperation{
- const{input,binding}=migrationOperationInput(value);if(canonicalReleaseExecutionJson(projection.rows)!==canonicalReleaseExecutionJson(input.plan.migrations)||loaded.provenance.sourceSha!==input.sourceSha||loaded.provenance.treeSha!==input.treeSha)throw failure();const sources=loaded.sources.map(row=>({name:row.name,bytes:new Uint8Array(row.bytes)})),original={...loaded,sources,tree:new Uint8Array(loaded.tree),provenance:{...loaded.provenance},normalized:new Map(sources.map(row=>[row.name,new Uint8Array(normalizeMigrationBytes(row.bytes))]))},token=Object.freeze(Object.create(null)) as CanonicalMigrationOperation,historical:Partial<Record<CanonicalMigrationPriorKind,RetainedHistoricalMigrationSource>>={};
+ const{input,binding}=migrationOperationInput(value),historical:Partial<Record<CanonicalMigrationPriorKind,RetainedHistoricalMigrationSource>>={};
  if(prior){const kind=input.plan.priorSchemaRelease?'PRIOR_SCHEMA':input.plan.priorCompletedRelease?'PRIOR_COMPLETED':undefined,selected=kind==='PRIOR_SCHEMA'?input.plan.priorSchemaRelease:input.plan.priorCompletedRelease;if(!kind||!selected||selected.sourceSha!==prior.provenance.sourceSha||selected.treeSha!==prior.provenance.treeSha)throw failure();historical[kind]=structuredClone(prior);}
- canonicalMigrationOperations.set(token,{binding,original,projection:structuredClone(projection),historical,invalid:false,busy:false});return token;
+ return retainMigrationSourceOperation(input,binding,'ORDINARY_V1',input.plan.migrations,loaded,projection,historical);
+}
+/** One private source store serves the finite purposes. Its tokens carry only
+ * actual immutable SQL/source ownership, never provider or execution approval. */
+function retainMigrationSourceOperation(input:{sourceSha:string;treeSha:string},binding:string,purpose:'ORDINARY_V1'|'ORIGINAL231_TRANSPORT_V2',rows:HostedMigrationPlanV1['migrations'],loaded:ReturnType<typeof readCurrentMigrationSources>,projection:MigrationSourceProjection,historical:Partial<Record<CanonicalMigrationPriorKind,RetainedHistoricalMigrationSource>>={}):CanonicalMigrationOperation{
+ if(canonicalReleaseExecutionJson(projection.rows)!==canonicalReleaseExecutionJson(rows)||loaded.provenance.sourceSha!==input.sourceSha||loaded.provenance.treeSha!==input.treeSha)throw failure();
+ const sources=loaded.sources.map(row=>({name:row.name,bytes:new Uint8Array(row.bytes)})),original={...loaded,sources,tree:new Uint8Array(loaded.tree),provenance:{...loaded.provenance},normalized:new Map(sources.map(row=>[row.name,new Uint8Array(normalizeMigrationBytes(row.bytes))]))},token=Object.freeze(Object.create(null)) as CanonicalMigrationOperation;
+ canonicalMigrationOperations.set(token,{purpose,binding,original,projection:structuredClone(projection),historical,invalid:false,busy:false});return token;
+}
+function original231TransportOperationInput(value:CanonicalOriginal231TransportAppendOperationInput){
+ const input=z.object({repoRoot:z.string(),sourceSha:sha,treeSha:sha,plan:z.unknown()}).strict().parse(jsonSnapshot(value)),plan=readOriginal231TransportAppendPlan(input.plan);
+ if(!isAbsolute(input.repoRoot)||resolve(input.repoRoot)!==input.repoRoot||plan.source.sha!==input.sourceSha||plan.source.tree!==input.treeSha)throw failure();
+ return{input:{...input,plan},binding:canonicalReleaseExecutionJson({repoRoot:input.repoRoot,sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:plan.planSha256})};
+}
+/** Captures the actual current232 source under the distinct planning purpose.
+ * Old original231/V1 source and SQL consumers remain unable to use this token. */
+export function prepareCanonicalOriginal231TransportAppendOperation(value:CanonicalOriginal231TransportAppendOperationInput):CanonicalMigrationOperation{
+ try{const{input,binding}=original231TransportOperationInput(value),loaded=readCurrentMigrationSources(input);verifyOriginal231SourceAncestry(input.repoRoot,input.plan);return retainMigrationSourceOperation(input,binding,'ORIGINAL231_TRANSPORT_V2',input.plan.migrations,loaded,migrationSourceProjection(loaded.sources));}catch{throw failure();}
+}
+export function readCanonicalOriginal231TransportAppendOperation(value:unknown,expected:CanonicalOriginal231TransportAppendOperationInput):CanonicalMigrationOperationRead{
+ if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();if(held.invalid||held.busy||held.purpose!=='ORIGINAL231_TRANSPORT_V2'){held.invalid=true;throw failure();}held.busy=true;
+ try{const{input,binding}=original231TransportOperationInput(expected);if(binding!==held.binding)throw failure();readCurrentMigrationSources(input,held.original);verifyOriginal231SourceAncestry(input.repoRoot,input.plan);if(held.invalid)throw failure();return structuredClone({sources:held.original.sources,provenance:held.original.provenance,...held.projection});}catch{held.invalid=true;throw failure();}finally{held.busy=false;}
 }
 /** Caller objects and arrays never establish a retained source owner. */
 export function readCanonicalMigrationOperation(value:unknown,expected:CanonicalMigrationOperationInput):CanonicalMigrationOperationRead{
- if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();if(held.invalid||held.busy){held.invalid=true;throw failure();}held.busy=true;
+ if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();if(held.invalid||held.busy||held.purpose!=='ORDINARY_V1'){held.invalid=true;throw failure();}held.busy=true;
  try{const{input,binding}=migrationOperationInput(expected);if(binding!==held.binding)throw failure();readCurrentMigrationSources(input,held.original);verifyOriginal231SourceAncestry(input.repoRoot,input.plan);if(held.invalid)throw failure();return structuredClone({sources:held.original.sources,provenance:held.original.provenance,...held.projection});}catch{held.invalid=true;throw failure();}finally{held.busy=false;}
 }
 export function disposeCanonicalMigrationOperation(value:unknown):void{if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();held.invalid=true;}
 
 /** The original231 incident source, not only its older124 marker, must precede current observation. */
-function verifyOriginal231SourceAncestry(repoRoot:string,plan:HostedMigrationPlanV1):void{
+function verifyOriginal231SourceAncestry(repoRoot:string,plan:{source:{sha:string};original231Recovery?:Original231RecoveryPlanContext}):void{
  if(!plan.original231Recovery)return;const{git}=checkedRoot(repoRoot),old=plan.original231Recovery.template.originalIdentity;if(git(['rev-parse',`${old.sourceSha}^{tree}`]).toString().trim()!==old.treeSha)throw failure();git(['merge-base','--is-ancestor',old.sourceSha,plan.source.sha]);
 }
 
 /** Closed original prior inventories selected only by the exact bound plan. */
 export function readCanonicalMigrationPriorSources(value:unknown,expected:CanonicalMigrationOperationInput,kind:CanonicalMigrationPriorKind):CanonicalMigrationSources|null{
- if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();if(held.invalid||held.busy){held.invalid=true;throw failure();}held.busy=true;
+ if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const held=canonicalMigrationOperations.get(value);if(!held)throw failure();if(held.invalid||held.busy||held.purpose!=='ORDINARY_V1'){held.invalid=true;throw failure();}held.busy=true;
  try{const{input,binding}=migrationOperationInput(expected);if(binding!==held.binding||!['PRIOR_SCHEMA','PRIOR_COMPLETED'].includes(kind))throw failure();readCurrentMigrationSources(input,held.original);verifyOriginal231SourceAncestry(input.repoRoot,input.plan);const prior=kind==='PRIOR_SCHEMA'?input.plan.priorSchemaRelease:input.plan.priorCompletedRelease;if(!prior){if(held.invalid)throw failure();return null;}const{git}=checkedRoot(input.repoRoot);if(git(['rev-parse',`${prior.sourceSha}^{tree}`]).toString().trim()!==prior.treeSha||prior.migrationCount!==(kind==='PRIOR_SCHEMA'&&(input.plan.originalChildRecovery||input.plan.originalNative180Recovery||input.plan.original231Recovery)?124:input.plan.applied.length))throw failure();git(['merge-base','--is-ancestor',prior.sourceSha,input.sourceSha]);const tree=git(['ls-tree','-r','-z',prior.sourceSha,'--','supabase/migrations']);let original=held.historical?.[kind];
   if(!original){if(prior.sourceSha===held.original.provenance.sourceSha&&prior.treeSha===held.original.provenance.treeSha){if(!Buffer.from(tree).equals(Buffer.from(held.original.tree)))throw failure();original={sources:held.original.sources,tree:held.original.tree,provenance:held.original.provenance,...held.projection};verifyMigrationBlobMetadata(git,tree,original.sources);}else{const sources=readMigrationBlobBatches(git,tree).map(row=>({name:row.name,bytes:new Uint8Array(row.bytes)})),projection=migrationSourceProjection(sources);original={sources,tree:new Uint8Array(tree),provenance:{kind:'VERIFIED_GIT_BLOBS',sourceSha:prior.sourceSha,treeSha:prior.treeSha,migrationTreeSha:git(['rev-parse',`${prior.sourceSha}:supabase/migrations`]).toString().trim(),manifestSha256:hash(tree)},...projection};}held.historical??={};held.historical[kind]=original;}else{if(!Buffer.from(tree).equals(Buffer.from(original.tree))||git(['rev-parse',`${prior.sourceSha}:supabase/migrations`]).toString().trim()!==original.provenance.migrationTreeSha)throw failure();verifyMigrationBlobMetadata(git,tree,original.sources);}
   if(kind==='PRIOR_SCHEMA')validatePriorSchemaRows(input.plan,original.sources,original);else{if(original.sources.length!==prior.migrationCount||original.order.length!==prior.migrationCount||canonicalReleaseExecutionJson(original.rows)!==canonicalReleaseExecutionJson(input.plan.migrations.slice(0,prior.migrationCount)))throw failure();}

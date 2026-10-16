@@ -55,7 +55,7 @@ export function ProgressWorkspace() {
 }
 
 function CurrentProgressWorkspace() {
-  const { membership, locale, accessGeneration } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
+  const { membership, locale, accessGeneration, apiUrl, accessToken } = useApp(); const t = locale === 'ar' ? progressAr : progressEn;
   const own = membership?.role === 'student';
   const parent = membership?.role === 'parent';
   const coordinator = membership?.role === 'coordinator';
@@ -70,6 +70,21 @@ function CurrentProgressWorkspace() {
   const people = usePaginatedLearningQuery(own || parent ? null : '/v1/people?limit=100', parsePersonChoice, refresh);
   const peopleCurrent = people.loaded && !people.loading && !people.loadingMore && !people.error && !people.moreError && !people.nextCursor;
   const choices=progressLearnerChoices(people.data,t.learnerContextUnavailable,peopleCurrent);
+  const directorySelectionCurrent = choices.some(choice => choice.value === learnerId && !choice.requiresReview);
+  const directoryReadIntent = useRef<{ scope: string; pages: number } | null>(null);
+  const directoryIntentScope = JSON.stringify([apiUrl, accessToken, membership?.schoolId, membership?.userId, membership?.role, '/v1/people?limit=100']);
+  useEffect(() => {
+    const intent = directoryReadIntent.current;
+    if (!intent || !learnerId || detailSelection?.source !== 'directory' || intent.scope !== directoryIntentScope) {
+      directoryReadIntent.current = null;
+      return;
+    }
+    if (peopleCurrent && Number.isSafeInteger(people.pagesLoaded) && people.pagesLoaded > 0 && directorySelectionCurrent) {
+      intent.pages = people.pagesLoaded;
+      return;
+    }
+    if (people.loaded && !people.loading && !people.loadingMore && !people.error && !people.moreError && people.nextCursor && people.pagesLoaded < intent.pages) people.loadMore();
+  }, [directoryIntentScope, learnerId, detailSelection?.source, peopleCurrent, directorySelectionCurrent, people.pagesLoaded, people.loaded, people.loading, people.loadingMore, people.error, people.moreError, people.nextCursor, people.loadMore]);
   const classSelected=learnerId&&detailSelection?.id===learnerId&&detailSelection.source==='class';
   const labelContext = `${membership?.schoolId}:${membership?.userId}:${accessGeneration}:${refresh}`;
   const coordinatorClassCurrent=classLearnerLabel?.id===learnerId&&classLearnerLabel.context===labelContext&&classLearnerLabel.label!==null;
@@ -83,12 +98,14 @@ function CurrentProgressWorkspace() {
   }, []);
   const reviewLearner = (id: string, label?: string) => {
     if(id&&!label&&!choices.some(choice=>choice.value===id&&!choice.requiresReview))return;
+    if (id && !label && peopleCurrent && Number.isSafeInteger(people.pagesLoaded) && people.pagesLoaded > 0) directoryReadIntent.current = { scope: directoryIntentScope, pages: people.pagesLoaded };
+    else directoryReadIntent.current = null;
     if (id) browseOpener.current = label ? document.activeElement instanceof HTMLElement ? document.activeElement : null : document.getElementById('learner-selection');
     setLearnerId(id || null);
     const learner = learners.find(learner => learner.userId === id);
     if (id) setDetailSelection(previous => ({ id, label: label ?? (learner ? [learner.displayName, ...learner.classLabels].join(' · ') : t.learnerContextUnavailable), request: (previous?.request ?? 0) + 1, context: labelContext, source:label?'class':'directory' }));
   };
-  function backToLearners() { setLearnerId(null); setDetailSelection(null); setClassLearnerLabel(null); returnToBrowse.current = true; }
+  function backToLearners() { directoryReadIntent.current = null; setLearnerId(null); setDetailSelection(null); setClassLearnerLabel(null); returnToBrowse.current = true; }
   useEffect(() => {
     const cancelReturn = (event: FocusEvent) => {
       if (returnToBrowse.current && event.target !== document.body && event.target !== document.documentElement) returnToBrowse.current = false;

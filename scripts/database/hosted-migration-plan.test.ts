@@ -13,6 +13,11 @@ const digest = (bytes: Uint8Array | string) => createHash('sha256').update(bytes
 const source = { sha: 'a'.repeat(40), tree: 'b'.repeat(40) };
 const now = Date.parse('2026-10-06T00:00:00Z');
 const sources = () => readdirSync('supabase/migrations').filter(name => name.endsWith('.sql')).map(name => ({ name, bytes: readFileSync('supabase/migrations/' + name) }));
+function nextFixtureAppend(rows:ReadonlyArray<{name:string}>,suffix:string){
+ const latest=rows.map(row=>row.name.slice(0,14)).sort().at(-1)!;
+ const timestamp=Date.UTC(Number(latest.slice(0,4)),Number(latest.slice(4,6))-1,Number(latest.slice(6,8)),Number(latest.slice(8,10)),Number(latest.slice(10,12)),Number(latest.slice(12,14)));
+ const next=new Date(timestamp+1000).toISOString().slice(0,19).replace(/[^0-9]/g,'');assert.equal(next.length,14);assert.ok(next>latest);return next+'_'+suffix+'.sql';
+}
 const target = () => ({ projectRef, boundProjectRef: projectRef, projectName: 'Cuevo', projectStatus: 'ACTIVE_HEALTHY', deploymentEnvironment: 'synthetic-staging' as const, observedAt: '2026-10-05T23:00:00Z', authUsers: 0, storageObjects: 0, appSchemas: [] as string[], migrationVersions: [] as string[], dispatchDisabled: true, population: 'EMPTY' as 'EMPTY' | 'GUARDED_SYNTHETIC' });
 async function api() {
   const path = resolve(import.meta.dirname, 'hosted-migration-plan.ts');
@@ -116,7 +121,7 @@ test('incremental history is the exact reviewed ordered prefix and only missing 
 test('a completed prior release admits one append-only migration without treating its full prefix as an unknown partial stage', async () => {
   const { planHostedMigrations } = await api(), original = sources();
   const installed = planHostedMigrations({ sources: original, source, target: target(), now });
-  const appended = { name: '20261009000000_verified_incremental_fixture.sql', bytes: Buffer.from('begin; select 1; commit;\n') };
+  const appended = { name: nextFixtureAppend(original,'verified_incremental_fixture'), bytes: Buffer.from('begin; select 1; commit;\n') };
   const priorReceipt = { projectRef, sourceSha: source.sha, treeSha: source.tree, migrations: installed.migrations.map(({ version, sha256 })=>({version,sha256})), completedSourceMigrationCount: installed.migrations.length };
   const current = { ...target(), authUsers:133,appSchemas:['app','internal','authorization'],population:'GUARDED_SYNTHETIC',migrationVersions:installed.migrations.map(row=>row.version) };
   const plan = planHostedMigrations({ sources:[...original,appended],source:{sha:'c'.repeat(40),tree:'d'.repeat(40)},target:current,priorReceipt,now });
@@ -424,7 +429,7 @@ test('canonical completed Git source admits an append-only delta and preserves e
  await fixture(async(root,priorSha,priorTree)=>{
   const initial=createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:priorSha,treeSha:priorTree,target:target(),now});
   const count=initial.plan.migrations.length;
-  const appended='20261009120000_verified_canonical_append.sql';
+  const appended=nextFixtureAppend(initial.plan.migrations,'verified_canonical_append');
   writeFileSync(join(root,'supabase/migrations',appended),'begin;\nselect 1;\ncommit;\n');
   git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','append one immutable migration');
   const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}');
@@ -506,12 +511,12 @@ test('canonical source acquisition batches real Git blobs and refuses incomplete
 test('completed-prefix and canonical prior receipts share exact historical batches without per-migration Git reads',async()=>{
  const subject=await api();await fixture(async(root,priorSha,priorTree)=>{
   const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha:priorSha,treeSha:priorTree,target:target(),now}).plan;
-  writeFileSync(join(root,'supabase/migrations/20261009150000_completed_batch_delta.sql'),'begin; select 1; commit;\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','One exact appended source');
+  const append=nextFixtureAppend(initial.migrations,'completed_batch_delta');writeFileSync(join(root,'supabase/migrations',append),'begin; select 1; commit;\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','One exact appended source');
   const sourceSha=git(root,'rev-parse','HEAD'),treeSha=git(root,'rev-parse','HEAD^{tree}'),priorReceipt={projectRef,sourceSha:priorSha,treeSha:priorTree,migrations:initial.migrations.map(({version,sha256})=>({version,sha256})),completedSourceMigrationCount:initial.migrations.length},current={...target(),population:'GUARDED_SYNTHETIC',authUsers:133,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version)};
   const childProcess=createRequire(import.meta.url)('node:child_process') as typeof import('node:child_process'),original=childProcess.execFileSync,calls:string[][]=[];let corrupt=false;
   childProcess.execFileSync=((file:string,args:string[],options:unknown)=>{if(file==='git')calls.push([...args]);const output=original(file,args,options as Parameters<typeof execFileSync>[2]);return file==='git'&&args.includes('--batch')&&corrupt&&Buffer.isBuffer(output)?output.subarray(0,output.length-1):output;}) as typeof execFileSync;syncBuiltinESMExports();
   try{
-   const result=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:current,priorReceipt,now});assert.equal(subject.verifyCompletedMigrationPrefix(root,result.plan),true);assert.deepEqual(result.plan.pending.map(row=>row.name),['20261009150000_completed_batch_delta.sql']);assert.equal(calls.some(args=>args.includes('show')&&args.some(value=>value.startsWith(priorSha+':supabase/migrations/'))),false,'verified prior bytes must not spawn one Git process per migration');
+   const result=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:current,priorReceipt,now});assert.equal(subject.verifyCompletedMigrationPrefix(root,result.plan),true);assert.deepEqual(result.plan.pending.map(row=>row.name),[append]);assert.equal(calls.some(args=>args.includes('show')&&args.some(value=>value.startsWith(priorSha+':supabase/migrations/'))),false,'verified prior bytes must not spawn one Git process per migration');
    assert.equal(typeof subject.readVerifiedCompletedMigrationSources,'function');calls.length=0;const completed=subject.readVerifiedCompletedMigrationSources(root,result.plan);assert.ok(completed);assert.equal(completed.length,initial.migrations.length);assert.equal(calls.filter(args=>args.includes('--batch')).length,1,'one verified acquisition returns its original bytes');for(const row of completed)assert.equal(createHash('sha256').update(row.bytes).digest('hex'),initial.migrations.find(item=>item.name===row.name)!.sha256);assert.equal(subject.readVerifiedCompletedMigrationSources(root,{...result.plan,priorCompletedRelease:undefined}),null);
    for(const priorCompletedRelease of [{...result.plan.priorCompletedRelease!,treeSha:'0'.repeat(40)},{...result.plan.priorCompletedRelease!,migrationCount:initial.migrations.length-1},{...result.plan.priorCompletedRelease!,sourceSha:'0'.repeat(40)}])assert.throws(()=>subject.verifyCompletedMigrationPrefix(root,{...result.plan,priorCompletedRelease}));
    corrupt=true;assert.throws(()=>subject.verifyCompletedMigrationPrefix(root,result.plan));assert.throws(()=>subject.readVerifiedCompletedMigrationSources(root,result.plan));corrupt=false;
@@ -538,7 +543,7 @@ test('active installed runtime can prepare only an explicit same-source read-onl
 test('canonical schema-only prefix at a former full-source boundary admits only a new committed append',async()=>{
  const subject=await api();await fixture(async(root,sourceSha,treeSha)=>{
   const initial=subject.createCanonicalHostedMigrationPlan({repoRoot:root,sourceSha,treeSha,target:target(),now}).plan,prior={projectRef,sourceSha,treeSha,migrations:initial.migrations.map(({version,sha256})=>({version,sha256}))};
-  const append='20261009140000_schema_only_delta.sql';writeFileSync(join(root,'supabase/migrations',append),'begin; select 1; commit;\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','append after completed schema without population');
+  const append=nextFixtureAppend(initial.migrations,'schema_only_delta');writeFileSync(join(root,'supabase/migrations',append),'begin; select 1; commit;\n');git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','append after completed schema without population');
   const current={...target(),population:'SCHEMA_ONLY',authUsers:0,storageObjects:12,appSchemas:['app','authorization','internal'],migrationVersions:initial.migrations.map(row=>row.version)};
   const sourceShaNow=git(root,'rev-parse','HEAD'),treeShaNow=git(root,'rev-parse','HEAD^{tree}'),input={repoRoot:root,sourceSha:sourceShaNow,treeSha:treeShaNow,target:current,priorReceipt:prior,now};
   assert.throws(()=>subject.planHostedMigrations({sources:sources().concat({name:append,bytes:Buffer.from('begin; select 1; commit;\n')}),source:{sha:sourceShaNow,tree:treeShaNow},target:current,priorReceipt:prior,now}),'caller-supplied rows cannot establish a former complete Git source boundary');

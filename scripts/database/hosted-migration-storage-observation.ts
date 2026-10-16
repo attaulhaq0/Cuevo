@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import { z } from 'zod';
 import { parseHostedExecutionJournal, type HostedExecutionJournal } from './hosted-migration-journal-contracts';
+import {readInactiveCronDefinitionContext,parseInactiveCronDefinitionJournal,canAppendInactiveCronDefinitionJournal,type InactiveCronDefinitionContext,type HostedMigrationStoredJournal} from './hosted-inactive-cron-definition-contracts';
+import {snapshotHostedMigrationMetadata} from './hosted-migration-journal-contracts';
 import { hostedOperatorStorageHeaders } from './hosted-operator-storage-policy';
 
 const purpose = 'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL', bucket = 'cuevo-release-operator';
@@ -17,9 +19,12 @@ const storageBucketSchema = bucketSchema.extend({ type: z.literal('STANDARD').op
 const bucketMetadataQuery = "select id,name,public,type::text as type,file_size_limit,allowed_mime_types from storage.buckets where id='cuevo-release-operator'";
 const entrySchema = z.object({ name: z.string().min(1).max(100), id: z.string().min(1).nullable(), metadata: z.object({ size: z.number().int().min(1).max(49152), mimetype: z.literal('application/json') }).passthrough().nullable() }).passthrough();
 const infoSchema = z.object({ id: z.string().min(1), name: z.string(), bucket_id: z.literal(bucket), size: z.number().int().min(1).max(49152), content_type: z.literal('application/json') });
-export type Chain = { operation: string; identity: HostedExecutionJournal['identity']; ownerBytes: string; records: { bytes: string; payload: HostedExecutionJournal }[] };
+type StoredChain<P extends HostedMigrationStoredJournal> = { operation: string; identity: HostedExecutionJournal['identity']; ownerBytes: string; records: { bytes: string; payload: P }[] };
+export type Chain = StoredChain<HostedExecutionJournal>;
+export type InactiveCronDefinitionStorageChain=StoredChain<HostedMigrationStoredJournal>;
 export type HostedMigrationStorageObjectObservation={path:string;id:string;version:string|null;size:number;mimetype:'application/json';sha256:string;bytes:string};
 export type HostedMigrationStorageProjectObservation={evidence:'READ_ONLY_STORAGE_PROJECT_COMPARISON';projectRef:string;observedAtMs:number;completedAtMs:number;bucket:z.infer<typeof storageBucketSchema>;operations:(RemoteMigrationProjectReceipt['operations'][number]&{ownerBytes:string;records:{bytes:string;payload:HostedExecutionJournal}[]})[];objects:HostedMigrationStorageObjectObservation[]};
+export type HostedInactiveCronDefinitionStorageProjectObservation=Omit<HostedMigrationStorageProjectObservation,'evidence'|'operations'>&{evidence:'READ_ONLY_INACTIVE_CRON_DEFINITION_STORAGE_COMPARISON';inactiveDefinitionContextSha256:string;effectAuthority:false;foundationAccepted:false;operations:(InactiveCronDefinitionStorageChain&{state:HostedMigrationStoredJournal['state']|'OWNER_ONLY';chainSha256:string;objects:{path:string;sha256:string;size:number}[]})[]};
 export type RemoteMigrationProjectReceipt = { evidence: 'VERIFIED_OPERATOR_STORAGE_BYTES_AND_METADATA'; projectRef: string; observedAtMs: number; sha256: string; operations: { operation: string; identity: HostedExecutionJournal['identity']; state: HostedExecutionJournal['state'] | 'OWNER_ONLY'; chainSha256: string; objects: { path: string; sha256: string; size: number }[] }[] };
 function own(value: unknown, depth = 0): unknown {
   if (depth > 8) throw failure(); if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value)) return value;
@@ -33,7 +38,7 @@ function decode(bytes: Uint8Array) { return new TextDecoder('utf8', { fatal: tru
 
 
 type FixedCollectorInput={projectRef:string;storageKey:string;providerToken?:string;signal?:AbortSignal};
-function createFixedRemoteCollector(input:FixedCollectorInput,mode:'STORAGE_ONLY'|'MANAGEMENT_AND_STORAGE'){
+function createFixedRemoteCollector<P extends HostedMigrationStoredJournal=HostedExecutionJournal>(input:FixedCollectorInput,mode:'STORAGE_ONLY'|'MANAGEMENT_AND_STORAGE',inactiveDefinitionContext?:InactiveCronDefinitionContext){
   const origin=`https://${input.projectRef}.supabase.co/storage/v1`,projectPrefix=`migration/v1/${input.projectRef}`;
   const observedObjects=new Map<string,HostedMigrationStorageObjectObservation>();
   const transport = async (path: string, method: 'GET' | 'POST', body?: string, upload = false, missing = false, management = false, prepared?:{url:string;headers:Record<string,string>}): Promise<{ status: number; bytes: Uint8Array }> => {
@@ -77,17 +82,23 @@ function createFixedRemoteCollector(input:FixedCollectorInput,mode:'STORAGE_ONLY
     if(read.status===404)return null;if(read.bytes.length>49152||!info)throw failure();
     const rawInfo=JSON.parse(decode(info.bytes)),metadata=infoSchema.parse(rawInfo),version=z.string().min(1).max(100).nullable().parse(rawInfo.version??null);if(metadata.name!==path||metadata.size!==read.bytes.length||listed&&(listed.id!==metadata.id||listed.metadata?.size!==metadata.size))throw failure();const bytes=decode(read.bytes);observedObjects.set(path,{path,id:metadata.id,version,size:metadata.size,mimetype:'application/json',sha256:hash(read.bytes),bytes});return bytes;
   };
-  const chain = async (name: string): Promise<Chain> => {
+  const chain = async (name: string): Promise<StoredChain<P>> => {
     if (!/^[a-f0-9]{64}$/.test(name)) throw failure(); const prefix = `${projectPrefix}/${name}`, entries = await list(prefix), names = entries.map(row => row.name); const expected = ['owner.json', ...names.filter(name => /^00000[1-3]\.record\.json$/.test(name))].sort();
     if (JSON.stringify(names) !== JSON.stringify(expected) || entries.some(row => row.id === null || row.metadata === null) || names.length > 4) throw failure();
     const downloaded=await readWave(entries.map(row=>download(`${prefix}/${row.name}`,row))),ownerBytes=downloaded[entries.findIndex(row=>row.name==='owner.json')];if(ownerBytes===null||ownerBytes===undefined)throw failure();const owner=ownerSchema.parse(own(JSON.parse(ownerBytes))),checked=identity(owner.identity);if(checked.projectRef!==input.projectRef||hash(JSON.stringify(checked))!==name||ownerBytes!==json({version:1,purpose,identity:checked}))throw failure();
-    const records: Chain['records'] = []; let previous: string | null = null;
+    const records: StoredChain<P>['records'] = []; let previous: string | null = null;
     const recordEntries=entries.filter(row=>row.name!=='owner.json');for(const[index,row]of recordEntries.entries())if(row.name!==String(index+1).padStart(6,'0')+'.record.json')throw failure();
-    for (const [index, row] of recordEntries.entries()) { if (row.name !== String(index + 1).padStart(6, '0') + '.record.json') throw failure(); const bytes = downloaded[entries.findIndex(entry=>entry.name===row.name)]; if (bytes === null||bytes===undefined) throw failure(); const raw = JSON.parse(bytes), record = recordSchema.parse(own(raw)),payload=parseHostedExecutionJournal(record.payload), checkedIdentity = identity(payload.identity); if (record.sequence !== index + 1 || record.previousSha256 !== previous || JSON.stringify(checkedIdentity) !== JSON.stringify(checked) || record.payloadSha256 !== hash(JSON.stringify(raw.payload)) || !transition(records.at(-1)?.payload.state, payload.state) || payload.version===2&&payload.originalIntentExecution.originalIntentSha256!==hash(JSON.stringify(records[0]?.payload)) || bytes !== json(raw)) throw failure(); records.push({ bytes, payload }); previous = hash(bytes); }
+    for (const [index, row] of recordEntries.entries()) {
+      if (row.name !== String(index + 1).padStart(6, '0') + '.record.json') throw failure(); const bytes = downloaded[entries.findIndex(entry=>entry.name===row.name)]; if (bytes === null||bytes===undefined) throw failure();
+      const raw = JSON.parse(bytes), record = recordSchema.parse(inactiveDefinitionContext?snapshotHostedMigrationMetadata(raw):own(raw));
+      const payload=inactiveDefinitionContext&&raw.payload?.version===3?parseInactiveCronDefinitionJournal(record.payload,inactiveDefinitionContext):parseHostedExecutionJournal(record.payload),checkedIdentity=identity(payload.identity),prior=records.at(-1)?.payload;
+      const validTransition=payload.version===3?canAppendInactiveCronDefinitionJournal(prior??null,payload):prior?.version!==3&&transition(prior?.state,payload.state);
+      if (record.sequence !== index + 1 || record.previousSha256 !== previous || JSON.stringify(checkedIdentity) !== JSON.stringify(checked) || payload.version===3&&JSON.stringify(checked)!==JSON.stringify(inactiveDefinitionContext!.identity) || record.payloadSha256 !== hash(JSON.stringify(raw.payload)) || !validTransition || payload.version===2&&payload.originalIntentExecution.originalIntentSha256!==hash(JSON.stringify(records[0]?.payload)) || bytes !== json(raw)) throw failure(); records.push({ bytes, payload:payload as P }); previous = hash(bytes);
+    }
     if (!sameEntries(entries, await list(prefix))) throw failure(); return { operation: name, identity: checked, ownerBytes, records };
   };
   function sameEntries(left: z.infer<typeof entrySchema>[], right: z.infer<typeof entrySchema>[]) { return JSON.stringify(left.map(row => ({ name: row.name, id: row.id, metadata: row.metadata }))) === JSON.stringify(right.map(row => ({ name: row.name, id: row.id, metadata: row.metadata }))); }
-  let lastBucket:z.infer<typeof storageBucketSchema>|null=null;const inspect = async () => { const[entries,beforeBucket]=await readWave([list(projectPrefix),bucketRead()]); if (entries.some(row => row.id !== null || row.metadata !== null || !/^[a-f0-9]{64}$/.test(row.name))) throw failure(); const chains: Chain[] = [];for(let start=0;start<entries.length;start+=4)chains.push(...await readWave(entries.slice(start,start+4).map(row=>chain(row.name))));const[after,afterBucket]=await readWave([list(projectPrefix),bucketRead()]);if(JSON.stringify(beforeBucket)!==JSON.stringify(afterBucket))throw failure();lastBucket=afterBucket;if (!sameEntries(entries,after)) throw failure(); return chains; };
+  let lastBucket:z.infer<typeof storageBucketSchema>|null=null;const inspect = async () => { const[entries,beforeBucket]=await readWave([list(projectPrefix),bucketRead()]); if (entries.some(row => row.id !== null || row.metadata !== null || !/^[a-f0-9]{64}$/.test(row.name))) throw failure(); const chains: StoredChain<P>[] = [];for(let start=0;start<entries.length;start+=4)chains.push(...await readWave(entries.slice(start,start+4).map(row=>chain(row.name))));const[after,afterBucket]=await readWave([list(projectPrefix),bucketRead()]);if(JSON.stringify(beforeBucket)!==JSON.stringify(afterBucket))throw failure();lastBucket=afterBucket;if (!sameEntries(entries,after)) throw failure(); return chains; };
   const prepareExactOperatorObject=(current:HostedExecutionJournal['identity'],path:string,bytes:string)=>{
     if(mode!=='MANAGEMENT_AND_STORAGE')throw failure();const checked=identity(current),prefix=`migration/v1/${input.projectRef}/${hash(JSON.stringify(checked))}/`;
     if(checked.projectRef!==input.projectRef||!path.startsWith(prefix)||!['owner.json','000001.record.json','000002.record.json','000003.record.json'].includes(path.slice(prefix.length))||Buffer.byteLength(bytes)>49152||bytes.includes(input.storageKey)||input.providerToken&&bytes.includes(input.providerToken))throw failure();
@@ -106,15 +117,33 @@ function createFixedRemoteCollector(input:FixedCollectorInput,mode:'STORAGE_ONLY
 export function createHostedMigrationOperatorStorage(value:unknown){
   const input=z.object({projectRef:ref,boundProjectRef:ref,storageKey:privateToken,providerToken:privateToken,identity:identitySchema}).strict().parse(own(value));const current=identity(input.identity);if(input.projectRef!==input.boundProjectRef||current.projectRef!==input.projectRef)throw failure();const reader=createFixedRemoteCollector(input,'MANAGEMENT_AND_STORAGE');return{bucketRead:reader.bucketRead,inspect:reader.inspect,bucket:reader.bucket,objects:reader.objects,prepareOperatorRecord:(path:string,bytes:string)=>reader.prepareExactOperatorObject(current,path,bytes),postOperatorRecord:(path:string,bytes:string)=>reader.prepareExactOperatorObject(current,path,bytes).postOperatorRecord(),readOperatorRecordAcknowledgement:(path:string,bytes:string)=>reader.prepareExactOperatorObject(current,path,bytes).readOperatorRecordAcknowledgement(),publishOperatorRecord:(path:string,bytes:string)=>reader.publishExactOperatorObject(current,path,bytes)};
 }
+/** Explicit current-operation collector. Supplied context restricts decoding;
+ * it supplies no native publication permit or general schema readiness. */
+export function createHostedInactiveCronDefinitionOperatorStorage(value:unknown){
+ const supplied=snapshotHostedMigrationMetadata(value) as Record<string,unknown>,context=readInactiveCronDefinitionContext(supplied.inactiveDefinitionContext),{inactiveDefinitionContext:_,...rest}=supplied;void _;
+ const input=z.object({projectRef:ref,boundProjectRef:ref,storageKey:privateToken,providerToken:privateToken,identity:identitySchema}).strict().parse(own(rest)),current=identity(input.identity);
+ if(input.projectRef!==input.boundProjectRef||current.projectRef!==input.projectRef||JSON.stringify(current)!==JSON.stringify(context.identity))throw failure();
+ const reader=createFixedRemoteCollector<HostedMigrationStoredJournal>(input,'MANAGEMENT_AND_STORAGE',context);
+ return{bucketRead:reader.bucketRead,inspect:reader.inspect,bucket:reader.bucket,objects:reader.objects,prepareOperatorRecord:(path:string,bytes:string)=>reader.prepareExactOperatorObject(current,path,bytes),postOperatorRecord:(path:string,bytes:string)=>reader.prepareExactOperatorObject(current,path,bytes).postOperatorRecord(),readOperatorRecordAcknowledgement:(path:string,bytes:string)=>reader.prepareExactOperatorObject(current,path,bytes).readOperatorRecordAcknowledgement(),publishOperatorRecord:(path:string,bytes:string)=>reader.publishExactOperatorObject(current,path,bytes)};
+}
 /** Fixed comparison reads only. It never accepts a provider token, SQL,
  * callback or permit and never supplies effect authority. */
 export async function observeHostedMigrationStorageProject(value:unknown):Promise<HostedMigrationStorageProjectObservation>{
+ return observeStorageProject<HostedExecutionJournal>(value) as Promise<HostedMigrationStorageProjectObservation>;
+}
+/** The same bounded Storage comparison, with exactly one supplied V3 context.
+ * An unrelated V3 operation is refused; legacy journal states remain intact. */
+export async function observeHostedInactiveCronDefinitionStorageProject(value:unknown):Promise<HostedInactiveCronDefinitionStorageProjectObservation>{
+ return observeStorageProject<HostedMigrationStoredJournal>(value,true) as Promise<HostedInactiveCronDefinitionStorageProjectObservation>;
+}
+async function observeStorageProject<P extends HostedMigrationStoredJournal>(value:unknown,inactiveScope=false){
  try{
   if(!value||typeof value!=='object'||types.isProxy(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw failure();const supplied:Record<string,unknown>=Object.create(null);let signal:AbortSignal|undefined;
   for(const key of Reflect.ownKeys(value)){const field=Object.getOwnPropertyDescriptor(value,key);if(typeof key!=='string'||!field||!('value'in field)||!field.enumerable)throw failure();if(key==='signal'){if(!(field.value instanceof AbortSignal)||types.isProxy(field.value))throw failure();Reflect.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted')!.get!.call(field.value);signal=field.value;}else supplied[key]=field.value;}
-  const input=z.object({projectRef:ref,boundProjectRef:ref,storageKey:privateToken}).strict().parse(own(supplied));if(input.projectRef!==input.boundProjectRef||!signal||signal.aborted)throw failure();const observedAtMs=Date.now(),collector=createFixedRemoteCollector({...input,signal},'STORAGE_ONLY'),before=await collector.inspect(),beforeBucket=collector.bucket(),beforeObjects=collector.objects(),after=await collector.inspect(),afterBucket=collector.bucket(),objects=collector.objects(),completedAtMs=Date.now();
+  const context=inactiveScope?readInactiveCronDefinitionContext(supplied.inactiveDefinitionContext):undefined;if(inactiveScope)delete supplied.inactiveDefinitionContext;
+  const input=z.object({projectRef:ref,boundProjectRef:ref,storageKey:privateToken}).strict().parse(own(supplied));if(input.projectRef!==input.boundProjectRef||context&&context.identity.projectRef!==input.projectRef||!signal||signal.aborted)throw failure();const observedAtMs=Date.now(),collector=createFixedRemoteCollector<P>({...input,signal},'STORAGE_ONLY',context),before=await collector.inspect(),beforeBucket=collector.bucket(),beforeObjects=collector.objects(),after=await collector.inspect(),afterBucket=collector.bucket(),objects=collector.objects(),completedAtMs=Date.now();
   if(!beforeBucket||!afterBucket||signal.aborted||!Number.isSafeInteger(observedAtMs)||!Number.isSafeInteger(completedAtMs)||completedAtMs<observedAtMs||JSON.stringify(beforeBucket)!==JSON.stringify(afterBucket)||JSON.stringify(before)!==JSON.stringify(after)||JSON.stringify(beforeObjects)!==JSON.stringify(objects))throw failure();
   const projectPrefix=`migration/v1/${input.projectRef}`,operations=after.map(row=>({operation:row.operation,identity:structuredClone(row.identity),state:row.records.at(-1)?.payload.state??'OWNER_ONLY' as const,chainSha256:hash(row.ownerBytes+row.records.map(record=>record.bytes).join('')),ownerBytes:row.ownerBytes,records:structuredClone(row.records),objects:[{path:`${projectPrefix}/${row.operation}/owner.json`,sha256:hash(row.ownerBytes),size:Buffer.byteLength(row.ownerBytes)},...row.records.map((record,index)=>({path:`${projectPrefix}/${row.operation}/${String(index+1).padStart(6,'0')}.record.json`,sha256:hash(record.bytes),size:Buffer.byteLength(record.bytes)}))]}));
-  if(objects.length!==operations.reduce((count,row)=>count+row.objects.length,0))throw failure();return{evidence:'READ_ONLY_STORAGE_PROJECT_COMPARISON',projectRef:input.projectRef,observedAtMs,completedAtMs,bucket:afterBucket,operations,objects};
+  if(objects.length!==operations.reduce((count,row)=>count+row.objects.length,0))throw failure();return{evidence:context?'READ_ONLY_INACTIVE_CRON_DEFINITION_STORAGE_COMPARISON':'READ_ONLY_STORAGE_PROJECT_COMPARISON',projectRef:input.projectRef,observedAtMs,completedAtMs,bucket:afterBucket,operations,objects,...(context?{inactiveDefinitionContextSha256:context.contextSha256,effectAuthority:false,foundationAccepted:false}:{})};
  }catch{throw failure();}
 }

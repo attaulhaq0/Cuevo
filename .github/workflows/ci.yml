@@ -117,6 +117,15 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
+      - name: Retain minimized inactive-Cron pairing failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cuevo-inactive-cron-pairing-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/inactive-cron-pairing/failure.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
   source-cohort-continuation-1:
@@ -530,6 +539,14 @@ jobs:
         with:
           name: cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/source231.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain exact source original231 transport232 catalogue reference
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cuevo-original231-transport232-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/child144-catalogue/source232.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90

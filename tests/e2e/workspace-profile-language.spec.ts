@@ -61,10 +61,14 @@ function prepareProfileLanguageFixture(enabled:boolean):void{
  try{registrations.push([document,'focusin',focusin],[document,'focusout',focusout],[document,'scroll',scroll],[view,'resize',resize],[view,'blur',blur],[document,'toggle',toggle],[document,'keydown',keydown as EventListener],[view,'pagehide',dispose]);for(const[target,name,listener]of registrations)target.addEventListener(name,listener,{capture:true,passive:true});mutation=new view.MutationObserver(()=>{if(!current())dispose();});mutation.observe(root,{childList:true,subtree:true});Object.defineProperty(globalThis,'cuevoProfileLanguageFocusDiagnostic',{configurable:true,value:api});}
  catch{dispose();}
 }
-async function disposeProfileLanguageFixture(page:Page){
+async function disposeProfileLanguageFixture(page:Page,includeResizeWitness=false):Promise<boolean>{
  let timer:ReturnType<typeof setTimeout>|undefined;
- try{await Promise.race([Promise.resolve().then(()=>page.evaluate(()=>{const row=Object.getOwnPropertyDescriptor(globalThis,'cuevoProfileLanguageFocusDiagnostic');if(row&&'value'in row)(row.value as{dispose:()=>void}).dispose();})),new Promise<void>(resolve=>{timer=setTimeout(resolve,250);})]);}
- catch{/* Optional cleanup cannot replace the original failure; retirement may remain unverified. */}
+ try{return await Promise.race([Promise.resolve().then(()=>page.evaluate(includeResize=>{let collectorRetired=!includeResize;
+  try{if(includeResize){const witness=Object.getOwnPropertyDescriptor(globalThis,'cuevoProfileResizeWitness');if(!witness||!('value'in witness))throw Error('Owned resize cleanup is unavailable.');(witness.value as{dispose:()=>void}).dispose();if(!Reflect.deleteProperty(globalThis,'cuevoProfileResizeWitness'))throw Error('Owned resize cleanup is unverified.');}}
+  finally{const row=Object.getOwnPropertyDescriptor(globalThis,'cuevoProfileLanguageFocusDiagnostic');if(row&&'value'in row){(row.value as{dispose:()=>void}).dispose();collectorRetired=true;}}
+  return collectorRetired;
+ },includeResizeWitness)),new Promise<boolean>(resolve=>{timer=setTimeout(()=>resolve(false),250);})]);}
+ catch{/* Optional cleanup cannot replace the original failure; retirement may remain unverified. */return false;}
  finally{if(timer)clearTimeout(timer);}
 }
 
@@ -93,7 +97,7 @@ const push=history.pushState.bind(history);history.pushState=(...args)=>{push(..
 test('native queued Profile opening retains established language focus',async({page})=>{
  const faults:string[]=[];page.on('pageerror',error=>faults.push(error.message));page.on('console',message=>{if(['warning','error'].includes(message.type()))faults.push(message.text());});
  try{
- const{denied}=await mount(page,'student','ar',true);await page.setViewportSize({width:320,height:844});const initial=await retained(page);
+  await page.setViewportSize({width:320,height:844});const{denied}=await mount(page,'student','ar',true);const initial=await retained(page);
  const panel=page.locator('.workspace-chrome__profile'),language=panel.getByRole('button',{name:'English',exact:true}),trigger=page.locator('.workspace-chrome__person>button');
  const before=await page.evaluate(()=>{
   const panel=document.querySelector<HTMLDivElement>('.workspace-chrome__profile'),trigger=document.querySelector<HTMLButtonElement>('.workspace-chrome__person>button'),language=Array.from(panel?.querySelectorAll<HTMLButtonElement>('.language-switch button')??[]).find(button=>button.textContent==='English');
@@ -105,12 +109,35 @@ test('native queued Profile opening retains established language focus',async({p
  expect(before).toEqual({open:true,focused:true,events:0});
  await expect.poll(()=>page.evaluate(()=>(globalThis as unknown as{cuevoQueuedProfileOpening:{events:number}}).cuevoQueuedProfileOpening.events)).toBe(1);
  expect(await page.evaluate(()=>(globalThis as unknown as{cuevoQueuedProfileOpening:{trusted:boolean;removed:boolean}}).cuevoQueuedProfileOpening)).toEqual({events:1,trusted:true,removed:true});
- await expect(language).toBeFocused();try{await expect.poll(()=>panel.evaluate(element=>element.matches(':popover-open'))).toBe(true);}catch(originalError){await rethrowProfileLanguageFocusFailure(originalError,()=>page.evaluate(()=>{const row=Object.getOwnPropertyDescriptor(globalThis,'cuevoProfileLanguageFocusDiagnostic');return row&&'value'in row?(row.value as{snapshot:(locale:'en'|'ar')=>unknown}).snapshot('ar'):null;}),line=>console.log(line));}expect(await retained(page)).toEqual(initial);
+  try{await expect(language).toBeFocused();await expect.poll(()=>panel.evaluate(element=>element.matches(':popover-open'))).toBe(true);}catch(originalError){await rethrowProfileLanguageFocusFailure(originalError,()=>page.evaluate(()=>{const row=Object.getOwnPropertyDescriptor(globalThis,'cuevoProfileLanguageFocusDiagnostic');return row&&'value'in row?(row.value as{snapshot:(locale:'en'|'ar')=>unknown}).snapshot('ar'):null;}),line=>console.log(line));}expect(await retained(page)).toEqual(initial);
  await page.keyboard.press('Space');await expect(page.locator('html')).toHaveAttribute('dir','ltr');await expect(page.locator('.workspace')).toHaveAttribute('lang','en');await expect(language).toHaveAttribute('aria-pressed','true');await expect(language).toBeFocused();expect(await retained(page)).toEqual(initial);
  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();await expect(panel).toBeHidden();
  await page.keyboard.press('Enter');await expect(panel.getByRole('button',{name:'Close profile and settings',exact:true})).toBeFocused();expect(await page.evaluate(()=>(globalThis as unknown as{cuevoQueuedProfileOpening:{events:number}}).cuevoQueuedProfileOpening.events)).toBe(1);
  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();expect(denied).toEqual([]);expect(faults).toEqual([]);
  }finally{await disposeProfileLanguageFixture(page);}
+});
+
+test('native Profile resize dismissal preserves current source and keyboard return',async({page})=>{
+ const faults:string[]=[];page.on('pageerror',error=>faults.push(error.message));page.on('console',message=>{if(['warning','error'].includes(message.type()))faults.push(message.text());});
+ let failed=false;
+ try{
+  await page.setViewportSize({width:320,height:844});const{denied}=await mount(page,'student','ar',true);const initial=await retained(page),{trigger,panel}=await openProfile(page);
+  await expect(panel.getByRole('button',{name:'إغلاق الملف الشخصي والإعدادات',exact:true})).toBeFocused();
+  await page.evaluate(()=>{
+   const view=window as unknown as{cuevoProfileResizeWitness?:{events:number;trusted:boolean;dispose:()=>void}};
+   if(view.cuevoProfileResizeWitness)throw Error('The owned resize witness must start absent.');
+   const witness={events:0,trusted:false,dispose:()=>window.removeEventListener('resize',observe)};
+   const observe=(event:Event)=>{witness.events++;witness.trusted=event.isTrusted;witness.dispose();};
+   view.cuevoProfileResizeWitness=witness;window.addEventListener('resize',observe,{once:true});
+  });
+  await page.setViewportSize({width:390,height:844});
+  await expect.poll(()=>page.evaluate(()=>{const witness=(window as unknown as{cuevoProfileResizeWitness?:{events:number;trusted:boolean}}).cuevoProfileResizeWitness;return witness?{events:witness.events,trusted:witness.trusted}:null;})).toEqual({events:1,trusted:true});
+  await expect(panel).toBeHidden();await expect(trigger).toBeFocused();expect(await retained(page)).toEqual(initial);
+  await page.keyboard.press('Enter');await expect(panel.getByRole('button',{name:'إغلاق الملف الشخصي والإعدادات',exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();
+  expect(await retained(page)).toEqual(initial);expect(denied).toEqual([]);expect(faults).toEqual([]);
+ }catch(error){failed=true;throw error;}finally{
+  const retired=await disposeProfileLanguageFixture(page,true);if(!failed)expect(retired).toBe(true);
+ }
 });
 
 async function openProfile(page:Page){const trigger=page.locator('.workspace-chrome__person>button');await trigger.scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise<void>(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done()))));await trigger.focus();await page.keyboard.press('Enter');const panel=page.locator('.workspace-chrome__profile');await expect.poll(()=>panel.evaluate(e=>e.matches(':popover-open'))).toBe(true);return{trigger,panel};}
@@ -170,6 +197,15 @@ function profileLanguageDiagnosticApi(){
  expect(typeof api.prepare,'The original fixture must own the bounded diagnostic collector').toBe('function');expect(typeof api.serialize).toBe('function');expect(typeof api.rethrow).toBe('function');return api as {prepare:(enabled:boolean)=>void;serialize:(value:unknown)=>string;rethrow:(error:unknown,observe:()=>Promise<unknown>,emit:(line:string)=>void)=>Promise<never>};
 }
 function validProfileLanguageDiagnostic(){return{schemaVersion:'1',code:'CUEVO_PROFILE_LANGUAGE_FOCUS_UNVERIFIED',role:'admin',expectedLocale:'en',currentLocale:'en',viewport:'MOBILE_320',phase:'SECOND_SPACE',spaceObserved:true,scopeCurrent:true,journalCurrent:true,profileConnected:true,profileOpen:false,focusInsideProfile:false,activeControl:'PROFILE_TRIGGER',target:{connected:true,enabled:true,rendered:false,pressed:true,focused:false},document:{visible:true,focused:true},openerGeometryUnchanged:false,viewportUnchanged:true,eventCount:2,overflow:false,events:[{kind:'BEFORE_NATIVE_SPACE',phase:'SECOND_SPACE',active:'LANGUAGE_EN',target:'LANGUAGE_EN',profileOpen:true},{kind:'PROFILE_TOGGLE_CLOSED',phase:'SECOND_SPACE',active:'PROFILE_TRIGGER',target:'PROFILE_OTHER_CONTROL',profileOpen:false}]};}
+
+test('profile resize cleanup reports failure and still retires the existing collector',async()=>{
+ const names=['cuevoProfileResizeWitness','cuevoProfileLanguageFocusDiagnostic'],prior=names.map(name=>Object.getOwnPropertyDescriptor(globalThis,name));let witnessAttempts=0,collectorRetirements=0;
+ Object.defineProperty(globalThis,names[0],{configurable:true,value:{dispose:()=>{witnessAttempts++;throw Error('Controlled witness cleanup failure');}}});
+ Object.defineProperty(globalThis,names[1],{configurable:true,value:{dispose:()=>{collectorRetirements++;}}});
+ const page={evaluate:(callback:(includeResizeWitness:boolean)=>boolean,argument:boolean)=>Promise.resolve(callback(argument))}as unknown as Page;
+ try{expect(await disposeProfileLanguageFixture(page,true)).toBe(false);expect(witnessAttempts).toBe(1);expect(collectorRetirements).toBe(1);}
+ finally{for(let index=0;index<names.length;index++){const descriptor=prior[index];if(descriptor)Object.defineProperty(globalThis,names[index],descriptor);else Reflect.deleteProperty(globalThis,names[index]);}}
+});
 function controlledProfileFixture(){
  const listeners=new Map<object,Map<string,Set<(event:unknown)=>void>>>();
  const hub=()=>({addEventListener(name:string,listener:(event:unknown)=>void,options:unknown){expect(options).toEqual({capture:true,passive:true});let owner=listeners.get(this);if(!owner){owner=new Map();listeners.set(this,owner);}const rows=owner.get(name)??new Set();rows.add(listener);owner.set(name,rows);},removeEventListener(name:string,listener:(event:unknown)=>void,capture:unknown){expect(capture).toBe(true);listeners.get(this)?.get(name)?.delete(listener);}});
