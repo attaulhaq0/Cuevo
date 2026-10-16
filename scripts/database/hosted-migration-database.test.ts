@@ -23,6 +23,32 @@ test('supplied reconciliation booleans and receipt-shaped objects cannot grant n
  const module=await api();assert.equal(typeof module.assertNativeReconciliationPermit,'function');
  for(const value of[true,{nativeVerified:true},{receiptSha256:'a'.repeat(64)},{status:'CURRENT_STATE_VERIFIED_PARTIAL'}])assert.throws(()=>module.assertNativeReconciliationPermit(value,{} as never));
 });
+
+test('inactive definition facade excludes legacy mutations and forged admission cannot start SQL or publication',async()=>{
+ const subject=await api();await fixture(async input=>{
+  const database=await subject.createHostedOriginal231TransportAppendDatabase(input);
+  for(const name of['executeOriginalSyntheticSeed','persistAuthSeedAttempt','prepareRuntimeCredentials','persistInstalledSchema','persistProviderDeploymentState','provisionInitialRuntimeRoles'])assert.equal(name in database,false);
+  await database.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const before=state.queries.length;for(const value of[{},true,{nativeVerified:true},{admissionHandle:{},plan:{effectAuthority:true}}])await assert.rejects(database.admitOriginal231TransportAppend(value));assert.equal(state.queries.length,before);});
+ });
+});
+
+test('native inactive acknowledgement and native append permit reject all caller tokens',async()=>{
+ const subject=await api();
+ for(const value of[{},true,{nativeVerified:true},{journal:{state:'INACTIVE_DEFINITIONS_ACKNOWLEDGED'}},new Proxy({},{})]){
+  await assert.rejects(subject.assertNativeOriginal231TransportAppendPermit(value,{} as never));
+  assert.throws(()=>subject.assertNativeOriginal231TransportAppendEffectPermit(value,{} as never));
+  await assert.rejects(subject.readNativeInactiveCronDefinitionAcknowledgement(value,{}));
+ }
+});
+
+test('persisted ACK read facade excludes all append and mutation owners and rejects saved JSON before effects',async()=>{
+ const subject=await api();await fixture(async input=>{
+  const database=await subject.createHostedInactiveCronDefinitionReadDatabase(input);
+  for(const name of['admitOriginal231TransportAppend','ownOriginal231TransportAppendIntent','reserveOriginal231TransportAppendCli','acknowledgeOriginal231TransportAppendCli','captureInactiveCronDefinitionAcknowledgement','executeOriginalSyntheticSeed','persistInstalledSchema','persistProviderDeploymentState'])assert.equal(name in database,false);
+  await database.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const before=state.queries.length;for(const value of[{},true,{persistedAcknowledgement:{nativeVerified:true}},{admissionHandle:{},stage:{},cli:{},timeoutMs:30000}])await assert.rejects(database.rebindPersistedInactiveCronDefinitionAcknowledgement(value));assert.equal(state.queries.length,before);});
+ });
+ for(const token of[{},true,{version:2},{nativeVerified:true}])await assert.rejects(subject.readNativeReboundInactiveCronDefinitionAcknowledgement(token,{originalContext:{},currentContext:{}}));
+});
 test('native prefix continuation refuses supplied completion flags before provider or database effects',async()=>{const module=await api();await fixture(async input=>{const db=await module.createHostedMigrationDatabase(input);assert.equal(typeof db.admitSchemaContinuation,'function');await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const before=state.queries.length;for(const value of[{},true,{completion:{cleanup:{kind:'RELEASED'}},nativeVerified:true}])await assert.rejects(db.admitSchemaContinuation(value));assert.equal(state.queries.length,before);});});});
 
 test('original native intent admission rejects caller metadata and forged tokens before any SQL or provider read',async()=>{const module=await api();await fixture(async input=>{const db=await module.createHostedMigrationDatabase(input);assert.equal(typeof db.admitOriginalNativeIntent,'function');await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const before=state.queries.length;for(const token of [{},Object.freeze({purpose:'CUEVO_ORIGINAL_NATIVE_INTENT_EXECUTION'}),null,new Proxy({},{})])await assert.rejects(db.admitOriginalNativeIntent(token,{} as never));assert.equal(state.queries.length,before);});});});
@@ -42,6 +68,25 @@ test('catalogue read refuses incomplete schemas and a same-operator session that
   const db=await createHostedMigrationDatabase(input);await db.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{await assert.rejects(db.readSchemaCatalogue(),/requires review; contents withheld/);state.quiescent=true;});
   state.catalogueMutate=false;state.catalogueRows=[];
  });
+});
+
+test('native observation equality retains large validated raw history without widening the generic serializer cap',async()=>{
+ const subject=await api();await fixture(async input=>{
+  state.catalogueRows=completeCatalogueFixture();state.history=Array.from({length:231},(_,index)=>({version:String(20261001000000+index),name:'large_native_'+index,statements:['-- source-only native history\n'+'x'.repeat(8400)]}));
+  const bytes=Buffer.byteLength(JSON.stringify(state.history));assert.ok(bytes>1024*1024&&bytes<8*1024*1024);
+  const database=await subject.createHostedMigrationDatabase(input);await database.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const result=await database.readSchemaCatalogue();assert.deepEqual(result.history,state.history);assert.throws(()=>canonicalReleaseExecutionJson(result),/Invalid|invalid|large|limit|review/i);});
+ });
+});
+
+test('native large-history reread detects bytes, segmentation, order and normalized header drift',async()=>{
+ const subject=await api();for(const mode of['bytes','segmentation','order','header'])await fixture(async input=>{
+  state.catalogueRows=completeCatalogueFixture();state.history=Array.from({length:231},(_,index)=>({version:String(20261001000000+index),name:'large_native_'+index,statements:['-- source-only native history\n'+'x'.repeat(8400)]}));const database=await subject.createHostedMigrationDatabase(input);
+  await database.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{const client=state.clients[0],query=client.query.bind(client);let rolledBack=false;client.query=async(value,values=[])=>{const sql=typeof value==='string'?value:value.text;if(sql==='ROLLBACK'&&!rolledBack){rolledBack=true;if(mode==='bytes')(state.history[0].statements as string[])[0]+='x';if(mode==='segmentation'){const text=(state.history[0].statements as string[])[0];state.history[0].statements=[text.slice(0,100),text.slice(100)];}if(mode==='order')state.history.reverse();}const result=await query(value,values);if(mode==='header'&&rolledBack&&sql.includes('session_user'))result.rows=[{operator:'postgres',database:'postgres',ssl:true,serverVersion:170012}];return result;};await assert.rejects(database.readSchemaCatalogue(),/requires review/);});
+ });
+});
+
+test('native raw history still refuses its original eight MiB limit',async()=>{
+ const subject=await api();await fixture(async input=>{state.history=Array.from({length:6},(_,index)=>({version:String(20261001000000+index),name:'native_bound_'+index,statements:['x'.repeat(1500000)]}));assert.ok(Buffer.byteLength(JSON.stringify(state.history))>8*1024*1024);const database=await subject.createHostedMigrationDatabase(input);await database.withLock(`${ref}:HOSTED_SCHEMA_MIGRATION`,async()=>{await assert.rejects(database.observe(),/requires review/);});});
 });
 
 const hash=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');

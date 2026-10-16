@@ -4,7 +4,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { types } from 'node:util';
 import { z } from 'zod';
 import { spawnOwnedProcess, stopOwnedProcesses } from '../runtime/process';
-import type { HostedExecutionPorts } from './hosted-migration-execution';
+import type { HostedExecutionPorts } from './hosted-migration-journal-contracts';
 
 const fail=()=>new Error('Native migration process, source or private execution requires review; contents withheld.');
 const digest=z.string().regex(/^[a-f0-9]{64}$/),imageDigest=z.string().regex(/^sha256:[a-f0-9]{64}$/);
@@ -12,6 +12,26 @@ const inputSchema=z.object({repoRoot:z.string(),projectRef:z.string().regex(/^[a
 type NativeProcessInput=z.infer<typeof inputSchema>;
 type CliResult=Awaited<ReturnType<HostedExecutionPorts['runCli']>>;
 export type PreparedHostedMigrationNativeProcess={readonly prepared:Readonly<{imageId:string;deliverySha256:string}>;runCli:(args:string[],privateEnvironment:Record<string,string>,options:{notAfterMs:number})=>Promise<CliResult>;dispose:()=>Promise<void>};
+declare const inactiveCronExecutionBrand:unique symbol;
+export type NativeInactiveCronAppendExecution={readonly[inactiveCronExecutionBrand]:true};
+const inactiveCronExecutions=new WeakMap<object,{databaseUrl:string;workdir:string;deliverySha256:string;startedAtMs:number;exitedAtMs:number;notAfterMs:number}>();
+/** Actual same-runner CLI receipt only; copied success objects and supplied
+ * transports cannot establish that this exact definition append exited zero. */
+export function readNativeInactiveCronAppendExecution(value:unknown,expected:{databaseUrl:string;workdir:string;deliverySha256:string;notBeforeMs:number;notAfterMs:number}){
+ if(!value||typeof value!=='object'||types.isProxy(value))throw fail();const actual=inactiveCronExecutions.get(value),input=own(expected) as typeof expected;
+ if(!actual||actual.databaseUrl!==input.databaseUrl||actual.workdir!==input.workdir||actual.deliverySha256!==input.deliverySha256||actual.startedAtMs<input.notBeforeMs||actual.startedAtMs>=actual.notAfterMs||actual.exitedAtMs<actual.startedAtMs||actual.notAfterMs!==input.notAfterMs||Date.now()<actual.exitedAtMs)throw fail();return Object.freeze({...actual,kind:'EXITED' as const,exitCode:0 as const});
+}
+/** Uses the one existing fixed native process owner. This wrapper changes no
+ * runner, CLI arguments, native clock, execution limits or cleanup behavior. */
+export async function createHostedOriginal231TransportAppendNativeProcess(value:unknown,options:{signal?:AbortSignal;privateEnvironment:Record<string,string>}){
+ const input=inputSchema.parse(own(value)),process=await createHostedMigrationNativeProcess(input,options);
+ return{prepared:process.prepared,dispose:process.dispose,runCli:async(args:string[],environment:Record<string,string>,clock:{notAfterMs:number})=>{
+  const startedAtMs=Date.now(),result=await process.runCli(args,environment,clock),exitedAtMs=Date.now();
+  if(result.kind!=='EXITED'||result.exitCode!==0)return{result,execution:null};
+  const execution=Object.freeze({}) as NativeInactiveCronAppendExecution;
+  inactiveCronExecutions.set(execution,{databaseUrl:input.databaseUrl,workdir:input.workdir,deliverySha256:process.prepared.deliverySha256,startedAtMs,exitedAtMs,notAfterMs:clock.notAfterMs});return{result,execution};
+ }};
+}
 export type HostedMigrationPreparationFailure={version:1;purpose:'CUEVO_NATIVE_MIGRATION_PREPARATION_FAILURE';phase:'SUPERVISOR'|'BASE'|'BUILD'|'IMAGE'|'CREATE'|'INSPECT';ownerId:string;cleanup:'UNCONFIRMED'|'CONFIRMED_STOPPED'};
 export class HostedMigrationNativePreparationError extends Error{
  readonly evidence:Readonly<HostedMigrationPreparationFailure>;

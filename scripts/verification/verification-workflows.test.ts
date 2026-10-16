@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJobs } from './verification-workflows';
 import {execFileSync} from 'node:child_process';
-import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics} from './verification-workflows';
+import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics,ciDatabaseJob} from './verification-workflows';
 
 test('actual main88 pre-Actions source and original501 require original purpose without changing current or earlier CodeQL policy',()=>{
  const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024});
@@ -27,7 +27,7 @@ test('canonical job eras preserve actual original source jobs and reject current
  const original=yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,{steps:Record<string,unknown>[]}>;
  const pins=[['actions/setup-node@820762786026740c76f36085b0efc47a31fe5020','actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'],['actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a','actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'],['actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3','actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333']];
  for(const name of ['fast-checks','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery','source-contracts','source-cohort-continuation-1','source-cohort-reconciliation-2','runtime-backend','runtime-browser','integration-learning','integration-state','technical-mvp','database-checks']){
-  const old=original[name],current=structuredClone(old);for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
+  const old=original[name],current=structuredClone(name==='database-checks'?ciDatabaseJob:old)as{steps:Record<string,unknown>[]};for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
   assert.deepEqual(selectCanonicalWorkflowJob(name,current,'CURRENT_SOURCE'),current,name);
   assert.deepEqual(selectCanonicalWorkflowJob(name,old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old,name);
   assert.throws(()=>selectCanonicalWorkflowJob(name,old,'CURRENT_SOURCE',{sha:source,git}),name);
@@ -107,6 +107,18 @@ test('official CodeQL step projection admits exact new whole job and source-boun
 
 test('one existing database producer retains exact original231 source proof without a second replay',async()=>{
  const api:Record<string,unknown>=await import('./verification-workflows');assert.ok(api.ciOriginal231CatalogueArtifactStep,'source231 requires its own exact retained artifact');const step=api.ciOriginal231CatalogueArtifactStep as Record<string,unknown>,job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.deepEqual(step,{name:'Retain exact source original231 catalogue reference',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-original231-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source231.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);const source=await readFile('.github/workflows/ci.yml','utf8'),flow=yaml.load(source)as{jobs:Record<string,{steps:Record<string,unknown>[]}>};assert.deepEqual(flow.jobs['database-checks'],job);assert.ok(flow.jobs['database-checks'].steps.some(row=>row.name===step.name));
+});
+test('one existing database producer retains distinct exact232 definition proof and preserves only the verified pre232 source era',async()=>{
+ const api:Record<string,unknown>=await import('./verification-workflows'),step=api.ciOriginal231TransportCatalogueArtifactStep as Record<string,unknown>|undefined;assert.ok(step,'source232 needs a distinct required artifact from its existing producer');
+ assert.deepEqual(step,{name:'Retain exact source original231 transport232 catalogue reference',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-original231-transport232-catalogue-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/child144-catalogue/source232.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}});
+ const job=api.ciDatabaseJob as{steps:Record<string,unknown>[]};assert.equal(job.steps.filter(row=>row.run==='node --import tsx scripts/database/hosted-child-catalogue-producer.ts').length,1);assert.equal(job.steps.filter(row=>row.name===step.name).length,1);
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),sha='5b6e39956d7b9cbe507ec4352812f433225fa6f6',old=(yaml.load(git(['show',sha+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['database-checks'];
+ assert.deepEqual(selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha,git}),old);assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'CURRENT_SOURCE',{sha,git}));assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA'));assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+ const changed=structuredClone(old) as {steps:Record<string,unknown>[]};changed.steps.push(structuredClone(step));changed.steps.at(-1)!.with={...(step.with as object),path:'.local/'};assert.throws(()=>selectCanonicalWorkflowJob('database-checks',changed,'ORIGINAL_RUNTIME_METADATA',{sha,git}));
+ const current=yaml.load(await readFile('.github/workflows/ci.yml','utf8'))as{jobs:Record<string,unknown>};assert.deepEqual(current.jobs['database-checks'],job);
+});
+test('pre-Actions database source retains its original contract after232 retention is added to current CI',()=>{
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),sha='501224dc5f6bfea631ecc66a0efae7892a83c847',old=(yaml.load(git(['show',sha+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['database-checks'];assert.deepEqual(selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha,git}),old);assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'CURRENT_SOURCE',{sha,git}));
 });
 import { statelessVerificationSteps } from './steps';
 import { createRequire } from 'node:module';

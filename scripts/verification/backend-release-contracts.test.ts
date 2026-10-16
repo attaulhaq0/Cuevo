@@ -4,9 +4,48 @@ import { test } from 'node:test';
 import {canonicalReleaseReviewJson} from './release-review';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {readFileSync} from 'node:fs';
 
 const sha = 'a'.repeat(40), tree = 'b'.repeat(40), base = 'c'.repeat(40), ref = 'mqxdjvsyckzocokuikmx';
 const now = Date.parse('2026-10-06T12:00:00Z');
+
+async function inactiveDefinitionFixture(){
+ const api=await subject();assert.equal(typeof api.prepareInactiveCronDefinitionBackendBinding,'function','inactive definitions require a distinct closed package binding');
+ const raw=(await import('../database/hosted-original-child-recovery.fixture')).original231RecoveryPlanFixture({sha,tree});raw.now=Date.parse('2026-10-16T00:01:00Z');raw.target.observedAt='2026-10-16T00:00:00Z';raw.original231Recovery.catalogueReference.runId='31';raw.original231Recovery.catalogueReference.runAttempt=2;
+ const sources=[...raw.sources,{name:'20261015110814_sql_cron_managed_transport.sql',bytes:readFileSync(resolve('supabase/migrations/20261015110814_sql_cron_managed_transport.sql'))}],plan=(await import('../database/hosted-original231-transport-append')).prepareOriginal231TransportAppendPlan({...raw,sources});
+ const digest=(value:unknown)=>createHash('sha256').update(canonicalReleaseReviewJson(value)).digest('hex');
+ const reference={...raw.original231Recovery.catalogueReference,purpose:'CUEVO_ORIGINAL231_TRANSPORT232_CATALOGUE_REFERENCE',appliedMigrationCount:232,migrationRowsSha256:digest(plan.migrations.map(row=>({version:row.version,sourceReceiptSha256:row.sha256}))),sourceInventorySha256:digest(plan.migrations.map(({name,sha256})=>({name,sha256}))),postconditionQuerySha256:(await import('../database/hosted-original231-transport-catalogue')).original231TransportDisabledDefinitionsQuerySha256,sourceOriginal231ReceiptSha256:'d'.repeat(64),effectScope:'DISABLED_TRANSPORT_DEFINITIONS_ONLY',effectAuthority:false,createdAt:'2026-10-16T00:00:00Z'};
+ const binding=api.prepareInactiveCronDefinitionBackendBinding({plan,stageSha256:'e'.repeat(64),catalogueReference232:reference}),databaseFingerprints={...fingerprints,migrationPlanSha256:plan.planSha256,migrationHistorySha256:binding.beforeHistorySha256,apiArtifactSha256:null,edgeArtifactSha256:null,denoLockSha256:null};
+ const body={...input(),version:3,executionScope:'inactive-cron-definitions',inactiveCronDefinitions:binding,fingerprints:databaseFingerprints,canonicalSchemaVerification:{runAttempt:2,jobsSha256:'e'.repeat(64)},preparedAt:'2026-10-16T00:05:00Z',expiresAt:'2026-10-16T06:00:00Z',reviews:input().reviews.map(row=>({...row,reviewedAt:'2026-10-15T23:55:00Z'}))} as Record<string,unknown>;
+ delete body.canonicalRuntimeVerification;
+ const context={...expected(),executionScope:'inactive-cron-definitions',inactiveCronDefinitions:binding,fingerprints:databaseFingerprints,canonicalSchemaVerification:body.canonicalSchemaVerification,now:Date.parse('2026-10-16T00:10:00Z'),ciRun:{...expected().ciRun,run_attempt:2}} as Record<string,unknown>;delete context.canonicalRuntimeVerification;
+ return{api,body,context,plan};
+}
+
+test('version three inactive definitions package binds exact current232 plan and source catalogue without runtime authority',async()=>{
+ const{api,body,context}=await inactiveDefinitionFixture(),prepared=api.prepareBackendReleaseIntent(body,context),parsed=JSON.parse(prepared.canonicalJson);
+ assert.equal(parsed.version,3);assert.equal(parsed.executionScope,'inactive-cron-definitions');assert.equal(parsed.inactiveCronDefinitions.beforeCount,231);assert.equal(parsed.inactiveCronDefinitions.afterCount,232);assert.equal(parsed.inactiveCronDefinitions.originalAcknowledgement,'UNKNOWN');
+ assert.equal(parsed.inactiveCronDefinitions.foundationAccepted,false);assert.equal(parsed.inactiveCronDefinitions.activationAuthorized,false);assert.equal(parsed.fingerprints.apiArtifactSha256,null);assert.equal(api.validatePreparedBackendReleaseIntent(prepared,context).sha256,prepared.sha256);
+ assert.throws(()=>api.readBackendRuntimeFingerprints(parsed.fingerprints));
+});
+
+test('persisted ACK read package binds original selector and current232 history without append authority',async()=>{
+ const{api,body,context,plan}=await inactiveDefinitionFixture(),owner=await import('../database/hosted-inactive-cron-definition-contracts'),binding=body.inactiveCronDefinitions as ReturnType<typeof api.prepareInactiveCronDefinitionBackendBinding>,originalContext=owner.prepareInactiveCronDefinitionContext({plan,identity:{projectRef:plan.projectRef,sourceSha:plan.source.sha,treeSha:plan.source.tree,planSha256:plan.planSha256,stageId:'remaining',stageSha256:binding.stageSha256,databaseUrl:plan.original231Recovery.template.originalIdentity.databaseUrl,certificateSha256:plan.original231Recovery.template.originalIdentity.certificateSha256,approvalDigest:'1'.repeat(64),ciRunId:binding.catalogueReference232.runId},catalogueReference232:binding.catalogueReference232,releaseRunId:'62',releaseRunAttempt:1}),selection=owner.preparePersistedInactiveCronAcknowledgementSelection({context:originalContext,journalPayloadSha256:'a'.repeat(64),journalChainSha256:'b'.repeat(64)}),readBinding=api.prepareInactiveCronDefinitionBackendBinding({plan,stageSha256:binding.stageSha256,catalogueReference232:binding.catalogueReference232,persistedAcknowledgement:selection});
+ body.inactiveCronDefinitions=readBinding;context.inactiveCronDefinitions=readBinding;body.fingerprints={...(body.fingerprints as object),migrationHistorySha256:readBinding.afterHistorySha256};context.fingerprints=body.fingerprints;
+ const prepared=api.prepareBackendReleaseIntent(body,context),saved=JSON.parse(prepared.canonicalJson);assert.equal(saved.inactiveCronDefinitions.effectScope,'PERSISTED_INACTIVE_ACK_READ_ONLY');assert.equal(saved.inactiveCronDefinitions.persistedAcknowledgement.context.identity.approvalDigest,'1'.repeat(64));assert.equal(saved.fingerprints.migrationHistorySha256,readBinding.afterHistorySha256);assert.equal(api.validatePreparedBackendReleaseIntent(prepared,context).sha256,prepared.sha256);
+ for(const mode of['history','scope','missing']){const changed=structuredClone(body);if(mode==='history')Object.assign(changed.fingerprints as object,{migrationHistorySha256:readBinding.beforeHistorySha256});if(mode==='scope')Object.assign(changed.inactiveCronDefinitions as object,{effectScope:'INACTIVE_TRANSPORT_DEFINITIONS_ONLY'});if(mode==='missing')Reflect.deleteProperty(changed.inactiveCronDefinitions as object,'persistedAcknowledgement');assert.throws(()=>api.prepareBackendReleaseIntent(changed,{...context,inactiveCronDefinitions:changed.inactiveCronDefinitions,fingerprints:changed.fingerprints}));}
+});
+
+test('inactive definitions package refuses legacy scope missing or altered232 binding and false readiness',async()=>{
+ const{api,body,context}=await inactiveDefinitionFixture();
+ for(const mode of['version','scope','missing','count','hash','source','ack','foundation','runtime']){
+  const changed=structuredClone(body),binding=changed.inactiveCronDefinitions as Record<string,unknown>;
+  if(mode==='version')changed.version=2;if(mode==='scope')changed.executionScope='complete-backend';if(mode==='missing')delete changed.inactiveCronDefinitions;
+  if(mode==='count')binding.afterCount=233;if(mode==='hash')binding.planSha256='f'.repeat(64);if(mode==='source')(binding.catalogueReference232 as Record<string,unknown>).sourceSha=base;
+  if(mode==='ack')binding.originalAcknowledgement='CONFIRMED';if(mode==='foundation')binding.foundationAccepted=true;if(mode==='runtime')(changed.fingerprints as Record<string,unknown>).apiArtifactSha256='0'.repeat(64);
+  assert.throws(()=>api.prepareBackendReleaseIntent(changed,context),mode);
+ }
+});
 
 test('original231 approval binds observed history without inventing old commitment or runtime capability',async()=>{
  const api=await subject(),{original231RecoveryFixture}=await import('../database/hosted-original-child-recovery.fixture'),{original231RecoveryFingerprint}=await import('../database/hosted-original-child-recovery'),t=original231RecoveryFixture(),binding={...original231RecoveryFingerprint(t),catalogueReferenceSha256:'e'.repeat(64)},installedSchema={sourceSha:'1a493ad735798bb6d3fa0ffaabc779e62149ac37',treeSha:'a207a7ec44dd29d61adc0490b85fedbf1e696fcd',migrationCount:124},schemaRecovery={completionReceiptSha256:'3'.repeat(64),completionExportSha256:'4'.repeat(64)},databaseFingerprints={...fingerprints,apiArtifactSha256:null,edgeArtifactSha256:null,denoLockSha256:null},body={...input(),version:2,executionScope:'schema-and-accounts',fingerprints:databaseFingerprints,installedSchema,schemaRecovery,original231Recovery:binding},context={...expected(),executionScope:'schema-and-accounts',fingerprints:databaseFingerprints,installedSchema,schemaRecovery,original231Recovery:binding};

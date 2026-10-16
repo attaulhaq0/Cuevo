@@ -663,6 +663,13 @@ test('integration partition artifacts and complete aggregate retain exact releas
  const parse=createRequire(import.meta.url)('js-yaml') as{load(text:string):{jobs:Record<string,Record<string,unknown>>};dump(value:unknown):string};
  const changed=parse.load(ci);const aggregate=changed.jobs['technical-mvp'];aggregate.needs=['database-checks','runtime-backend','runtime-browser'];assert.ok(validateWorkflows(parse.dump(changed),release).some(issue=>issue.includes('isolated')));
 });
+test('source232 catalogue artifact admits only its complete source-owned database step and rejects broadened or secret paths',async()=>{
+ const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8'),yaml=createRequire(import.meta.url)('js-yaml')as{load(text:string):{jobs:Record<string,{steps:Record<string,unknown>[]}>};dump(value:unknown):string};
+ assert.deepEqual(validateWorkflows(ci,release),[],'the exact source232 retention is required source-only evidence');
+ for(const path of['.local/','.local/child144-catalogue/','*.json','.local/child144-catalogue/../source232.json','.env','.local/child144-catalogue/source232.json\n.env']){const flow=yaml.load(ci),step=flow.jobs['database-checks'].steps.find(row=>row.name==='Retain exact source original231 transport232 catalogue reference')!;(step.with as Record<string,unknown>).path=path;assert.ok(validateWorkflows(yaml.dump(flow),release).includes('Unsafe artifact path.'),path);}
+ const foreign=yaml.load(ci),step=foreign.jobs['database-checks'].steps.find(row=>row.name==='Retain exact source original231 transport232 catalogue reference')!;foreign.jobs['fast-checks'].steps.push(structuredClone(step));assert.ok(validateWorkflows(yaml.dump(foreign),release).includes('Unsafe artifact path.'),'the exact file is not an artifact permission for other jobs');
+ for(const mode of['name','optional','continue']){const flow=yaml.load(ci),step=flow.jobs['database-checks'].steps.find(row=>row.name==='Retain exact source original231 transport232 catalogue reference')!;if(mode==='name')(step.with as Record<string,unknown>).name='cuevo-latest';if(mode==='optional')step.if='always()';if(mode==='continue')step['continue-on-error']=true;assert.ok(validateWorkflows(yaml.dump(flow),release).includes('Unsafe artifact path.'),mode);}
+});
 
 test('Community producer is ordered after learning only for the exact protected staging customer candidate',async()=>{
  const ci=await readFile('.github/workflows/ci.yml','utf8'),release=await readFile('.github/workflows/release.yml','utf8');

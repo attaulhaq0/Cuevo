@@ -11,11 +11,11 @@ on:
         required: true
         type: string
       scope:
-        description: Schema/accounts milestone complete backend or installed runtime verification
+        description: Reviewed inactive Cron definitions schema/accounts backend or installed runtime verification
         required: true
         type: choice
         default: schema-and-accounts
-        options: [schema-and-accounts, complete-backend, installed-runtime, reconcile-schema, pending-runtime-confirmation, runtime-rollout]
+        options: [schema-and-accounts, complete-backend, installed-runtime, reconcile-schema, pending-runtime-confirmation, runtime-rollout, inactive-cron-definitions]
       handoff:
         description: Operating synthetic staging or full customer candidate prerequisites
         required: true
@@ -51,6 +51,29 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
+      - name: Read immutable inactive acknowledgement artifact selection
+        id: inactive-custody
+        env:
+          CUEVO_BACKEND_RELEASE_SCOPE: ${{ inputs.scope }}
+          CUEVO_BACKEND_CI_RUN_ID: ${{ inputs.ci_run_id }}
+          CUEVO_BACKEND_RELEASE_INPUT_JSON: ${{ vars.CUEVO_BACKEND_RELEASE_INPUT_JSON }}
+        run: node --import tsx scripts/verification/backend-release.ts inspect-inactive-custody
+      - name: Read exact original inactive definition package
+        if: steps.inactive-custody.outputs.original-run-id != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.0
+        with:
+          name: cuevo-backend-package-${{ steps.inactive-custody.outputs.original-run-id }}-${{ steps.inactive-custody.outputs.original-run-attempt }}
+          github-token: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          run-id: ${{ steps.inactive-custody.outputs.original-run-id }}
+          path: .local/inactive-ack-original-package/
+      - name: Read exact original inactive definition journal custody
+        if: steps.inactive-custody.outputs.original-run-id != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.0
+        with:
+          name: cuevo-backend-schema-result-${{ steps.inactive-custody.outputs.original-run-id }}-${{ steps.inactive-custody.outputs.original-run-attempt }}
+          github-token: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          run-id: ${{ steps.inactive-custody.outputs.original-run-id }}
+          path: .local/hosted-release/
       - name: Prepare exact source and read-only project package
         id: prepare
         env:
@@ -105,6 +128,18 @@ jobs:
           CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
           CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
         run: node --import tsx scripts/verification/backend-release.ts bootstrap-schema
+      - name: Append exact inactive Cron definitions with original231 custody
+        id: inactive-definitions
+        if: inputs.scope == 'inactive-cron-definitions' && inputs.handoff == 'operating-staging'
+        env:
+          GH_TOKEN: ${{ secrets.CUEVO_GITHUB_RELEASE_METADATA_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          CUEVO_MIGRATION_DATABASE_PASSWORD: ${{ secrets.CUEVO_MIGRATION_DATABASE_PASSWORD }}
+          CUEVO_DATABASE_TLS_CA: ${{ secrets.CUEVO_DATABASE_TLS_CA }}
+          CUEVO_RELEASE_JOURNAL_STORAGE_KEY: ${{ secrets.CUEVO_RELEASE_JOURNAL_STORAGE_KEY }}
+          CUEVO_BACKEND_BUNDLE_PATH: ${{ needs.prepare.outputs.bundle-path }}
+          CUEVO_BACKEND_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle-sha256 }}
+        run: node --import tsx scripts/verification/backend-release.ts append-inactive-cron-definitions
       - name: Reconcile exact interrupted prefix and execute its original three pending migrations
         if: inputs.scope == 'reconcile-schema'
         env:
@@ -350,13 +385,14 @@ jobs:
           if-no-files-found: error
           retention-days: 2
       - name: Preserve schema status without private runtime inputs
-        if: always()
+        if: always() && inputs.scope != 'inactive-cron-definitions'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: cuevo-backend-schema-result-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .local/hosted-release/bucket-result.json
             .local/hosted-release/schema-result.json
+            .local/hosted-release/inactive-cron-definition-result.json
             .local/hosted-release/journal-*/
             .local/hosted-release/population-result.json
             .local/hosted-release/auth-result.json
@@ -406,6 +442,21 @@ jobs:
             .local/hosted-release/web-settings-intent.json
             .local/hosted-release/web-settings-result.json
             .local/hosted-release/population-*/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve exact inactive definition journal custody and read results
+        if: always() && inputs.scope == 'inactive-cron-definitions'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: cuevo-backend-schema-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/hosted-release/inactive-cron-definition-result.json
+            .local/hosted-release/inactive-cron-ack-read-result.json
+            ${{ steps.inactive-definitions.outputs.inactive-journal-root != '' && format('{0}/owner.json', steps.inactive-definitions.outputs.inactive-journal-root) || '' }}
+            ${{ steps.inactive-definitions.outputs.inactive-journal-root != '' && format('{0}/000001.record.json', steps.inactive-definitions.outputs.inactive-journal-root) || '' }}
+            ${{ steps.inactive-definitions.outputs.inactive-journal-root != '' && format('{0}/000002.record.json', steps.inactive-definitions.outputs.inactive-journal-root) || '' }}
+            ${{ steps.inactive-definitions.outputs.inactive-journal-root != '' && format('{0}/000003.record.json', steps.inactive-definitions.outputs.inactive-journal-root) || '' }}
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14

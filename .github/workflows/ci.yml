@@ -533,6 +533,14 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
+      - name: Retain exact source original231 transport232 catalogue reference
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cuevo-original231-transport232-catalogue-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/child144-catalogue/source232.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
       - name: Retain minimized source child144 failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

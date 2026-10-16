@@ -4,14 +4,19 @@ import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import {lstatSync,readFileSync,readdirSync,realpathSync} from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { types } from 'node:util';
+import {z} from 'zod';
 import { canonicalHostedMigrationPlan, prepareCanonicalMigrationOperation, readCanonicalMigrationOperation, disposeCanonicalMigrationOperation, type CanonicalMigrationOperation, verifyCompletedMigrationPrefix, verifyPriorSchemaPrefix, type HostedMigrationPlanV1 } from './hosted-migration-plan';
 import { posthogIntelligenceMigration } from './replay-plan';
 import { deriveCanonicalHostedMigrationBatches } from './hosted-migration-batches';
 import type { HostedMigrationBatchWorkdir,HostedMigrationWorkdirs } from './hosted-migration-workdirs';
 import { canonicalReleaseExecutionJson } from '../verification/release-review';
+import {readOriginal231TransportAppendPlan,type Original231TransportAppendPlan} from './original231-transport-plan-contracts';
+import {prepareCanonicalOriginal231TransportAppendOperation,readCanonicalOriginal231TransportAppendOperation} from './hosted-migration-plan';
 
 const failure=()=>new Error('Native migration stage source or physical artifact requires review; contents withheld.');
 const hash=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');
+const toolchainDigest=z.string().regex(/^[a-f0-9]{64}$/),toolchainSha=z.string().regex(/^[a-f0-9]{40}$/);
+export const hostedMigrationToolchainManifestSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_HOSTED_MIGRATION_TOOLCHAIN'),sourceSha:toolchainSha,treeSha:toolchainSha,sourceLockSha256:toolchainDigest,cliVersion:z.literal('2.119.0'),platform:z.string(),cli:z.object({shimSha256:toolchainDigest,binarySha256:toolchainDigest,sidecarSha256:toolchainDigest}).strict()}).strict();
 function plain(value:unknown,depth=0):unknown{
  if(depth>12)throw failure();if(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return value;
  if(!value||typeof value!=='object'||types.isProxy(value)||!Array.isArray(value)&&![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw failure();
@@ -24,6 +29,41 @@ async function physical(root:string,path:string,kind:'directory'|'file'){
  const part=relative(root,path);if(!isAbsolute(path)||resolve(path)!==path||!part||isAbsolute(part)||part.split(/[\\/]/).some(piece=>!piece||piece==='.'||piece==='..'))throw failure();
  const base=await lstat(root);if(!base.isDirectory()||base.isSymbolicLink()||await realpath(root)!==root)throw failure();let current=root;const pieces=part.split(/[\\/]/);
  for(const[index,piece]of pieces.entries()){current=join(current,piece);const stat=await lstat(current);if(stat.isSymbolicLink()||await realpath(current)!==current||(index===pieces.length-1?(kind==='file'?!stat.isFile()||stat.nlink!==1:!stat.isDirectory()):!stat.isDirectory()))throw failure();}
+}
+/** Actual owned manifest/source-lock read. Its fingerprint must come from the
+ * caller's separately authenticated approval; this reader creates no permit. */
+export async function readHostedMigrationToolchainManifest(value:{repoRoot:string;sourceSha:string;treeSha:string;manifestSha256:string;path?:string;cli?:z.infer<typeof hostedMigrationToolchainManifestSchema>['cli']}){
+ try{
+  const input=z.object({repoRoot:z.string(),sourceSha:toolchainSha,treeSha:toolchainSha,manifestSha256:toolchainDigest,path:z.string().optional(),cli:hostedMigrationToolchainManifestSchema.shape.cli.optional()}).strict().parse(plain(value)),root=input.repoRoot,path=input.path??join(root,'.local','hosted-release','migration-toolchain.json'),part=relative(join(root,'.local','hosted-release'),path);
+  if(!part||isAbsolute(part)||part.split(/[\\/]/).some(piece=>piece==='.'||piece==='..'))throw failure();await physical(root,path,'file');const before=await lstat(path);if(before.size>48*1024)throw failure();const bytes=await readFile(path),after=await lstat(path);
+  if(before.ino!==after.ino||before.dev!==after.dev||before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ctimeMs!==after.ctimeMs||bytes.length>48*1024||hash(bytes)!==input.manifestSha256)throw failure();
+  const manifest=hostedMigrationToolchainManifestSchema.parse(plain(JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(bytes))));if(manifest.sourceSha!==input.sourceSha||manifest.treeSha!==input.treeSha||manifest.platform!==`${process.platform}-${process.arch}`||input.cli&&canonicalReleaseExecutionJson(input.cli)!==canonicalReleaseExecutionJson(manifest.cli))throw failure();
+  const relativePath=relative(root,path).replaceAll('\\','/');if(git(root,['check-ignore','--no-index',relativePath])!==relativePath||git(root,['ls-files','--cached','--',relativePath]).length)throw failure();
+  const env=Object.fromEntries(['PATH','Path','SystemRoot','WINDIR','TEMP','TMP'].filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]]).concat([['GIT_NO_REPLACE_OBJECTS','1'],['GIT_CONFIG_NOSYSTEM','1'],['GIT_CONFIG_GLOBAL',process.platform==='win32'?'NUL':'/dev/null']])),lockBytes=execFileSync('git',['-C',root,'show',input.sourceSha+':package-lock.json'],{env,stdio:['ignore','pipe','ignore'],timeout:15000,maxBuffer:2*1024*1024,windowsHide:true,shell:false});
+  if(hash(lockBytes)!==manifest.sourceLockSha256)throw failure();const lock=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(lockBytes)) as {lockfileVersion:number;packages:Record<string,{version?:string;integrity?:string;resolved?:string}>},platform=process.platform==='win32'?'windows':process.platform;
+  for(const dependency of['node_modules/supabase',`node_modules/@supabase/cli-${platform}-${process.arch}`]){const row=lock.packages?.[dependency];if(lock.lockfileVersion!==3||row?.version!=='2.119.0'||!row.integrity?.startsWith('sha512-')||!row.resolved?.startsWith('https://registry.npmjs.org/'))throw failure();}
+  await physical(root,path,'file');if(hash(await readFile(path))!==input.manifestSha256)throw failure();return manifest;
+ }catch{throw failure();}
+}
+/** Separate current232 physical admission. It never enters ordinary V1 SQL or
+ * original231 metadata preparation, and grants no execution capability. */
+export async function admitOriginal231TransportAppendStageFiles(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:Original231TransportAppendPlan;stage:HostedMigrationWorkdirs['stages'][number]},borrowed?:CanonicalMigrationOperation){
+ let operation:CanonicalMigrationOperation|undefined;
+ try{
+  const text=canonicalReleaseExecutionJson(plain(value));if(Buffer.byteLength(text)>2*1024*1024)throw failure();const input=JSON.parse(text) as typeof value,root=input.repoRoot,plan=readOriginal231TransportAppendPlan(input.plan);
+  if(JSON.stringify(Object.keys(input).sort())!==JSON.stringify(['repoRoot','sourceSha','treeSha','plan','stage'].sort())||!isAbsolute(root)||resolve(root)!==root||await realpath(root)!==root||git(root,['status','--porcelain','--untracked-files=all']))throw failure();
+  const binding={repoRoot:root,sourceSha:input.sourceSha,treeSha:input.treeSha,plan};operation=borrowed??prepareCanonicalOriginal231TransportAppendOperation(binding);const loaded=readCanonicalOriginal231TransportAppendOperation(operation,binding),stage=input.stage;
+  if(JSON.stringify(Object.keys(stage).sort())!==JSON.stringify(['id','workdir','included','pending','expectedBeforeVersions','expectedAfterVersions','configSha256','commandArgs','materialization'].sort())||stage.materialization!=='SQL_FILES'||stage.configSha256!==hash(config)||canonicalReleaseExecutionJson({id:stage.id,included:stage.included,pending:stage.pending,expectedBeforeVersions:stage.expectedBeforeVersions,expectedAfterVersions:stage.expectedAfterVersions})!==canonicalReleaseExecutionJson(plan.stage))throw failure();
+  const releaseRoot=join(root,'.local','hosted-release'),deliveryRoot=resolve(stage.workdir,'..'),part=relative(releaseRoot,deliveryRoot);
+  if(!/^migration-[a-f0-9-]{36}$/.test(part)||stage.workdir!==join(deliveryRoot,'remaining')||JSON.stringify(stage.commandArgs)!==JSON.stringify(['db','push','--linked','--project-ref',plan.projectRef,'--include-all','--skip-vault','--workdir',stage.workdir,'--yes','--output-format','json']))throw failure();
+  await physical(root,deliveryRoot,'directory');await physical(root,join(deliveryRoot,'builder-state.json'),'file');
+  const state=JSON.stringify({version:1,purpose:'CUEVO_ORIGINAL231_TRANSPORT_APPEND_DELIVERY',state:'READY',sourceSha:input.sourceSha,treeSha:input.treeSha,planSha256:plan.planSha256,execution:'NOT_EXECUTED',effectAuthority:false,originalAcknowledgement:'UNKNOWN'})+'\n';
+  if(await readFile(join(deliveryRoot,'builder-state.json'),'utf8')!==state||JSON.stringify((await readdir(deliveryRoot)).sort())!==JSON.stringify(['builder-state.json','remaining']))throw failure();
+  const supabase=join(stage.workdir,'supabase'),migrations=join(supabase,'migrations');await physical(root,migrations,'directory');await physical(root,join(supabase,'config.toml'),'file');
+  if(JSON.stringify((await readdir(stage.workdir)).sort())!==JSON.stringify(['supabase'])||JSON.stringify((await readdir(supabase)).sort())!==JSON.stringify(['config.toml','migrations'])||JSON.stringify((await readdir(migrations)).sort())!==JSON.stringify(plan.migrations.map(row=>row.name).sort())||await readFile(join(supabase,'config.toml'),'utf8')!==config)throw failure();
+  for(const row of plan.migrations){const file=join(migrations,row.name);await physical(root,file,'file');if(hash(await readFile(file))!==row.sha256)throw failure();}
+  readCanonicalOriginal231TransportAppendOperation(operation,binding);return{evidence:'VERIFIED_GIT_AND_PHYSICAL_TRANSPORT_APPEND' as const,effectAuthority:false as const,sources:loaded.sources,planSha256:plan.planSha256,stageSha256:hash(JSON.stringify({included:plan.migrations.map(({name,version,sha256})=>({name,version,sha256})),configSha256:stage.configSha256}))};
+ }catch{throw failure();}finally{if(operation&&borrowed===undefined)disposeCanonicalMigrationOperation(operation);}
 }
 /** Re-admit original Git bytes and exact ignored CLI input. No provider, database or source acceptance is inferred. */
 export async function admitHostedMigrationStageFiles(value:{repoRoot:string;sourceSha:string;treeSha:string;plan:HostedMigrationPlanV1;stage:HostedMigrationWorkdirs['stages'][number]},borrowed?:CanonicalMigrationOperation){

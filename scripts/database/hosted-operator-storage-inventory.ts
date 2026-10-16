@@ -6,8 +6,8 @@ import {createHostedMigrationRemoteJournal} from './hosted-migration-remote-jour
 import {assertNativeReconciliationPermit} from './hosted-migration-database';
 import type {CanonicalMigrationOperation} from './hosted-migration-plan';
 import {schema,countsSchema,bucketSchema,objectSchema,own,same,validTimestamp,sourcePolicy,type HostedOperatorStorageInventory} from './hosted-operator-storage-observation';
-export {nativeHostedOperatorStorageCountsSchema,nativeHostedOperatorStorageBucketsSchema,nativeHostedOperatorStorageObjectsSchema,nativeHostedOperatorStorageBucketPolicy,prepareNativeHostedOperatorStorageInventory} from './hosted-operator-storage-observation';
-export type {HostedOperatorStorageInventory,NativeHostedOperatorStorageSnapshot} from './hosted-operator-storage-observation';
+export {nativeHostedOperatorStorageCountsSchema,nativeHostedOperatorStorageBucketsSchema,nativeHostedOperatorStorageObjectsSchema,nativeHostedOperatorStorageBucketPolicy,nativeHostedInactiveCronDefinitionStorageBucketPolicy,prepareNativeHostedOperatorStorageInventory,prepareNativeHostedInactiveCronDefinitionStorageInventory} from './hosted-operator-storage-observation';
+export type {HostedOperatorStorageInventory,HostedInactiveCronDefinitionStorageInventory,NativeHostedOperatorStorageSnapshot} from './hosted-operator-storage-observation';
 const bucket='cuevo-release-operator',failure=()=>Error('Hosted operator Storage inventory, source or metadata requires review; contents withheld.');
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
 async function readWave<const T extends readonly unknown[]>(requests:{[K in keyof T]:Promise<T[K]>}):Promise<T>{const results=await Promise.allSettled(requests);if(results.some(result=>result.status==='rejected'))throw failure();return results.map(result=>{if(result.status!=='fulfilled')throw failure();return result.value;}) as unknown as T;}
