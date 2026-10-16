@@ -89,7 +89,7 @@
     "esbuild": "0.28.2",
     "eslint": "9.39.1",
     "storybook": "10.6.1",
-    "supabase": "2.119.0",
+    "supabase": "2.120.0",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
