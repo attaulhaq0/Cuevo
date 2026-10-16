@@ -28,7 +28,9 @@ import {observeHostedInactiveCronDefinitionStorageProject,createHostedInactiveCr
 import type {HostedSchemaCatalogueRow} from './hosted-schema-catalogue';
 
 export type PairingFailurePhase='CATALOGUE'|'BASELINE51'|'POST_ACK52'|'READ53'|'READ54';
+export type PairingFailureReboundStep='PACKAGE'|'ADMISSION_PREPARE'|'ADMISSION_REFRESH'|'PERMISSIONS'|'READ'|'ASSERT';
 const failurePhases:readonly string[]=['CATALOGUE','BASELINE51','POST_ACK52','READ53','READ54'];
+const failureReboundSteps:readonly string[]=['PACKAGE','ADMISSION_PREPARE','ADMISSION_REFRESH','PERMISSIONS','READ','ASSERT'];
 const failureCategories:readonly string[]=['ASSERTION','SYNTAX_OR_MODULE','REFUSAL','OTHER'];
 const failureFrameFiles=new Set(['hosted-inactive-cron-native-pairing.fixture.ts','hosted-inactive-cron-native-pairing.test.ts','hosted-migration-executor.ts','hosted-migration-database.ts','hosted-migration-journal.ts','hosted-migration-native-process.ts'].map(name=>'scripts/database/'+name));
 export const pairingFailureDiagnosticPath='.local/verification/inactive-cron-pairing/failure.json';
@@ -41,14 +43,15 @@ const failureInteger=(value:unknown,maximum:number)=>typeof value==='number'&&Nu
 /** Closed test-only data. No raw error, journal, SQL or caller effect flag is retained. */
 export function encodePairingFailureDiagnostic(value:unknown):string|null{
  try{
-  const raw=failureRecord(value,['identity','phase','category','frame','counters']),identity=failureRecord(raw.identity,['sourceSha','treeSha','runId','runAttempt','testSha256','fixtureSha256']);
+  const raw=failureRecord(value,['identity','phase','reboundStep','category','frame','counters']),identity=failureRecord(raw.identity,['sourceSha','treeSha','runId','runAttempt','testSha256','fixtureSha256']);
   for(const key of['sourceSha','treeSha'])if(typeof identity[key]!=='string'||!/^[a-f0-9]{40}$/.test(identity[key] as string))return null;
   for(const key of['testSha256','fixtureSha256'])if(typeof identity[key]!=='string'||!/^[a-f0-9]{64}$/.test(identity[key] as string))return null;
   if(typeof identity.runId!=='string'||!/^[1-9][0-9]{0,19}$/.test(identity.runId)||!Number.isSafeInteger(Number(identity.runId))||!failureInteger(identity.runAttempt,1000000)||identity.runAttempt===0||typeof raw.phase!=='string'||!failurePhases.includes(raw.phase)||typeof raw.category!=='string'||!failureCategories.includes(raw.category))return null;
+  if(raw.phase==='READ53'||raw.phase==='READ54'){if(typeof raw.reboundStep!=='string'||!failureReboundSteps.includes(raw.reboundStep))return null;}else if(raw.reboundStep!==null)return null;
   let frame:Record<string,unknown>|null=null,counters:Record<string,unknown>|null=null;
   if(raw.frame!==null){frame=failureRecord(raw.frame,['file','line','column']);if(typeof frame.file!=='string'||!failureFrameFiles.has(frame.file)||!failureInteger(frame.line,1000000)||frame.line===0||!failureInteger(frame.column,1000000)||frame.column===0)return null;}
   if(raw.counters!==null){counters=failureRecord(raw.counters,['cliAttempts','historyRows','closed','released','ownerObjects','ackRecords','localAckRecords']);if(!failureInteger(counters.cliAttempts,2)||!failureInteger(counters.historyRows,1000)||typeof counters.closed!=='boolean'||typeof counters.released!=='boolean'||!failureInteger(counters.ownerObjects,1)||!failureInteger(counters.ackRecords,3)||counters.localAckRecords!==null&&!failureInteger(counters.localAckRecords,3))return null;}
-  const encoded=JSON.stringify({version:1,purpose:'CUEVO_CONTROLLED_INACTIVE_PAIRING_FAILURE',evidence:'CONTROLLED_SOURCE_FIXTURE_FAILURE_ONLY',effectAuthority:false,hostedAcceptance:false,acceptedReceipt:false,identity,phase:raw.phase,category:raw.category,frame,counters});return Buffer.byteLength(encoded)<=4096?encoded:null;
+  const encoded=JSON.stringify({version:1,purpose:'CUEVO_CONTROLLED_INACTIVE_PAIRING_FAILURE',evidence:'CONTROLLED_SOURCE_FIXTURE_FAILURE_ONLY',effectAuthority:false,hostedAcceptance:false,acceptedReceipt:false,identity,phase:raw.phase,reboundStep:raw.reboundStep,category:raw.category,frame,counters});return Buffer.byteLength(encoded)<=4096?encoded:null;
  }catch{return null;}
 }
 /** Read only own error data; private text never reaches the output. */
@@ -66,7 +69,7 @@ export function pairingFailureErrorDetails(value:unknown):{category:string;frame
  * replace an assertion, repair custody, or become a partition receipt. */
 export async function retainPairingFailureDiagnostic(details:unknown):Promise<boolean>{
  try{
-  const raw=failureRecord(details,['phase','category','frame','counters']);if(process.platform!=='linux'||process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_ENVIRONMENT!=='github-hosted'||process.env.GITHUB_JOB!=='source-fixtures-delivery')return false;
+  const raw=failureRecord(details,['phase','reboundStep','category','frame','counters']);if(process.platform!=='linux'||process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_ENVIRONMENT!=='github-hosted'||process.env.GITHUB_JOB!=='source-fixtures-delivery')return false;
   const root=resolve(import.meta.dirname,'../..');if(!root.startsWith('/home/runner/work/')||await actualFs.realpath(root)!==root)return false;
   const timing=JSON.parse(process.env.CUEVO_CI_TEST_TIMING_INPUT??''),current=timing.identity,sourceSha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).trim(),treeSha=execFileSync('git',['rev-parse','HEAD^{tree}'],{cwd:root,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).trim();
   if(current?.scope!=='source-delivery'||sourceSha!==process.env.GITHUB_SHA||sourceSha!==current.sourceSha||treeSha!==current.treeSha||current.runId!==process.env.GITHUB_RUN_ID||String(current.runAttempt)!==process.env.GITHUB_RUN_ATTEMPT||!Array.isArray(timing.files))return false;
@@ -144,7 +147,7 @@ export async function pairingMetadataHarness(input:FixtureInput){
  const dependencies=registerHooks({resolve(specifier,context,next){return specifier==='zod'?{shortCircuit:true,url:zodUrl}:next(specifier,context);}});
  const root=process.cwd(),repository=input.run.repository.full_name,sourceSha=input.run.head_sha,treeSha=input.tree,ciRunId=String(input.run.id),releaseRunId='51',now=pairingNow;let activeReleaseRunId=releaseRunId;
  const contracts=await import('../verification/backend-release-contracts');
- let approvalComment='',failurePhase:PairingFailurePhase='CATALOGUE';let failureState:PairingState|null=null;
+ let approvalComment='',failurePhase:PairingFailurePhase='CATALOGUE',failureReboundStep:PairingFailureReboundStep|null=null;let failureState:PairingState|null=null;
  const backend={id:51,run_attempt:1,head_sha:sourceSha,head_branch:'main',event:'workflow_dispatch',status:'in_progress',conclusion:null,path:'.github/workflows/backend-release.yml',repository:{full_name:repository}};
  const environment={id:123,name:'staging',can_admins_bypass:false,protection_rules:[{type:'required_reviewers',prevent_self_review:false,reviewers:[{type:'User',reviewer:{id:95836629,login:'attaulhaq0',type:'User'}}]}],deployment_branch_policy:{protected_branches:false,custom_branch_policies:true}};
  const read=async(path:string):Promise<unknown>=>{
@@ -166,7 +169,7 @@ export async function pairingMetadataHarness(input:FixtureInput){
   throw Error('Unexpected controlled GitHub path: '+path);
  };
  const archive=async(id:number)=>{assert.ok(input.archives[String(id)],'only the existing retained fixture archives are read');return Buffer.from(input.archives[String(id)],'base64');};
- return{root,repository,sourceSha,treeSha,ciRunId,releaseRunId,now,contracts,read,archive,backend,environment,disposeDependencies:()=>dependencies.deregister(),setReleaseRun:(value:string)=>{activeReleaseRunId=value;backend.id=Number(value);},setApproval:(comment:string)=>{approvalComment=comment;},setFailurePhase:(value:PairingFailurePhase)=>{failurePhase=value;},setFailureState:(value:PairingState|null)=>{failureState=value;},failureDetails:(error:unknown)=>{const state=failureState,prefix=state?.currentPrefix;return{phase:failurePhase,...pairingFailureErrorDetails(error),counters:state?{cliAttempts:state.cliAttempts,historyRows:state.history.length,closed:state.closed,released:state.released,ownerObjects:prefix&&state.objects.has(prefix+'owner.json')?1:0,ackRecords:prefix?['000001.record.json','000002.record.json','000003.record.json'].filter(name=>state.objects.has(prefix+name)).length:0,localAckRecords:state.observedLocalAckRecords}:null};}};
+ return{root,repository,sourceSha,treeSha,ciRunId,releaseRunId,now,contracts,read,archive,backend,environment,disposeDependencies:()=>dependencies.deregister(),setReleaseRun:(value:string)=>{activeReleaseRunId=value;backend.id=Number(value);},setApproval:(comment:string)=>{approvalComment=comment;},setFailurePhase:(value:PairingFailurePhase)=>{failurePhase=value;failureReboundStep=null;},setFailureReboundStep:(value:PairingFailureReboundStep)=>{failureReboundStep=value;},setFailureState:(value:PairingState|null)=>{failureState=value;},failureDetails:(error:unknown)=>{const state=failureState,prefix=state?.currentPrefix;return{phase:failurePhase,reboundStep:failureReboundStep,...pairingFailureErrorDetails(error),counters:state?{cliAttempts:state.cliAttempts,historyRows:state.history.length,closed:state.closed,released:state.released,ownerObjects:prefix&&state.objects.has(prefix+'owner.json')?1:0,ackRecords:prefix?['000001.record.json','000002.record.json','000003.record.json'].filter(name=>state.objects.has(prefix+name)).length:0,localAckRecords:state.observedLocalAckRecords}:null};}};
 }
 const originalMetadataPins:Record<string,readonly[string,string,number,number,string]>={
  '11707162912':['cuevo-backend-schema-result-38150995125-1','832e6eed86f1cb55b0928319b473a51fe4d39acdc4b5ad6bf93f5a1ce5009bcb',4369,38150995125,'239bb18f5646bbfcc0aa5a5bee56edb81e9dfb37'],
@@ -318,17 +321,25 @@ async function createControlledCliFiles(root:string){const files=[['node_modules
 
 async function runReboundPairing(value:{input:FixtureInput;metadata:Awaited<ReturnType<typeof pairingMetadataHarness>>;proof:ChildProof;plan:Original231TransportAppendPlan;state:PairingState;originalContext:ReturnType<typeof prepareInactiveCronDefinitionContext>;journalPayloadSha256:string;journalChainSha256:string;expected:unknown;prepared:unknown;certificate:{path:string;sha256:string};releaseRunId:string;expectRefusal?:boolean}){
  value.metadata.setFailurePhase(value.expectRefusal?'READ54':'READ53');
+ // Last started wrapper step only; existing counters do not establish its cause.
+ value.metadata.setFailureReboundStep('PACKAGE');
  const selection=preparePersistedInactiveCronAcknowledgementSelection({context:value.originalContext,journalPayloadSha256:value.journalPayloadSha256,journalChainSha256:value.journalChainSha256}),previous=value.expected as Record<string,unknown>,previousBody=JSON.parse((value.prepared as {canonicalJson:string}).canonicalJson),binding=previous.inactiveCronDefinitions as Record<string,unknown>;
  value.metadata.setReleaseRun(value.releaseRunId);
  const reboundBinding=value.metadata.contracts.prepareInactiveCronDefinitionBackendBinding({plan:value.plan,stageSha256:binding.stageSha256,catalogueReference232:value.proof.reference,persistedAcknowledgement:selection}),fingerprints={...(previous.fingerprints as Record<string,unknown>),migrationHistorySha256:reboundBinding.afterHistorySha256};
  const expected={...previous,releaseRunId:value.releaseRunId,inactiveCronDefinitions:reboundBinding,fingerprints,backendRun:{...value.metadata.backend,id:Number(value.releaseRunId)},now:value.state.clock};
  const prepared=value.metadata.contracts.prepareBackendReleaseIntent({...previousBody,releaseRunId:value.releaseRunId,inactiveCronDefinitions:reboundBinding,fingerprints,preparedAt:new Date(value.state.clock).toISOString(),expiresAt:new Date(value.state.clock+600000).toISOString()},expected);value.metadata.setApproval(prepared.comment);
- const currentIdentity={...value.originalContext.identity,approvalDigest:prepared.sha256},currentContext=prepareInactiveCronDefinitionContext({plan:value.plan,identity:currentIdentity,catalogueReference232:value.proof.reference,releaseRunId:value.releaseRunId,releaseRunAttempt:1}),admission=await import('../verification/backend-release-admission'),handle=await admission.prepareNativeBackendReleaseAdmission({repoRoot:process.cwd(),prepared,expected,effectScope:'INACTIVE_CRON_DEFINITIONS',githubToken:password}),writes=value.state.events.filter(row=>row.startsWith('http:POST:/storage/v1/object/')&&!row.includes('/object/list/')).length,cliBefore=value.state.cliAttempts;
+ const currentIdentity={...value.originalContext.identity,approvalDigest:prepared.sha256},currentContext=prepareInactiveCronDefinitionContext({plan:value.plan,identity:currentIdentity,catalogueReference232:value.proof.reference,releaseRunId:value.releaseRunId,releaseRunAttempt:1}),admission=await import('../verification/backend-release-admission');
+ value.metadata.setFailureReboundStep('ADMISSION_PREPARE');
+ const handle=await admission.prepareNativeBackendReleaseAdmission({repoRoot:process.cwd(),prepared,expected,effectScope:'INACTIVE_CRON_DEFINITIONS',githubToken:password}),writes=value.state.events.filter(row=>row.startsWith('http:POST:/storage/v1/object/')&&!row.includes('/object/list/')).length,cliBefore=value.state.cliAttempts;
  value.state.closed=false;value.state.released=false;
  try{
+  value.metadata.setFailureReboundStep('ADMISSION_REFRESH');
   const admissionBinding={repoRoot:process.cwd(),prepared,expected,effectScope:'INACTIVE_CRON_DEFINITIONS' as const};await admission.readNativeInactiveCronBackendReleaseAdmission(handle,admissionBinding);admission.assertNativeInactiveCronBackendReleaseAdmission(handle,admissionBinding);
+  value.metadata.setFailureReboundStep('PERMISSIONS');
   const restored=await(await import('./hosted-migration-journal')).restorePersistedInactiveCronJournalPermissions({repoRoot:process.cwd(),persistedAcknowledgement:selection});assert.equal(restored.modeEvidence,'POSIX_MODE_VERIFIED');assert.equal(restored.journalChainSha256,value.journalChainSha256);assert.equal(restored.journalPayloadSha256,value.journalPayloadSha256);
+  value.metadata.setFailureReboundStep('READ');
   const result=await(await import('./hosted-migration-executor')).executeNativePersistedInactiveCronAcknowledgementRead({repoRoot:process.cwd(),plan:value.plan,prepared,expected,identity:currentContext.identity,catalogueReference232:value.proof.reference,releaseRunId:value.releaseRunId,releaseRunAttempt:1,databaseUrl:value.originalContext.identity.databaseUrl,certificate:value.certificate,migrationPassword:password,providerToken:password,storageKey:password,admissionHandle:handle});
+  value.metadata.setFailureReboundStep('ASSERT');
   assert.equal(result.status,value.expectRefusal?'REQUIRES_REVIEW':'ACK_REBOUND_READ_ONLY',JSON.stringify({result,queries:value.state.queries.slice(-3)}));if(value.expectRefusal){assert.equal(value.state.lateReadInjected,true,'the refusal follows the actual final-local-read boundary');assert.equal(result.configuration,null);}else{assert.equal(result.cleanup,'RELEASED');assert.equal(result.configuration?.effectScope,'SQL_CRON_CONFIGURATION_ONLY');assert.equal(result.configuration?.activationAuthorized,false);assert.equal(value.state.released,true);}assert.equal(result.cliExecution,'NOT_EXECUTED');assert.equal(result.sqlExecution,'NOT_EXECUTED');assert.equal(value.state.cliAttempts,cliBefore);assert.equal(value.state.events.filter(row=>row.startsWith('http:POST:/storage/v1/object/')&&!row.includes('/object/list/')).length,writes);assert.equal(value.state.closed,true);
   return{status:result.status,configurationScope:result.configuration?.effectScope,cliDelta:0,providerRecordWrites:0,permissionEvidence:restored.modeEvidence,originalContextSha256:value.originalContext.contextSha256,currentContextSha256:currentContext.contextSha256,originalJournalPayloadSha256:value.journalPayloadSha256,originalJournalChainSha256:value.journalChainSha256,lateFinalReadInjected:value.state.lateReadInjected,actualHostedAcceptance:false};
  }finally{admission.disposeNativeBackendReleaseAdmission(handle);}
