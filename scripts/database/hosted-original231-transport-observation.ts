@@ -38,6 +38,14 @@ export function inactiveCronEmptyAppCensusSql(catalogue:HostedSchemaCatalogue):s
 }
 export function readInactiveCronEmptyAppCensus(value:unknown){return z.object({tableCount:z.literal(136),empty:z.literal(true)}).strict().parse(value);}
 
+/** One fixed ancestor binding for native prior-journal consumers. The supplied
+ * metadata does not issue a permit; the native owner verifies its raw custody. */
+export function original231InactivePrefixCustody(templateValue:unknown){
+ const template=parseOriginal231RecoveryTemplate(templateValue),fields=originalNativeIntentTemplateSchema.shape.originalIdentity.shape,nativeIdentity=Object.fromEntries(Object.entries(fields).map(([name,field])=>[name,field.value])) as z.infer<typeof originalNativeIntentTemplateSchema.shape.originalIdentity>,prefix=createOriginalPrefixReconciliationTemplate({recoverySource:{sourceSha:nativeIdentity.sourceSha,treeSha:nativeIdentity.treeSha,ciRunId:nativeIdentity.ciRunId,releaseRunId:'38007719238',runAttempt:1},stageRows:template.stageRows.slice(0,123),historySha256:hash(canonicalReleaseExecutionJson(template.stageRows.slice(0,120).map(({version,sha256})=>({version,sourceReceiptSha256:sha256})))),cataloguePolicySha256:unknownPrefixCataloguePolicySha256,catalogueSha256:prefixPolicy.expected.catalogueSha256,absencePolicySha256:unknownPrefixAbsencePolicySha256,endpointSha256:hash(canonicalReleaseExecutionJson({projectRef:nativeIdentity.projectRef,kind:'session-pooler',host:new URL(nativeIdentity.databaseUrl).hostname,port:5432,database:'postgres'}))});
+ const recoveredPrefixIdentity={...nativeIdentity,planSha256:'9d88259379b2e7d14c0e951c10f6624b18a2ddefbcdd5086340f487c43ffb7c8',stageId:'prefix',stageSha256:prefix.originalIdentity.stageSha256,approvalDigest:'4d103d7b6251f2e15daa6fbb54e762c20435161c14048a1fa9bdfecd0c488f55'};
+ return{nativeIdentity,prefix,recoveredPrefixIdentity};
+}
+
 /** Exact original private objects remain unchanged while one distinct current
  * operation may own its new intent/terminal. The original interrupted120 and
  * recovered123 journals are ancestors of native124, not unrelated operations.
@@ -45,8 +53,7 @@ export function readInactiveCronEmptyAppCensus(value:unknown){return z.object({t
  * PREFIX123_CONFIRMED receipt; no general COMMITTED exception is introduced. */
 export function requireOriginal231InactiveDefinitionCustody(value:{objects:{path:string;sha256:string}[];operations:{operation:string;identity:unknown;state:string;chainSha256:string}[]},templateValue:unknown,current:{identity:unknown;contextSha256:string}){
  const template=parseOriginal231RecoveryTemplate(templateValue),envelope=JSON.parse(template.native180ReceiptJson),native180=expandOriginalNative180RecoveryTemplate(envelope.template,template.stageRows.slice(0,180)),child=readOriginalNative180RetainedChild(native180).template;
- const nativeIdentity=originalNativeIntentTemplateSchema.shape.originalIdentity.parse(value.operations.find(row=>row.operation===child.native124.originalOperationSha256)?.identity),prefix=createOriginalPrefixReconciliationTemplate({recoverySource:{sourceSha:nativeIdentity.sourceSha,treeSha:nativeIdentity.treeSha,ciRunId:nativeIdentity.ciRunId,releaseRunId:'38007719238',runAttempt:1},stageRows:template.stageRows.slice(0,123),historySha256:hash(canonicalReleaseExecutionJson(template.stageRows.slice(0,120).map(({version,sha256})=>({version,sourceReceiptSha256:sha256})))),cataloguePolicySha256:unknownPrefixCataloguePolicySha256,catalogueSha256:prefixPolicy.expected.catalogueSha256,absencePolicySha256:unknownPrefixAbsencePolicySha256,endpointSha256:hash(canonicalReleaseExecutionJson(native180.migrationEndpoint))});
- const recoveredPrefixIdentity={...nativeIdentity,planSha256:'9d88259379b2e7d14c0e951c10f6624b18a2ddefbcdd5086340f487c43ffb7c8',stageId:'prefix',stageSha256:prefix.originalIdentity.stageSha256,approvalDigest:'4d103d7b6251f2e15daa6fbb54e762c20435161c14048a1fa9bdfecd0c488f55'};
+ const {nativeIdentity,prefix,recoveredPrefixIdentity}=original231InactivePrefixCustody(template);
  const protectedRows=[
   {operation:hash(JSON.stringify(prefix.originalIdentity)),owner:hash(prefix.ownerJson),records:prefix.recordJson.map(hash),chain:hash(prefix.ownerJson+prefix.recordJson.join('')),identity:prefix.originalIdentity,state:'REQUIRES_REVIEW'},
   {operation:hash(JSON.stringify(recoveredPrefixIdentity)),owner:'837dd88cdd12085aceb0d19b3424af2de67314b5a845b8127d0223cade7976d8',records:['17f1af86dbe07a109057ee7e8c77afd15452a40bbf0a796b75ce07fc90df4550','9ad29f51a0e83ee575f71d320d6d723eecba49f49d9ab89064cba0a638240a9f'],chain:'1c0312bd79e4c734cf2c90e6c7d0476c4b931d0a2844dfaa50b939d148527942',identity:recoveredPrefixIdentity,state:'COMMITTED'},
