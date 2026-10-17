@@ -68,7 +68,7 @@ const runStep=async(step:typeof selectedSteps[number])=>{
  const env={...process.env,CUEVO_REQUIRE_INTEGRATION:'1',CUEVO_REQUIRE_LIVE_INTELLIGENCE:'0',NEXT_TELEMETRY_DISABLED:'1',CUEVO_VERIFICATION_RUN_ID:runId,CUEVO_VERIFICATION_SOURCE_SHA:sourceSha,CUEVO_VERIFICATION_SOURCE_DIGEST:sourceDigest,CUEVO_VERIFICATION_SCOPE:step.name,CUEVO_VERIFICATION_BROWSER_RECEIPT_FILE:resolve(directory,'browser-receipt.json'),CUEVO_INTEGRATION_PHASE_RECEIPT_FILE:resolve(directory,'integration-phase.json'),CI:['browser','browser-compatibility','critical-browser'].includes(step.name)?'true':process.env.CI};
  let inventory:BrowserInventory|undefined,reportPath:string|undefined;
  if(step.name==='critical-browser')args.push(...criticalBrowserArguments(selection.browserFiles));
- let code:number|null=null;
+ let code:number|null;
  try{
   if(browser){
    const inventoryPath=resolve(directory,`${step.name}-inventory.json`);reportPath=resolve(directory,`${step.name}-results.json`);

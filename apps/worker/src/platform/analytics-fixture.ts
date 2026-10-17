@@ -1,5 +1,6 @@
 import{mkdir,readFile,writeFile,link,unlink}from'node:fs/promises';import{resolve}from'node:path';import{randomUUID}from'node:crypto';
 import type{Pool}from'pg';import{createAnalyticsEvent}from'@cuevo/config';
+// eslint-disable-next-line preserve-caught-error -- An identity collision is an integrity verdict; the expected existing-file error contains private paths.
 export async function writeAnalyticsFixture(directory:string,event:NonNullable<ReturnType<typeof createAnalyticsEvent>>){const id=event.properties.$insert_id;if(!/^[a-f0-9]{64}$/.test(id))throw Error('Invalid minimized analytics identity.');await mkdir(directory,{recursive:true});const path=resolve(directory,id+'.json');const temporary=resolve(directory,'.'+randomUUID()+'.pending');const payload=JSON.stringify(event);try{await writeFile(temporary,payload,{flag:'wx',mode:0o600});try{await link(temporary,path);}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;if(await readFile(path,'utf8')!==payload)throw Error('Analytics fixture identity collision.');}}finally{await unlink(temporary).catch(()=>undefined);}return id;}
 export class AnalyticsFixtureDelivery{
  private active=false;

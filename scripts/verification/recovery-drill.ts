@@ -10,7 +10,7 @@ const status=await waitForCuevoProviderReady({
  onSample:value=>{providerReadiness.push(value);},
 }).catch(async error=>{await writeFile(resolve(directory,'provider-readiness.json'),JSON.stringify({status:'FAILED',samples:providerReadiness},null,2));throw error;});
 await writeFile(resolve(directory,'provider-readiness.json'),JSON.stringify({status:'VERIFIED',samples:providerReadiness},null,2));assertCuevoLocalTarget(status);validateRecoveryTarget(status.DB_URL,scratch);const fullArchive=resolve(directory,'database-full.dump');const scratchArchive=resolve(directory,'database-scratch.dump');
-const admin=new Pool({connectionString:status.DB_URL,max:1});const checks:{name:string;passed:boolean}[]=[];let scratchCreated=false;let cleanupComplete=false;let backupTransaction=false;const objectPath='recovery/'+scratch+'/fixture.txt';let objectCreated=false;
+const admin=new Pool({connectionString:status.DB_URL,max:1});const checks:{name:string;passed:boolean}[]=[];let scratchCreated=false;let cleanupComplete:boolean;let backupTransaction=false;const objectPath='recovery/'+scratch+'/fixture.txt';let objectCreated=false;
 const archives:{kind:'full'|'scratch-domain';sha256:string;excludedExtensions:string[];excludedSchemas:string[];schedulerRestore:string}[]=[];let scheduler:{extensionVersion:string|null;jobCount:number;activeJobCount:number;configurationSha256:string}|null=null;
 const storage=createClient(status.API_URL,status.SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false},global:{fetch:(input,init)=>fetch(input,{...init,signal:AbortSignal.timeout(10000)})}}).storage.from('learner-private');
 try{

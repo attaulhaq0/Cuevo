@@ -10,15 +10,16 @@ export class Database {
     this.pool?.on('error', () => { console.error(JSON.stringify({ service: 'cuevo-api', code: 'DATABASE_IDLE_CONNECTION_FAILED' })); });
   }
   async actorTransaction<T>(userId: string, schoolId: string | undefined, fn: (client: PoolClient) => Promise<T>): Promise<T> {
-    const started=performance.now();let outcome:'COMMITTED'|'REJECTED'|'UNAVAILABLE'='UNAVAILABLE';
+    const started=performance.now();
     if (!this.pool) throw new DomainError('DATABASE_UNAVAILABLE', 503, 'School services are temporarily unavailable.');
     const client = await this.pool.connect().catch(() => { throw new DomainError('DATABASE_UNAVAILABLE', 503, 'School services are temporarily unavailable.'); });
+    let outcome:'COMMITTED'|'REJECTED'='REJECTED';
     try {
       await client.query('BEGIN');
       await client.query("select set_config('app.actor_id',$1,true), set_config('app.school_id',$2,true)", [userId, schoolId ?? '']);
       if (schoolId && this.settings.syntheticOnly && (await client.query<{ allowed: boolean }>('select internal.synthetic_school_runtime_allowed($1::uuid) as allowed', [schoolId])).rows[0]?.allowed !== true) throw new DomainError('SYNTHETIC_SCHOOL_REQUIRED', 403, 'This staging environment requires a current entirely synthetic school.');
       const result = await fn(client); await client.query('COMMIT');outcome='COMMITTED'; return result;
-    } catch (error) {outcome='REJECTED'; await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release();try{console.log(JSON.stringify(databaseTransactionRecord(performance.now()-started,outcome,this.pool.waitingCount)));}catch{/* Metrics cannot change transaction receipts. */} }
   }
   async ready(): Promise<boolean> {

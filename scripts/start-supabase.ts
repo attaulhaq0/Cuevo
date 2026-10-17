@@ -38,6 +38,7 @@ export async function startCuevoSupabase(prepared?: ReplayWorkdirs) {
         await writeFile(resolve(replay.root, 'start-diagnostic.json'), JSON.stringify({ version: 1, purpose: 'CUEVO_LOCAL_START_DIAGNOSTIC', context: { sourceSha, treeSha, operation, ci }, cliVersion: '2.120.0', ...diagnostic, observedAt: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 });
       }
     } catch { /* A missing diagnostic never replaces the original startup failure. */ }
+    // eslint-disable-next-line preserve-caught-error -- The bounded diagnostic owner retains fixed outcomes; raw startup errors may contain credentials.
     throw new Error('Cuevo local Supabase failed to start; inspect local Docker state without printing credentials.');
   }
 }

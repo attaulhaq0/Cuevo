@@ -55,6 +55,7 @@ export async function scanRepository(root: string, executable: string) {
   if (gitRoot !== source || git(source, ['rev-parse', '--is-shallow-repository']).trim() !== 'false') throw Error('Secret scan requires the exact repository root and complete Git history.');
   const grafts = resolve(source, git(source, ['rev-parse', '--git-path', 'info/grafts']).trim());
   try { await lstat(grafts); throw Error('Legacy Git graft metadata is refused.'); }
+  // eslint-disable-next-line preserve-caught-error -- The scan verdict deliberately withholds private filesystem details from error causes.
   catch (error) { if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw Error('Secret scan refuses legacy Git graft metadata.'); }
   const parent = join(source, '.local', 'security'); await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(join(parent, 'cuevo-secret-scan-'));
@@ -65,6 +66,7 @@ export async function scanRepository(root: string, executable: string) {
       const paths = new Set(git(source, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean));
       for (const path of paths) {
         validateAuthoredPath(path); const file = join(source, path);
+        // eslint-disable-next-line preserve-caught-error -- The scan verdict deliberately withholds private filesystem details from error causes.
         let stat; try { stat = await lstat(file); } catch (error) { if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue; throw Error('Authored secret-scan source is unavailable.'); }
         const canonical = relative(await realpath(source), await realpath(file));
         if (!stat.isFile() || stat.isSymbolicLink() || canonical.startsWith('..') || resolve(source, canonical) !== resolve(file)) throw Error('Secret scan refuses non-file, linked or external authored source.');

@@ -213,7 +213,7 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
     const data=record(value);if(!data||typeof data.message!=='string'||data.message.length>2048||!data.message.startsWith(original231DiagnosticPrefix)||data.nesting!==0||!integer(data.line,1_000_000)||data.line<1||!integer(data.column,1_000_000)||data.column<1||typeof data.file!=='string')return;
     const file=files.get(original231DiagnosticFile);if(!file||data.file.replaceAll('\\','/')!==original231DiagnosticFile&&data.file.replaceAll('\\','/')!==resolve(repoRoot,original231DiagnosticFile).replaceAll('\\','/'))return;
     const matched=file.units.filter(unit=>!unit.wrapper&&unit.type==='test'&&unit.titleSha256===hash(original231DiagnosticTitle)&&unit.line===data.line&&unit.column===data.column&&unit.nesting===0&&unit.complete?.outcome==='FAILED');if(matched.length!==1||file.diagnosticRejected)return;
-    let diagnostic:Original231ExecutorFailureDiagnostic|null=null;try{diagnostic=readOriginal231ExecutorFailureDiagnostic(JSON.parse(data.message.slice(original231DiagnosticPrefix.length)));}catch{return;}if(!diagnostic)return;
+    let diagnostic:Original231ExecutorFailureDiagnostic|null;try{diagnostic=readOriginal231ExecutorFailureDiagnostic(JSON.parse(data.message.slice(original231DiagnosticPrefix.length)));}catch{return;}if(!diagnostic)return;
     if(file.row.failedCaseDiagnostics){delete file.row.failedCaseDiagnostics;file.diagnosticRejected=true;return;}
     const failed=matched[0].complete!;const definition={column:failed.column,line:failed.line,nesting:failed.nesting,suiteSha256:failed.suiteSha256,titleSha256:failed.titleSha256};
     file.row.failedCaseDiagnostics=[{definitionSha256:hash(JSON.stringify(definition)),diagnostic}];
@@ -224,7 +224,7 @@ export function createCiTestTimingCollector(input: CiTestTimingOptions) {
    const file=files.get(nativeIsolationDiagnosticFile);if(!file||data.file.replaceAll('\\','/')!==nativeIsolationDiagnosticFile&&data.file.replaceAll('\\','/')!==resolve(repoRoot,nativeIsolationDiagnosticFile).replaceAll('\\','/'))return;
    const matched=file.units.filter(unit=>!unit.wrapper&&unit.type==='test'&&unit.titleSha256===hash(nativeIsolationDiagnosticTitle)&&unit.line===data.line&&unit.column===data.column&&unit.nesting===0&&unit.complete?.outcome==='FAILED');if(matched.length!==1||file.nativeDiagnosticRejected)return;
    if(file.nativeDiagnosticSeen){delete file.row.nativeIsolationFailureDiagnostics;file.nativeDiagnosticRejected=true;return;}file.nativeDiagnosticSeen=true;
-   let diagnostic:NativeIsolationFailureDiagnostic|null=null;try{diagnostic=readNativeIsolationFailureDiagnostic(JSON.parse(data.message.slice(nativeIsolationDiagnosticPrefix.length)));}catch{return;}if(!diagnostic)return;
+   let diagnostic:NativeIsolationFailureDiagnostic|null;try{diagnostic=readNativeIsolationFailureDiagnostic(JSON.parse(data.message.slice(nativeIsolationDiagnosticPrefix.length)));}catch{return;}if(!diagnostic)return;
    const failed=matched[0].complete!,definition={column:failed.column,line:failed.line,nesting:failed.nesting,suiteSha256:failed.suiteSha256,titleSha256:failed.titleSha256};file.row.nativeIsolationFailureDiagnostics=[{definitionSha256:hash(JSON.stringify(definition)),diagnostic}];
   }
   function consume(event: unknown) {
