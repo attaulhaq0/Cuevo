@@ -37,6 +37,13 @@ export function readNativeCronProofSources(input:{repoRoot:string;sourceSha:stri
  return{...loaded,selection,names:selection.rows.map(row=>row.name)};
 }
 
+/** The catalogue owner validates every row under its own32MiB bound. Its exact
+ * digest and the paired facts fit the unchanged1MiB release-bundle serializer. */
+export function nativeCronCanonicalFingerprint(catalogue:unknown,pairedFacts:unknown){
+ const admitted=requireCompleteHostedSchemaCatalogue(catalogue);
+ return hash(canonicalReleaseExecutionJson({catalogueSha256:admitted.sha256,pairedFacts}));
+}
+
 /** The only effect entrypoint is a fixed genuine fresh-CI proof, with no arguments. */
 export async function runNativeCronMechanicsProof(){
  const root=resolve('.'),env=runner(root),context=captureCanonicalSourceContext(root,env.GITHUB_SHA,undefined),started=Date.now(),deadline=started+300000,ownerId=randomUUID(),name='cuevo-native-cron-'+ownerId;
@@ -62,7 +69,7 @@ export async function runNativeCronMechanicsProof(){
  const unschedule=async(jobId:string)=>{int8.parse(jobId);const attempt=unscheduleAttempts.get(jobId),job=jobs.get(jobId);if(!attempt||!job||unscheduleUncertain)throw fail();try{await attempt.attempt(id=>sql('cuevo_worker',`select cron.unschedule(${id}::bigint);`));if(await attempt.settle(()=>jobRead(job.name))!=='ABSENT')throw fail();jobs.delete(jobId);}catch(error){unscheduleUncertain=true;throw error;}};
  const resourceInventory=async()=>{const ids=(await good(['container','ls','--all','--no-trunc','--quiet'])).split(/\r?\n/).filter(Boolean).sort(),rows=[];for(const id of ids){if(id===containerId)continue;const row=await inspect(id);rows.push({id:row.Id,name:row.Name,image:row.Image,running:row.State.Running,startedAt:row.State.StartedAt});}return{containers:rows,volumes:(await good(['volume','ls','--quiet'])).split(/\r?\n/).filter(Boolean).sort()};};
  let baseline:unknown,canonicalBefore:string|undefined;
- const canonicalFingerprint=async()=>{emptySchema.parse(await json('postgres',emptySql));const structural=await json('postgres',`select coalesce(json_agg(row_to_json(s)),'[]'::json)from(${hostedSchemaCatalogueStructuralSql.replace(/;\s*$/,'')})s;`),authority=await json('postgres',`select coalesce(json_agg(row_to_json(s)),'[]'::json)from(${hostedSchemaCatalogueAuthoritySql.replace(/;\s*$/,'')})s;`),pairedFacts=await json('postgres',original231TransportDisabledDefinitionsSql);const catalog=requireCompleteHostedSchemaCatalogue([...structural,...authority]);return hash(canonicalReleaseExecutionJson({catalogue:catalog.rows,pairedFacts}));};
+ const canonicalFingerprint=async()=>{emptySchema.parse(await json('postgres',emptySql));const structural=await json('postgres',`select coalesce(json_agg(row_to_json(s)),'[]'::json)from(${hostedSchemaCatalogueStructuralSql.replace(/;\s*$/,'')})s;`),authority=await json('postgres',`select coalesce(json_agg(row_to_json(s)),'[]'::json)from(${hostedSchemaCatalogueAuthoritySql.replace(/;\s*$/,'')})s;`),pairedFacts=await json('postgres',original231TransportDisabledDefinitionsSql);return nativeCronCanonicalFingerprint([...structural,...authority],pairedFacts);};
  const settleJobs=async()=>{for(const[jobName,wanted]of jobNames){const first=await jobRead(jobName),second=await jobRead(jobName);if(canonicalReleaseExecutionJson(first)!==canonicalReleaseExecutionJson(second)||first.length>1)throw fail();if(first.length)registerJob(first[0],{name:jobName,...wanted});else for(const[id,job]of jobs)if(job.name===jobName)jobs.delete(id);}};
  let sourceReplay:NativeCronSourceReplay|undefined,startupFacts:ReturnType<typeof admitNativeCronStartupLine>|undefined,fixtureSha:string|undefined,startupSha:string|undefined,cronRoutines:{name:string;owner:string;definitionSha256:string;aclSha256:string}[]|undefined,registrationPermission:{signature:'cron.schedule(text,text,text)';explicitGrantRemoved:true;residualExecute:boolean}|undefined;const proofCases:ReturnType<typeof admitNativeCronCase>[]=[];
  let denials:{outerTransaction:'2D000';definer:'2D000';procedureSet:'2D000';explicitUsername:Awaited<ReturnType<typeof verifyNativeCronPermissionControl>>;foreignJob:Awaited<ReturnType<typeof verifyNativeCronPermissionControl>>;rawJobWrite:true}|undefined;

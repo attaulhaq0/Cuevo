@@ -152,7 +152,7 @@ function requireOriginalBeforeTransport232(purpose:'CURRENT_SOURCE'|'ORIGINAL_RU
  source.git(['merge-base','--is-ancestor',source.sha,cutoff]);
 }
 function requireOriginalBeforeNativeCronProof(purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',source:OriginalJobSource|undefined){
- const cutoff='0852c34c8c4001591e6752e616875cbd195c8d28';
+ const cutoff='4edd18feaf7374f35cac1264e88470af061cb31b';
  if(purpose!=='ORIGINAL_RUNTIME_METADATA'||!source||!/^[a-f0-9]{40}$/.test(source.sha)||source.git(['rev-parse',cutoff+'^{tree}']).toString().trim()!=='d3ffa3747529b4953b4176a252bbbe88c440b288')throw Error('Original pre-Cron source requires review.');
  source.git(['merge-base','--is-ancestor',source.sha,cutoff]);
 }
