@@ -90,7 +90,12 @@ export function assertNativeOriginal231TransportAppendJournalPermit(value:unknow
 export function assertNativeOriginal231TransportAppendSafetyRecord(value:unknown,current:HostedExecutionJournal['identity']):NativeInactiveCronPermitFacts{
  if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const registered=nativeInactiveCronPermits.get(value);if(!registered||registered.mode!=='APPEND'||!registered.intentOwned||canonicalReleaseExecutionJson(current)!==canonicalReleaseExecutionJson(registered.identity))throw failure();return structuredClone(registered.facts);
 }
-export async function prepareNativeInactiveCronJournalPublication(value:unknown,current:HostedExecutionJournal['identity'],payload:unknown):Promise<NativeJournalPublication>{const registered=inactiveCronPermit(value,current);return registered.publication(parseInactiveCronDefinitionJournal(payload,registered.context));}
+export async function prepareNativeInactiveCronJournalPublication(value:unknown,current:HostedExecutionJournal['identity'],payload:unknown):Promise<NativeJournalPublication>{
+ if(!value||typeof value!=='object'||types.isProxy(value))throw failure();const registered=nativeInactiveCronPermits.get(value);if(!registered||registered.mode!=='APPEND')throw failure();registered.live();if(canonicalReleaseExecutionJson(current)!==canonicalReleaseExecutionJson(registered.identity))throw failure();
+ // Publication renews the full native proof before checking its refreshed age;
+ // prior inventory latency cannot prevent renewal of the still-live owner.
+ return registered.publication(parseInactiveCronDefinitionJournal(payload,registered.context));
+}
 export function readNativeInactiveCronJournalPublicationAcknowledgement(ticket:unknown,current:HostedExecutionJournal['identity'],payload:unknown):NativeInactiveCronPermitFacts{
  if(!ticket||typeof ticket!=='object'||types.isProxy(ticket))throw failure();const registered=nativeInactiveCronJournalPublications.get(ticket),journal=parseInactiveCronDefinitionJournal(payload);if(!registered||canonicalReleaseExecutionJson(current)!==canonicalReleaseExecutionJson(registered.identity)||hash(JSON.stringify(journal))!==registered.payloadSha256||[...registered.posts.values()].some(post=>post.sentAtMs===null))throw failure();registered.live();return structuredClone(registered.facts);
 }
