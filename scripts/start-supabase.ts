@@ -35,7 +35,7 @@ export async function startCuevoSupabase(prepared?: ReplayWorkdirs) {
         ? { repository: env.GITHUB_REPOSITORY!, runId: env.GITHUB_RUN_ID!, attempt: Number(env.GITHUB_RUN_ATTEMPT), job: env.GITHUB_JOB!, scope: env.CUEVO_VERIFICATION_SCOPE!, verificationRunId: env.CUEVO_VERIFICATION_RUN_ID! } : null;
       if (/^operation-[a-zA-Z0-9_-]{1,80}$/.test(operation)) {
         assertReplayWorkdirs(replay, replay.prefix);
-        await writeFile(resolve(replay.root, 'start-diagnostic.json'), JSON.stringify({ version: 1, purpose: 'CUEVO_LOCAL_START_DIAGNOSTIC', context: { sourceSha, treeSha, operation, ci }, cliVersion: '2.119.0', ...diagnostic, observedAt: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 });
+        await writeFile(resolve(replay.root, 'start-diagnostic.json'), JSON.stringify({ version: 1, purpose: 'CUEVO_LOCAL_START_DIAGNOSTIC', context: { sourceSha, treeSha, operation, ci }, cliVersion: '2.120.0', ...diagnostic, observedAt: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 });
       }
     } catch { /* A missing diagnostic never replaces the original startup failure. */ }
     // eslint-disable-next-line preserve-caught-error -- The bounded diagnostic owner retains fixed outcomes; raw startup errors may contain credentials.
