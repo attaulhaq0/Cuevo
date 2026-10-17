@@ -3,6 +3,10 @@ import {z} from 'zod';
 import {original231TransportAppendMigration} from './original231-transport-source';
 import {parseOriginal231RecoveryTemplate,expandOriginalNative180RecoveryTemplate,readOriginalNative180RetainedChild} from './hosted-original-child-recovery';
 import {canonicalReleaseExecutionJson} from '../verification/release-review';
+import {createOriginalPrefixReconciliationTemplate} from './hosted-schema-reconciliation';
+import {originalNativeIntentTemplateSchema} from './hosted-original-native-intent';
+import {unknownPrefixCataloguePolicySha256,unknownPrefixAbsencePolicySha256} from './hosted-schema-reconciliation-policy';
+import prefixPolicy from './unknown-prefix-catalogue-policy.json';
 import {requireCompleteHostedSchemaCatalogue,type HostedSchemaCatalogue} from './hosted-schema-catalogue';
 const fail=()=>Error('Native inactive transport source observation requires review; contents withheld.');
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
@@ -34,15 +38,29 @@ export function inactiveCronEmptyAppCensusSql(catalogue:HostedSchemaCatalogue):s
 }
 export function readInactiveCronEmptyAppCensus(value:unknown){return z.object({tableCount:z.literal(136),empty:z.literal(true)}).strict().parse(value);}
 
+/** One fixed ancestor binding for native prior-journal consumers. The supplied
+ * metadata does not issue a permit; the native owner verifies its raw custody. */
+export function original231InactivePrefixCustody(templateValue:unknown){
+ const template=parseOriginal231RecoveryTemplate(templateValue),fields=originalNativeIntentTemplateSchema.shape.originalIdentity.shape,nativeIdentity=Object.fromEntries(Object.entries(fields).map(([name,field])=>[name,field.value])) as z.infer<typeof originalNativeIntentTemplateSchema.shape.originalIdentity>,prefix=createOriginalPrefixReconciliationTemplate({recoverySource:{sourceSha:nativeIdentity.sourceSha,treeSha:nativeIdentity.treeSha,ciRunId:nativeIdentity.ciRunId,releaseRunId:'38007719238',runAttempt:1},stageRows:template.stageRows.slice(0,123),historySha256:hash(canonicalReleaseExecutionJson(template.stageRows.slice(0,120).map(({version,sha256})=>({version,sourceReceiptSha256:sha256})))),cataloguePolicySha256:unknownPrefixCataloguePolicySha256,catalogueSha256:prefixPolicy.expected.catalogueSha256,absencePolicySha256:unknownPrefixAbsencePolicySha256,endpointSha256:hash(canonicalReleaseExecutionJson({projectRef:nativeIdentity.projectRef,kind:'session-pooler',host:new URL(nativeIdentity.databaseUrl).hostname,port:5432,database:'postgres'}))});
+ const recoveredPrefixIdentity={...nativeIdentity,planSha256:'9d88259379b2e7d14c0e951c10f6624b18a2ddefbcdd5086340f487c43ffb7c8',stageId:'prefix',stageSha256:prefix.originalIdentity.stageSha256,approvalDigest:'4d103d7b6251f2e15daa6fbb54e762c20435161c14048a1fa9bdfecd0c488f55'};
+ return{nativeIdentity,prefix,recoveredPrefixIdentity};
+}
+
 /** Exact original private objects remain unchanged while one distinct current
- * operation may own its new intent/terminal. No unrelated journal is ignored. */
+ * operation may own its new intent/terminal. The original interrupted120 and
+ * recovered123 journals are ancestors of native124, not unrelated operations.
+ * The recovered123 raw hashes were independently matched to its original
+ * PREFIX123_CONFIRMED receipt; no general COMMITTED exception is introduced. */
 export function requireOriginal231InactiveDefinitionCustody(value:{objects:{path:string;sha256:string}[];operations:{operation:string;identity:unknown;state:string;chainSha256:string}[]},templateValue:unknown,current:{identity:unknown;contextSha256:string}){
  const template=parseOriginal231RecoveryTemplate(templateValue),envelope=JSON.parse(template.native180ReceiptJson),native180=expandOriginalNative180RecoveryTemplate(envelope.template,template.stageRows.slice(0,180)),child=readOriginalNative180RetainedChild(native180).template;
+ const {nativeIdentity,prefix,recoveredPrefixIdentity}=original231InactivePrefixCustody(template);
  const protectedRows=[
+  {operation:hash(JSON.stringify(prefix.originalIdentity)),owner:hash(prefix.ownerJson),records:prefix.recordJson.map(hash),chain:hash(prefix.ownerJson+prefix.recordJson.join('')),identity:prefix.originalIdentity,state:'REQUIRES_REVIEW'},
+  {operation:hash(JSON.stringify(recoveredPrefixIdentity)),owner:'837dd88cdd12085aceb0d19b3424af2de67314b5a845b8127d0223cade7976d8',records:['17f1af86dbe07a109057ee7e8c77afd15452a40bbf0a796b75ce07fc90df4550','9ad29f51a0e83ee575f71d320d6d723eecba49f49d9ab89064cba0a638240a9f'],chain:'1c0312bd79e4c734cf2c90e6c7d0476c4b931d0a2844dfaa50b939d148527942',identity:recoveredPrefixIdentity,state:'COMMITTED'},
   {operation:template.selection.originalOperationSha256,owner:template.ownerSha256,records:template.recordSha256,chain:template.originalChainSha256,identity:template.originalIdentity,state:'REQUIRES_REVIEW'},
   {operation:native180.selection.originalOperationSha256,owner:native180.ownerSha256,records:native180.recordSha256,chain:native180.originalChainSha256,identity:native180.originalIdentity,state:'REQUIRES_REVIEW'},
   {operation:child.selection.originalOperationSha256,owner:child.ownerSha256,records:child.recordSha256,chain:child.originalChainSha256,identity:child.originalIdentity,state:'REQUIRES_REVIEW'},
-  {operation:child.native124.originalOperationSha256,owner:child.native124.ownerSha256,records:[child.native124.intentRecordSha256,child.native124.terminalRecordSha256],chain:null,identity:null,state:'COMMITTED'},
+  {operation:child.native124.originalOperationSha256,owner:child.native124.ownerSha256,records:[child.native124.intentRecordSha256,child.native124.terminalRecordSha256],chain:null,identity:nativeIdentity,state:'COMMITTED'},
  ];
  const currentOperation=hash(JSON.stringify(current.identity)),expectedPaths=new Map<string,string>();
  for(const row of protectedRows){const base=`migration/v1/${template.originalIdentity.projectRef}/${row.operation}/`;expectedPaths.set(base+'owner.json',row.owner);row.records.forEach((sha,index)=>expectedPaths.set(base+String(index+1).padStart(6,'0')+'.record.json',sha));

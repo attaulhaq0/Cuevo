@@ -5,10 +5,35 @@ import {resolve,join,sep} from 'node:path';
 import {tmpdir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {original231RecoveryPlanFixture} from './hosted-original-child-recovery.fixture';
+import {original231RecoveryPlanFixture,originalPrefixCustodyJournalFixture,originalChildNative124JournalFixture} from './hosted-original-child-recovery.fixture';
+import {expandOriginalNative180RecoveryTemplate,readOriginalNative180RetainedChild} from './hosted-original-child-recovery';
+import {requireOriginal231InactiveDefinitionCustody} from './hosted-original231-transport-observation';
 import {planHostedMigrations,canonicalHostedMigrationPlan} from './hosted-migration-plan';
 
 const migration='20261015110814_sql_cron_managed_transport.sql';
+const custodyHash=(value:string)=>createHash('sha256').update(value).digest('hex');
+function originalCustody(){
+ const template=fixture().original231Recovery.template,native=expandOriginalNative180RecoveryTemplate(JSON.parse(template.native180ReceiptJson).template,template.stageRows.slice(0,180)),child=readOriginalNative180RetainedChild(native).template,native124=originalChildNative124JournalFixture();
+ const journals=[...originalPrefixCustodyJournalFixture(),...[template,native,child].map(saved=>({identity:saved.originalIdentity,ownerJson:saved.ownerJson,recordJson:saved.recordJson,state:'REQUIRES_REVIEW'})),{identity:JSON.parse(native124.ownerJson).identity,ownerJson:native124.ownerJson,recordJson:[native124.record1Json,native124.terminalJson],state:'COMMITTED'}];
+ const operations=journals.map(saved=>({operation:custodyHash(JSON.stringify(saved.identity)),identity:saved.identity,state:saved.state,chainSha256:custodyHash(saved.ownerJson+saved.recordJson.join(''))})),objects=journals.flatMap(saved=>[saved.ownerJson,...saved.recordJson].map((bytes,index)=>({path:'migration/v1/'+template.originalIdentity.projectRef+'/'+custodyHash(JSON.stringify(saved.identity))+'/'+(index===0?'owner.json':String(index).padStart(6,'0')+'.record.json'),sha256:custodyHash(bytes)})));
+ return{template,operations,objects,current:{identity:{...template.originalIdentity,sourceSha:'f'.repeat(40),treeSha:'e'.repeat(40),approvalDigest:'d'.repeat(64)},contextSha256:'c'.repeat(64)}};
+}
+test('inactive Cron custody accepts all eighteen preserved original journal objects without relabeling acknowledgements',()=>{
+ const input=originalCustody();assert.equal(input.objects.length,18);assert.equal(input.operations.length,6);
+ const result=requireOriginal231InactiveDefinitionCustody(input,input.template,input.current);assert.equal(result.originalAcknowledgement,'UNKNOWN');assert.equal(result.effectAuthority,false);assert.equal(input.operations.filter(row=>row.state==='REQUIRES_REVIEW').length,4);assert.equal(input.operations.filter(row=>row.state==='COMMITTED').length,2);
+});
+test('inactive Cron custody rejects missing or altered bytes in either preserved prefix journal',()=>{
+ const input=originalCustody(),prefixes=originalPrefixCustodyJournalFixture().map(row=>row.operation);
+ for(const operation of prefixes){const protectedObjects=input.objects.filter(row=>row.path.includes('/'+operation+'/'));assert.equal(protectedObjects.length,3);for(const object of protectedObjects){assert.throws(()=>requireOriginal231InactiveDefinitionCustody({...input,objects:input.objects.filter(row=>row!==object)},input.template,input.current));assert.throws(()=>requireOriginal231InactiveDefinitionCustody({...input,objects:input.objects.map(row=>row===object?{...row,sha256:'0'.repeat(64)}:row)},input.template,input.current));}
+  for(const patch of[{state:'OWNER_ONLY'},{state:'INTENT'},{chainSha256:'0'.repeat(64)}])assert.throws(()=>requireOriginal231InactiveDefinitionCustody({...input,operations:input.operations.map(row=>row.operation===operation?{...row,...patch}:row)},input.template,input.current));
+ }
+});
+test('inactive Cron custody rejects an unrelated original journal and retains the exact current-operation exception',()=>{
+ const input=originalCustody(),currentOperation=custodyHash(JSON.stringify(input.current.identity)),extra={operation:'b'.repeat(64),identity:input.current.identity,state:'COMMITTED',chainSha256:'a'.repeat(64)};
+ assert.throws(()=>requireOriginal231InactiveDefinitionCustody({...input,operations:[...input.operations,extra]},input.template,input.current));assert.throws(()=>requireOriginal231InactiveDefinitionCustody({...input,objects:[...input.objects,{path:'migration/v1/'+input.template.originalIdentity.projectRef+'/'+extra.operation+'/owner.json',sha256:'a'.repeat(64)}]},input.template,input.current));
+ for(const state of['OWNER_ONLY','INTENT','INACTIVE_DEFINITIONS_ACKNOWLEDGED'])assert.equal(requireOriginal231InactiveDefinitionCustody({...input,operations:[...input.operations,{...extra,operation:currentOperation,state}]},input.template,input.current).effectAuthority,false);
+ assert.throws(()=>requireOriginal231InactiveDefinitionCustody({...input,operations:[...input.operations,{...extra,operation:currentOperation}]},input.template,input.current));
+});
 let originalFixture:ReturnType<typeof original231RecoveryPlanFixture>|undefined;
 function fixture(){
  const original=structuredClone(originalFixture??=(original231RecoveryPlanFixture({sha:'f'.repeat(40),tree:'e'.repeat(40)})));
