@@ -20,7 +20,7 @@ export async function prepareCiNativePostgresImage(){
  // Network acquisition has the existing catalogue producer's120s command
  // budget. Native fixture commands retain their independent unchanged30s.
  const command=(args:string[])=>execFileSync('/usr/bin/docker',args,{env:{PATH:'/usr/bin:/bin',HOME:'/home/runner',DOCKER_CONFIG:'/home/runner/.docker'},shell:false,windowsHide:true,stdio:['ignore','pipe','pipe'],timeout:120000,maxBuffer:1024*1024}).toString('utf8').trim();
- let image:ReturnType<typeof prepareSourceChildCatalogueImageCache>|null=null;
+ let image:ReturnType<typeof prepareSourceChildCatalogueImageCache>;
  try{image=prepareSourceChildCatalogueImageCache(command,(step,kind,error)=>diagnostic.recordFailure(step,kind,error));context.finalMetadata();}
  catch{
   await mkdir(directory,{recursive:true});await writeFile(resolve(directory,'failure.json'),canonicalReleaseExecutionJson({version:1,purpose:'CUEVO_CI_NATIVE_POSTGRES_IMAGE_PREPARATION_FAILURE',sourceSha,treeSha:context.treeSha,startedAt,completedAt:new Date().toISOString(),diagnostic:diagnostic.snapshot('NOT_ATTEMPTED'),hostedWrites:0,containerEffects:false,scheduledExecution:false}),{flag:'wx',mode:0o600});throw fail();
