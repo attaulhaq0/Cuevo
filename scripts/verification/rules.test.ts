@@ -38,6 +38,7 @@ test('reviewed schema continuation fixtures run once in their required replay an
    'scripts/database/hosted-original-child-recovery.test.ts',
    'scripts/database/hosted-child-catalogue-producer.test.ts',
    'scripts/database/hosted-child-catalogue-reference.test.ts',
+   'scripts/database/worker-native-cron-proof.test.ts',
    'scripts/database/hosted-schema-continuation-native.test.ts',
    'scripts/database/hosted-schema-continuation-executor.test.ts',
    'scripts/database/hosted-migration-batch-receipt.test.ts',

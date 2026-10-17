@@ -31,7 +31,7 @@ export async function resetCuevoLocalDatabase(prepared?: ReplayWorkdirs) {
     write: async diagnostic => {
       if (!/^operation-[a-zA-Z0-9_-]{1,80}$/.test(operation)) return;
       assertReplayWorkdirs(stage, stage.prefix);
-      await writeFile(resolve(stage.root, 'reset-diagnostic.json'), JSON.stringify({ version: 1, purpose: 'CUEVO_LOCAL_PREFIX_RESET_DIAGNOSTIC', context: { sourceSha, treeSha, operation, ci }, cliVersion: '2.119.0', ...diagnostic, observedAt: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 });
+      await writeFile(resolve(stage.root, 'reset-diagnostic.json'), JSON.stringify({ version: 1, purpose: 'CUEVO_LOCAL_PREFIX_RESET_DIAGNOSTIC', context: { sourceSha, treeSha, operation, ci }, cliVersion: '2.120.0', ...diagnostic, observedAt: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 });
     },
   });
   assertReplayWorkdirs(stage, stage.prerequisite);

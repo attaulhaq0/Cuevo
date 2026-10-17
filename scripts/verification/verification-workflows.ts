@@ -105,7 +105,11 @@ export const ciChildCatalogueFailureStep={name:'Retain minimized source child144
 const databaseJobWithoutOriginal231={'runs-on':'ubuntu-latest','timeout-minutes':30,steps:[...ciSetup,ciChildCatalogueProducerStep,{name:'Verify isolated database boundary',run:'node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=database'},runtimeLaneArtifactStep('database'),ciChildCatalogueArtifactStep,ciNative180CatalogueArtifactStep,ciChildCatalogueFailureStep,{name:'Stop owned local Supabase',if:'always()',run:'npx --no-install supabase stop --project-id cuevo'}]};
 export const ciDatabaseJobBeforeOriginal231=beforeActions(databaseJobWithoutOriginal231);
 export const ciDatabaseJobBeforeTransport232={...databaseJobWithoutOriginal231,steps:[...databaseJobWithoutOriginal231.steps.slice(0,-2),ciOriginal231CatalogueArtifactStep,...databaseJobWithoutOriginal231.steps.slice(-2)]};
-export const ciDatabaseJob={...ciDatabaseJobBeforeTransport232,steps:[...ciDatabaseJobBeforeTransport232.steps.slice(0,-2),ciOriginal231TransportCatalogueArtifactStep,...ciDatabaseJobBeforeTransport232.steps.slice(-2)]};
+export const ciDatabaseJobBeforeNativeCronProof={...ciDatabaseJobBeforeTransport232,steps:[...ciDatabaseJobBeforeTransport232.steps.slice(0,-2),ciOriginal231TransportCatalogueArtifactStep,...ciDatabaseJobBeforeTransport232.steps.slice(-2)]};
+export const ciNativeCronProofStep={name:'Verify native restricted SQL Cron mechanics',run:'node --import tsx scripts/database/worker-native-cron-proof.ts'};
+export const ciNativeCronProofArtifactStep={name:'Retain minimized native Cron proof',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-native-cron-proof-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/worker-native-cron-proof/proof.json','include-hidden-files':true,'if-no-files-found':'error','retention-days':90}};
+export const ciNativeCronProofFailureStep={name:'Retain minimized native Cron failure',if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-native-cron-failure-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/worker-native-cron-proof/failure.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}};
+export const ciDatabaseJob={...ciDatabaseJobBeforeNativeCronProof,steps:ciDatabaseJobBeforeNativeCronProof.steps.flatMap(step=>'name'in step&&step.name==='Build exact source child144 catalogue reference'?[step,ciNativeCronProofStep]:'name'in step&&step.name==='Stop owned local Supabase'?[ciNativeCronProofArtifactStep,ciNativeCronProofFailureStep,step]:[step])};
 export const ciRequiredJob={if:'always()',needs:['fast-checks','source-contracts','database-checks','technical-mvp','dependency-review','codeql','secret-scan'],'runs-on':'ubuntu-latest','timeout-minutes':5,steps:[{name:'Require every verification boundary',env:{FAST:'${{ needs.fast-checks.result }}',SOURCE_CONTRACTS:'${{ needs.source-contracts.result }}',DATABASE:'${{ needs.database-checks.result }}',TECHNICAL:'${{ needs.technical-mvp.result }}',DEPENDENCY:'${{ needs.dependency-review.result }}',CODEQL:'${{ needs.codeql.result }}',SECRET_SCAN:'${{ needs.secret-scan.result }}'},run:'if [ "$FAST" != success ] || [ "$SOURCE_CONTRACTS" != success ] || [ "$DATABASE" != success ] || [ "$TECHNICAL" != success ] || [ "$CODEQL" != success ] || [ "$SECRET_SCAN" != success ]; then exit 1; fi\nif [ "$GITHUB_EVENT_NAME" = pull_request ]; then test "$DEPENDENCY" = success; else test "$DEPENDENCY" = skipped; fi\n'}]};
 /** Optional minimized failure evidence never replaces a required lane result. */
 export const ciResetDiagnosticArtifactStep={name:'Retain minimized local reset failure diagnostics',if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-reset-diagnostic-integration-state-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/migration-replay/operation-*/reset-diagnostic.json','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}};
@@ -147,6 +151,11 @@ function requireOriginalBeforeTransport232(purpose:'CURRENT_SOURCE'|'ORIGINAL_RU
  if(purpose!=='ORIGINAL_RUNTIME_METADATA'||!source||!/^[a-f0-9]{40}$/.test(source.sha)||source.git(['rev-parse',cutoff+'^{tree}']).toString().trim()!=='efcc9468871d82650dbf36a2397692fa54489022')throw Error('Original pre232 source requires review.');
  source.git(['merge-base','--is-ancestor',source.sha,cutoff]);
 }
+function requireOriginalBeforeNativeCronProof(purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',source:OriginalJobSource|undefined){
+ const cutoff='4edd18feaf7374f35cac1264e88470af061cb31b';
+ if(purpose!=='ORIGINAL_RUNTIME_METADATA'||!source||!/^[a-f0-9]{40}$/.test(source.sha)||source.git(['rev-parse',cutoff+'^{tree}']).toString().trim()!=='d3ffa3747529b4953b4176a252bbbe88c440b288')throw Error('Original pre-Cron source requires review.');
+ source.git(['merge-base','--is-ancestor',source.sha,cutoff]);
+}
 /** Select one closed authored contract, never a caller-supplied pin or job policy. */
 export function selectCanonicalWorkflowJob(name:string,value:unknown,purpose:'CURRENT_SOURCE'|'ORIGINAL_RUNTIME_METADATA',source?:OriginalJobSource):{steps:Record<string,unknown>[];[key:string]:unknown}{
  const fail=()=>Error('Canonical workflow source requires review.');
@@ -154,6 +163,7 @@ export function selectCanonicalWorkflowJob(name:string,value:unknown,purpose:'CU
   if(!['CURRENT_SOURCE','ORIGINAL_RUNTIME_METADATA'].includes(purpose)||!Object.hasOwn(currentCanonicalJobs,name))throw fail();
   const current=currentCanonicalJobs[name];
   if(canonicalReleaseReviewJson(value)===canonicalReleaseReviewJson(current))return current as {steps:Record<string,unknown>[]};
+  if(name==='database-checks'&&canonicalReleaseReviewJson(value)===canonicalReleaseReviewJson(ciDatabaseJobBeforeNativeCronProof)){requireOriginalBeforeNativeCronProof(purpose,source);return ciDatabaseJobBeforeNativeCronProof;}
   if(name==='source-fixtures-delivery'&&canonicalReleaseReviewJson(value)===canonicalReleaseReviewJson(ciSourceDeliveryBeforePairingFailure)){requireOriginalBeforePairingFailure(purpose,source);return ciSourceDeliveryBeforePairingFailure;}
    if(name==='database-checks'&&canonicalReleaseReviewJson(value)===canonicalReleaseReviewJson(ciDatabaseJobBeforeTransport232)){requireOriginalBeforeTransport232(purpose,source);return ciDatabaseJobBeforeTransport232;}
   const original=canonicalJobsBeforeActions[name];
