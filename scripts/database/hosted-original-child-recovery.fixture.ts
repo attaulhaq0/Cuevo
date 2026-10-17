@@ -5,8 +5,19 @@ import {replayPlan,posthogIntelligenceMigration} from './replay-plan';
 import {canonicalReleaseExecutionJson} from '../verification/release-review';
 import {hostedChildCatalogueCategories} from './hosted-child-catalogue-reference';
 import {originalNativeIntentFixture} from './hosted-original-native-intent.fixture';
+import {createOriginalPrefixReconciliationTemplate} from './hosted-schema-reconciliation';
+import {unknownPrefixCataloguePolicySha256,unknownPrefixAbsencePolicySha256} from './hosted-schema-reconciliation-policy';
+import prefixPolicy from './unknown-prefix-catalogue-policy.json';
 
 const hash=(value:string|Uint8Array)=>createHash('sha256').update(value).digest('hex');
+/** The two preserved prefix journals precede the original124/144/180/231
+ * custody. Their fixed bytes describe historical evidence, never new effects. */
+export function originalPrefixCustodyJournalFixture(){
+ const native=originalNativeIntentFixture(),stageRows=native.stageRows.slice(0,123),original=createOriginalPrefixReconciliationTemplate({recoverySource:{releaseRunId:'38007719238',runAttempt:1,sourceSha:native.originalIdentity.sourceSha,treeSha:native.originalIdentity.treeSha,ciRunId:native.originalIdentity.ciRunId},stageRows,historySha256:hash(canonicalReleaseExecutionJson(stageRows.slice(0,120).map(({version,sha256})=>({version,sourceReceiptSha256:sha256})))),cataloguePolicySha256:unknownPrefixCataloguePolicySha256,catalogueSha256:prefixPolicy.expected.catalogueSha256,absencePolicySha256:unknownPrefixAbsencePolicySha256,endpointSha256:hash(canonicalReleaseExecutionJson(native.migrationEndpoint))});
+ const recoveredIdentity={...native.originalIdentity,planSha256:'9d88259379b2e7d14c0e951c10f6624b18a2ddefbcdd5086340f487c43ffb7c8',stageId:'prefix',stageSha256:original.originalIdentity.stageSha256,approvalDigest:'4d103d7b6251f2e15daa6fbb54e762c20435161c14048a1fa9bdfecd0c488f55'};
+ const journals=[{identity:original.originalIdentity,ownerJson:original.ownerJson,recordJson:original.recordJson,state:'REQUIRES_REVIEW'},(()=>{const identity=recoveredIdentity,ownerJson=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',identity})+'\n',payload=(state:string)=>({version:1,identity,state,schemaHistoryAtomic:false,evidence:'SUPPLIED_PORT_EXECUTION_ONLY'}),first=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:1,previousSha256:null,payload:payload('INTENT'),payloadSha256:hash(JSON.stringify(payload('INTENT')))})+'\n',second=JSON.stringify({version:1,purpose:'CUEVO_HOSTED_SCHEMA_MIGRATION_JOURNAL',sequence:2,previousSha256:hash(first),payload:payload('COMMITTED'),payloadSha256:hash(JSON.stringify(payload('COMMITTED')))})+'\n';return{identity,ownerJson,recordJson:[first,second],state:'COMMITTED'};})()];
+ return journals.map(journal=>({...journal,operation:hash(JSON.stringify(journal.identity)),ownerSha256:hash(journal.ownerJson),recordSha256:journal.recordJson.map(hash),chainSha256:hash(journal.ownerJson+journal.recordJson.join(''))}));
+}
 export function originalChildCatalogueSummaryFixture(){return{version:'CUEVO_SCHEMA_CATALOGUE_V1' as const,sha256:'2'.repeat(64),categories:hostedChildCatalogueCategories.map(category=>({category,count:1,sha256:'3'.repeat(64)})),bytes:160,rows:16,serverVersion:170011 as const};}
 export function originalChildRecoveryFixture(){
  const sourceSha='1a493ad735798bb6d3fa0ffaabc779e62149ac37',treeSha='a207a7ec44dd29d61adc0490b85fedbf1e696fcd',sources=readHistoricalMigrationSources(resolve(import.meta.dirname,'../..'),sourceSha,treeSha),replay=replayPlan(sources),names=[...replay.before,replay.prerequisite,...replay.remaining],rows=names.map(name=>({name,version:name.slice(0,14),sha256:hash(sources.find(row=>row.name===name)!.bytes)})),end=124+replay.remaining.indexOf(posthogIntelligenceMigration),stageRows=rows.slice(0,end),configSha256='cc91534b07b96e61b993f179225a9929b65e965d19a5a02e242c79126166b4ff';

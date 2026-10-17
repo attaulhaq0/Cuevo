@@ -63,6 +63,7 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('supported local 
     expect(current.data.user?.email_confirmed_at ?? null).toBeNull();
     if(!redemption)throw Error('Owned invitation redemption not supplied');
     const accepted = await publicAuth.auth.verifyOtp({ token_hash: redemption, type: 'invite' });
+    // eslint-disable-next-line no-useless-assignment -- Clear the redeemed invitation credential before further assertions can fail.
     redemption = null;
     if(accepted.error||!accepted.data.session)throw Error('Owned local invitation redemption failed.');
     const config=parseServerConfig({...process.env,SUPABASE_URL:status.API_URL,SUPABASE_PUBLISHABLE_KEY:status.PUBLISHABLE_KEY});

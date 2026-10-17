@@ -115,6 +115,7 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('school account a
       if (!['postgres:', 'postgresql:'].includes(databaseUrl.protocol) || databaseUrl.hostname !== '127.0.0.1' || databaseUrl.port !== '56322' || databaseUrl.pathname !== '/postgres' || databaseUrl.username !== 'cuevo_api' || databaseUrl.search || databaseUrl.hash) throw Error('Admission fixture refuses another API database target.');
       for (const port of [3000, 4000, 4001]) {
         try { await fetch(`http://127.0.0.1:${port}/health/live`, { redirect: 'error', signal: AbortSignal.timeout(1000) }); }
+        // eslint-disable-next-line preserve-caught-error -- Stopped-state verdicts deliberately omit raw network details from fixture failures.
         catch (error) { if ((error as Error & { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED') continue; throw Error('Admission fixture cannot prove shared runtimes are stopped.'); }
         throw Error('Admission fixture requires stopped shared runtimes.');
       }
@@ -171,11 +172,14 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('school account a
       const messages = await lookupMessages(); expect(messages).toHaveLength(1); ownedMessageIds.add(messages[0]);
       let message: CapturedMessage | undefined = await readMessage(messages[0]);
       if (!message.Text.includes('تابع فقط')) throw Error('Captured invitation is missing its Arabic safety explanation.');
+      // eslint-disable-next-line no-useless-assignment -- Release the captured invitation content or continuation after extracting only required credentials.
       let continuation: string | undefined = message.Text.split(/\r?\n/).find(line => line.startsWith('http://localhost:3000/account/admission#')); message = undefined;
       if (!continuation) throw Error('Exact owned invitation continuation unavailable.');
+      // eslint-disable-next-line no-useless-assignment -- Release the captured invitation content or continuation after extracting only required credentials.
       let link: URL | undefined = new URL(continuation); continuation = undefined;
       const fragment = new URLSearchParams(link.hash.slice(1));
       if (link.origin !== 'http://localhost:3000' || link.pathname !== '/account/admission' || link.search || link.username || link.password || [...fragment.keys()].length !== 4 || new Set(fragment.keys()).size !== 4 || [...fragment.keys()].some(key => !['id', 'type', 'token_hash', 'admission_secret'].includes(key)) || fragment.get('id') !== invitationId || fragment.get('type') !== 'invite') throw Error('Captured admission continuation is outside its approved context.');
+      // eslint-disable-next-line no-useless-assignment -- Release the captured invitation content or continuation after extracting only required credentials.
       redemption = fragment.get('token_hash') ?? ''; admissionSecret = fragment.get('admission_secret') ?? ''; fragment.delete('token_hash'); fragment.delete('admission_secret'); link = undefined;
       if (!redemption || redemption.length > 4096 || !/^[a-f0-9]{64}$/.test(admissionSecret)) throw Error('Captured admission credentials are invalid.');
       const storedDigest = (await connection.query<{ matches: boolean }>('select token_digest=$2 as matches from internal.school_account_token_digests where request_id=$1', [invitationId, createHash('sha256').update(admissionSecret).digest('hex')])).rows;

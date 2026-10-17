@@ -20,7 +20,7 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('current recommen
     const active = context!;
     const started = performance.now();
     const samples: { path: 'RAW_RLS' | 'CURRENT_API'; limit: number; elapsedMs: number; status: string; delivered: number | null }[] = [];
-    let baselineCount = 0; let proposalCount = 0; let releasedBaselineCount = 0; let completedAnalysisCount = 0; let cleanupCompleted = false;
+    let baselineCount = 0; let proposalCount = 0; let releasedBaselineCount = 0; let completedAnalysisCount = 0; let cleanupCompleted: boolean;
     let stage = 'COURSE_SETUP'; let failureCode: string | null = null; let failureHttpStatus: number | null = null;
     const querySamples: { operation: string; elapsedMs: number; status: string }[] = [];
     const componentSamples: { component: string; elapsedMs: number; status: string; count: number | null }[] = [];

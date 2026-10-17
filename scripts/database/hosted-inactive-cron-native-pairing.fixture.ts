@@ -12,7 +12,7 @@ import {PassThrough} from 'node:stream';
 import {types} from 'node:util';
 import {transformSync} from 'esbuild';
 import {canonicalReleaseExecutionJson} from '../verification/release-review';
-import {originalChildNative124JournalFixture} from './hosted-original-child-recovery.fixture';
+import {originalChildNative124JournalFixture,originalPrefixCustodyJournalFixture} from './hosted-original-child-recovery.fixture';
 import {expandOriginalNative180RecoveryTemplate,readOriginalNative180RetainedChild} from './hosted-original-child-recovery';
 import {readInactiveCronLegacyTransportBody,readInactiveCronLegacyTransportSource,readInactiveCronEmptyRuntime,readInactiveCronEmptyAppCensus,inactiveCronEmptyAppCensusSql,requireOriginal231InactiveDefinitionCustody} from './hosted-original231-transport-observation';
 import {prepareInactiveCronDefinitionContext,preparePersistedInactiveCronAcknowledgementSelection} from './hosted-inactive-cron-definition-contracts';
@@ -182,6 +182,7 @@ const originalMetadataPins:Record<string,readonly[string,string,number,number,st
 
 function originalObjects(state:PairingState,plan:Original231TransportAppendPlan){
  const original=plan.original231Recovery.template,native=expandOriginalNative180RecoveryTemplate(JSON.parse(original.native180ReceiptJson).template,original.stageRows.slice(0,180)),child=readOriginalNative180RetainedChild(native).template,native124=originalChildNative124JournalFixture();
+ for(const saved of originalPrefixCustodyJournalFixture()){const prefix=`migration/v1/${ref}/${saved.operation}/`;state.objects.set(prefix+'owner.json',saved.ownerJson);saved.recordJson.forEach((bytes,index)=>state.objects.set(prefix+String(index+1).padStart(6,'0')+'.record.json',bytes));}
  for(const saved of[original,native,child]){const prefix=`migration/v1/${ref}/${saved.selection.originalOperationSha256}/`;state.objects.set(prefix+'owner.json',saved.ownerJson);saved.recordJson.forEach((bytes,index)=>state.objects.set(prefix+String(index+1).padStart(6,'0')+'.record.json',bytes));}
  const prefix=`migration/v1/${ref}/${child.native124.originalOperationSha256}/`;state.objects.set(prefix+'owner.json',native124.ownerJson);state.objects.set(prefix+'000001.record.json',native124.record1Json);state.objects.set(prefix+'000002.record.json',native124.terminalJson);
  state.vault.set('cuevo_schema_stage_'+ref,original.installedMarkerJson);state.vault.set('cuevo_original_native180_'+ref+'_'+native.selection.originalOperationSha256,original.native180ReceiptJson);state.vault.set('cuevo_original_child144_'+ref+'_'+child.selection.originalOperationSha256,native.original144ReceiptJson);original.batchReceiptJson.forEach((bytes,index)=>state.vault.set('cuevo_batch_prefix_'+ref+'_'+original.selection.originalOperationSha256+'_'+String(index+1).padStart(3,'0'),bytes));
@@ -241,10 +242,10 @@ export async function preflightPairingExternalObservations(){
  const input:FixtureInput={run:packet.expected.ciRun,tree:context.identity.treeSha,jobs:[],artifacts:[],archives:{},ownerRoot:root},metadata=await pairingMetadataHarness(input),restore=await installExternalPrimitives(input,state,plan,facts,metadata,'');
  try{
   const storage=await observeHostedInactiveCronDefinitionStorageProject({projectRef:ref,boundProjectRef:ref,storageKey:password,signal:new AbortController().signal,inactiveDefinitionContext:context});
-  const managed=createHostedInactiveCronDefinitionOperatorStorage({projectRef:ref,boundProjectRef:ref,storageKey:password,providerToken:password,identity:context.identity,inactiveDefinitionContext:context});await managed.bucketRead();const managedChains=await managed.inspect();assert.equal(managedChains.length,4);assert.equal(managed.objects().length,12);
+  const managed=createHostedInactiveCronDefinitionOperatorStorage({projectRef:ref,boundProjectRef:ref,storageKey:password,providerToken:password,identity:context.identity,inactiveDefinitionContext:context});await managed.bucketRead();const managedChains=await managed.inspect();assert.equal(managedChains.length,6);assert.equal(managed.objects().length,18);
   requireOriginal231InactiveDefinitionCustody(storage,plan.original231Recovery.template,{identity:context.identity,contextSha256:context.contextSha256});
   const result=prepareNativeHostedInactiveCronDefinitionStorageInventory({identity:context.identity,expectedVersions:plan.stage.expectedBeforeVersions,before,after:{...before,observedAtMs:state.clock},storage,expectedBuckets:buckets,inactiveDefinitionContext:context});
-  assert.equal(result.effectAuthority,false);assert.equal(result.foundationAccepted,false);assert.equal(result.totalStorageObjects,12);assert.equal(state.cliAttempts,0);assert.equal(state.closed,false);
+  assert.equal(result.effectAuthority,false);assert.equal(result.foundationAccepted,false);assert.equal(result.totalStorageObjects,18);assert.equal(state.cliAttempts,0);assert.equal(state.closed,false);
   return{purpose:'CONTROLLED_NATIVE_OBSERVATION_FORMATS_PREFLIGHT_ONLY',beforeRows:231,afterRows:232,emptySourceRows:state.history.filter(row=>(row.statements as unknown[]).length===0).length,appTables:136,privateRawObjects:storage.objects.length,protectedOriginalCustody:'FORMAT_VERIFIED',nativeCapability:false,actualSQL:false,actualProvider:false};
  }finally{restore();metadata.disposeDependencies();}
 }

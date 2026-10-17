@@ -98,7 +98,7 @@ test.describe('isolated actual Admin guardian command acceptance', () => {
     if (!parentPerson || !learnerPerson) throw new Error('Authorized exact human context required.');
     expect(original.status).toBe('active');
     const profilePath = `/v1/school/learners/${learner.actorId}/profile`; expect((await get<{ id: string }>(profilePath, 'parent')).id).toBe(learner.actorId);
-    let delivery: 'actual' | 'abort' | 'malformed' = 'actual', cleanup: Relationship | null = null;
+    let delivery: 'actual' | 'abort' | 'malformed' = 'actual', cleanup: Relationship | null;
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'warning') warnings.push(message.text()); if (message.type() === 'error') { const expected = message.location().url === api + path && /Failed to load resource:.*(?:409|ERR_FAILED)/.test(message.text()); if (!expected) errors.push(message.text()); } });
     await page.context().routeWebSocket('**/*', socket => socket.close());

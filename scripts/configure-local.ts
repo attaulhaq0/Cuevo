@@ -55,6 +55,7 @@ async function main() {
   let secrets: Secrets;
   try { secrets = JSON.parse(await readFile(secretFile, 'utf8')) as Secrets; }
   catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Credential read failures must not attach private paths or parsed credential input as a cause.
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Local runtime credentials cannot be read; existing credentials were preserved.');
     secrets = { api: randomBytes(32).toString('hex'), worker: randomBytes(32).toString('hex'), syntheticPassword: randomBytes(24).toString('base64url') };
     await writeFile(secretFile, JSON.stringify(secrets), { mode: 0o600 });
