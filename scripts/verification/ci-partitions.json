@@ -128,6 +128,7 @@
         "scripts/database/hosted-runtime-rollout-session.test.ts",
         "scripts/database/hosted-schema-catalogue.test.ts",
         "scripts/database/hosted-schema-recovery-completion.test.ts",
+        "scripts/database/hosted-sql-cron-configuration-contracts.test.ts",
         "scripts/database/hosted-synthetic-auth.test.ts",
         "scripts/database/hosted-synthetic-plan.test.ts",
         "scripts/database/hosted-synthetic-population.test.ts",
@@ -415,6 +416,10 @@
       },
       {
         "path": "scripts/database/hosted-inactive-cron-definition-contracts.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/hosted-sql-cron-configuration-contracts.test.ts",
         "durationMs": null
       },
       {

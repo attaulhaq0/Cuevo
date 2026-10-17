@@ -1,5 +1,7 @@
 # Controlled school community
 
+The visible Community journey retains an optional frozen mutation-response diagnostic alongside its existing current-read failure. It reports only the first response-confirmation guard reason, bounded request count, response/original-request presence and nullable current scope; a skipped short-circuit scope check stays unknown. The observer preserves one original action, request/receipt checks, timing and error through cleanup or failed diagnostic delivery. Schema1 read-only records remain accepted. PR102's original restore-post refusal still has an unknown deciding predicate; controlled observations and later passes do not explain it or establish hosted acceptance.
+
 Parent conversation directory buttons use the canonical shared `--control-min-size` token. This replaces an undefined height reference without changing conversation selection, current participant scope or command behavior.
 
 Parent conversations use the current ChildSelector as the single missing-child prerequisite. The extra generic selection card appears only when an actual selected candidate exists but its current relationship read is refused. Real loading, ambiguity, denial, continuation and original-command recovery remain visible; protected conversation reads and commands retain their existing scope. Bilingual owner render tests cover absent and refused-child sources separately.
