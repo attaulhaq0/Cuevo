@@ -16,6 +16,7 @@ import { withFixtureCleanup } from './fixture-cleanup';
 describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('initial school with a real newly verified administrator', () => {
   it('admits one approved school through the owner command and operates it through the normal restricted API', async () => {
     const status = JSON.parse(execFileSync(process.execPath, [resolve('node_modules/supabase/dist/supabase.js'), 'status', '-o', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })) as LocalStatus; assertCuevoLocalTarget(status);
+    // eslint-disable-next-line preserve-caught-error -- Stopped-state verdicts deliberately omit raw network details from fixture failures.
     for (const port of [3000, 4000, 4001]) { try { await fetch(`http://127.0.0.1:${port}/health/live`, { signal: AbortSignal.timeout(800) }); } catch (error) { if ((error as Error & { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED') continue; throw Error('Stopped state unconfirmed.'); } throw Error('Initial admission fixture requires stopped applications.'); }
     const userId = randomUUID(); const schoolId = randomUUID(); const email = `first-admin-${userId}@example.test`;
     const authOptions = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
@@ -33,6 +34,7 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('initial school w
       const adapter = createAuthProvisioning({ url: status.API_URL, projectRef: 'LOCAL_CUEVO', webOrigin: 'http://localhost:3000', redirects: { invite: 'http://localhost:3000/account/admission', recovery: 'http://localhost:3000/account/recovery' }, key: status.SERVICE_ROLE_KEY }); const requestId = randomUUID(); const operation = { requestId, userId, email, priorState: 'NOT_ATTEMPTED' as const };
       expect((await adapter.createUnconfirmed(operation)).state).toBe('CONFIRMED'); let redemption = '';
       expect((await adapter.generateLink({ ...operation, purpose: 'invite' }, async value => { redemption = new URL(value.actionLink).searchParams.get('token') ?? ''; })).state).toBe('GENERATED');
+      // eslint-disable-next-line no-useless-assignment -- Clear the redeemed invitation credential before further assertions can fail.
       const verified = await administrator.auth.verifyOtp({ token_hash: redemption, type: 'invite' }); redemption = ''; if (!verified.data.session || verified.data.user?.id !== userId) throw Error('First administrator identity control unconfirmed.'); administratorToken = verified.data.session.access_token;
       const request = (method: 'GET' | 'POST', url: string, body?: Record<string, unknown>) => runtime.app.inject({ method, url, headers: { authorization: `Bearer ${administratorToken}`, 'x-school-id': schoolId, 'idempotency-key': randomUUID() }, payload: body });
       expect((await request('GET', '/v1/me')).statusCode).toBe(403);

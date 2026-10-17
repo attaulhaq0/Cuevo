@@ -70,7 +70,7 @@ describe.skipIf(!enabled)('school learning real Auth/API/Postgres journey',()=>{
     expect((await request('parent','/v1/submissions')).statusCode).toBe(403);
     // The default queue is paginated; find this run's source across authorized bounded pages.
     let cursor: string | null = null;
-    let foundSubmission = false;
+    let foundSubmission: boolean;
     do {
       const queue = await request('teacher', `/v1/submissions?limit=100${cursor ? `&cursor=${cursor}` : ''}`);
       expect(queue.statusCode).toBe(200);

@@ -42,6 +42,7 @@ async function main() {
   const [sourcePath, key] = process.argv.slice(2); if (!sourcePath || !key) throw Error('Approved source file and original key required.');
   await readFile('supabase/config.toml', 'utf8').then(assertCuevoLocalConfig);
   const status = JSON.parse(execFileSync(process.execPath, [resolve('node_modules/supabase/dist/supabase.js'), 'status', '-o', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })) as LocalStatus; assertCuevoLocalTarget(status);
+  // eslint-disable-next-line preserve-caught-error -- The stopped-port verdict deliberately withholds raw network error details.
   for (const port of [3000, 4000, 4001]) { try { await fetch(`http://127.0.0.1:${port}/health/live`, { signal: AbortSignal.timeout(1000) }); } catch (error) { if ((error as Error & { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED') continue; throw Error('Stopped application state unconfirmed.'); } throw Error('Stop Cuevo applications before initial admission.'); }
   const operatorToken = process.env.CUEVO_OPERATOR_ACCESS_TOKEN; const administratorToken = process.env.CUEVO_INITIAL_ADMIN_ACCESS_TOKEN;
   if (!operatorToken || !administratorToken) throw Error('Current verified operator and administrator tokens required.');
