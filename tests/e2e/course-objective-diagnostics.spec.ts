@@ -13,6 +13,19 @@ test('Community read failure diagnostics retain only bounded source state and re
   expect(()=>serializeFailureDiagnostic({...value,confirmedWriteCount:1001})).toThrow();
 });
 
+test('Community mutation diagnostics retain the first response guard without accepting private or contradictory facts', () => {
+  const base = { schemaVersion: '1', code: 'COMMUNITY_CURRENT_SOURCE_UNVERIFIED', confirmedWriteCount: 12, read: null };
+  const mutation = { schemaVersion: '1', stage: 'RESPONSE_CONFIRMATION', reason: 'NO_MATCHING_RESPONSE', requestCount: 0, responseSeen: false, originalSeen: false, currentScope: null };
+  expect(JSON.parse(serializeFailureDiagnostic({ ...base, mutation }))).toEqual({ ...base, mutation }); expect(JSON.parse(serializeFailureDiagnostic(base))).toEqual(base);
+  const counted = { ...mutation, reason: 'MATCHING_REQUEST_COUNT', requestCount: 2, responseSeen: true, originalSeen: true };
+  expect(JSON.parse(serializeFailureDiagnostic({ ...base, mutation: { ...counted, requestCount: null } }))).toEqual({ ...base, mutation: { ...counted, requestCount: null } });
+  for (const field of ['path', 'action', 'actorId', 'schoolId', 'key', 'token', 'body', 'error']) expect(() => serializeFailureDiagnostic({ ...base, mutation: { ...mutation, [field]: 'private-content-canary' } })).toThrow();
+  for (const patch of [{ reason: 'Raw browser failure' }, { stage: 'ACTIVATION' }, { requestCount: 1001 }, { requestCount: -1 }, { requestCount: 1.5 }, { currentScope: true }, { responseSeen: true }]) expect(() => serializeFailureDiagnostic({ ...base, mutation: { ...mutation, ...patch } })).toThrow();
+  expect(() => serializeFailureDiagnostic({ ...base, mutation: { ...counted, requestCount: 1 } })).toThrow();
+  expect(() => serializeFailureDiagnostic({ ...base, mutation: { ...mutation, originalSeen: true, requestCount: 0 } })).toThrow();
+  expect(JSON.parse(serializeFailureDiagnostic({ ...base, mutation: { ...mutation, reason: 'NO_ORIGINAL_REQUEST', responseSeen: true } }))).toEqual({ ...base, mutation: { ...mutation, reason: 'NO_ORIGINAL_REQUEST', responseSeen: true } });
+});
+
 test('course objective diagnostics preserve endpoint class while excluding keys, credentials and queries', () => {
   const origins={api:'https://api.fixture.invalid',auth:'https://auth.fixture.invalid',web:'https://web.fixture.invalid'};
   expect(diagnosticSource('https://api.fixture.invalid/v1/assessments/a1000000-0000-4000-8000-000000000001/preparation?token=private&answer=pupil',origins)).toEqual({origin:'api',path:'/v1/assessments/{record}/preparation'});

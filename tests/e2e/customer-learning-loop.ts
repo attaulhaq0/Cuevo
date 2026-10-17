@@ -15,6 +15,11 @@ export type CustomerLearningLoopAccount = CustomerLearningLoopActor & { password
 export type CustomerLearningLoopReceipt = { id: string; [field: string]: unknown };
 export type CustomerLearningLoopMutationIntent = { path: string; actor: Readonly<CustomerLearningLoopActor>; scopeGeneration: number };
 export type CustomerLearningLoopCommandObservation = CustomerLearningLoopMutationIntent & { request: Request; key: string; body: Record<string, unknown>; receipt: CustomerLearningLoopReceipt; status: number };
+export type CustomerLearningLoopResponseFailureDiagnostic = Readonly<{
+  schemaVersion: '1'; stage: 'RESPONSE_CONFIRMATION';
+  reason: 'NO_MATCHING_RESPONSE' | 'NO_ORIGINAL_REQUEST' | 'MATCHING_REQUEST_COUNT' | 'CURRENT_SCOPE_CHANGED';
+  requestCount: number | null; responseSeen: boolean; originalSeen: boolean; currentScope: boolean | null;
+}>;
 export type CustomerLearningLoopInput = {
   webOrigin: string; apiOrigin: string; accounts: readonly CustomerLearningLoopAccount[]; title: string;
   context: { schoolId: string; classId: string; classLabel: string; className: string; yearGroupName: string; classShortName: string; subjectId: string; subjectName: string; referenceId: string; referenceTitle: string };
@@ -56,6 +61,7 @@ function validateLoopInput(value: CustomerLearningLoopInput): CustomerLearningLo
 export async function observeCustomerLearningLoopMutation(page: Page, input: {
   apiOrigin: string; intent: CustomerLearningLoopMutationIntent; isCurrent: () => boolean; action: () => Promise<void>;
   beforeMutation?: CustomerLearningLoopPorts['beforeMutation']; onCommand?: CustomerLearningLoopPorts['onCommand'];
+  onResponseFailure?: (diagnostic: CustomerLearningLoopResponseFailureDiagnostic) => void;
 }): Promise<CustomerLearningLoopReceipt> {
   const intent = { ...input.intent, actor: Object.freeze({ ...input.intent.actor }) };
   if (!input.isCurrent() || new URL(input.apiOrigin).origin !== input.apiOrigin || !intent.path.startsWith('/v1/') || intent.path.includes('?') || intent.path.includes('#')) throw Error('The original visible command scope is unavailable.');
@@ -68,7 +74,14 @@ export async function observeCustomerLearningLoopMutation(page: Page, input: {
   const pending = page.waitForResponse(response => matches(response.request()) && response.request() === original).then(response => ({ response }), () => ({ response: null }));
   try {
     await input.action(); const { response } = await pending;
-    if (!response || !original || requestCount !== 1 || !input.isCurrent()) throw Error('The original visible command response could not be confirmed.');
+    let currentScope: boolean | null = null;
+    if (!response || !original || requestCount !== 1 || !(currentScope = input.isCurrent())) {
+      const failure = Error('The original visible command response could not be confirmed.');
+      try {
+        input.onResponseFailure?.(Object.freeze({schemaVersion:'1',stage:'RESPONSE_CONFIRMATION',reason:!response?'NO_MATCHING_RESPONSE':!original?'NO_ORIGINAL_REQUEST':requestCount!==1?'MATCHING_REQUEST_COUNT':'CURRENT_SCOPE_CHANGED',requestCount:Number.isSafeInteger(requestCount)&&requestCount>=0&&requestCount<=1000?requestCount:null,responseSeen:!!response,originalSeen:!!original,currentScope}));
+      } catch { /* Diagnostic delivery cannot replace the original response refusal. */ }
+      throw failure;
+    }
     expect(await response.finished()).toBeNull();
     const headers = original.headers(); const key = idempotencyKeySchema.parse(headers['idempotency-key']);
     if (headers['x-school-id'] !== intent.actor.schoolId || !/^Bearer [^\s]+$/.test(headers.authorization ?? '') || headers['content-type']?.split(';')[0].trim() !== 'application/json') throw Error('The original visible command identity could not be confirmed.');

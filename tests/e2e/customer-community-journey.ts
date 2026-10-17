@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { membershipSchema, type MembershipResponse } from '@cuevo/contracts';
 import { z } from 'zod';
 import { confirmCommunityReceipt, parseRoom, parseRosterPerson, parseAnnouncement, type Room, type Announcement } from '../../apps/web/features/community/model';
-import { observeCustomerLearningLoopMutation, type CustomerLearningLoopActor, type CustomerLearningLoopCommandObservation, type CustomerLearningLoopMutationIntent, type CustomerLearningLoopReceipt } from './customer-learning-loop';
+import { observeCustomerLearningLoopMutation, type CustomerLearningLoopActor, type CustomerLearningLoopCommandObservation, type CustomerLearningLoopMutationIntent, type CustomerLearningLoopReceipt, type CustomerLearningLoopResponseFailureDiagnostic } from './customer-learning-loop';
 import { expectTrailWorkspace, openTrailWorkspace, signOutTrailWorkspace } from './trail-workspace';
 import { selectHumanChoice } from './human-choice';
 
@@ -39,7 +39,7 @@ export type CustomerCommunityReadFailureDiagnostic = Readonly<{
   role: CustomerCommunityRole; generation: number; confirmedWriteCount: number;
   cancelled: boolean; parsed: boolean; hasCursor: boolean; elapsedMs: number; pendingReadCount: number;
 }>;
-export type CustomerCommunityFailureDiagnostic = Readonly<{ schemaVersion: '1'; code: 'COMMUNITY_CURRENT_SOURCE_UNVERIFIED'; confirmedWriteCount: number; read: CustomerCommunityReadFailureDiagnostic | null }>;
+export type CustomerCommunityFailureDiagnostic = Readonly<{ schemaVersion: '1'; code: 'COMMUNITY_CURRENT_SOURCE_UNVERIFIED'; confirmedWriteCount: number; read: CustomerCommunityReadFailureDiagnostic | null; mutation?: CustomerLearningLoopResponseFailureDiagnostic }>;
 export type CustomerCommunityJourneyPorts = {
   step?: (name: string, work: () => Promise<void>) => Promise<void>;
   capture?: (name: string) => Promise<void>;
@@ -97,6 +97,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   let currentActor: Readonly<CustomerCommunityActor> | null = null, scopeGeneration = 0, scopeFailure: unknown;
   let admittedClassRoomId = input.context.classRoom?.id;
   let failedRead: CustomerCommunityReadFailureDiagnostic | null = null;
+  let failedMutation: CustomerLearningLoopResponseFailureDiagnostic | null = null;
   let roomFacts = new Map<string, Room>();
   let announcementFacts=new Map<string,Announcement>();let confirmedMainRestriction:string|undefined;
   const rosterFacts = new Map<string, {id:string;displayName:string;role:string}[]>();
@@ -211,7 +212,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   async function signOut() { const actor=currentActor;if(!actor)throw Error('The current Community session is unavailable.');await signOutTrailWorkspace(page);await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();resetReads();currentActor=null;scopeGeneration++;await ports.sessionEnded?.(actor);observation.sessionEndedCount++; }
   async function mutate(action: string, path: string, activate: () => Promise<void>, expectedBody?: Record<string,unknown>) {
     await currentReads();const actor=currentActor,generation=scopeGeneration;if(!actor)throw Error('The current Community actor is unavailable.');
-    const receipt=await observeCustomerLearningLoopMutation(page,{apiOrigin,intent:{path,actor,scopeGeneration:generation},isCurrent:()=>currentActor===actor&&scopeGeneration===generation&&!scopeFailure,action:activate,beforeMutation:ports.beforeMutation,onCommand:async command=>{
+    const receipt=await observeCustomerLearningLoopMutation(page,{apiOrigin,intent:{path,actor,scopeGeneration:generation},isCurrent:()=>currentActor===actor&&scopeGeneration===generation&&!scopeFailure,action:activate,beforeMutation:ports.beforeMutation,onResponseFailure:diagnostic=>{failedMutation??=diagnostic;},onCommand:async command=>{
       if(expectedBody)expect(command.body).toEqual(expectedBody);confirmCommunityReceipt(command.receipt,{key:command.key,path:command.path,body:command.body},actor.actorId);
       if(path==='/v1/community/rooms/'+observation.groupId+'/restrict'&&command.body.actorId===input.actors.student.actorId)confirmedMainRestriction=String(command.body.restriction);
       writes.push({action,path,actorId:actor.actorId,scopeGeneration:generation,status:command.status,id:command.receipt.id,key:command.key,keySha256:digest(command.key),requestSha256:digest(command.request.postDataBuffer()!),bodySha256:digest(JSON.stringify(command.body)),receiptSha256:digest(JSON.stringify(command.receipt))});await ports.onCommand?.(command);
@@ -366,7 +367,7 @@ export async function runCustomerCommunityJourney(page: Page, input: CustomerCom
   if(currentActor&&!page.isClosed())try{await signOut();}catch(error){cleanupFailures.push(error);}
   page.off('response',responseObserver);page.off('request',requestObserver);page.off('requestfailed',requestFailedObserver);resetReads();await Promise.all([...pendingReads]);
   if(ports.cleanup)try{observation.cleanupCount++;await ports.cleanup(observation);}catch(error){cleanupFailures.push(error);}
-  if(failure){try{await ports.captureFailure?.(Object.freeze({schemaVersion:'1',code:'COMMUNITY_CURRENT_SOURCE_UNVERIFIED',confirmedWriteCount:writes.length,read:failedRead}));}catch{/* Diagnostic delivery cannot replace the original failure. */}if(cleanupFailures.length)throw new AggregateError([failure,...cleanupFailures],'Community verification and cleanup failed.',{cause:failure});throw failure;}
+  if(failure){try{await ports.captureFailure?.(Object.freeze({schemaVersion:'1',code:'COMMUNITY_CURRENT_SOURCE_UNVERIFIED',confirmedWriteCount:writes.length,read:failedRead,...(failedMutation?{mutation:failedMutation}:{})}));}catch{/* Diagnostic delivery cannot replace the original failure. */}if(cleanupFailures.length)throw new AggregateError([failure,...cleanupFailures],'Community verification and cleanup failed.',{cause:failure});throw failure;}
   if(cleanupFailures.length)throw new AggregateError(cleanupFailures,'Community cleanup failed.');
   return observation;
 }

@@ -79,12 +79,73 @@ test('failed pre-action admission prevents the visible command from being sent',
 test('visible command observation binds the original request, school and receipt before publishing it', async ({ page }) => {
   const imported = await owner(); expect(imported).not.toBeNull();
   const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': 'original-loop-key', 'X-School-Id': actor.schoolId, Authorization: 'Bearer fictional-session' };
-  const order: string[] = [];
+  const order: string[] = []; const responseFailures: unknown[] = []; let currentChecks = 0;
   await page.route(apiOrigin + path, async route => { order.push('request'); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '70000000-0000-4000-8000-000000000001' }) }); });
   await form(page, headers);
-  const receipt = await imported!.observeCustomerLearningLoopMutation(page, { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => true, beforeMutation: async () => { order.push('admission'); }, action: () => page.getByRole('button', { name: 'Save' }).click(), onCommand: async observation => { order.push('receipt'); expect(observation.key).toBe('original-loop-key'); expect(observation.actor).toEqual(actor); expect(observation.request.url()).toBe(apiOrigin + path); expect(observation.body).toEqual({ title: 'Fictional course' }); expect(observation.receipt.id).toBe('70000000-0000-4000-8000-000000000001'); } });
+  const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => { currentChecks++; return true; }, beforeMutation: async () => { order.push('admission'); }, action: () => page.getByRole('button', { name: 'Save' }).click(), onCommand: async (observation: import('./customer-learning-loop').CustomerLearningLoopCommandObservation) => { order.push('receipt'); expect(observation.key).toBe('original-loop-key'); expect(observation.actor).toEqual(actor); expect(observation.request.url()).toBe(apiOrigin + path); expect(observation.body).toEqual({ title: 'Fictional course' }); expect(observation.receipt.id).toBe('70000000-0000-4000-8000-000000000001'); }, onResponseFailure: (value: unknown) => { responseFailures.push(value); } };
+  const receipt = await imported!.observeCustomerLearningLoopMutation(page, options);
   expect(receipt.id).toBe('70000000-0000-4000-8000-000000000001');
   expect(order).toEqual(['admission', 'request', 'receipt']);
+  expect(responseFailures).toEqual([]); expect(currentChecks).toBe(5);
+});
+
+test('missing visible command response freezes the first bounded diagnostic without another scope check', async ({ page }) => {
+  const imported = await owner(); expect(imported).not.toBeNull(); await page.setContent('<button type="button">Save</button>'); page.setDefaultTimeout(1000);
+  let currentChecks = 0, actions = 0; const failures: unknown[] = [], diagnosticError = Error('Private diagnostic failure');
+  const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => { currentChecks++; return true; }, action: async () => { actions++; await page.getByRole('button', { name: 'Save' }).click({ timeout: 5000 }); }, onResponseFailure: (value: unknown) => { expect(Object.isFrozen(value)).toBe(true); failures.push(value); throw diagnosticError; } };
+  let failure: unknown; try { await imported!.observeCustomerLearningLoopMutation(page, options); } catch (error) { failure = error; }
+  expect(failure).toBeInstanceOf(Error); expect(failure).not.toBe(diagnosticError); expect((failure as Error).message).toBe('The original visible command response could not be confirmed.');
+  expect(failures).toEqual([{ schemaVersion: '1', stage: 'RESPONSE_CONFIRMATION', reason: 'NO_MATCHING_RESPONSE', requestCount: 0, responseSeen: false, originalSeen: false, currentScope: null }]);
+  expect(currentChecks).toBe(2); expect(actions).toBe(1); expect(JSON.stringify(failures)).not.toMatch(/path|actor|school|key|body|token|https:/);
+});
+
+test('duplicate visible commands report the original count without reevaluating current scope', async ({ page }) => {
+  const imported = await owner(); expect(imported).not.toBeNull(); let requests = 0, currentChecks = 0; const failures: unknown[] = [];
+  await page.route(apiOrigin + path, route => { requests++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '70000000-0000-4000-8000-000000000001' }) }); });
+  await form(page, { 'Content-Type': 'application/json', 'Idempotency-Key': 'original-loop-key', 'X-School-Id': actor.schoolId, Authorization: 'Bearer fictional-session' });
+  const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => { currentChecks++; return true; }, action: async () => { for (let count = 0; count < 2; count++) { const response = page.waitForResponse(value => value.url() === apiOrigin + path && value.request().method() === 'POST'); await page.getByRole('button', { name: 'Save' }).click(); await response; } }, onResponseFailure: (value: unknown) => { failures.push(value); } };
+  await expect(imported!.observeCustomerLearningLoopMutation(page, options)).rejects.toThrow('The original visible command response could not be confirmed.');
+  expect(failures).toEqual([{ schemaVersion: '1', stage: 'RESPONSE_CONFIRMATION', reason: 'MATCHING_REQUEST_COUNT', requestCount: 2, responseSeen: true, originalSeen: true, currentScope: null }]); expect(requests).toBe(2); expect(currentChecks).toBe(2);
+});
+
+test('stale visible command scope remains frozen when diagnostic delivery changes current state', async ({ page }) => {
+  const imported = await owner(); expect(imported).not.toBeNull(); let current = true, currentChecks = 0; const failures: unknown[] = [], diagnosticError = Error('Private diagnostic failure');
+  await page.route(apiOrigin + path, route => { current = false; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '70000000-0000-4000-8000-000000000001' }) }); });
+  await form(page, { 'Content-Type': 'application/json', 'Idempotency-Key': 'original-loop-key', 'X-School-Id': actor.schoolId, Authorization: 'Bearer fictional-session' });
+  const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => { currentChecks++; return current; }, action: () => page.getByRole('button', { name: 'Save' }).click(), onResponseFailure: (value: unknown) => { failures.push(value); current = true; throw diagnosticError; } };
+  const originalError = globalThis.Error; let createdGuardFailure: Error | undefined;
+  globalThis.Error = new Proxy(originalError, { apply(target, thisArg, args) { const error = Reflect.apply(target, thisArg, args) as Error; if (args[0] === 'The original visible command response could not be confirmed.') createdGuardFailure = error; return error; } });
+  let failure: unknown; try { await imported!.observeCustomerLearningLoopMutation(page, options); } catch (error) { failure = error; } finally { globalThis.Error = originalError; }
+  expect(failure).toBe(createdGuardFailure); expect(failure).not.toBe(diagnosticError); expect((failure as Error).message).toBe('The original visible command response could not be confirmed.'); expect(currentChecks).toBe(3);
+  expect(failures).toEqual([{ schemaVersion: '1', stage: 'RESPONSE_CONFIRMATION', reason: 'CURRENT_SCOPE_CHANGED', requestCount: 1, responseSeen: true, originalSeen: true, currentScope: false }]); expect(Object.isFrozen(failures[0])).toBe(true); expect(current).toBe(true);
+});
+
+test('a controlled response without an original request reports the second guard before scope evaluation', async ({ page }) => {
+  const imported = await owner(); expect(imported).not.toBeNull(); const failures: unknown[] = []; let currentChecks = 0;
+  await page.route(apiOrigin + path, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '70000000-0000-4000-8000-000000000001' }) }));
+  await form(page, { 'Content-Type': 'application/json', 'Idempotency-Key': 'original-loop-key', 'X-School-Id': actor.schoolId, Authorization: 'Bearer fictional-session' });
+  const pending = page.waitForResponse(response => response.url() === apiOrigin + path && response.request().method() === 'POST'); await page.getByRole('button', { name: 'Save' }).click(); const response = await pending;
+  const originalWait = page.waitForResponse.bind(page); page.waitForResponse = () => Promise.resolve(response);
+  try {
+    const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => { currentChecks++; return true; }, action: async () => {}, onResponseFailure: (value: unknown) => { failures.push(value); } };
+    await expect(imported!.observeCustomerLearningLoopMutation(page, options)).rejects.toThrow('The original visible command response could not be confirmed.');
+  } finally { page.waitForResponse = originalWait; }
+  expect(failures).toEqual([{ schemaVersion: '1', stage: 'RESPONSE_CONFIRMATION', reason: 'NO_ORIGINAL_REQUEST', requestCount: 0, responseSeen: true, originalSeen: false, currentScope: null }]); expect(currentChecks).toBe(2);
+});
+
+test('an action failure retains its original error and emits no response-guard diagnostic', async ({ page }) => {
+  const imported = await owner(); expect(imported).not.toBeNull(); page.setDefaultTimeout(100); const original = Error('Original visible action refused'), failures: unknown[] = [];
+  const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => true, action: async () => { throw original; }, onResponseFailure: (value: unknown) => { failures.push(value); } };
+  await expect(imported!.observeCustomerLearningLoopMutation(page, options)).rejects.toBe(original); expect(failures).toEqual([]);
+});
+
+test('response-guard diagnostics keep an overflowing event count unknown without changing the original rejection', async ({ page }) => {
+  const imported = await owner(); expect(imported).not.toBeNull(); const failures: unknown[] = []; let currentChecks = 0;
+  await page.route(apiOrigin + path, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '70000000-0000-4000-8000-000000000001' }) }));
+  await form(page, { 'Content-Type': 'application/json', 'Idempotency-Key': 'original-loop-key', 'X-School-Id': actor.schoolId, Authorization: 'Bearer fictional-session' });
+  const options = { apiOrigin, intent: { path, actor, scopeGeneration: 1 }, isCurrent: () => { currentChecks++; return true; }, action: async () => { const response = page.waitForResponse(value => value.url() === apiOrigin + path && value.request().method() === 'POST'); await page.getByRole('button', { name: 'Save' }).click(); const original = (await response).request(), events = page as Page & { emit(event: 'request', request: import('@playwright/test').Request): boolean }; for (let count = 0; count < 1000; count++) events.emit('request', original); }, onResponseFailure: (value: unknown) => { failures.push(value); } };
+  await expect(imported!.observeCustomerLearningLoopMutation(page, options)).rejects.toThrow('The original visible command response could not be confirmed.');
+  expect(failures).toEqual([{ schemaVersion: '1', stage: 'RESPONSE_CONFIRMATION', reason: 'MATCHING_REQUEST_COUNT', requestCount: null, responseSeen: true, originalSeen: true, currentScope: null }]); expect(currentChecks).toBe(2);
 });
 
 test('wrong-school and malformed confirmed responses cannot publish command evidence', async ({ page }) => {
