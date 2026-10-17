@@ -152,6 +152,18 @@ export function assertNativeInactiveCronBackendReleaseAdmission(handle:unknown,b
  try{if(registered.binding!==admissionBinding(binding))throw failure();assertFresh();inactive.assert();assertFresh();}
  catch{registered.invalid=true;registered.dispose();throw failure();}
 }
+/** Renewal lifetime only. It validates the original live owner, source and
+ * package without claiming aged cached official evidence is current. A full
+ * authenticated read and ordinary fresh assertion still precede effects. */
+export function assertNativeInactiveCronBackendReleaseLifetime(handle:unknown,binding:unknown):void{
+ if(!handle||typeof handle!=='object'||types.isProxy(handle))throw failure();const registered=nativeBackendAdmissions.get(handle);if(!registered||registered.invalid||registered.disposed||registered.active||!registered.inactive)throw failure();
+ try{
+  const checked=z.object({repoRoot:z.string(),prepared:z.unknown(),expected:z.unknown(),effectScope:z.literal('INACTIVE_CRON_DEFINITIONS')}).strict().parse(captureAdmissionEnvelope(binding));
+  if(registered.binding!==admissionBinding(checked))throw failure();
+  const assertLifetime=()=>{const now=Date.now();if(now>=registered.inactive!.expiresAtMs||registered.inactive!.lastReadAtMs!==null&&now<registered.inactive!.lastReadAtMs)throw failure();};
+  assertLifetime();registered.inactive.assert();assertLifetime();
+ }catch{registered.invalid=true;registered.dispose();throw failure();}
+}
 export function disposeNativeBackendReleaseAdmission(handle:unknown):void{if(!handle||typeof handle!=='object'||types.isProxy(handle))throw failure();const registered=nativeBackendAdmissions.get(handle);if(!registered)throw failure();registered.disposed=true;registered.dispose();}
 /** One-shot compatibility consumer. Prepared handles never serialize cached approval as authority. */
 export async function readBackendReleaseAdmission(value:unknown):Promise<NativeBackendReleaseAdmission>{const handle=await prepareNativeBackendReleaseAdmission(value);try{const input=inputSchema.parse(captureAdmissionEnvelope(value));return await readNativeBackendReleaseAdmission(handle,{repoRoot:input.repoRoot,prepared:input.prepared,expected:input.expected,effectScope:input.effectScope});}finally{disposeNativeBackendReleaseAdmission(handle);}}
