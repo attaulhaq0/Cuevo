@@ -148,7 +148,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
   const adminPeriods = page.waitForResponse(row => { const url = new URL(row.url()); return url.origin === 'http://localhost:4000' && url.pathname === '/v1/development/periods' && !url.searchParams.has('cursor') && row.request().method() === 'GET'; });
   await openTrailWorkspace(page, 'Development');
   const initialPolicyPage = await readPage(await adminPolicies);
-  let classPage = await readPage(await adminClasses);
+  await readPage(await adminClasses);
   const configuredPeriods = [] as { classId: string; endsAt: string }[];
   let periodPageResponse = await adminPeriods;
   const seenPeriodCursors = new Set<string>();
@@ -192,7 +192,7 @@ test('teacher loads complete authorized learner choices before reviewing develop
   await setup.getByRole('button', { name: 'Save', exact: true }).click(); const approvedPolicy = await policyResponse; expect(approvedPolicy.status()).toBe(200);
   const policyReceipt = await approvedPolicy.json() as { id: string; command: string; awards: number }; expect(policyReceipt).toMatchObject({ command: 'policy', awards: 0 }); expect(policyReceipt.id).toMatch(/^[0-9a-f-]{36}$/i);
   expect(approvedPolicy.request().postDataJSON()).toMatchObject({ points: { practice: 0, revision: 0, reflection: 0 }, milestones: [], confirmApproval: true }); await expect(setup).toHaveCount(0);
-  const currentPolicyPage = await readPage(await reloadedPolicies); classPage = await readPage(await reloadedClasses);
+  const currentPolicyPage = await readPage(await reloadedPolicies); const classPage = await readPage(await reloadedClasses);
   if (currentPolicyPage.nextCursor) await expect(policyMore).toHaveCount(1); else await expect(adminWorkspace.getByRole('button', { name: 'Approve recognition policy', exact: true })).toBeEnabled();
   await expect(adminWorkspace.getByRole('status').filter({ hasText: 'Loading development…' })).toHaveCount(0);
   await completePolicies(currentPolicyPage);

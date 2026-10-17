@@ -18,6 +18,7 @@ let analytics:AnalyticsFixtureDelivery|undefined;
 if(pool&&process.env.ANALYTICS_FIXTURE_ENABLED==='true'){
  if(config.nodeEnv==='production'||!config.workerDatabaseUrl||!['localhost','127.0.0.1'].includes(new URL(config.workerDatabaseUrl).hostname)||new URL(config.workerDatabaseUrl).port!=='56322')throw Error('Fixture analytics requires local Cuevo.');
  const directory = analyticsFixtureDirectory(); const keyFile = join(directory, 'pseudonym.key');
+ // eslint-disable-next-line preserve-caught-error -- Fixture setup failures must not attach private paths or key configuration as an uncaught cause.
  await mkdir(directory,{recursive:true});let key:string;try{key=await readFile(keyFile,'utf8');}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw Error('Analytics fixture configuration unavailable');key=randomBytes(32).toString('hex');try{await writeFile(keyFile,key,{mode:0o600,flag:'wx'});}catch(collision){if((collision as NodeJS.ErrnoException).code!=='EEXIST')throw collision;key=await readFile(keyFile,'utf8');}}
  if(!/^[a-f0-9]{64}$/.test(key))throw Error('Analytics fixture pseudonym configuration invalid.');
  analytics=new AnalyticsFixtureDelivery(pool,{enabled:true,nodeEnv:config.nodeEnv,directory:join(directory,'events'),pseudonymKey:key});

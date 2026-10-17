@@ -87,7 +87,7 @@ test('actual outer Community composition binds15 confirmed originals to prefix p
   let gate: ReturnType<typeof import('./hosted-community-command-gate').createHostedCommunityCommandGate>;
   let records: HostedCommandJournalRecord<'community'>[] = [], states: HostedCommandJournalRead<'community'>['commands'] = [];
   const files = new Map<string, Buffer>(), proofs = new WeakMap<object, { receipt: HostedCommunityLivePrefixProofReceipt; used: boolean }>();
-  let prefixReceipt: HostedCommunityLivePrefixProofReceipt | null = null;
+  let prefixReceipt: HostedCommunityLivePrefixProofReceipt | null;
   const append = (command: HostedCommunityJournalOriginal['command'], state: HostedCommandJournalRecord<'community'>['state'], original?: HostedCommunityJournalOriginal, receipt?: string) => {
     const payload = { version: 1, purpose: contracts.purpose, sequence: records.length + 1, previousRecordSha256: records.at(-1)?.recordSha256 ?? null, identity, command, state,
       intentSequence: original?.intentSequence ?? records.length + 1, intentRecordSha256: original?.intentRecordSha256 ?? null, httpReceiptSha256: receipt ?? null,

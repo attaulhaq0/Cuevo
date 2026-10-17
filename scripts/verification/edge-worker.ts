@@ -317,7 +317,6 @@ async function main() {
     check('health-private-and-idle', health?.ready === true && health.transportPrivate === true && health.state === 'IDLE' && !JSON.stringify(health).includes(purposeKey) && !JSON.stringify(health).includes(secretName));
   } catch (error) { checks.push({ name: 'phase-' + phase.toLowerCase().replaceAll('_', '-'), passed: false }); failures.push({ phase, code: safeEdgeFailureCode(error),...(phase==='AUTH'?{authProbe,transportCause:safeEdgeTransportCause(error)}:{}) }); }
   finally {
-    phase = 'RESTORE';
     let clean = true;
     const cleanup = async (name: string, operation: () => Promise<unknown>) => { try { await operation(); } catch (error) { clean = false; failures.push({ phase: 'RESTORE_' + name, code: safeEdgeFailureCode(error) }); } };
     if (client && configured) await cleanup('DISPATCH_PAUSE', async () => {

@@ -83,6 +83,7 @@ async function stopped() { await requireStoppedBrowserPorts(port => new Promise(
 async function processes(): Promise<PilotProcessIdentity[]> {
   const result: PilotProcessIdentity[] = [];
   for (const pid of (await readdir('/proc')).filter(value => /^[1-9][0-9]*$/.test(value))) {
+    // eslint-disable-next-line preserve-caught-error -- The process-census verdict deliberately withholds private process and filesystem details.
     try { const stat = await readFile(`/proc/${pid}/stat`, 'utf8'), parts = stat.slice(stat.lastIndexOf(')') + 2).split(' '), command = await readFile(`/proc/${pid}/cmdline`); result.push({ pid: Number(pid), ppid: Number(parts[1]), group: Number(parts[2]), start: parts[19], commandSha256: hash(command) }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'ESRCH') throw Error('Owned process census unavailable.'); }
   }
   return result;
