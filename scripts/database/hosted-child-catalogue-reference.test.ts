@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import {registerHooks} from 'node:module';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {transformSync} from 'esbuild';
 import { hostedChildCatalogueCategories, hostedChildCatalogueSummarySchema, applySourceChildCatalogueProviderDeltas, parseHostedChildCatalogueReceipt, verifySourceChildCatalogueImage,sourceChildCatalogueImage } from './hosted-child-catalogue-reference';
 import policy from './unknown-prefix-catalogue-policy.json';
 import * as reference from './hosted-child-catalogue-reference';
@@ -9,12 +14,86 @@ const imageApi=()=>{const api=reference as unknown as {
  admitSourceChildCatalogueImageInspection?:(value:unknown,selectedReference:string)=>ImageAdmission;
  isSourceChildCatalogueImageAbsent?:(error:unknown,selectedReference:string)=>boolean;
  verifySourceChildCatalogueContainerInspection?:(value:unknown,containerId:string,image:ImageAdmission)=>void;
+ prepareSourceChildCatalogueImageCache?:(command:(args:string[])=>string,observeFailure?:(step:string,kind:string,error:unknown)=>void)=>ImageAdmission;
 };assert.equal(typeof api.admitSourceChildCatalogueImageInspection,'function');assert.equal(typeof api.isSourceChildCatalogueImageAbsent,'function');assert.equal(typeof api.verifySourceChildCatalogueContainerInspection,'function');return api;};
 const mirrorImage='ghcr.io/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
 const ecrImage='public.ecr.aws/supabase/postgres@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
 const postgresConfigId='sha256:e671c63f6ad3a3bc0503d26bb6641bb2b8eddaabbfe1782ba56b7d2c0243b6d8';
 const imageInspect=(selected=mirrorImage)=>({Id:postgresConfigId,RepoDigests:[selected],Os:'linux',Architecture:'amd64'});
 const absentImageError=(selected=mirrorImage)=>Object.assign(Error('private-image-canary'),{status:1,signal:null,stdout:Buffer.alloc(0),stderr:Buffer.from('Error response from daemon: No such image: '+selected+'\n')});
+
+test('native image preparation reuses either exactly admitted cache without a registry pull',()=>{
+ const prepare=imageApi().prepareSourceChildCatalogueImageCache;assert.equal(typeof prepare,'function');
+ for(const selected of[mirrorImage,ecrImage]){
+  const calls:string[][]=[];
+  const actual=prepare!(args=>{calls.push(args);if(args[2]!==selected)throw absentImageError(args[2]);return JSON.stringify([imageInspect(selected)]);});
+  assert.deepEqual(actual,{imageId:postgresConfigId,reference:selected});
+  assert.deepEqual(calls,selected===mirrorImage?[['image','inspect',mirrorImage]]:[['image','inspect',mirrorImage],['image','inspect',ecrImage]]);
+ }
+});
+
+test('native image preparation permits one fixed AMD64 acquisition only after both exact cache absences',()=>{
+ const prepare=imageApi().prepareSourceChildCatalogueImageCache;assert.equal(typeof prepare,'function');let pulled=false;const calls:string[][]=[];
+ const actual=prepare!(args=>{calls.push(args);if(args[0]==='pull'){pulled=true;return '';}if(!pulled)throw absentImageError(args[2]);return JSON.stringify([imageInspect()]);});
+ assert.deepEqual(actual,{imageId:postgresConfigId,reference:mirrorImage});
+ assert.deepEqual(calls,[['image','inspect',mirrorImage],['image','inspect',ecrImage],['pull','--platform','linux/amd64',mirrorImage],['image','inspect',mirrorImage]]);
+});
+
+test('native image preparation refuses uncertainty and invalid content before any acquisition',()=>{
+ const prepare=imageApi().prepareSourceChildCatalogueImageCache;assert.equal(typeof prepare,'function');
+ for(const value of[Object.assign(absentImageError(),{code:'ETIMEDOUT'}),Object.assign(absentImageError(),{signal:'SIGTERM'}),Object.assign(absentImageError(),{stderr:Buffer.from('Cannot connect to Docker daemon')}),'not JSON',JSON.stringify([{...imageInspect(),Architecture:'arm64'}])]){
+  const calls:string[][]=[];
+  assert.throws(()=>prepare!(args=>{calls.push(args);if(typeof value==='string')return value;throw value;}),/requires review/);
+  assert.deepEqual(calls,[['image','inspect',mirrorImage]]);
+ }
+});
+
+test('native image preparation latches the original failing pull and never retries or admits partial content',()=>{
+ const prepare=imageApi().prepareSourceChildCatalogueImageCache;assert.equal(typeof prepare,'function');
+ for(const mode of['pull-failed','post-pull-invalid']){
+  let pulled=false;const calls:string[][]=[],observed:{step:string;kind:string;error:unknown}[]=[],original=Object.assign(Error('private-canary'),{code:'ETIMEDOUT'});
+  assert.throws(()=>prepare!(args=>{calls.push(args);if(args[0]==='pull'){pulled=true;if(mode==='pull-failed')throw original;return '';}if(!pulled)throw absentImageError(args[2]);return 'invalid JSON';},(step,kind,error)=>observed.push({step,kind,error})),/requires review/);
+  assert.equal(calls.filter(args=>args[0]==='pull').length,1);assert.equal(observed.length,1);
+  assert.equal(observed[0].step,mode==='pull-failed'?'IMAGE_PULL':'IMAGE_POST_PULL_ADMISSION');
+  assert.equal(observed[0].kind,mode==='pull-failed'?'COMMAND_FAILED':'ADMISSION_REFUSED');
+  if(mode==='pull-failed')assert.equal(observed[0].error,original);
+ }
+});
+
+test('native image preparation emits a fixed refusal even when a diagnostic observer fails',()=>{
+ const prepare=imageApi().prepareSourceChildCatalogueImageCache;assert.equal(typeof prepare,'function');const calls:string[][]=[];
+ assert.throws(()=>prepare!(args=>{calls.push(args);throw Object.assign(absentImageError(),{code:'ETIMEDOUT'});},()=>{throw Error('private-observer-canary');}),error=>error instanceof Error&&error.message==='Native PostgreSQL image admission requires review; contents withheld.');
+ assert.deepEqual(calls,[['image','inspect',mirrorImage]]);
+});
+
+test('CI image setup refuses imported calls and another runner root before image commands',async()=>{
+ let commands=0;
+ const hook=registerHooks({load(url,context,next){
+  if(url.endsWith('/prepare-ci-native-postgres-image.ts')){
+   const source=readFileSync(new URL(url),'utf8')
+    .replace("import {execFileSync} from 'node:child_process';",'const execFileSync=globalThis.controlledCiImageCommand;')
+    .replace("import {captureCanonicalSourceContext} from '../verification/canonical-source-jobs';",'const captureCanonicalSourceContext=()=>({treeSha:"b".repeat(40),finalMetadata(){}});')
+    .replace("const root=resolve('.');","const root=resolve('/home/runner/work/Cuevo/Cuevo');")
+    .replaceAll('process.platform',"'linux'").replaceAll('process.arch',"'x64'");
+   return{format:'module',shortCircuit:true,source:transformSync(source,{loader:'ts',format:'esm'}).code};
+  }
+  return next(url,context);
+ }});
+ Object.assign(globalThis,{controlledCiImageCommand:()=>{commands++;return Buffer.from(JSON.stringify([imageInspect()]));}});
+ const savedArgv=[...process.argv],savedEnv={...process.env};
+ try{
+  for(const key of['SUPABASE_ACCESS_TOKEN','SUPABASE_SERVICE_ROLE_KEY','DATABASE_URL','WORKER_DATABASE_URL','VERCEL_TOKEN','VERCEL_API_KEY','SUPABASE_DB_PASSWORD','GH_TOKEN','GITHUB_TOKEN'])delete process.env[key];
+  Object.assign(process.env,{CI:'true',GITHUB_ACTIONS:'true',RUNNER_ENVIRONMENT:'github-hosted',GITHUB_JOB:'source-fixtures-native',GITHUB_REPOSITORY:'attaulhaq0/Cuevo',GITHUB_SHA:'a'.repeat(40),GITHUB_WORKSPACE:'/home/runner/work/Cuevo/Cuevo'});
+  const path=resolve(import.meta.dirname,'prepare-ci-native-postgres-image.ts'),api=await import(pathToFileURL(path).href) as {prepareCiNativePostgresImage:()=>Promise<unknown>};
+  process.argv=[savedArgv[0],resolve(import.meta.dirname,'hosted-child-catalogue-reference.test.ts')];
+  await assert.rejects(api.prepareCiNativePostgresImage(),/requires review/);assert.equal(commands,0,'An import is not an image setup invocation.');
+  process.argv=[savedArgv[0],path];
+  process.env.GITHUB_WORKSPACE='/home/runner/work/Cuevo/Cuevo/foreign-root';
+  await assert.rejects(api.prepareCiNativePostgresImage(),/requires review/);assert.equal(commands,0,'The selected source must be in the actual runner root.');
+ }finally{
+  process.argv=savedArgv;for(const key of Object.keys(process.env))if(!(key in savedEnv))delete process.env[key];Object.assign(process.env,savedEnv);hook.deregister();delete(globalThis as {controlledCiImageCommand?:unknown}).controlledCiImageCommand;
+ }
+});
 
 test('local image inspection preserves the exact approved immutable identity for both fixed repositories',()=>{
  const api=imageApi();for(const selected of[mirrorImage,ecrImage])assert.deepEqual(api.admitSourceChildCatalogueImageInspection!(JSON.stringify([imageInspect(selected)]),selected),{imageId:postgresConfigId,reference:selected});

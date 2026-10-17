@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import type { createHostedMigrationNativeProcess } from './hosted-migration-native-process';
-import { sourceChildCatalogueImage, admitSourceChildCatalogueImageInspection, isSourceChildCatalogueImageAbsent, verifySourceChildCatalogueContainerInspection } from './hosted-child-catalogue-reference';
+import { admitSourceChildCatalogueImageInspection, prepareSourceChildCatalogueImageCache, verifySourceChildCatalogueContainerInspection } from './hosted-child-catalogue-reference';
 import {createNativeIsolationFailureRecorder,nativeIsolationDiagnosticPrefix,type NativeIsolationStep,type NativeIsolationFailureKind} from '../verification/ci-test-timings';
 
 const hash=(bytes:string|Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
@@ -127,15 +127,7 @@ function nativeIsolationStep<T>(recorder:NativeIsolationRecorder|undefined,step:
  try{return work();}catch(error){recorder?.recordFailure(step,kind,error);throw error;}
 }
 function prepareNativePostgresImage(command:NativeImageCommand,recorder?:NativeIsolationRecorder):NativePostgresImage{
- try{
-  for(const reference of[sourceChildCatalogueImage.mirrorPinnedReference,sourceChildCatalogueImage.pinnedReference]){
-   let inspection:string;try{inspection=command(['image','inspect',reference]);}catch(error){if(isSourceChildCatalogueImageAbsent(error,reference))continue;recorder?.recordFailure(reference===sourceChildCatalogueImage.mirrorPinnedReference?'IMAGE_GHCR_LOOKUP':'IMAGE_ECR_LOOKUP','COMMAND_FAILED',error);throw nativeImageRefusal();}
-   return nativeIsolationStep(recorder,'IMAGE_ADMISSION','ADMISSION_REFUSED',()=>admitSourceChildCatalogueImageInspection(inspection,reference));
-  }
-  nativeIsolationStep(recorder,'IMAGE_PULL','COMMAND_FAILED',()=>command(['pull','--platform','linux/amd64',sourceChildCatalogueImage.mirrorPinnedReference]));
-  const inspection=nativeIsolationStep(recorder,'IMAGE_POST_PULL_LOOKUP','COMMAND_FAILED',()=>command(['image','inspect',sourceChildCatalogueImage.mirrorPinnedReference]));
-  return nativeIsolationStep(recorder,'IMAGE_POST_PULL_ADMISSION','ADMISSION_REFUSED',()=>admitSourceChildCatalogueImageInspection(inspection,sourceChildCatalogueImage.mirrorPinnedReference));
- }catch{throw nativeImageRefusal();}
+ return prepareSourceChildCatalogueImageCache(command,(step,kind,error)=>recorder?.recordFailure(step,kind,error));
 }
 function startNativePostgresContainer(command:NativeImageCommand,id:string,image:NativePostgresImage,recorder?:NativeIsolationRecorder):void{
  try{
@@ -254,7 +246,6 @@ if(process.platform==='linux')test('actual pinned Linux container prevents input
    const{certificate,key}=source!,postgresImage=prepareNativePostgresImage(dockerCommand,diagnostic);nativeIsolationStep(diagnostic,'NETWORK_CREATE','COMMAND_FAILED',()=>dockerCommand(['network','create',network!]));networkCreated=true;
    const dbEnv={PATH:'/usr/bin:/bin',HOME:'/home/runner',DOCKER_CONFIG:'/home/runner/.docker',POSTGRES_PASSWORD:secret};
    databaseId=nativeIsolationStep(diagnostic,'DATABASE_CREATE','COMMAND_FAILED',()=>execFileSync('/usr/bin/docker',nativePostgresCreateArguments(databaseName!,network!,postgresImage),{env:dbEnv,stdio:['ignore','pipe','pipe'],timeout:30000}).toString().trim());nativeIsolationStep(diagnostic,'DATABASE_CREATE_ID','ASSERTION_FAILED',()=>assert.match(databaseId!,/^[a-f0-9]{64}$/));
-   // eslint-disable-next-line preserve-caught-error -- The native diagnostic owner retains fixed outcome metadata; raw command errors must stay private.
    startNativePostgresContainer(dockerCommand,databaseId,postgresImage,diagnostic);for(let attempt=0;attempt<100;attempt++){try{dockerCommand(['exec',databaseId,'pg_isready','-h','127.0.0.1','-p','5432','-U','postgres']);break;}catch(error){if(attempt===99){diagnostic.recordFailure('DATABASE_READY','COMMAND_FAILED',error);throw Error('Disposable native test database was not ready');}await new Promise(done=>setTimeout(done,100));}}
    const ownedDatabaseId=databaseId;nativeIsolationStep(diagnostic,'CERTIFICATE_COPY','COMMAND_FAILED',()=>dockerCommand(['cp',certificate,ownedDatabaseId+':/tmp/cuevo-native-ca.pem']));nativeIsolationStep(diagnostic,'KEY_COPY','COMMAND_FAILED',()=>dockerCommand(['cp',key,ownedDatabaseId+':/tmp/cuevo-native-key.pem']));nativeIsolationStep(diagnostic,'TLS_PERMISSIONS','COMMAND_FAILED',()=>dockerCommand(['exec','--user','root',ownedDatabaseId,'/bin/bash','-c','chown postgres:postgres /tmp/cuevo-native-ca.pem /tmp/cuevo-native-key.pem && chmod 600 /tmp/cuevo-native-key.pem']));
    sqlExec=(query:string)=>dockerCommand(['exec',databaseId!,'psql','-X','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1','-A','-t','-c',query]);

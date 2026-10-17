@@ -5,6 +5,26 @@ import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJo
 import {execFileSync} from 'node:child_process';
 import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics,ciDatabaseJob,ciSourceJobs} from './verification-workflows';
 
+test('native fixtures require successful image preparation before their single isolation execution',async()=>{
+ const jobs=yaml.load(await readFile('.github/workflows/ci.yml','utf8')).jobs as Record<string,{steps:Record<string,unknown>[]}>,native=jobs['source-fixtures-native'];
+ const preparation=native.steps.findIndex(step=>step.name==='Prepare exact native PostgreSQL image before fixtures');
+ assert.ok(preparation>=0,'Cold runner acquisition must be a required setup prerequisite.');
+ assert.deepEqual(native.steps[preparation],{name:'Prepare exact native PostgreSQL image before fixtures',run:'node --import tsx scripts/database/prepare-ci-native-postgres-image.ts'});
+ assert.ok(preparation<native.steps.findIndex(step=>step.name==='Verify exact source-native fixtures'));
+ const evidence=native.steps.filter(step=>step.name==='Retain native PostgreSQL image preparation observation');
+ assert.equal(evidence.length,1,'Original preparation failure metadata must survive a stopped fixture step.');
+ assert.deepEqual(evidence[0],{name:'Retain native PostgreSQL image preparation observation',if:'always()',uses:'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',with:{name:'cuevo-native-image-preparation-${{ github.run_id }}-${{ github.run_attempt }}',path:'.local/verification/native-image-preparation/','include-hidden-files':true,'if-no-files-found':'warn','retention-days':14}});
+ const skipped=structuredClone(jobs);skipped['source-fixtures-native'].steps[preparation]['continue-on-error']=true;
+ assert.ok(validateCiSourceJobs(skipped).length,'A failed image preparation cannot permit the isolation tests.');
+});
+
+test('native image preparation preserves exact pre-preparation main metadata without accepting it as current CI',()=>{
+ const source='e9683e5293f16a027900dec19b3227b8717f9cc1',git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),old=(yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['source-fixtures-native'];
+ assert.throws(()=>selectCanonicalWorkflowJob('source-fixtures-native',old,'CURRENT_SOURCE',{sha:source,git}));
+ assert.deepEqual(selectCanonicalWorkflowJob('source-fixtures-native',old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old);
+ assert.throws(()=>selectCanonicalWorkflowJob('source-fixtures-native',old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+});
+
 test('native Cron is required in the current database job while historical pre-Cron source stays exact',()=>{
  const steps=ciDatabaseJob.steps as Record<string,unknown>[],proof=steps.find(step=>step.name==='Verify native restricted SQL Cron mechanics');assert.deepEqual(proof,{name:'Verify native restricted SQL Cron mechanics',run:'node --import tsx scripts/database/worker-native-cron-proof.ts'});assert.equal(steps.filter(step=>step.name===proof!.name).length,1);
  assert.ok(steps.some(step=>step.name==='Retain exact source original231 transport232 catalogue reference'));
@@ -42,7 +62,7 @@ test('canonical job eras preserve actual original source jobs and reject current
  const original=yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,{steps:Record<string,unknown>[]}>;
  const pins=[['actions/setup-node@820762786026740c76f36085b0efc47a31fe5020','actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'],['actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a','actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'],['actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3','actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333']];
  for(const name of ['fast-checks','source-fixtures-native','source-fixtures-contracts','source-fixtures-delivery','source-contracts','source-cohort-continuation-1','source-cohort-reconciliation-2','runtime-backend','runtime-browser','integration-learning','integration-state','technical-mvp','database-checks']){
-  const old=original[name],current=structuredClone(name==='database-checks'?ciDatabaseJob:name==='source-fixtures-delivery'?(ciSourceJobs as Record<string,unknown>)[name]:old)as{steps:Record<string,unknown>[]};for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
+  const old=original[name],current=structuredClone(name==='database-checks'?ciDatabaseJob:['source-fixtures-native','source-fixtures-delivery'].includes(name)?(ciSourceJobs as Record<string,unknown>)[name]:old)as{steps:Record<string,unknown>[]};for(const step of current.steps)for(const[before,after]of pins)if(step.uses===before)step.uses=after;
   assert.deepEqual(selectCanonicalWorkflowJob(name,current,'CURRENT_SOURCE'),current,name);
   assert.deepEqual(selectCanonicalWorkflowJob(name,old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old,name);
   assert.throws(()=>selectCanonicalWorkflowJob(name,old,'CURRENT_SOURCE',{sha:source,git}),name);
