@@ -16,7 +16,7 @@ import {prepareCanonicalOriginal231TransportAppendOperation,readCanonicalOrigina
 const failure=()=>new Error('Native migration stage source or physical artifact requires review; contents withheld.');
 const hash=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');
 const toolchainDigest=z.string().regex(/^[a-f0-9]{64}$/),toolchainSha=z.string().regex(/^[a-f0-9]{40}$/);
-export const hostedMigrationToolchainManifestSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_HOSTED_MIGRATION_TOOLCHAIN'),sourceSha:toolchainSha,treeSha:toolchainSha,sourceLockSha256:toolchainDigest,cliVersion:z.literal('2.119.0'),platform:z.string(),cli:z.object({shimSha256:toolchainDigest,binarySha256:toolchainDigest,sidecarSha256:toolchainDigest}).strict()}).strict();
+export const hostedMigrationToolchainManifestSchema=z.object({version:z.literal(1),purpose:z.literal('CUEVO_HOSTED_MIGRATION_TOOLCHAIN'),sourceSha:toolchainSha,treeSha:toolchainSha,sourceLockSha256:toolchainDigest,cliVersion:z.enum(['2.119.0','2.120.0']),platform:z.string(),cli:z.object({shimSha256:toolchainDigest,binarySha256:toolchainDigest,sidecarSha256:toolchainDigest}).strict()}).strict();
 function plain(value:unknown,depth=0):unknown{
  if(depth>12)throw failure();if(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return value;
  if(!value||typeof value!=='object'||types.isProxy(value)||!Array.isArray(value)&&![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw failure();
@@ -41,7 +41,7 @@ export async function readHostedMigrationToolchainManifest(value:{repoRoot:strin
   const relativePath=relative(root,path).replaceAll('\\','/');if(git(root,['check-ignore','--no-index',relativePath])!==relativePath||git(root,['ls-files','--cached','--',relativePath]).length)throw failure();
   const env=Object.fromEntries(['PATH','Path','SystemRoot','WINDIR','TEMP','TMP'].filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]]).concat([['GIT_NO_REPLACE_OBJECTS','1'],['GIT_CONFIG_NOSYSTEM','1'],['GIT_CONFIG_GLOBAL',process.platform==='win32'?'NUL':'/dev/null']])),lockBytes=execFileSync('git',['-C',root,'show',input.sourceSha+':package-lock.json'],{env,stdio:['ignore','pipe','ignore'],timeout:15000,maxBuffer:2*1024*1024,windowsHide:true,shell:false});
   if(hash(lockBytes)!==manifest.sourceLockSha256)throw failure();const lock=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(lockBytes)) as {lockfileVersion:number;packages:Record<string,{version?:string;integrity?:string;resolved?:string}>},platform=process.platform==='win32'?'windows':process.platform;
-  for(const dependency of['node_modules/supabase',`node_modules/@supabase/cli-${platform}-${process.arch}`]){const row=lock.packages?.[dependency];if(lock.lockfileVersion!==3||row?.version!=='2.119.0'||!row.integrity?.startsWith('sha512-')||!row.resolved?.startsWith('https://registry.npmjs.org/'))throw failure();}
+  for(const dependency of['node_modules/supabase',`node_modules/@supabase/cli-${platform}-${process.arch}`]){const row=lock.packages?.[dependency];if(lock.lockfileVersion!==3||row?.version!==manifest.cliVersion||!row.integrity?.startsWith('sha512-')||!row.resolved?.startsWith('https://registry.npmjs.org/'))throw failure();}
   await physical(root,path,'file');if(hash(await readFile(path))!==input.manifestSha256)throw failure();return manifest;
  }catch{throw failure();}
 }
