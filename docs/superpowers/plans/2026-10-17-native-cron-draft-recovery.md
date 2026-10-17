@@ -1,0 +1,21 @@
+# Native Cron draft recovery
+
+**Goal:** Repair the isolated native Cron CI startup and reconcile PR77 with current main, preserving PR70/74 historical failures and the separate held hosted experiment.
+
+**Authority:** Sources 11/38/39/81/82/83, the accepted event-processing architecture and the native first-proof specification remain unchanged. User-authorized ordinary source repairs and disposable local read-only preflight do not authorize the held hosted scheduler operation.
+
+**Evidence:** PR77 run38683145372/attempt1 records matched FILES/92/LIBRARY and confirmed original disposal. A stopped read-only, networkless container of the existing pinned image0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53 supplied the selected PostgreSQL wrapper. Its286-byte SHA256 is e31ce2e809ffe99f097f2cd7e3a05425a2cfe6a72e2f091519ddcb0c5cc4b663. It exports its package lib as NIX_PGLIBDIR and executes the package .postgres-wrapped. The package Cron library resolves to1.6.4, SHA256140a270d223a159138448127871fd9beb8edffdb567e7bcc67ea0b36b91a2ff3; control SHA25642bd6c45b72b713c6a6262fba102ab20bf34c5102e94a16243672d9cdb72ccc8 declares1.6.4. Inspection container was never started and was removed; unrelated containers/volumes matched before/after.
+
+- [x] Add a failing controlled shell regression for selected runtime package paths and refusal of an unrecognized wrapper.
+- [x] Resolve the actual selected postgres executable and accept only the exact inspected wrapper hash before deriving its lib/share locations. Keep the four file predicates, version1.6.4,5000ms/1MiB startup, all SQL/grants, cache-only images and cleanup unchanged.
+- [x] Preserve current main's Actions/historical source selectors and transport232 catalogue; add the Cron step only to the current database job and a source-bound pre-Cron historical shape.
+- [x] Run focused Cron/workflow/historical-source tests and required architecture/docs/repository/CI checks with the pinned G: runtime. Verify exact image preflight only without entrypoint, database or scheduling execution.
+- [ ] Hand the one reviewed local successor to root for signed publication and new genuine CI. Preserve PR70/74 and all original receipts as superseded history; no native pass or hosted clearance is claimed.
+
+No curriculum artifact is affected. The separate original hosted scheduler stop and source-to-binary correspondence remain unproved. Failed checks remain explicit evidence rather than silently weakening acceptance.
+
+Independent review continuation: fix the stale231 source guard by acquiring exact current232 canonical Git bytes through the existing original231/suffix selector. Add red/green actual-source and strict proof3 regressions, validate disabled-definition facts before the isolated overlay, preserve paired catalogue snapshots afterward, and merge exact0852 custody source with a source-bound final pre-Cron selector. Fresh local verification is required before root's signed publication; no hosted operation or native mechanics runs in this repair.
+
+Continuation validation passed74 focused source/catalogue/workflow/discovery cases, with39 Cron cases freshly repeated after the final receipt-fixture isolation. Actual-source acquisition, strict current proof3 and exact0852 historical selection each had a failing regression before their repair. Typecheck/scoped lint, architecture17, docs7, repository25 and CI trust/194-source coverage passed on the revised source. Exact232 frozen source and current disabled-definition/overlay behavior still require genuine Linux CI; no native acceptance is claimed.
+
+Validation: focused Cron/workflow/CI/discovery suite119/119, exact pre231/pre-Actions runtime cases2/2, Windows controlled migration-process cases22/22, architecture17/17, docs7/7 and repository25/25 passed. Typecheck, scoped lint, CI trust and194-source-file discovery passed. The final read-only pinned-image preflight passed all four required-file predicates and retained matching Cron library/control hashes; its container was disposed and unrelated containers/volumes were unchanged. No PostgreSQL entrypoint, server or scheduled job ran locally. Linux-only native migration-process and Cron mechanics remain new genuine CI gates.

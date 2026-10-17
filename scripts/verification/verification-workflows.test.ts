@@ -5,6 +5,17 @@ import { validateFullRegressionWorkflow,validateCiSourceJobs,validateCiRuntimeJo
 import {execFileSync} from 'node:child_process';
 import {ciCodeqlJob,ciCodeqlJobBeforeUpgrade,deriveCodeqlJobStepContract,selectCanonicalWorkflowJob,ciDatabaseJobBeforeOriginal231,ciRuntimeBrowserJobBeforeDiagnostics,ciDatabaseJob,ciSourceJobs} from './verification-workflows';
 
+test('native Cron is required in the current database job while historical pre-Cron source stays exact',()=>{
+ const steps=ciDatabaseJob.steps as Record<string,unknown>[],proof=steps.find(step=>step.name==='Verify native restricted SQL Cron mechanics');assert.deepEqual(proof,{name:'Verify native restricted SQL Cron mechanics',run:'node --import tsx scripts/database/worker-native-cron-proof.ts'});assert.equal(steps.filter(step=>step.name===proof!.name).length,1);
+ assert.ok(steps.some(step=>step.name==='Retain exact source original231 transport232 catalogue reference'));
+ for(const [name,file]of[['Retain minimized native Cron proof','proof.json'],['Retain minimized native Cron failure','failure.json']]){const step=steps.find(step=>step.name===name)!;assert.equal((step.with as Record<string,unknown>).path,'.local/worker-native-cron-proof/'+file);assert.equal(step['continue-on-error'],undefined);assert.equal(step.if,file==='failure.json'?'always()':undefined);}
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024}),source='304254cf2e8fb80373aefca227fda30a18535ddb',old=(yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['database-checks'];assert.deepEqual(selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old);assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'CURRENT_SOURCE',{sha:source,git}));assert.throws(()=>selectCanonicalWorkflowJob('database-checks',{...old as object,'continue-on-error':true},'ORIGINAL_RUNTIME_METADATA',{sha:source,git}));assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));
+});
+
+test('the final custody source retains its exact pre-Cron original job after current proof integration',()=>{
+ const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024});for(const source of['304254cf2e8fb80373aefca227fda30a18535ddb','0852c34c8c4001591e6752e616875cbd195c8d28']){const old=(yaml.load(git(['show',source+':.github/workflows/ci.yml']).toString('utf8')).jobs as Record<string,unknown>)['database-checks'];assert.deepEqual(selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git}),old);assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'CURRENT_SOURCE',{sha:source,git}));assert.throws(()=>selectCanonicalWorkflowJob('database-checks',{...old as object,'continue-on-error':true},'ORIGINAL_RUNTIME_METADATA',{sha:source,git}));assert.throws(()=>selectCanonicalWorkflowJob('database-checks',old,'ORIGINAL_RUNTIME_METADATA',{sha:source,git:args=>args[0]==='rev-parse'?Buffer.from('0'.repeat(40)):git(args)}));}
+});
+
 test('actual main88 pre-Actions source and original501 require original purpose without changing current or earlier CodeQL policy',()=>{
  const git=(args:string[])=>execFileSync('git',args,{windowsHide:true,maxBuffer:2*1024*1024});
  for(const source of ['501224dc5f6bfea631ecc66a0efae7892a83c847','88b35965242e5b076806da3f05110bd61db12ef7']){

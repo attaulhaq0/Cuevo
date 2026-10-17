@@ -507,6 +507,8 @@ jobs:
       - run: node node_modules/esbuild/install.js
       - name: Build exact source child144 catalogue reference
         run: node --import tsx scripts/database/hosted-child-catalogue-producer.ts
+      - name: Verify native restricted SQL Cron mechanics
+        run: node --import tsx scripts/database/worker-native-cron-proof.ts
       - name: Verify isolated database boundary
         run: node --import tsx scripts/verification/technical-exit.ts --profile=ci --lane=database
       - name: Retain exact safe database lane
@@ -556,6 +558,23 @@ jobs:
         with:
           name: cuevo-child144-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .local/child144-catalogue/failure.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain minimized native Cron proof
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cuevo-native-cron-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/worker-native-cron-proof/proof.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain minimized native Cron failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cuevo-native-cron-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/worker-native-cron-proof/failure.json
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
