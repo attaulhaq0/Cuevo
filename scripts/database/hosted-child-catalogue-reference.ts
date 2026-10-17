@@ -54,6 +54,25 @@ export function isSourceChildCatalogueImageAbsent(error:unknown,reference:string
   return stderr==='Error response from daemon: No such image: '+selected;
  }catch{return false;}
 }
+export type SourceChildCatalogueImagePreparationStep='IMAGE_GHCR_LOOKUP'|'IMAGE_ECR_LOOKUP'|'IMAGE_PULL'|'IMAGE_POST_PULL_LOOKUP'|'IMAGE_ADMISSION'|'IMAGE_POST_PULL_ADMISSION';
+/** The command owner supplies its existing deadline. No retry or effect permit
+ * follows from cached content; each consumer still verifies the current image. */
+export function prepareSourceChildCatalogueImageCache(command:(args:string[])=>string,observeFailure?:(step:SourceChildCatalogueImagePreparationStep,kind:'COMMAND_FAILED'|'ADMISSION_REFUSED',error:unknown)=>void):SourceChildCatalogueImageAdmission{
+ const attempt=<T>(step:SourceChildCatalogueImagePreparationStep,kind:'COMMAND_FAILED'|'ADMISSION_REFUSED',work:()=>T):T=>{
+  try{return work();}catch(error){observeFailure?.(step,kind,error);throw error;}
+ };
+ try{
+  for(const reference of[sourceChildCatalogueImage.mirrorPinnedReference,sourceChildCatalogueImage.pinnedReference]){
+   let inspection:string;
+   try{inspection=command(['image','inspect',reference]);}
+   catch(error){if(isSourceChildCatalogueImageAbsent(error,reference))continue;observeFailure?.(reference===sourceChildCatalogueImage.mirrorPinnedReference?'IMAGE_GHCR_LOOKUP':'IMAGE_ECR_LOOKUP','COMMAND_FAILED',error);throw error;}
+   return attempt('IMAGE_ADMISSION','ADMISSION_REFUSED',()=>admitSourceChildCatalogueImageInspection(inspection,reference));
+  }
+  attempt('IMAGE_PULL','COMMAND_FAILED',()=>command(['pull','--platform','linux/amd64',sourceChildCatalogueImage.mirrorPinnedReference]));
+  const inspection=attempt('IMAGE_POST_PULL_LOOKUP','COMMAND_FAILED',()=>command(['image','inspect',sourceChildCatalogueImage.mirrorPinnedReference]));
+  return attempt('IMAGE_POST_PULL_ADMISSION','ADMISSION_REFUSED',()=>admitSourceChildCatalogueImageInspection(inspection,sourceChildCatalogueImage.mirrorPinnedReference));
+ }catch{throw Error('Native PostgreSQL image admission requires review; contents withheld.');}
+}
 /** The disposable fixture must still be the exact newly created Linux container. */
 export function verifySourceChildCatalogueContainerInspection(value:unknown,containerId:string,image:SourceChildCatalogueImageAdmission):void{
  try{

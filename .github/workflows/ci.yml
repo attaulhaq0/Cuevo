@@ -50,6 +50,8 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node node_modules/esbuild/install.js
+      - name: Prepare exact native PostgreSQL image before fixtures
+        run: node --import tsx scripts/database/prepare-ci-native-postgres-image.ts
       - name: Verify exact source-native fixtures
         run: node --import tsx scripts/verification/stateless-checks.ts --partition=source-native
       - name: Retain exact source-native fixture receipt
@@ -61,6 +63,15 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
+      - name: Retain native PostgreSQL image preparation observation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: cuevo-native-image-preparation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/verification/native-image-preparation/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
       - name: Confirm frozen authored source
         run: git diff --exit-code HEAD -- && test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && test -z "$(git ls-files --others --exclude-standard)"
   source-fixtures-contracts:
