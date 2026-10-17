@@ -59,17 +59,26 @@ async function keyboardActivate(page: Page, target: Locator) {
         };
       }, source).catch(() => undefined);
       const sample = async () => {
-        const state = await target.evaluateAll((elements, original) => {
-          const element = elements[0];
-          if (elements.length !== 1 || element !== original || !element.isConnected) throw new Error('Named keyboard control is no longer unique and current.');
-          const popup = element.closest('[popover]');
-          const style = getComputedStyle(element), rect = element.getBoundingClientRect();
-          if (element.matches(':disabled') || style.display === 'none' || style.visibility !== 'visible' || !element.getClientRects().length || popup && !popup.matches(':popover-open')) throw new Error('Named keyboard control is no longer available.');
-          return { focused: element === document.activeElement, outline: element.matches(':focus-visible') && parseFloat(style.outlineWidth) >= 2
-            && style.outlineStyle !== 'none' && rect.left >= -1 && rect.right <= innerWidth + 1
-            && rect.top >= -1 && rect.bottom <= innerHeight + 1 };
-        }, source);
-        if (inPopover && !await panel.evaluate(element => !!element?.isConnected && element.matches(':popover-open') && element.contains(document.activeElement))) throw new Error('Native popover keyboard scope was lost.');
+        const state = await target.evaluateAll((elements, { original, observation }) => {
+          try {
+            const element = elements[0];
+            if (elements.length !== 1 || element !== original || !element.isConnected) throw new Error('Named keyboard control is no longer unique and current.');
+            const popup = element.closest('[popover]');
+            const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+            if (element.matches(':disabled') || style.display === 'none' || style.visibility !== 'visible' || !element.getClientRects().length || popup && !popup.matches(':popover-open')) throw new Error('Named keyboard control is no longer available.');
+            return { focused: element === document.activeElement, outline: element.matches(':focus-visible') && parseFloat(style.outlineWidth) >= 2
+              && style.outlineStyle !== 'none' && rect.left >= -1 && rect.right <= innerWidth + 1
+              && rect.top >= -1 && rect.bottom <= innerHeight + 1 };
+          } catch (originalError) {
+            try { observation?.capture(); } catch { /* Optional capture cannot replace the keyboard failure. */ }
+            throw originalError;
+          }
+        }, { original: source, observation: diagnostic });
+        if (inPopover && !await panel.evaluate((element, observation) => {
+          const current = !!element?.isConnected && element.matches(':popover-open') && element.contains(document.activeElement);
+          if (!current) { try { observation?.capture(); } catch { /* Preserve the scope refusal. */ } }
+          return current;
+        }, diagnostic)) throw new Error('Native popover keyboard scope was lost.');
         return state;
       };
       if (inPopover) {
@@ -526,6 +535,60 @@ test('adapter: profile destinations and ordinary controls retain real keyboard e
   await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=access');
   await expect(page.getByRole('heading', { name: 'Current access', exact: true })).toBeFocused();
   expect(blocked).toEqual([]);
+});
+for (const delivery of ['delivered', 'failed'] as const) test(`adapter: late native Profile closure retains its keyboard failure when diagnostic delivery is ${delivery}`, async ({ page }) => {
+  const blocked = await mountKeyboardChrome(page), captured: string[] = [], faults: string[] = [];
+  page.on('pageerror', error => faults.push(error.message));
+  page.on('console', message => { if (['warning', 'error'].includes(message.type())) faults.push(message.text()); });
+  const panel = page.locator('.workspace-chrome__profile'), trigger = page.locator('.workspace-chrome__person > button');
+  await keyboardActivate(page, trigger);
+  await expect(panel.getByRole('button', { name: 'Close profile and settings', exact: true })).toBeFocused();
+  const target = panel.locator('.workspace-chrome__profile-language .language-switch button').filter({ hasText: /^English$/ });
+  const source = await target.elementHandle();
+  if (!source) throw new Error('Current Profile language source is required.');
+  await page.evaluate(() => {
+    const popup = document.querySelector<HTMLElement>('.workspace-chrome__profile')!;
+    const probe = { added: 0, removed: 0, tabs: 0, entered: 0 };
+    (globalThis as typeof globalThis & { lateProfileKeyboardProbe: typeof probe }).lateProfileKeyboardProbe = probe;
+    for (const [owner, name] of [[document, 'scroll'], [window, 'resize'], [popup, 'toggle']] as [EventTarget, string][]) {
+      const add = owner.addEventListener.bind(owner), remove = owner.removeEventListener.bind(owner);
+      owner.addEventListener = (type, listener, options) => { if (type === name) probe.added++; add(type, listener, options); };
+      owner.removeEventListener = (type, listener, options) => { if (type === name) probe.removed++; remove(type, listener, options); };
+    }
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Enter') probe.entered++;
+      if (event.key === 'Tab' && event.isTrusted && popup.matches(':popover-open') && popup.contains(document.activeElement)) {
+        probe.tabs++; popup.hidePopover();
+      }
+    }, { capture: true, once: true });
+  });
+  const originalEvaluateAll = target.evaluateAll.bind(target);
+  let originalFailure: unknown, failure: unknown;
+  target.evaluateAll = async (callback, argument) => {
+    try { return await originalEvaluateAll(callback, argument); }
+    catch (error) { originalFailure = error; throw error; }
+  };
+  const originalConsoleError = console.error;
+  console.error = value => { captured.push(String(value)); if (delivery === 'failed') throw new Error('Deliberate diagnostic delivery failure'); };
+  const started = performance.now();
+  try { await keyboardActivate(page, target); }
+  catch (error) { failure = error; }
+  finally { console.error = originalConsoleError; }
+  try {
+    expect(failure).toBe(originalFailure); expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('Named keyboard control is no longer available.');
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(captured).toHaveLength(1);
+    expect(nativeKeyboardDiagnostic.parse(JSON.parse(captured[0]))).toMatchObject({ schemaVersion: '1', code: 'NATIVE_KEYBOARD_POPOVER_UNVERIFIED', panel: 'PROFILE', role: 'teacher', destination: 'UNKNOWN', connected: true, open: false, focusInside: false });
+    expect(captured[0]).not.toMatch(/Current teacher|Current reference school|chooser\.fixture|https:|rawError|token|popover-[\w-]+/);
+    const counts = await page.evaluate(() => (globalThis as typeof globalThis & { lateProfileKeyboardProbe: { added: number; removed: number; tabs: number; entered: number } }).lateProfileKeyboardProbe);
+    expect(counts).toEqual({ added: 3, removed: 3, tabs: 1, entered: 0 });
+    expect(await source.evaluate(element => element.isConnected && element === document.querySelector('.workspace-chrome__profile-language .language-switch button'))).toBe(true);
+    await expect(target).toHaveCount(1); await expect(target).toBeEnabled(); await expect(panel).toBeHidden();
+    expect(await panel.evaluate(element => element.contains(document.activeElement))).toBe(false);
+    await expect(page).toHaveURL('https://chooser.fixture.invalid/?view=progress');
+    expect(blocked).toEqual([]); expect(faults).toEqual([]);
+  } finally { await source.dispose(); }
 });
 test('adapter: current compact navigation focus remains on visible main while selected human heading stays visible',async({page})=>{
  const blocked=await mountKeyboardChrome(page);await page.locator('main h1').evaluate(node=>{node.closest('main')!.focus();node.classList.add('workspace-page-heading__semantic');const header=document.createElement('header');header.setAttribute('data-workspace-heading-compact','true');node.before(header);header.append(node);});
