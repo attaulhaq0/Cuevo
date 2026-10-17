@@ -19,7 +19,8 @@
         "scripts/database/hosted-schema-continuation-native.test.ts",
         "scripts/database/hosted-schema-reconciliation-native.test.ts",
         "scripts/database/hosted-schema-reconciliation-policy.test.ts",
-        "scripts/database/hosted-schema-reconciliation.test.ts"
+        "scripts/database/hosted-schema-reconciliation.test.ts",
+        "scripts/database/worker-native-cron-proof.test.ts"
       ]
     },
     {
@@ -1134,6 +1135,10 @@
       },
       {
         "path": "scripts/verification/web-test-assets.test.ts",
+        "durationMs": null
+      },
+      {
+        "path": "scripts/database/worker-native-cron-proof.test.ts",
         "durationMs": null
       }
     ],
