@@ -16,6 +16,7 @@ function connectionRefused(error: unknown): boolean {
 async function requireStoppedApplications() {
   for (const port of [3000, 4000, 4001]) {
     try { await fetch(`http://127.0.0.1:${port}/health/live`, { signal: AbortSignal.timeout(1000) }); }
+    // eslint-disable-next-line preserve-caught-error -- The stopped-port verdict deliberately withholds raw network error details.
     catch (error) { if (connectionRefused(error)) continue; throw Error('Reference drain requires confirmed stopped application ports.'); }
     throw Error('Stop Cuevo application processes before reference processing.');
   }

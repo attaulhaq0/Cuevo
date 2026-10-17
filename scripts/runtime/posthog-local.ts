@@ -30,6 +30,7 @@ export function parsePosthogOverlay(input: string): Record<string, string> {
 export async function loadDevelopmentEnvironment(base: Record<string, string | undefined>, read: () => Promise<string>): Promise<Record<string, string | undefined>> {
   if (base.CI || base.CUEVO_REQUIRE_INTEGRATION === '1' || base.CUEVO_POSTHOG_LOCAL_OVERLAY === 'false') return { ...base };
   let bytes: string;
+  // eslint-disable-next-line preserve-caught-error -- Analytics failures deliberately withhold private overlay, key, path and database error details.
   try { bytes = await read(); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ...base }; throw Error('Local analytics overlay is unreadable.'); }
   if (base.NODE_ENV === 'production') throw Error('Local analytics overlay is forbidden in production.');
   return { ...base, ...parsePosthogOverlay(bytes) };
@@ -61,8 +62,10 @@ export async function configureLocalPosthog(input: unknown, disabled: boolean, d
     return { mode: disabled ? 'DISABLED' : 'LIVE_SYNTHETIC' };
   } catch (error) {
     if (transaction) await deps.query('ROLLBACK').catch(() => undefined);
+    // eslint-disable-next-line preserve-caught-error -- Analytics failures deliberately withhold private overlay, key, path and database error details.
     if (committed) throw Error('Local analytics activation was saved but the local overlay could not be written. Stop applications and rerun configuration.');
     if (error instanceof Error && ['Local analytics requires the verified database owner target.', 'Current approved all-synthetic school policy is required.', 'Local analytics activation outcome requires review.'].includes(error.message)) throw error;
+    // eslint-disable-next-line preserve-caught-error -- Analytics failures deliberately withhold private overlay, key, path and database error details.
     throw Error('Local analytics configuration could not be completed; retained keys and receipts are unchanged.');
   }
 }

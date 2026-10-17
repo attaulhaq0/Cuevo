@@ -35,6 +35,7 @@ function refused(error: unknown): boolean {
 async function stopped() {
   for (const port of [3000, 4000, 4001]) {
     try { await fetch(`http://127.0.0.1:${port}/health/live`, { signal: AbortSignal.timeout(1000) }); }
+    // eslint-disable-next-line preserve-caught-error -- The stopped-port verdict deliberately withholds raw network error details.
     catch (error) { if (refused(error)) continue; throw Error('Pilot volume requires confirmed stopped application ports.'); }
     throw Error('Pilot volume refuses active application processes.');
   }

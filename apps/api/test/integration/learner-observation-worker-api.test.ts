@@ -50,6 +50,7 @@ describe.skipIf(process.env.CUEVO_REQUIRE_INTEGRATION !== '1')('independent work
         if (new URL(workerUrl).hostname !== '127.0.0.1') throw Error('Exact loopback worker target required.');
         for (const port of [3000, 4000, 4001]) {
           try { await fetch(`http://127.0.0.1:${port}/health/live`, { signal: AbortSignal.timeout(1000), redirect: 'error' }); }
+          // eslint-disable-next-line preserve-caught-error -- Stopped-state verdicts deliberately omit raw network details from fixture failures.
           catch (error) { if ((error as Error & { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED') continue; throw Error('Stopped application state is unknown.'); }
           throw Error('Worker proof requires stopped shared applications.');
         }

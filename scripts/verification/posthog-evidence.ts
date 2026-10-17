@@ -105,6 +105,7 @@ async function safeEvidenceFile(directory: string, name: string, optional = fals
     return { bytes, value: JSON.parse(bytes.toString('utf8')) as unknown };
   } catch (error) {
     if (optional && object(error) && error.code === 'ENOENT') return null;
+    // eslint-disable-next-line preserve-caught-error -- Evidence refusals deliberately withhold private source paths and parsed input from error causes.
     throw Error('Invalid technical verification evidence file.');
   }
 }
@@ -125,6 +126,7 @@ async function currentSources(root: string): Promise<Source[]> {
       rows.push({ path, sha256: hash(await readFile(absolute)) });
     } catch (error) {
       if (object(error) && error.code === 'ENOENT') continue;
+      // eslint-disable-next-line preserve-caught-error -- Evidence refusals deliberately withhold private source paths and parsed input from error causes.
       throw Error('Current authored source inventory cannot be verified.');
     }
   }
