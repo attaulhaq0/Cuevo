@@ -21,12 +21,13 @@ import {readFileSync,appendFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 const mode=process.env.CUEVO_CHILD_PRODUCER_FIXTURE_MODE,events=process.env.CUEVO_CHILD_PRODUCER_FIXTURE_EVENTS;
 const childSource=String.raw` + '`' + String.raw`
-import {appendFileSync}from'node:fs';
+import {appendFileSync,readFileSync}from'node:fs';
 const events=process.env.CUEVO_CHILD_PRODUCER_FIXTURE_EVENTS,mode=process.env.CUEVO_CHILD_PRODUCER_FIXTURE_MODE;
 const id='a'.repeat(64),image='public.ecr.aws/supabase/postgres:17.11.0.002',imageId='sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53';
 const mirror='ghcr.io/supabase/postgres@'+imageId;
-export function execFileSync(file,args,options){const stored=args.map(arg=>String(arg).startsWith('POSTGRES_PASSWORD=')?'POSTGRES_PASSWORD=<redacted>':arg);appendFileSync(events,JSON.stringify({file:file==='docker'?'docker':'node',args:stored,inputBytes:options?.input?.byteLength??0,...(file==='docker'?{}:{registryFallback:options?.env?.SUPABASE_INTERNAL_IMAGE_REGISTRY==='',slimDisabled:options?.env?.SUPABASE_USE_SLIM_IMAGES==='false'})})+'\n');
- if(file!=='docker'){if(mode.startsWith('start-')){const error=Error('private-start-canary');error.status=mode==='start-signal'||mode==='start-timeout'?null:mode==='start-invalid-status'?257:1;error.signal=mode==='start-signal'?'SIGKILL':mode==='start-timeout'?'SIGTERM':mode==='start-invalid-status'?37:null;if(mode==='start-timeout')error.code='ETIMEDOUT';const messages={
+function sourceServicePins(args){const workdir=args[args.indexOf('--workdir')+1],directory=workdir+'/supabase/.temp/';const files={'postgres-version':'17.11.0.002','gotrue-version':'v2.197.0','rest-version':'v16.4','realtime-version':'v2.140.3','storage-version':'v1.79.28'};try{return Object.entries(files).every(([name,version])=>readFileSync(directory+name,'utf8')===version+'\n');}catch{return false;}}
+export function execFileSync(file,args,options){const stored=args.map(arg=>String(arg).startsWith('POSTGRES_PASSWORD=')?'POSTGRES_PASSWORD=<redacted>':arg);appendFileSync(events,JSON.stringify({file:file==='docker'?'docker':'node',args:stored,inputBytes:options?.input?.byteLength??0,...(file==='docker'?{}:{registryFallback:options?.env?.SUPABASE_INTERNAL_IMAGE_REGISTRY==='',slimDisabled:options?.env?.SUPABASE_USE_SLIM_IMAGES==='false',sourcePins:sourceServicePins(args)})})+'\n');
+ if(file!=='docker'){if(mode==='source-pins')globalThis.serviceImage=sourceServicePins(args)?image:'public.ecr.aws/supabase/postgres:17.11.0.004';if(mode.startsWith('start-')){const error=Error('private-start-canary');error.status=mode==='start-signal'||mode==='start-timeout'?null:mode==='start-invalid-status'?257:1;error.signal=mode==='start-signal'?'SIGKILL':mode==='start-timeout'?'SIGTERM':mode==='start-invalid-status'?37:null;if(mode==='start-timeout')error.code='ETIMEDOUT';const messages={
  'start-pull-denied':'failed to pull docker image from all registries: public.ecr.aws/supabase/postgres:17.11.0.002 attempt 1: unexpected status from HEAD request: 403 Forbidden; private-start-canary',
  'start-pull-dns':'failed to pull docker image from all registries: public.ecr.aws/supabase/gotrue:v2.197.0 attempt 1: dial tcp: lookup public.ecr.aws: no such host; private-start-canary',
  'start-pull-manifest':'failed to pull docker image from all registries: public.ecr.aws/supabase/realtime:v2.140.3 attempt 1: manifest unknown; private-start-canary',
@@ -87,6 +88,15 @@ test('one controlled source producer retains144 and180 then captures231 from one
  assert.deepEqual(result.records.filter(row=>row.pg==='query'&&row.kind==='structural').map(row=>row.migrationCount),[123,144,180,231]);assert.deepEqual(result.records.filter(row=>row.pg==='query'&&row.kind==='authority').map(row=>row.migrationCount),[123,144,180,231]);
  assert.equal(result.records.filter(row=>row.file==='docker'&&(row.args as string[])[0]==='pull').length,1);assert.equal(result.records.filter(row=>row.file==='docker'&&(row.args as string[])[0]==='run').length,1);assert.equal(result.records.filter(row=>row.file==='docker'&&(row.args as string[])[0]==='rm').length,1);assert.equal(result.records.filter(row=>row.file==='node').length,1);
  const old=parseHostedChildCatalogueReceipt(result.receipts['reference.json']),current=parseHostedNative180CatalogueReceipt(result.receipts['source180.json']);assert.equal(old.migrationCount,144);assert.equal(current.migrationCount,180);assert.equal(current.child144ReceiptSha256,sourceChildCatalogueReceiptSha256(old));assert.equal(current.startedAt,old.startedAt);assert.equal(current.cleanupCompletedAt,old.cleanupCompletedAt);assert.equal(canonicalReleaseExecutionJson(current.provider144),canonicalReleaseExecutionJson(old.catalogueSummary));const full=parseHostedOriginal231CatalogueReceipt(result.receipts['source231.json']);assert.equal(full.migrationCount,231);assert.equal(full.sourceNative180ReceiptSha256,createHash('sha256').update(canonicalReleaseExecutionJson(current)).digest('hex'));assert.equal(canonicalReleaseExecutionJson(full.provider180),canonicalReleaseExecutionJson(current.catalogueSummary));assert.equal(full.startedAt,current.startedAt);assert.equal(full.cleanupCompletedAt,current.cleanupCompletedAt);assert.deepEqual(Object.keys(result.receipts).sort(),['reference.json','source180.json','source231.json']);}
+});
+
+test('the newer CLI retains exact original service pins before catalogue capture',async()=>{
+ const result=await runFixture('source-pins');assert.notEqual(result.status,0);
+ const start=result.records.find(row=>row.file==='node');assert.equal(start?.sourcePins,true);
+ assert.equal((result.diagnostic as{phase:string}).phase,'SOURCE_REPLAY');
+ assert.equal(result.records.filter(row=>row.file==='node').length,1);
+ assert.equal(result.records.some(row=>(row.args as string[]|undefined)?.includes('pg_dump')),true);
+ assert.equal(Object.keys(result.receipts).length,0);
 });
 test('controlled232 producer appends the frozen source once after historical captures and binds disabled hook facts before publication',async()=>{
  // PostgreSQL and Docker are replaced here. This proves source orchestration,

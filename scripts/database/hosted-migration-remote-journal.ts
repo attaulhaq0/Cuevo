@@ -3,7 +3,7 @@ import { types } from 'node:util';
 import { z } from 'zod';
 import {parseHostedExecutionJournal,snapshotHostedMigrationMetadata, type HostedExecutionJournal, type HostedExecutionPorts} from './hosted-migration-journal-contracts';
 import {canAppendStoredHostedMigrationJournal,parseInactiveCronDefinitionJournal,readInactiveCronDefinitionContext,inactiveCronDefinitionContextSchema,type HostedMigrationStoredJournal,type InactiveCronDefinitionJournal} from './hosted-inactive-cron-definition-contracts';
-import type {NativeJournalPublication} from './hosted-migration-database';
+import type {NativeJournalPublication,NativeInactiveCronPermitFacts} from './hosted-migration-database';
 import {createHostedMigrationOperatorStorage,createHostedInactiveCronDefinitionOperatorStorage} from './hosted-migration-storage-observation';
 export {observeHostedMigrationStorageProject} from './hosted-migration-storage-observation';
 export type {HostedMigrationStorageProjectObservation,HostedMigrationStorageObjectObservation} from './hosted-migration-storage-observation';
@@ -64,7 +64,9 @@ async function createRemoteJournal(value: unknown,inactive:boolean) {
     const selectedChildReview=(row:Chain)=>permit?.selectedOriginalChild&&row.operation===permit.selectedOriginalChild.operationSha256&&JSON.stringify(row.identity)===JSON.stringify(permit.selectedOriginalChild.identity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===permit.selectedOriginalChild.chainSha256;
     const selectedNative180Review=(row:Chain)=>permit?.selectedOriginalNative180&&row.operation===permit.selectedOriginalNative180.operationSha256&&JSON.stringify(row.identity)===JSON.stringify(permit.selectedOriginalNative180.identity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===permit.selectedOriginalNative180.chainSha256;
     const selectedOriginal231Review=(row:Chain)=>permit?.selectedOriginal231&&row.operation===permit.selectedOriginal231.operationSha256&&JSON.stringify(row.identity)===JSON.stringify(permit.selectedOriginal231.identity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===permit.selectedOriginal231.chainSha256;
-    if(chains.some(row=>row.operation!==operation&&row.records.at(-1)?.payload.state!=='COMMITTED'&&!matchesOriginal(row)&&!ownedSafetyReview(row)&&!selectedChildReview(row)&&!selectedNative180Review(row)&&!selectedOriginal231Review(row)))throw failure();
+    const selectedPrefix=inactive?(permit as NativeInactiveCronPermitFacts|null)?.selectedOriginalPrefix:undefined,selectedPrefixReview=(row:Chain)=>selectedPrefix&&row.operation===selectedPrefix.operationSha256&&JSON.stringify(row.identity)===JSON.stringify(selectedPrefix.identity)&&row.records.length===2&&row.records[0].payload.state==='INTENT'&&row.records[1].payload.state==='REQUIRES_REVIEW'&&hash(row.ownerBytes+row.records.map(record=>record.bytes).join(''))===selectedPrefix.chainSha256;
+    if(inactive&&(!selectedPrefix||chains.filter(selectedPrefixReview).length!==1))throw failure();
+    if(chains.some(row=>row.operation!==operation&&row.records.at(-1)?.payload.state!=='COMMITTED'&&!matchesOriginal(row)&&!ownedSafetyReview(row)&&!selectedChildReview(row)&&!selectedNative180Review(row)&&!selectedOriginal231Review(row)&&!selectedPrefixReview(row)))throw failure();
   };
   const requirePriorOperations=async(chains:Chain[],safety=false)=>comparePriorOperations(chains,await requirePermit(safety),safety);
   const admitSelectedOriginalIntent=(chains:Chain[],permit:Awaited<ReturnType<typeof requirePermit>>)=>{

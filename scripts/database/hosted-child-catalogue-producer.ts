@@ -57,11 +57,17 @@ export async function produceHostedChildCatalogueReference(){
  const config=source('supabase/config.toml').toString('utf8');assertCuevoLocalConfig(config);
  const pending=await mkdtemp(resolve(process.env.TEMP??process.env.TMP??'/tmp','cuevo-source-child144-')),workdir=resolve(pending,'empty');await mkdir(resolve(workdir,'supabase/migrations'),{recursive:true});
  const emptyConfig=config.replace(/(\[db\.seed\][\s\S]*?enabled\s*=\s*)true/,'$1false');if(emptyConfig===config)throw fail();await writeFile(resolve(workdir,'supabase/config.toml'),emptyConfig,{flag:'wx',mode:0o600});
+ // The CLI's supported .temp pins keep historical catalogue prerequisites
+ // independent of its newer default service images. Actual Postgres bytes are
+ // still admitted against the original immutable digest after start.
+ const servicePins={'postgres-version':sourceChildCatalogueImage.tag.split(':')[1],'gotrue-version':'v2.197.0','rest-version':'v16.4','realtime-version':'v2.140.3','storage-version':'v1.79.28'};
+ await mkdir(resolve(workdir,'supabase/.temp'),{recursive:true});
+ for(const[name,version]of Object.entries(servicePins))await writeFile(resolve(workdir,'supabase/.temp',name),version+'\n',{flag:'wx',mode:0o600});
  const cli=resolve('node_modules/supabase/dist/supabase.js'),startedAt=new Date().toISOString();
  // The normal database lane will subsequently reuse this same owned stack.
  try{exec('docker',['network','inspect','cuevo-local']);}catch{exec('docker',['network','create','--subnet','10.252.60.0/24','cuevo-local']);}
  try{exec('docker',['inspect','supabase_db_cuevo']);throw fail();}catch(error){if((error as {status?:number}).status!==1)throw fail();}
- // Admit the exact ECR cache tag first; CLI 2.119 selects it before native auxiliary-service fallbacks.
+ // Admit the exact ECR cache tag before the source-pinned service startup.
  phase('SERVICE_POSTGRES_PREPARATION');servicePreparationDiagnostic={classification:'OBSERVED_TEXT_CLASSIFICATION',substep:'PULL',exitCode:null,signal:null,timedOut:null,response:'UNKNOWN',image:null};
  try{
   exec('docker',['pull','--platform','linux/amd64',imageReference],undefined,undefined,true);
